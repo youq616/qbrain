@@ -39,8 +39,16 @@ $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
 $bytes = $utf8.GetBytes($InputJson)
 if ($bytes.Length -gt 262144) { throw 'Input JSON exceeds the UTF-8 byte bound.' }
 $resolved = (Resolve-Path -LiteralPath $FilePath -ErrorAction Stop).ProviderPath
+$location = Get-Location
+if ($location.Provider.Name -ne 'FileSystem') {
+    throw 'A filesystem working directory is required.'
+}
 $start = New-Object System.Diagnostics.ProcessStartInfo
 $start.FileName = $resolved
+# Set-Location is runspace-local; Process.Start otherwise inherits the .NET
+# process directory, which can differ from PowerShell's current directory.
+# Do not derive this from untrusted hook JSON or modify global CurrentDirectory.
+$start.WorkingDirectory = $location.ProviderPath
 $start.Arguments = (($ArgumentList | ForEach-Object { ConvertTo-CrtArgument $_ }) -join ' ')
 $start.UseShellExecute = $false
 $start.CreateNoWindow = $true
