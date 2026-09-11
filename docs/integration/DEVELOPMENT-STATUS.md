@@ -1,3 +1,17 @@
+# Current continuation: N46B native HTTP boundaries
+
+Tested source `2661e5205ba480c993210405d35c463efd8c6b6c`; final run
+https://github.com/youq616/qbrain/actions/runs/34626277700 completed successfully.
+Windows 45 registered groups, 51 native HTTP checks, all prior memory/context/MCP/
+Hook process tests, both PowerShell installation/transport/consent suites and the
+same-commit package gate passed. See [N46B outcome](../nodes/N46B-HARD-AUDIT.md),
+[upgrade notes](N46B-UPGRADE.zh-CN.md), and [evidence](../nodes/n46b-evidence/RESULT.json).
+This is a scoped unsigned development build, not full-project acceptance.
+The following content is retained as the historical N44/N45/N46A record; its old
+EXE hashes and timeout wording do not describe the N46B artifact.
+
+---
+
 # Qbrain verified memory preview
 
 Repository: youq616/qbrain. Original upstream is unchanged.

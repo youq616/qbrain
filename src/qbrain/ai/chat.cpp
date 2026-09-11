@@ -48,20 +48,18 @@ ChatResult chat_complete(const Config& cfg, const std::vector<ChatMessage>& mess
 
   auto base = cfg.chat_base_url.empty() ? cfg.embedding_base_url : cfg.chat_base_url;
   const char* path = use_responses ? "/responses" : "/chat/completions";
-  const auto started = std::chrono::steady_clock::now();
   auto resp = http_post_json(base, path, key,
                              body.dump(-1, ' ', false,
                                         nlohmann::json::error_handler_t::replace),
                              effective_timeout_ms);
-  const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                              std::chrono::steady_clock::now() - started)
-                              .count();
-  if (resp.status < 200 || resp.status >= 300) {
-    r.error = resp.error.empty() ? resp.body : resp.error;
-    if (resp.status == 0) {
-      const auto timeout_threshold = std::max<int64_t>(1, effective_timeout_ms * 8LL / 10LL);
-      r.failure_kind = elapsed_ms >= timeout_threshold ? ChatFailureKind::transport_timeout
-                                                      : ChatFailureKind::transport_error;
+  if (resp.failure != HttpFailure::none || resp.status < 200 || resp.status >= 300) {
+    r.error = resp.error.empty() ? "HTTP request failed" : resp.error;
+    if (resp.failure == HttpFailure::timeout) {
+      r.failure_kind = ChatFailureKind::transport_timeout;
+    } else if (resp.failure == HttpFailure::invalid_request) {
+      r.failure_kind = ChatFailureKind::configuration;
+    } else if (resp.status == 0) {
+      r.failure_kind = ChatFailureKind::transport_error;
     } else {
       r.failure_kind = ChatFailureKind::http_status;
     }
