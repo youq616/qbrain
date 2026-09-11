@@ -1,11 +1,27 @@
 #include <iostream>
-#include <stdexcept>
+#include <vector>
+#include <functional>
 #include <string>
 
-#define QB_CHECK(x)                                                     \
+using TestFn = void (*)();
+static std::vector<std::pair<const char*, TestFn>>& registry() {
+  static std::vector<std::pair<const char*, TestFn>> r;
+  return r;
+}
+
+struct Reg {
+  Reg(const char* n, TestFn f) { registry().push_back({n, f}); }
+};
+
+#define QB_TEST(name)                         \
+  void name();                                \
+  static Reg reg_##name(#name, name);         \
+  void name()
+
+#define QB_CHECK(cond)                                                  \
   do {                                                                  \
-    if (!(x)) {                                                         \
-      throw std::runtime_error(std::string("check failed: ") + #x +     \
+    if (!(cond)) {                                                      \
+      throw std::runtime_error(std::string("CHECK failed: ") + #cond +  \
                                " @ " + __FILE__ + ":" + std::to_string(__LINE__)); \
     }                                                                   \
   } while (0)

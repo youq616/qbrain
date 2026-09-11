@@ -187,8 +187,8 @@ if(WIN32)
 endif()
 
 qbrain_lib(service
-  src/qbrain/service/live_sync.cpp
   src/qbrain/service/inbox_watch.cpp
+  src/qbrain/service/live_sync.cpp
 )
 target_link_libraries(qbrain_service PUBLIC qbrain_core qbrain_ingest qbrain_util)
 
