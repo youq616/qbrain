@@ -82,10 +82,16 @@ jobs:
           "Source commit: ${{ needs.prepare.outputs.commit }}" | Set-Content evidence/source.txt
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-cl.ps1 2>&1 | Tee-Object evidence/windows-build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Real executable MCP source and read-boundary integration
+        shell: pwsh
+        run: |
+          python .ci/test_mcp_boundaries.py --binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/windows-mcp.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Original full regression suite plus N42 tests
         shell: pwsh
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/windows-tests.log
+          # Reuse only objects built in the immediately preceding step of this clean runner.
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 -SkipProductionBuild 2>&1 | Tee-Object evidence/windows-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload native logs even on failure
         if: always()
