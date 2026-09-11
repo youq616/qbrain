@@ -1,0 +1,109 @@
+name: N43 memory and native Unicode validation
+
+on:
+  push:
+    branches: ['optimization/n43-memory-cycle']
+    paths: ['src/**', 'include/**', 'tests/**', 'scripts/**', '.ci/**', 'CMakeLists.txt', '.github/workflows/n43-validation.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qbrain-n43-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Archive exact source commit
+        run: git archive --format=zip --output=qbrain-n43-source.zip HEAD
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qbrain-n43-source
+          path: qbrain-n43-source.zip
+          retention-days: 14
+
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build real application and memory tests
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
+          cmake --build build/native --target qbrain qbrain_memory_tests --parallel 2 2>&1 | tee evidence/portable-build.log
+          build/native/qbrain_memory_tests 2>&1 | tee evidence/portable-memory-unit.log
+      - name: Real process and prior MCP regressions
+        run: |
+          set -euo pipefail
+          python3 .ci/test_memory_cycle.py --binary build/native/qbrain 2>&1 | tee evidence/portable-memory-process.log
+          python3 .ci/test_mcp_boundaries.py --binary build/native/qbrain 2>&1 | tee evidence/portable-n42-mcp.log
+          cmake -S tests/n42 -B build/n42 -DQBRAIN_N42_SQLITE_ADAPTER_TEST=ON
+          cmake --build build/n42 --parallel 2
+          ctest --test-dir build/n42 --output-on-failure 2>&1 | tee evidence/portable-n42-ctest.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n43-portable-logs
+          path: evidence/
+          retention-days: 14
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Full native MSVC application build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          "Source commit: ${{ github.sha }}" | Set-Content evidence/source.txt
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-cl.ps1 2>&1 | Tee-Object evidence/windows-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Real process memory and N42 MCP integration
+        shell: pwsh
+        run: |
+          python .ci/test_memory_cycle.py --binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/windows-memory-process.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_mcp_boundaries.py --binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/windows-n42-mcp.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Byte preserving PowerShell 5.1 and 7 transport
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File .ci/test_windows_transport.ps1 -Binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/windows-powershell51.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File .ci/test_windows_transport.ps1 -Binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/windows-powershell7.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Original 42 registered groups plus N43
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 -SkipProductionBuild 2>&1 | Tee-Object evidence/windows-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve native logs even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qbrain-n43-windows-logs
+          path: evidence/
+          retention-days: 14
+      - name: Archive tested executable, not an installer or signed release
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qbrain-n43-windows-development-binary
+          path: |
+            build/cl/qbrain.exe
+            evidence/source.txt
+          retention-days: 14

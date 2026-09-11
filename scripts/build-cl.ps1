@@ -107,6 +107,8 @@ $productionSources = @(
   "src\qbrain\ai\chat.cpp",
   "src\qbrain\ops\registry.cpp",
   "src\qbrain\ops\handlers.cpp",
+  "src\qbrain\ops\memory_ops.cpp",
+  "src\qbrain\memory\session_memory.cpp",
   "src\qbrain\service\inbox_watch.cpp",
   "src\qbrain\service\live_sync.cpp",
   "src\qbrain\mcp\jsonrpc.cpp",
@@ -127,7 +129,7 @@ $sqliteC = Join-Path $sqlite "sqlite3.c"
 $prodObjNames = @(
   "paths","hash","log","string_util","time_util","database","migrate","pg_backend","types","brain",
   "extract","traverse","analytics","scan","astlite","packs","lint","store","image_meta","vector","rrf","hybrid","rerank","minions","dream",
-  "chunker","markdown","import","http_client","embed","chat","registry","handlers",
+  "chunker","markdown","import","http_client","embed","chat","registry","handlers","memory_ops","session_memory",
   "inbox_watch","live_sync","jsonrpc","server","auth","http_server","app","commands","main"
 )
 $prodObjList = ($prodObjNames | ForEach-Object { "$_.obj" }) -join " "

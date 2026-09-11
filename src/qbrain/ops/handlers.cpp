@@ -1,4 +1,5 @@
 #include "qbrain/ops/registry.hpp"
+#include "qbrain/ops/memory_ops.hpp"
 #include "qbrain/util/utf8_display.hpp"
 #include "qbrain/ai/chat.hpp"
 #include "qbrain/ai/embed.hpp"
@@ -3685,6 +3686,7 @@ void register_builtin_ops() {
   register_agent_ops();
   register_raw_ops();
   register_schema_mutations_ops();
+  register_memory_ops(resolve_source);
 }
 
 }  // namespace qbrain::ops

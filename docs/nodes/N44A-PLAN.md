@@ -1,0 +1,4 @@
+# N44A — Windows Unicode and bounded CLI transport
+Status: approved
+Scope: native Unicode argv, UTF-8/path conversion with exact buffer lengths and invalid-input refusal, Unicode LOCALAPPDATA from the wide environment; bounded JSON stdin usable from Windows PowerShell 5.1 and PowerShell 7 through raw UTF-8 bytes. Native tests include Chinese, spaces and emoji in executable/data paths and arguments. This is the transport prerequisite of N44, not the complete multi-host Agent lifecycle or automatic injection implementation.
+Acceptance: exact UTF-8 round trip, no lossy ANSI environment lookup, no size+terminator overwrite, default existing CLI behaviour on ordinary input, both PowerShell engines exercising a real child process with raw stdin bytes. No WSL/Docker/runtime Python. Rollback is code-only to N42; no configuration mutation or installation on the user's machine.

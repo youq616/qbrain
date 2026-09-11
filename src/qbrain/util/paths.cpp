@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
+#include <climits>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -15,18 +16,26 @@
 namespace qbrain::util {
 
 #ifdef _WIN32
-static std::wstring widen(const std::string& s) {
+std::wstring utf8_to_wide(std::string_view s) {
   if (s.empty()) return {};
-  int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, nullptr, 0);
-  std::wstring w(static_cast<size_t>(n ? n - 1 : 0), L'\0');
-  if (n > 1) MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, w.data(), n);
+  if (s.size() > static_cast<size_t>(INT_MAX)) throw std::length_error("UTF-8 input too long");
+  const int length = static_cast<int>(s.size());
+  const int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.data(), length, nullptr, 0);
+  if (!n) throw std::runtime_error("invalid UTF-8 input");
+  std::wstring w(static_cast<size_t>(n), L'\0');
+  if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.data(), length, w.data(), n) != n)
+    throw std::runtime_error("UTF-8 conversion failed");
   return w;
 }
-static std::string narrow(const std::wstring& w) {
+std::string wide_to_utf8(std::wstring_view w) {
   if (w.empty()) return {};
-  int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
-  std::string s(static_cast<size_t>(n ? n - 1 : 0), '\0');
-  if (n > 1) WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, s.data(), n, nullptr, nullptr);
+  if (w.size() > static_cast<size_t>(INT_MAX)) throw std::length_error("UTF-16 input too long");
+  const int length = static_cast<int>(w.size());
+  const int n = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, w.data(), length, nullptr, 0, nullptr, nullptr);
+  if (!n) throw std::runtime_error("invalid UTF-16 input");
+  std::string s(static_cast<size_t>(n), '\0');
+  if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, w.data(), length, s.data(), n, nullptr, nullptr) != n)
+    throw std::runtime_error("UTF-16 conversion failed");
   return s;
 }
 #endif
@@ -35,7 +44,14 @@ fs::path local_app_data() {
 #ifdef _WIN32
   // Honor an explicit process override first so native tests and isolated CLI
   // runs can use their own %LOCALAPPDATA% data root.
-  if (const char* e = std::getenv("LOCALAPPDATA"); e && *e) return utf8_to_path(e);
+  const DWORD needed = GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0);
+  if (needed) {
+    std::wstring value(needed, L'\0');
+    const DWORD got = GetEnvironmentVariableW(L"LOCALAPPDATA", value.data(), needed);
+    if (got == 0 || got >= needed) throw std::runtime_error("LOCALAPPDATA changed while reading");
+    value.resize(got);
+    return fs::path(value);
+  }
   wchar_t* buf = nullptr;
   if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &buf)) && buf) {
     std::wstring w(buf);
@@ -88,7 +104,7 @@ void ensure_dir(const fs::path& p) {
 
 std::string path_to_utf8(const fs::path& p) {
 #ifdef _WIN32
-  return narrow(p.wstring());
+  return wide_to_utf8(p.wstring());
 #else
   return p.string();
 #endif
@@ -96,7 +112,7 @@ std::string path_to_utf8(const fs::path& p) {
 
 fs::path utf8_to_path(const std::string& s) {
 #ifdef _WIN32
-  return fs::path(widen(s));
+  return fs::path(utf8_to_wide(s));
 #else
   return fs::path(s);
 #endif

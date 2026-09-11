@@ -1,4 +1,7 @@
 #include "qbrain/cli/app.hpp"
+#include "qbrain/memory/session_memory.hpp"
+#include "qbrain/util/hash.hpp"
+#include <set>
 #include "qbrain/core/brain.hpp"
 #include "qbrain/ops/registry.hpp"
 #include "qbrain/ingest/import.hpp"
@@ -142,6 +145,8 @@ void print_help() {
       "  sync <notes-dir> [--watch] [--once]  live-sync notes (mtime state)\n"
       "  worker [--once]                     claim/complete minion jobs + inbox\n"
       "  dream [--apply] [--phase p] [--retention-hours N] [--json]\n"
+      "  memory capture|extract|read|status|forget [--source id]\n"
+      "  session-capture [--automatic] [--session-id id] [--fragment-id id]\n"
       "  version\n"
       "  help\n\n"
       "MCP:\n"
@@ -337,39 +342,71 @@ int cmd_import(const std::vector<std::string>& args) {
   });
 }
 
-// N41: session capture — save a session fragment for batch fact extraction.
-// Reads from stdin; stores as type=session_fragment with auto-slug.
-// Triggered by Claude Code PreCompact hooks or session-end automation.
-int cmd_session_capture(const std::vector<std::string>& args) {
-  return with_brain(args, [&](Brain& b) {
-    std::ostringstream ss;
-    ss << std::cin.rdbuf();
-    auto body = ss.str();
-    if (body.empty()) {
-      std::cerr << "session-capture: no content on stdin\n";
-      return 1;
+// Read raw UTF-8 bytes; unlike operator>>/PowerShell's text pipeline this preserves JSON exactly.
+std::string bounded_stdin() {
+  std::string value; char buffer[4096];
+  while (std::cin.read(buffer,sizeof(buffer)) || std::cin.gcount()) {
+    value.append(buffer,static_cast<size_t>(std::cin.gcount()));
+    if (value.size()>memory::max_payload_bytes) throw memory::Error("payload_too_large");
+  }
+  if (std::cin.bad()) throw memory::Error("stdin_read_failed");
+  if (value.rfind("\xEF\xBB\xBF",0)==0) value.erase(0,3);
+  return value;
+}
+int cmd_memory(const std::vector<std::string>& args) {
+  if(args.empty()) { std::cerr << "usage: qbrain memory capture|extract|read|status|forget\n"; return 1; }
+  const auto& action = args[0];
+  std::set<std::string> values={"--brain","--source"};
+  std::set<std::string> flags;
+  if(action=="capture") { flags={"--manual","--stdin"}; }
+  else if(action=="extract") { values.insert("--event"); values.insert("--method"); }
+  else if(action=="forget" || action=="status") { values.insert("--event"); }
+  else if(action=="read") { values.insert("--query"); values.insert("--limit"); values.insert("--max-bytes"); }
+  else throw memory::Error("invalid_action");
+  std::set<std::string> seen;
+  for(std::size_t i=1;i<args.size();++i) {
+    if(!seen.insert(args[i]).second) throw memory::Error("duplicate_argument");
+    if(flags.count(args[i])) continue;
+    if(!values.count(args[i]) || i+1>=args.size()) throw memory::Error("invalid_cli_argument");
+    ++i;
+  }
+  if((action=="extract" || action=="forget" || action=="status") && opt(args,"--event").empty())
+    throw memory::Error("event_id_required");
+  return with_brain(args,[&](Brain& b) {
+    ops::OpContext ctx; ctx.brain=&b;
+    ctx.args["source_id"]=opt(args,"--source","default");
+    const auto& action=args[0];
+    const bool reading=action=="read" || action=="status";
+    if(reading) {
+      ctx.args["query"]=opt(args,"--query"); ctx.args["limit"]=opt(args,"--limit","10");
+      ctx.args["max_bytes"]=opt(args,"--max-bytes","8192");
+      if(action=="status") ctx.args["event_id"]=opt(args,"--event");
+    } else {
+      ctx.args["action"]=action;
+      if(action=="capture") {
+        ctx.args["payload"]=bounded_stdin();
+        if(flag(args,"--manual")) ctx.args["manual"]="true";
+      } else {
+        ctx.args["event_id"]=opt(args,"--event");
+        if(action=="extract") ctx.args["method"]=opt(args,"--method","local");
+      }
     }
-    auto label = opt(args, "--label", "session");
-    auto ts = util::utc_now();
-    // Build a readable slug: session-YYYYMMDD-HHMMSS-label
-    std::string stamp;
-    for (char c : ts)
-      if (c >= '0' && c <= '9') stamp += c;
-    if (stamp.size() > 14) stamp = stamp.substr(0, 14);
-    auto slug = "session-" + stamp + "-" + util::slugify(label);
-    PageInput in;
-    in.slug = slug;
-    in.title = "Session: " + label + " (" + ts + ")";
-    in.body = body;
-    in.type = "session_fragment";
-    auto page = b.put_page(in);
-    auto chunks = ingest::chunk_markdown(page.title, page.body);
-    b.replace_chunks(page.id, chunks);
-    b.enqueue_embed_page(page.id);
-    b.drain_embed_jobs(5);
-    std::cout << "session-captured " << slug << " id=" << page.id
-              << " bytes=" << body.size() << "\n";
-    return 0;
+    auto r=ops::global_registry().call(reading?"memory_read":"memory_write",ctx);
+    std::cout << r.json << "\n"; return r.ok?0:1;
+  });
+}
+// Legacy raw transcripts have unknown speaker attribution and cannot become user facts.
+int cmd_session_capture(const std::vector<std::string>& args) {
+  return with_brain(args,[&](Brain& b) {
+    const auto body=bounded_stdin();
+    const auto label=opt(args,"--label","session");
+    const auto session=opt(args,"--session-id","legacy-"+util::sha256_hex(label));
+    const auto fragment=opt(args,"--fragment-id",util::sha256_hex(body));
+    const nlohmann::json payload={{"session_id",session},{"fragment_id",fragment},
+      {"messages",nlohmann::json::array({{{"role","unknown"},{"content",body}}})}};
+    ops::OpContext ctx; ctx.brain=&b; ctx.args={{"source_id",opt(args,"--source","default")},
+      {"action","capture"},{"payload",payload.dump()},{"manual",flag(args,"--automatic")?"false":"true"}};
+    auto r=ops::global_registry().call("memory_write",ctx); std::cout << r.json << "\n"; return r.ok?0:1;
   });
 }
 
@@ -634,6 +671,7 @@ int run(int argc, char** argv) {
     if (cmd == "get") return cmd_get(rest);
     if (cmd == "list") return cmd_list(rest);
     if (cmd == "capture") return cmd_capture(rest);
+    if (cmd == "memory") return cmd_memory(rest);
     if (cmd == "session-capture") return cmd_session_capture(rest);  // N41
     if (cmd == "import") return cmd_import(rest);
     if (cmd == "search") return cmd_search(rest);

@@ -197,11 +197,15 @@ qbrain_lib(files
   src/qbrain/files/image_meta.cpp
 )
 
+qbrain_lib(memory src/qbrain/memory/session_memory.cpp)
+target_link_libraries(qbrain_memory PUBLIC qbrain_core qbrain_ai qbrain_util)
+
 qbrain_lib(ops
+  src/qbrain/ops/memory_ops.cpp
   src/qbrain/ops/registry.cpp
   src/qbrain/ops/handlers.cpp
 )
-target_link_libraries(qbrain_ops PUBLIC
+target_link_libraries(qbrain_ops PUBLIC qbrain_memory
   qbrain_core qbrain_schema qbrain_search qbrain_graph qbrain_codeintel qbrain_ingest
   qbrain_ai qbrain_jobs qbrain_cycle
   qbrain_service qbrain_files qbrain_util
@@ -233,6 +237,7 @@ endif()
 enable_testing()
 add_executable(qbrain_tests
   tests/test_main.cpp
+  tests/test_n43.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
   tests/test_vector.cpp
@@ -287,3 +292,9 @@ endif()
 add_test(NAME qbrain_unit COMMAND qbrain_tests)
 
 install(TARGETS qbrain RUNTIME DESTINATION bin)
+
+# Portable focused target uses the same production implementations as MSVC/CLI.
+add_executable(qbrain_memory_tests tests/test_n43.cpp)
+target_compile_definitions(qbrain_memory_tests PRIVATE QBRAIN_MEMORY_STANDALONE=1)
+target_link_libraries(qbrain_memory_tests PRIVATE qbrain_ops qbrain_memory)
+add_test(NAME qbrain_memory_unit COMMAND qbrain_memory_tests)

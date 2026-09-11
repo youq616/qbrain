@@ -1,0 +1,19 @@
+# N43 — evidence-grounded session memory
+Status: approved
+Base: youq616/qbrain N42, source d8fcec42; development parent 258698aba8f3f53f4243d09fc19cb084a3ec2d3a.
+
+## Scope and acceptance
+1. Add an optional SQLite memory module, initialized only by a permitted write. Keep the core v13 schema and PostgreSQL path unchanged; new memory operations reject PostgreSQL explicitly until validated. No user's database is opened during development.
+2. Capture bounded UTF-8, role-labelled JSON sessions. Source + session + fragment + canonical payload SHA-256 identifies events; retries are idempotent, inconsistent reuse of a fragment fails. Automatic off does not archive or initialize the module. Manual archival is explicit and never implies extraction or external consent.
+3. Archive and event insert are one transaction. Never enqueue embeddings or send archived text automatically. Reject common credential patterns before persistence; this is a conservative detector, not a complete DLP guarantee.
+4. Extract ONLY exact quotes from caller-attested user messages. Local mode recognises explicit Chinese/English statement markers; it is not general semantic understanding. Optional model mode requires separate database consent, only sends user messages, validates all evidence before committing, and never stores generated paraphrases as facts. Zero supported statements remains honestly reported. Assistant/tool/system text cannot become a user memory.
+5. Persist evidence-linked memory items with category, event, message index, expiry, method and user-stated/unverified status. Conflicts are retained as separate evidence, not silently merged. No promotion to legacy global facts (their lifecycle cannot currently enforce memory expiry/edit invalidation).
+6. Idempotent extraction, bounded lease/recovery, atomic item publication and a durable forgotten-event tombstone. Reads filter source, deletion, changed evidence and expiry. Provider usage is reported when available; unknown usage/cost is null, not zero.
+7. Expose two compact MCP operations with enforced Read/Write boundaries and source resolution reused from N42; CLI uses the same handlers. New operations have explicit inventory/ledger entries; preserve the full N31 baseline contract and separately account for extensions.
+8. Fix legacy session-capture: content identity rather than second-level timestamp, bounded input, explicit automatic/manual semantics, raw unlabelled text cannot be extracted as user claims. No implicit embedding.
+
+## Tests
+SHA-256 known answers, Chinese/emoji, malformed UTF-8/JSON, unknown arguments, off/manual/all/salient, source isolation and default-deny; retries, conflicting fragment reuse, simultaneous independent processes; lease expiry/stale worker; exact evidence checks and invalid model output via an injected provider seam, no live provider/key; deletion/edit/expiry/forget/replay; complete production CLI+MCP on native Windows and GCC. Preserve original regression assertions except explicit accounting for the named new operations. CI logs and exact commit must be inspected before node completion.
+
+## Security and rollback
+No original transcript/key in logs or test output. Treat recalled content as untrusted quoted data, not instructions. Input <=256 KiB; <=256 messages; <=32 items/event; bounded output and provider timeout. Model call outside write transaction, lease revalidated on completion. Optional module has its own version; backup before first schema creation in an existing on-disk store. Rollback: stop writers, retain a backup, run N42 which ignores module tables; no down-migration or user's files automatically deleted. Known limits: quote attribution is caller-attested, not identity authentication; credential detection is incomplete; no all-project ACL certification, live-model benchmark, full semantic extraction, or host lifecycle acceptance claim.

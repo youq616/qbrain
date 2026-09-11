@@ -180,7 +180,15 @@ void test_n31_a_counts_mapping() {
   qbrain::ops::register_builtin_ops();
 
   // ---- (1) runtime registry side of the four-way reconciliation ----
-  const auto ops = qbrain::ops::global_registry().list();
+  auto ops = qbrain::ops::global_registry().list();
+  // N43 adds exactly two independently-tested extensions. Freeze/check the original
+  // 108-entry contract unchanged; do not hide arbitrary unexpected operations.
+  QB_CHECK(static_cast<int>(ops.size()) == kN31FrozenRegistryCount + 2);
+  QB_CHECK(qbrain::ops::global_registry().find("memory_read")->scope == qbrain::ops::Scope::Read);
+  QB_CHECK(qbrain::ops::global_registry().find("memory_write")->scope == qbrain::ops::Scope::Write);
+  ops.erase(std::remove_if(ops.begin(), ops.end(), [](const auto* op) {
+    return op->name == "memory_read" || op->name == "memory_write";
+  }), ops.end());
   QB_CHECK(static_cast<int>(ops.size()) == kN31FrozenRegistryCount);
   std::vector<std::string> runtime_names;
   for (const auto* op : ops) {
