@@ -1,26 +1,28 @@
 # Qbrain development status - 2026-09-11
 
-## Repository
+Repository: `youq616/qbrain`. Original `Lordakee/qbrain` remains unchanged.
+Main baseline: `c65f8686b5f7a9c730df9f1770af400ae801d6ea`, imported from the original MIT revision `2e5c4f0bf310ca4f340b3a2295d2dfd79d3b8325`.
+Development: `optimization/n42-foundation`, PR #1. Roadmap: issue #2.
 
-Development destination: `youq616/qbrain` (owner selected and authorized).
-Original `Lordakee/qbrain` is unchanged. Its exact MIT source baseline `2e5c4f0bf310ca4f340b3a2295d2dfd79d3b8325` was imported as commit `c65f8686b5f7a9c730df9f1770af400ae801d6ea`.
+## Delivered code
 
-N42 foundation implementation is in Draft PR #1. The complete optimization roadmap is issue #2. A successful import or build is not a complete memory-system acceptance.
+Cross-source search identity, source-correct synthesis evidence, bounded UTF-8 excerpts, affected page/fact source checks, no implicit image upload, no save in read-only MCP synthesis, rerank identity/index checks, and Windows CRLF macro continuation. Source includes focused tests and real-process MCP integration plus native MSVC CI. No new runtime service or database migration.
 
-## Code delivered
+## Validation checkpoint
 
-Cross-source search identity, source-correct synthesis evidence, valid UTF-8 display excerpts, affected page/fact read isolation, no implicit image upload, read-only MCP synthesis cannot save, rerank identity/index validation. The exact verified application manifest is `.ci/n42.applied.json`; preimage/replacement evidence is `.ci/n42/edits.json`. The one-time encoded transport and importer were removed after application. The working tree contains ordinary readable source.
+Code tested by the current workflow: `d8fcec42b343668836af6974e38c05550083a655`.
+https://github.com/youq616/qbrain/actions/runs/34556246262
 
-## Validation and boundaries
+GCC and Clang focused tests: 3/3 each. Full production GCC build and real-process MCP: passed. Current Windows complete application build and real MCP test: succeeded. Full original regression was still executing at this documentation checkpoint. The outcome review is therefore PENDING, not PASS; see `docs/nodes/N42-HARD-AUDIT.md` and the actual Actions result.
 
-Fresh local GCC and Clang focused CTest targets passed. Full production application compiled under GCC; the real executable passed seventeen stdio MCP checks against a migrated disposable SQLite brain. The same test is now registered in native Windows CI. CI reports the exact tested commit and preserves logs even on failure.
+Earlier native CI exposed a CRLF parser bug and a Python SQLite-handle cleanup bug; both have actual fixes and added/reused tests, not suppressed failures. The raw artifacts are the audit evidence when a parsed log summary disagrees.
 
-The initial Windows/MSVC application build has passed. Full native regression was still executing when this status file was prepared; consult Actions rather than treating this sentence as a PASS. No real PostgreSQL/model provider/Windows 11 Agent lifecycle acceptance is claimed. Source checks are not a complete audit of every operation.
+## Not delivered yet
 
-CI is now read-only with respect to the repository: it builds, tests and uploads evidence, but does not modify or push source. Python is only used for test tooling, not required by the C++ product.
+Semantic session extraction, automatic Agent recall/capture hooks, semantic directory L0/L1 layers, full gbrain protocol, full-operation ACL audit, exact token/cost savings, real PostgreSQL/provider acceptance, and host-level Windows 11 Agent testing. Each is separately tracked in #2.
 
-## Important
+## Do not install historical binaries
 
-Files under `dist/` are historical upstream artifacts, NOT builds of the N42 fixes. Do not install those files as an optimized release. Do not overwrite an existing application or migrate a production memory database based only on this development branch.
+`dist/` contains upstream historical artifacts, not rebuilt N42 binaries. Do not replace a working executable or migrate a production memory database based on this branch. New tests use disposable synthetic data. No user credentials, databases or full sessions were published.
 
-Semantic session extraction, automatic recall/capture adapters, semantic L0/L1 directory summaries and total-cost benchmarks remain separately tracked work. No claim of complete gbrain parity or universal token savings is made.
+The one-time import/patch transport workflows were removed from the development branch after verified application. The remaining CI has read-only repository permissions. `.ci/n42.applied.json` records initial application, not current post-repair file hashes.
