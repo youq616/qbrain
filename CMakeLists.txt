@@ -234,6 +234,7 @@ enable_testing()
 add_executable(qbrain_tests
   tests/test_main.cpp
   tests/test_rrf.cpp
+  tests/n42/test_foundation.cpp
   tests/test_vector.cpp
   tests/test_chunker.cpp
   tests/test_extract.cpp

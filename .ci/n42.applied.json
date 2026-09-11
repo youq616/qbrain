@@ -1,0 +1,23 @@
+{
+  "upstream_commit": "2e5c4f0bf310ca4f340b3a2295d2dfd79d3b8325",
+  "payload_sha256": "0e24492f39cae4a04163eccc50ff9e3684d2a751384e4df187afa9b2b5129c7d",
+  "changed_files": {
+    "include/qbrain/core/types.hpp": "f57717018d5baba4c987947c7ab40a178495dfe7e79b26ee6322730b3519a253",
+    "src/qbrain/search/rrf.cpp": "5fd405806438bf55ee226f48f64ff8b7f3ede3918fb76be5b78594cda10cc6c2",
+    "src/qbrain/search/hybrid.cpp": "5f5464bcfcd6b329b087ce3d608d403a6f4534fc655a9fb28e68f3c498f31273",
+    "src/qbrain/search/rerank.cpp": "a77f08047f8061cfe9476a6c112ea29047268bbf4cd9e379d876e42d996fcfd5",
+    "src/qbrain/ops/handlers.cpp": "3294a8cdf3116cfb57ae17d682e4bbe1d281c0ac3c40e2b48ffd5192894caf94",
+    "CMakeLists.txt": "b30e5a3302cc8a88420e7d50e66b1f4a6192ff22290f5c7711108e1dea32f299",
+    "tests/test_main.cpp": "0654f155c5b2833d1b2d3ccdba17e200c203a597a251523845ce8f9bfb8e77cb",
+    "scripts/build-tests-cl.ps1": "58f651c2bf9188bbf056c87d9ff3f10c04e275052b49c9726d7d32f32adc8f12",
+    "include/qbrain/search/result_identity.hpp": "ef398a3461665cf80d0b53494b3d1aa4f0b60f956582f4367ee8687ca384f67b",
+    "include/qbrain/util/utf8_display.hpp": "e57df8ff477ac0cc950a57c870471e776d064bed575f2abdaa03aea91cd41705",
+    "tests/n42/CMakeLists.txt": "cf1bfa7eb5226f45a246e46dd511f4abd6af224e75c0a0df1ef840ff3bcd8888",
+    "tests/n42/support/qbrain/core/brain.hpp": "0cb3fe694865e8fb69650eacae859e9a1efada31c9c181ed2255898d56269d17",
+    "tests/n42/support/qbrain/search/rerank.hpp": "f13d221e580a58280328d9a7b723d8c769cc556977ac885d829ba309c26dd0e3",
+    "tests/n42/support/qbrain/util/string_util.hpp": "726f3edc17f967b54ce9271ae94184dc018a841ed93acf03f26998c221aaeb7f",
+    "tests/n42/test_foundation.cpp": "4644a5082924545650b5d1180bfc6a51e7680cc3bf90b46f58c3efc7f1bad49f",
+    "tests/n42/test_search_adapter.cpp": "b19dee181dc6b4719037c0ee86b8ea57680dc9d4d054b72e5c3a00cfe1064384"
+  },
+  "acceptance": "development patch; native build, regression and transport acceptance tracked separately"
+}

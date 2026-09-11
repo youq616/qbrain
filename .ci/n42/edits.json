@@ -1,0 +1,293 @@
+{
+  "base_commit": "2e5c4f0bf310ca4f340b3a2295d2dfd79d3b8325",
+  "changes": [
+    {
+      "path": "include/qbrain/core/types.hpp",
+      "base_blob_sha": "698d757b959f15a4d17656d351e72744a3471700",
+      "edits": [
+        {
+          "old": "  int reranker_delta = 0;\n  std::string type;\n",
+          "new": "  int reranker_delta = 0;\n  std::string type;\n  // N42: preserve source through retrieval and evidence loading. Appended\n  // to retain source compatibility with historical aggregate initializers.\n  std::string source_id;\n",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "src/qbrain/search/rrf.cpp",
+      "base_blob_sha": "a19476b29483741df3ea2a940133876a85c74a25",
+      "edits": [
+        {
+          "old": "#include \"qbrain/search/rrf.hpp\"\n",
+          "new": "#include \"qbrain/search/rrf.hpp\"\n#include \"qbrain/search/result_identity.hpp\"\n#include <cmath>\n#include <limits>\n#include <unordered_set>\n",
+          "count": 1
+        },
+        {
+          "old": "  std::unordered_map<std::string, Acc> map;",
+          "new": "  // Avoid zero/negative denominators from malformed configuration.\n  k = std::max(k, 0);\n  std::unordered_map<std::string, Acc> map;",
+          "count": 1
+        },
+        {
+          "old": "    if (w <= 0) continue;",
+          "new": "    if (!std::isfinite(w) || w <= 0) continue;\n    std::unordered_set<std::string> seen;",
+          "count": 1
+        },
+        {
+          "old": "      std::string key = h.slug.empty() ? std::to_string(h.page_id) : h.slug;\n      auto& a = map[key];\n      if (a.hit.slug.empty()) a.hit = h;\n      a.score += w / (static_cast<double>(k) + static_cast<double>(rank + 1));",
+          "new": "      if (h.page_id <= 0 && h.slug.empty()) continue;\n      const auto key = result_identity(h);\n      if (!seen.insert(key).second) continue;  // no duplicate votes in one list\n      auto [it, inserted] = map.try_emplace(key);\n      auto& a = it->second;\n      if (inserted) a.hit = h;\n      // Reject inconsistent identity metadata rather than fusing stale rows.\n      if (a.hit.slug != h.slug || a.hit.source_id != h.source_id) continue;\n      const auto contribution = w / (static_cast<double>(k) + static_cast<double>(rank + 1));\n      const auto maximum = std::numeric_limits<double>::max();\n      a.score = contribution > maximum - a.score ? maximum : a.score + contribution;",
+          "count": 1
+        },
+        {
+          "old": "[](const SearchHit& x, const SearchHit& y) { return x.score > y.score; }",
+          "new": "[](const SearchHit& x, const SearchHit& y) {\n              return x.score != y.score ? x.score > y.score : result_identity_less(x, y);\n            }",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "src/qbrain/search/hybrid.cpp",
+      "base_blob_sha": "4ed6cb2e96dbab567f148daea2db87978074c776",
+      "edits": [
+        {
+          "old": "#include \"qbrain/search/hybrid.hpp\"\n",
+          "new": "#include \"qbrain/search/hybrid.hpp\"\n#include \"qbrain/search/result_identity.hpp\"\n#include \"qbrain/util/utf8_display.hpp\"\n#include <cmath>\n#include <utility>\n",
+          "count": 1
+        },
+        {
+          "old": "namespace qbrain::search {\n\n",
+          "new": "namespace qbrain::search {\n\nnamespace {\n// FtsRow predates source identity. Resolve all candidates in one read instead\n// of adding one SQL query per hit or changing both storage backend contracts.\n// Deleted/stale rows and unknown sources are never silently mapped to default.\nvoid attach_sources(Brain& brain, std::vector<SearchHit>& hits,\n                    const std::string& requested_source) {\n  if (hits.empty()) return;\n  std::string sql = \"SELECT id, source_id, slug FROM pages WHERE deleted_at IS NULL AND id IN (\";\n  for (size_t i = 0; i < hits.size(); ++i) sql += i ? \",?\" : \"?\";\n  sql += \")\";\n  auto st = brain.db().prepare(sql);\n  for (size_t i = 0; i < hits.size(); ++i) st.bind_int(static_cast<int>(i + 1), hits[i].page_id);\n  std::unordered_map<int64_t, std::pair<std::string, std::string>> identities;\n  while (st.step()) identities.emplace(st.column_int(0), std::make_pair(st.column_text(1), st.column_text(2)));\n  hits.erase(std::remove_if(hits.begin(), hits.end(), [&](SearchHit& h) {\n    const auto it = identities.find(h.page_id);\n    if (it == identities.end() || it->second.first.empty() || it->second.second != h.slug ||\n        (!requested_source.empty() && it->second.first != requested_source)) return true;\n    h.source_id = it->second.first;\n    h.snippet = util::utf8_excerpt(h.snippet, h.snippet.size());\n    return false;\n  }), hits.end());\n}\n}  // namespace\n\n",
+          "count": 1
+        },
+        {
+          "old": "  std::vector<SearchHit> out;\n  // N38",
+          "new": "  std::vector<SearchHit> out;\n  limit = std::clamp(limit, 1, 500);\n  // N38",
+          "count": 1
+        },
+        {
+          "old": "  } catch (...) {\n    std::string sql2 =",
+          "new": "  } catch (...) {\n    out.clear();  // do not mix partial FTS output with the fallback\n    std::string sql2 =",
+          "count": 1
+        },
+        {
+          "old": "  return out;\n}\n\nstd::vector<SearchHit> vector_search",
+          "new": "  attach_sources(brain, out, source_id);\n  return out;\n}\n\nstd::vector<SearchHit> vector_search",
+          "count": 1
+        },
+        {
+          "old": "  if (qemb.empty()) return out;",
+          "new": "  if (qemb.empty() || !std::all_of(qemb.begin(), qemb.end(), [](float v) { return std::isfinite(v); })) return out;\n  limit = std::clamp(limit, 1, 500);",
+          "count": 1
+        },
+        {
+          "old": "p.type, c.text, c.embedding \"",
+          "new": "p.type, c.text, c.embedding, p.source_id \"",
+          "count": 1
+        },
+        {
+          "old": "    double sim = cosine_similarity(qemb, emb);",
+          "new": "    if (emb.size() != qemb.size() || !std::all_of(emb.begin(), emb.end(), [](float v) { return std::isfinite(v); })) continue;\n    double sim = cosine_similarity(qemb, emb);\n    if (!std::isfinite(sim)) continue;",
+          "count": 1
+        },
+        {
+          "old": "    h.snippet = st.column_text(4).substr(0, 200);",
+          "new": "    h.snippet = util::utf8_excerpt(st.column_text(4), 200);\n    h.source_id = st.column_text(6);",
+          "count": 1
+        },
+        {
+          "old": "    auto it = best.find(c.h.slug);\n    if (it == best.end() || c.sim > it->second.sim) best[c.h.slug] = std::move(c);",
+          "new": "    const auto key = result_identity(c.h);\n    auto it = best.find(key);\n    if (it == best.end() || c.sim > it->second.sim ||\n        (c.sim == it->second.sim && c.h.snippet < it->second.h.snippet))\n      best[key] = std::move(c);",
+          "count": 1
+        },
+        {
+          "old": "[](const Cand& a, const Cand& b) { return a.sim > b.sim; }",
+          "new": "[](const Cand& a, const Cand& b) {\n              return a.sim != b.sim ? a.sim > b.sim : result_identity_less(a.h, b.h);\n            }",
+          "count": 1
+        },
+        {
+          "old": "brain.get_links_to(h.slug, opts.source_id.empty() ? \"default\" : opts.source_id)",
+          "new": "brain.get_links_to(h.slug, h.source_id)",
+          "count": 1
+        },
+        {
+          "old": "  const bool conservative = opts.mode == \"conservative\";\n  std::sort(fused.begin(), fused.end(), [conservative](const SearchHit& a, const SearchHit& b) {\n    if (!conservative || a.score != b.score) return a.score > b.score;\n    return a.slug < b.slug;\n  });",
+          "new": "  std::sort(fused.begin(), fused.end(), [](const SearchHit& a, const SearchHit& b) {\n    return a.score != b.score ? a.score > b.score : result_identity_less(a, b);\n  });",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "src/qbrain/search/rerank.cpp",
+      "base_blob_sha": "950c3231a36690be34afa9299d5c86456f7abb72",
+      "edits": [
+        {
+          "old": "#include \"qbrain/search/rerank.hpp\"\n",
+          "new": "#include \"qbrain/search/rerank.hpp\"\n#include \"qbrain/util/utf8_display.hpp\"\n",
+          "count": 1
+        },
+        {
+          "old": "return left.page_id == right.page_id && left.slug == right.slug;",
+          "new": "return left.page_id == right.page_id && left.slug == right.slug &&\n         left.source_id == right.source_id;",
+          "count": 1
+        },
+        {
+          "old": "    if (text.size() > 480) text.resize(480);",
+          "new": "    text = util::utf8_excerpt(text, 480);",
+          "count": 1
+        },
+        {
+          "old": "    if (snippet.size() > 240) snippet.resize(240);",
+          "new": "    snippet = util::utf8_excerpt(snippet, 240);",
+          "count": 1
+        },
+        {
+          "old": "    std::vector<std::pair<double, size_t>> scored;\n    for (const auto& item : j[\"results\"]) {",
+          "new": "    std::vector<std::pair<double, size_t>> scored;\n    std::vector<bool> seen(baseline.size(), false);\n    for (const auto& item : j[\"results\"]) {",
+          "count": 1
+        },
+        {
+          "old": "      scored.emplace_back(score, static_cast<size_t>(idx));",
+          "new": "      if (!std::isfinite(score) || seen[static_cast<size_t>(idx)])\n        return {false, {}, FailureReason::malformed_response};\n      seen[static_cast<size_t>(idx)] = true;\n      scored.emplace_back(std::clamp(score, 0.0, 1.0), static_cast<size_t>(idx));",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "src/qbrain/ops/handlers.cpp",
+      "base_blob_sha": "3a25e706005ccb996af4cca8fe2c8c20a421c1be",
+      "edits": [
+        {
+          "old": "#include \"qbrain/ops/registry.hpp\"\n",
+          "new": "#include \"qbrain/ops/registry.hpp\"\n#include \"qbrain/util/utf8_display.hpp\"\n",
+          "count": 1
+        },
+        {
+          "old": "bool date_parts_valid(const std::string& value) {",
+          "new": "// N42: page-owned facts inherit the same source boundary as page reads.\n// Unowned legacy facts remain available to unscoped local CLI calls only.\nstd::optional<std::vector<std::string>> visible_fact_texts(\n    OpContext& ctx, const std::string& entity, int limit, OpResult& error) {\n  if (!(ctx.via_mcp || ctx.remote) && !ctx.args.count(\"source_id\"))\n    return ctx.brain->list_facts(entity, limit);\n  const auto source = resolve_source(ctx, true, error);\n  if (!source) return std::nullopt;\n  std::vector<std::string> result;\n  auto st = ctx.brain->db().prepare(\n      \"SELECT f.predicate || ': ' || f.object_text FROM facts f \"\n      \"JOIN pages p ON p.id=f.page_id WHERE f.entity_slug=? AND f.active=1 \"\n      \"AND p.source_id=? AND p.deleted_at IS NULL ORDER BY f.id DESC LIMIT ?\");\n  st.bind_text(1, entity);\n  st.bind_text(2, *source);\n  st.bind_int(3, std::clamp(limit, 0, 100));\n  while (st.step()) result.push_back(st.column_text(0));\n  return result;\n}\n\nbool date_parts_valid(const std::string& value) {",
+          "count": 1
+        },
+        {
+          "old": "    auto page = ctx.brain->get_page(slug, arg(ctx, \"source_id\", \"default\"));",
+          "new": "    OpResult source_error;\n    const auto source = resolve_source(ctx, true, source_error);\n    if (!source) return source_error;\n    auto page = ctx.brain->get_page(slug, *source);",
+          "count": 1
+        },
+        {
+          "old": "    json j = {{\"id\", page->id},\n              {\"slug\", page->slug},",
+          "new": "    json j = {{\"id\", page->id},\n              {\"source_id\", page->source_id},\n              {\"slug\", page->slug},",
+          "count": 1
+        },
+        {
+          "old": "    auto pages = ctx.brain->list_pages(limit, type);",
+          "new": "    std::vector<Page> pages;\n    if (ctx.via_mcp || ctx.remote || ctx.args.count(\"source_id\")) {\n      OpResult source_error;\n      const auto source = resolve_source(ctx, true, source_error);\n      if (!source) return source_error;\n      pages = type.empty() ? ctx.brain->list_pages_for_source(*source, limit)\n                           : ctx.brain->list_pages_for_source(*source, limit, type);\n    } else {\n      pages = ctx.brain->list_pages(limit, type);\n    }",
+          "count": 1
+        },
+        {
+          "old": "      arr.push_back({{\"slug\", p.slug}, {\"type\", p.type}, {\"title\", p.title}, {\"updated_at\", p.updated_at}});",
+          "new": "      arr.push_back({{\"source_id\", p.source_id}, {\"slug\", p.slug}, {\"type\", p.type}, {\"title\", p.title}, {\"updated_at\", p.updated_at}});",
+          "count": 1
+        },
+        {
+          "old": "R\"({\"type\":\"object\",\"properties\":{\"limit\":{\"type\":\"integer\"},\"type\":{\"type\":\"string\"}}})\"",
+          "new": "R\"({\"type\":\"object\",\"properties\":{\"limit\":{\"type\":\"integer\"},\"type\":{\"type\":\"string\"},\"source_id\":{\"type\":\"string\"}}})\"",
+          "count": 1
+        },
+        {
+          "old": "    opts.source_id = arg(ctx, \"source_id\");",
+          "new": "    opts.source_id = arg(ctx, \"source_id\");\n    // Resolve before any embedding/model call; local unscoped search stays available.\n    if (ctx.via_mcp || ctx.remote || ctx.args.count(\"source_id\")) {\n      OpResult source_error;\n      const auto source = resolve_source(ctx, true, source_error);\n      if (!source) return source_error;\n      opts.source_id = *source;\n    }",
+          "count": 2
+        },
+        {
+          "old": "      arr.push_back({{\"rank\", i},\n                     {\"slug\", h.slug},",
+          "new": "      arr.push_back({{\"rank\", i},\n                     {\"source_id\", h.source_id},\n                     {\"page_id\", h.page_id},\n                     {\"slug\", h.slug},",
+          "count": 1
+        },
+        {
+          "old": "    for (auto& h : hits) {\n      auto page = ctx.brain->get_page(h.slug);\n      evidence << \"[\" << i << \"] \" << h.slug << \" — \" << h.title << \"\\n\";\n      if (page) {\n        auto body = page->body;\n        if (body.size() > 1200) body = body.substr(0, 1200) + \"…\";\n        evidence << body << \"\\n\\n\";\n      }\n      ++i;\n    }",
+          "new": "    for (auto& h : hits) {\n      if (h.source_id.empty()) continue;  // no default-source fallback\n      auto page = ctx.brain->get_page(h.slug, h.source_id);\n      if (!page || page->id != h.page_id) continue;  // stale/deleted/replaced hit\n      evidence << \"[\" << i << \"] \" << h.source_id << \"/\" << h.slug\n               << \" — \" << page->title << \"\\n\";\n      evidence << util::utf8_excerpt(page->body, 1200, true) << \"\\n\\n\";\n      ++i;\n    }",
+          "count": 1
+        },
+        {
+          "old": "    j[\"hits\"] = hits.size();",
+          "new": "    j[\"hits\"] = i - 1;  // count only evidence actually read",
+          "count": 1
+        },
+        {
+          "old": "      \"think\", Scope::Read, [](OpContext& ctx) {\n    OpResult r;\n    auto q = arg(ctx, \"question\");",
+          "new": "      \"think\", Scope::Read, [](OpContext& ctx) {\n    OpResult r;\n    const auto save = arg(ctx, \"save\");\n    if ((ctx.via_mcp || ctx.remote) && (save == \"1\" || save == \"true\"))\n      return argument_error(\"write_denied\", \"save\", \"Use an explicitly authorized write tool to save a synthesis\");\n    auto q = arg(ctx, \"question\");",
+          "count": 1
+        },
+        {
+          "old": "    if (arg(ctx, \"save\") == \"1\" && (!ctx.via_mcp || ctx.allow_write)) {",
+          "new": "    if ((arg(ctx, \"save\") == \"1\" || arg(ctx, \"save\") == \"true\") && !ctx.via_mcp && !ctx.remote) {",
+          "count": 1
+        },
+        {
+          "old": "    auto facts = ctx.brain->list_facts(entity, limit);",
+          "new": "    OpResult source_error;\n    const auto visible = visible_fact_texts(ctx, entity, limit, source_error);\n    if (!visible) return source_error;\n    const auto& facts = *visible;",
+          "count": 2
+        },
+        {
+          "old": "R\"({\"type\":\"object\",\"properties\":{\"entity_slug\":{\"type\":\"string\"},\"entity\":{\"type\":\"string\"},\"limit\":{\"type\":\"integer\"}}})\"",
+          "new": "R\"({\"type\":\"object\",\"properties\":{\"entity_slug\":{\"type\":\"string\"},\"entity\":{\"type\":\"string\"},\"limit\":{\"type\":\"integer\"},\"source_id\":{\"type\":\"string\"}}})\"",
+          "count": 1
+        },
+        {
+          "old": "R\"({\"type\":\"object\",\"properties\":{\"entity_slug\":{\"type\":\"string\"},\"entity\":{\"type\":\"string\"},\"query\":{\"type\":\"string\"},\"depth\":{\"type\":\"integer\"},\"limit\":{\"type\":\"integer\"}}})\"",
+          "new": "R\"({\"type\":\"object\",\"properties\":{\"entity_slug\":{\"type\":\"string\"},\"entity\":{\"type\":\"string\"},\"query\":{\"type\":\"string\"},\"depth\":{\"type\":\"integer\"},\"limit\":{\"type\":\"integer\"},\"source_id\":{\"type\":\"string\"}}})\"",
+          "count": 1
+        },
+        {
+          "old": "      \"search_by_image\", Scope::Read, [](OpContext& ctx) {\n        OpResult r;\n        auto path = arg(ctx, \"path\");",
+          "new": "      \"search_by_image\", Scope::Read, [](OpContext& ctx) {\n        OpResult r;\n        // The file index has no source ownership contract yet. A name is not\n        // permission to read/egress a host file. Keep this lane local-only.\n        if (ctx.via_mcp || ctx.remote)\n          return argument_error(\"local_only\", \"operation\", \"Image search is restricted to explicit local calls pending source-scoped file access\");\n        auto path = arg(ctx, \"path\");",
+          "count": 1
+        },
+        {
+          "old": "          // best-effort index (existing behavior)\n          files::upload(*ctx.brain, path, name);",
+          "new": "          // N42: query bytes only; explicit file_upload owns copying/indexing.\n          // No write side effect is permitted on the search path.",
+          "count": 1
+        },
+        {
+          "old": "stem = util::path_to_utf8(fs::path(path).stem());",
+          "new": "stem = util::path_to_utf8(util::utf8_to_path(path).stem());",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "CMakeLists.txt",
+      "base_blob_sha": "50fba28dbe7bb29e0f66089c347866150e50e429",
+      "edits": [
+        {
+          "old": "  tests/test_rrf.cpp\n",
+          "new": "  tests/test_rrf.cpp\n  tests/n42/test_foundation.cpp\n",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "tests/test_main.cpp",
+      "base_blob_sha": "9ab45d585a3b64d3d6a6fd9f42d0b977ee282ae6",
+      "edits": [
+        {
+          "old": "void test_rrf();\n",
+          "new": "void test_rrf();\nvoid test_n42_foundation();\n",
+          "count": 1
+        },
+        {
+          "old": "      {\"rrf\", test_rrf},\n",
+          "new": "      {\"rrf\", test_rrf},\n      {\"n42_foundation\", test_n42_foundation},\n",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "scripts/build-tests-cl.ps1",
+      "base_blob_sha": "9deaf50955c49641d6212c9eaabae8a86cc5754c",
+      "edits": [
+        {
+          "old": "  \"tests\\test_n39.cpp\"\n",
+          "new": "  \"tests\\test_n39.cpp\",\n  \"tests\\n42\\test_foundation.cpp\"\n",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

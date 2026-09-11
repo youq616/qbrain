@@ -716,8 +716,14 @@ void Parser::SkipPreprocessorLine() {
   // '#' is at pos_, at line start. Skip to end of line; a trailing backslash
   // continues the directive onto the next physical line.
   while (pos_ < body_.size() && body_[pos_] != '\n') MainAdvance();
-  while (pos_ < body_.size() && body_[pos_] == '\n' && pos_ > 0 &&
-         body_[pos_ - 1] == '\\') {
+  const auto continued = [&] {
+    // CR belongs to a CRLF terminator, not to the macro body. Keep byte
+    // positions and line accounting on the original input unchanged.
+    std::size_t end = pos_;
+    if (end > 0 && body_[end - 1] == '\r') --end;
+    return end > 0 && body_[end - 1] == '\\';
+  };
+  while (pos_ < body_.size() && body_[pos_] == '\n' && continued()) {
     MainAdvance();  // newline
     while (pos_ < body_.size() && body_[pos_] != '\n') MainAdvance();
   }

@@ -28,6 +28,7 @@ struct Reg {
 
 // declarations
 void test_rrf();
+void test_n42_foundation();
 void test_vector();
 void test_chunker();
 void test_extract();
@@ -76,6 +77,7 @@ int main() {
     void (*f)();
   } tests[] = {
       {"rrf", test_rrf},
+      {"n42_foundation", test_n42_foundation},
       {"vector", test_vector},
       {"chunker", test_chunker},
       {"extract", test_extract},

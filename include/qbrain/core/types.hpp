@@ -65,6 +65,9 @@ struct SearchHit {
   double rerank_score = 0.0;
   int reranker_delta = 0;
   std::string type;
+  // N42: preserve source through retrieval and evidence loading. Appended
+  // to retain source compatibility with historical aggregate initializers.
+  std::string source_id;
 };
 
 struct BrainStats {

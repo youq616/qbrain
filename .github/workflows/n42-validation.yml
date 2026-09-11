@@ -1,0 +1,89 @@
+name: N42 native and portable validation
+
+on:
+  push:
+    branches: [main, 'optimization/n42-foundation']
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'CMakeLists.txt'
+      - '.ci/**'
+      - '.github/workflows/n42-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qbrain-n42-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Archive exact source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=zip --output=qbrain-n42-source.zip HEAD
+          printf 'Source snapshot: `%s`\n\nNot a validated application release.\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qbrain-n42-source
+          path: qbrain-n42-source.zip
+          retention-days: 14
+
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Compile and run focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S tests/n42 -B build/n42 -DQBRAIN_N42_SQLITE_ADAPTER_TEST=ON
+          cmake --build build/n42 --parallel 2
+          ctest --test-dir build/n42 --output-on-failure
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Full native MSVC application build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          "Source commit: ${{ github.sha }}" | Set-Content evidence/source.txt
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-cl.ps1 2>&1 | Tee-Object evidence/windows-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Real executable MCP source and read-boundary integration
+        shell: pwsh
+        run: |
+          python .ci/test_mcp_boundaries.py --binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/windows-mcp.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Original full regression suite plus N42 tests
+        shell: pwsh
+        run: |
+          # Only reuse objects freshly built in this same clean job, never a cache.
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 -SkipProductionBuild 2>&1 | Tee-Object evidence/windows-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload native logs even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qbrain-n42-windows-logs
+          path: evidence/
+          retention-days: 14
