@@ -3,7 +3,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string]$FilePath,
-    [Parameter(Mandatory=$true)][AllowEmptyCollection()][string[]]$ArgumentList,
+    [Parameter(Mandatory=$true)][AllowEmptyCollection()][AllowEmptyString()][string[]]$ArgumentList,
     [AllowEmptyString()][string]$InputJson = '',
     [ValidateRange(100,120000)][int]$TimeoutMilliseconds = 10000
 )
@@ -30,7 +30,7 @@ function ConvertTo-CrtArgument([AllowEmptyString()][string]$Value) {
         }
         $slashes = 0
     }
-    if ($slashes) { [void]$builder.Append(('\' * (2 * $slashes))) }
+    if ($slashes) { [void]$builder.Append(('\' * $slashes)) }
     [void]$builder.Append('"')
     return $builder.ToString()
 }
