@@ -2,7 +2,27 @@
 
 Windows 原生 C++20 / PowerShell Agent 记忆与知识库。默认 SQLite + FTS5，不要求 Docker、WSL 或 Python 服务。由 `Lordakee/qbrain` 的 MIT 代码继续开发；gbrain / OpenViking 是设计参考，不是完整功能等价声明。
 
-## 当前交付：经过原生验证的记忆预览版
+## 最新已验证代码：N46B Windows 模型传输优化
+
+测试源码 `2661e5205ba480c993210405d35c463efd8c6b6c`；
+[PR #6](https://github.com/youq616/qbrain/pull/6) 和
+[完整原生验证与开发包](https://github.com/youq616/qbrain/actions/runs/34626277700)。
+在该运行的 Artifacts 中选择 `qbrain-n44-windows-development-package`；外层归档中
+包含 `qbrain-windows-x64-development.zip` 和校验文件。Artifact 名称沿用 N44，但
+来源与 MANIFEST 必须是上述 N46B 提交。CI Artifact 保留期为 14 天，不是永久 Release。
+
+本轮修复整次网络请求截止时间、超大响应、半截结果、自动重定向和取消后的缓冲区
+生命周期；45 个原生回归组、51 项原生网络检查，以及原有记忆/MCP/Hook/两版
+PowerShell 验收全部通过。内层开发 ZIP SHA-256：
+`750b5835ad4c924365ba052aef2ed2e7482e0033558cdf84bf15db6b724f160b`。
+
+[本轮验收](docs/nodes/N46B-HARD-AUDIT.md) ·
+[机器可读结果](docs/nodes/n46b-evidence/RESULT.json) ·
+[升级兼容性](docs/integration/N46B-UPGRADE.zh-CN.md)。
+开发包未签名；真实登录 Win11 Agent、付费模型质量/费用及 PostgreSQL 对等没有在
+本轮完成。未改变采集、模型外发许可或数据库格式。
+
+## 历史永久预览包：不包含 N46B 修复
 
 **[下载 Windows x64 记忆预览版](https://github.com/youq616/qbrain/releases/tag/memory-preview-5ee79dfd)**。选择 `qbrain-windows-x64-memory-preview.zip`，完整解压后阅读中文说明。该包未签名，ZIP SHA-256 为 `fa106efa7066264c177c31f856d22828d750602ad953390088041d656d38296c`。原始 Windows 验证日志、校验值和来源信息同时发布。
 
@@ -29,7 +49,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-QbrainMemo
 
 Codex 将 `-HostName Claude` 改为 `-HostName Codex`。客户端的项目/Hook 信任确认仍由用户审核，安装器不绕过。默认数据位于 `%LOCALAPPDATA%\Qbrain\`，不上传真实会话、数据库或密钥到仓库。试用已有脑库前备份；卸载保留记忆与备份。
 
-## 验证
+## 早期记忆预览版验证（N44/N45/N46A）
 
 Windows/MSVC 完整应用构建通过；44 个注册回归组全部报告通过，其中需要真实 PostgreSQL DSN 的用例明确跳过，不能计作 PG 验收。真实进程 memory 44、MCP 17、Hooks 69、context 65、项目本地配置 6 项通过。PowerShell 5.1/7 各安装 69、采集许可/路径 16、字节传输 8 项通过。GCC 可移植 CI 通过；另完成 C++ 记忆与上下文的 ASan/UBSan 检查。
 

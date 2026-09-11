@@ -1,5 +1,6 @@
 # N46B — bounded Windows model transport
-Status: approved for implementation after N46B-PLAN-AUDIT.md; outcome pending.
+Status: done for the scoped N46B transport node after N46B-HARD-AUDIT.md.
+Not a full-project, signed-production, live-model or Win11 host acceptance claim.
 Baseline: youq616/qbrain @ 380524b8506e4b333613eb830bae8fd002f4b3ae.
 This node belongs only to the native Windows Qbrain project.
 
