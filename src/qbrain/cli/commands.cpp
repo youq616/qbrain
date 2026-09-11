@@ -218,7 +218,7 @@ int cmd_doctor(const std::vector<std::string>& args) {
 
 int cmd_config(const std::vector<std::string>& args) {
   if (args.size() < 2) {
-    std::cerr << "usage: qbrain config get|set <key> [value]\n";
+    std::cerr << "usage: qbrain config get|set <key> [value] [--local]\n";
     return 1;
   }
   return with_brain(args, [&](Brain& b) {
@@ -253,7 +253,7 @@ int cmd_config(const std::vector<std::string>& args) {
     }
     if (args[0] == "set") {
       if (args.size() < 3) return 1;
-      b.save_config_value(args[1], args[2]);
+      b.save_config_value(args[1], args[2], !flag(args, "--local"));
       std::cout << "set " << args[1] << "\n";
       return 0;
     }

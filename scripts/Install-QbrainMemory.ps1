@@ -164,7 +164,7 @@ try {
   $result=& $bridgeSource -FilePath $exe -ArgumentList @('init','--brain',$BrainId,'--no-default')
   if($result.ExitCode -ne 0){throw 'Project brain initialization failed.'}
   if($EnableCapture){
-   $result=& $bridgeSource -FilePath $exe -ArgumentList @('config','set','memory.writeback','salient','--brain',$BrainId)
+   $result=& $bridgeSource -FilePath $exe -ArgumentList @('config','set','memory.writeback','salient','--brain',$BrainId,'--local')
    if($result.ExitCode -ne 0){throw 'Capture opt-in failed.'}
   }
   Change $bridgePath (Raw $bridgeSource);Change $cfgPath (Json $cfg);Change $ownerPath (Json $newOwner)

@@ -333,14 +333,15 @@ void Brain::load_config() {
   }
 }
 
-void Brain::save_config_value(const std::string& key, const std::string& value) {
+void Brain::save_config_value(const std::string& key, const std::string& value,
+                              bool mirror_to_file) {
   auto st = db_.prepare("INSERT INTO config(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value");
   st.bind_text(1, key);
   st.bind_text(2, value);
   st.step_done();
   load_config();
   // API keys stay DB/env only; still mirror non-secret keys to file plane.
-  if (key != "embedding.api_key" && key != "chat.api_key" &&  // N39
+  if (mirror_to_file && key != "embedding.api_key" && key != "chat.api_key" &&  // N39
       key != "rerank.api_key") {
     save_file_config(config_);
   }

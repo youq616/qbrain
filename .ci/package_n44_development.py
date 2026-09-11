@@ -5,14 +5,16 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
+from validate_native_log import verified_groups
 import tempfile
 import zipfile
 
 root=Path.cwd();e=root/'evidence'
 def read(name): return (e/name).read_text(encoding='utf-8-sig')
-expected=re.findall(r'\{"([^"]+)",\s*test_\w+\}',(root/'tests/test_main.cpp').read_text())
-passed=re.findall(r'\[PASS\] (\w+)',read('regression.log'))
-assert len(expected)==44 and sorted(passed)==sorted(expected) and '[FAIL]' not in read('regression.log')
+expected=verified_groups((root/'tests/test_main.cpp').read_text(),read('regression.log'))
+with (e/'evidence-gate-tests.log').open('wb') as log:
+    subprocess.run([sys.executable,'.ci/test_validate_native_log.py'],stdout=log,stderr=subprocess.STDOUT,check=True)
 for file,text in [('memory_cycle.log','44 checks passed'),('mcp_boundaries.log','17 checks passed'),('hooks.log','69 passed'),('context_process.log','65 passed'),('transport51.log','8 checks passed'),('transport7.log','8 checks passed')]:
     assert text in read(file),(file,text)
 installer={}
@@ -28,6 +30,8 @@ for shell,name in [('powershell','consent51.log'),('pwsh','consent7.log')]:
     assert proc.returncode==0 and b'16 checks passed' in proc.stdout,name
 commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
 binary=root/'build/cl/qbrain.exe';digest=hashlib.sha256(binary.read_bytes()).hexdigest()
+with (e/'local-config.log').open('wb') as log:
+    subprocess.run([sys.executable,'.ci/test_local_config.py','--binary',str(binary)],stdout=log,stderr=subprocess.STDOUT,check=True)
 report={'source_commit':commit,'binary_sha256':digest,'result':'PASS','registered_groups':len(expected),'installer_checks':installer,'additional_consent_checks_per_shell':16,'real_host_model_consumption_verified':False,'signed':False,'postgres_memory_context_verified':False}
 # Staged native startup without development DLL paths or real user state.
 with tempfile.TemporaryDirectory(prefix='qbrain-package-smoke-') as t:
