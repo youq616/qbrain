@@ -1,0 +1,20 @@
+name: Apply locally verified N43 source once
+on:
+  push:
+    branches: ['optimization/n43-memory-cycle']
+    paths: ['.ci/n43-import/**', '.ci/apply_n43_once.py', '.github/workflows/apply-n43-once.yml']
+permissions:
+  contents: read
+jobs:
+  apply:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/optimization/n43-memory-cycle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+      - name: Verify base and hashes, apply source, remove importer, push without force
+        run: python3 .ci/apply_n43_once.py
