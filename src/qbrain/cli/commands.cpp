@@ -1,3 +1,4 @@
+#include "qbrain/integration/hook.hpp"
 #include "qbrain/cli/app.hpp"
 #include "qbrain/memory/session_memory.hpp"
 #include "qbrain/util/hash.hpp"
@@ -140,12 +141,14 @@ void print_help() {
       "  graph <slug> [--depth N]\n"
       "  delete <slug> [--source default]\n"
       "  embed --all | --slug s | --drain   (drain: process embed jobs queue)\n"
-      "  serve [--brain id] [--allow-write] [--http] [--port N]\n"
+      "  context list|read|summary [--uri qbrain://source/resources/] [--layer L0|L1|L2]\n"
+      "  hook --config <absolute project config> (JSON stdin; fail-open)\n"
+      "  serve [--brain id] [--tool-profile full|memory] [--allow-write] [--http] [--port N]\n"
       "  inbox [--watch]                     process %LOCALAPPDATA%\\Qbrain\\inbox\n"
       "  sync <notes-dir> [--watch] [--once]  live-sync notes (mtime state)\n"
       "  worker [--once]                     claim/complete minion jobs + inbox\n"
       "  dream [--apply] [--phase p] [--retention-hours N] [--json]\n"
-      "  memory capture|extract|read|status|forget [--source id]\n"
+      "  memory capture|extract|drain|read|status|forget [--source id]\n"
       "  session-capture [--automatic] [--session-id id] [--fragment-id id]\n"
       "  version\n"
       "  help\n\n"
@@ -165,7 +168,7 @@ int cmd_init(const std::vector<std::string>& args) {
   b.open();
   auto cfg = load_file_config();
   cfg.brain_id = id;
-  save_file_config(cfg);
+  if (!flag(args, "--no-default")) save_file_config(cfg);
   std::cout << "Initialized brain '" << id << "' at "
             << util::path_to_utf8(util::brain_db_path(id)) << "\n";
   return 0;
@@ -215,7 +218,7 @@ int cmd_doctor(const std::vector<std::string>& args) {
 
 int cmd_config(const std::vector<std::string>& args) {
   if (args.size() < 2) {
-    std::cerr << "usage: qbrain config get|set <key> [value]\n";
+    std::cerr << "usage: qbrain config get|set <key> [value] [--local]\n";
     return 1;
   }
   return with_brain(args, [&](Brain& b) {
@@ -250,7 +253,7 @@ int cmd_config(const std::vector<std::string>& args) {
     }
     if (args[0] == "set") {
       if (args.size() < 3) return 1;
-      b.save_config_value(args[1], args[2]);
+      b.save_config_value(args[1], args[2], !flag(args, "--local"));
       std::cout << "set " << args[1] << "\n";
       return 0;
     }
@@ -354,11 +357,12 @@ std::string bounded_stdin() {
   return value;
 }
 int cmd_memory(const std::vector<std::string>& args) {
-  if(args.empty()) { std::cerr << "usage: qbrain memory capture|extract|read|status|forget\n"; return 1; }
+  if(args.empty()) { std::cerr << "usage: qbrain memory capture|extract|drain|read|status|forget\n"; return 1; }
   const auto& action = args[0];
   std::set<std::string> values={"--brain","--source"};
   std::set<std::string> flags;
   if(action=="capture") { flags={"--manual","--stdin"}; }
+  else if(action=="drain") { values.insert("--method"); }
   else if(action=="extract") { values.insert("--event"); values.insert("--method"); }
   else if(action=="forget" || action=="status") { values.insert("--event"); }
   else if(action=="read") { values.insert("--query"); values.insert("--limit"); values.insert("--max-bytes"); }
@@ -373,6 +377,7 @@ int cmd_memory(const std::vector<std::string>& args) {
   if((action=="extract" || action=="forget" || action=="status") && opt(args,"--event").empty())
     throw memory::Error("event_id_required");
   return with_brain(args,[&](Brain& b) {
+    if(action=="drain") { std::cout << memory::drain(b,opt(args,"--source","default"),opt(args,"--method","local")).dump() << "\n"; return 0; }
     ops::OpContext ctx; ctx.brain=&b;
     ctx.args["source_id"]=opt(args,"--source","default");
     const auto& action=args[0];
@@ -408,6 +413,21 @@ int cmd_session_capture(const std::vector<std::string>& args) {
       {"action","capture"},{"payload",payload.dump()},{"manual",flag(args,"--automatic")?"false":"true"}};
     auto r=ops::global_registry().call("memory_write",ctx); std::cout << r.json << "\n"; return r.ok?0:1;
   });
+}
+
+int cmd_context(const std::vector<std::string>& args) {
+  try {
+    if(args.empty()||(args[0]!="list"&&args[0]!="read"&&args[0]!="summary"))throw memory::Error("invalid_context_action");
+    const bool write=args[0]=="summary";
+    const std::set<std::string> allowed=write?std::set<std::string>{"--brain","--source","--uri","--method"}:
+      std::set<std::string>{"--brain","--source","--uri","--layer","--max-bytes","--offset","--revision"};
+    std::set<std::string> seen;
+    for(std::size_t i=1;i<args.size();i+=2)if(!allowed.count(args[i])||!seen.insert(args[i]).second||i+1>=args.size())throw memory::Error("invalid_cli_argument");
+    return with_brain(args,[&](Brain& b){ops::OpContext c;c.brain=&b;c.args["source_id"]=opt(args,"--source","default");
+      for(const auto& [flag,key]:std::vector<std::pair<std::string,std::string>>{{"--uri","uri"},{"--layer","layer"},{"--max-bytes","max_bytes"},{"--offset","offset"},{"--revision","revision"},{"--method","method"}})
+        if(seen.count(flag))c.args[key]=opt(args,flag);
+      auto result=ops::global_registry().call(write?"context_write":"context_read",c);std::cout<<result.json<<"\n";return result.ok?0:1;});
+  }catch(const memory::Error& e){std::cout<<nlohmann::json({{"error",{{"code",e.what()}}}}).dump()<<"\n";return 1;}
 }
 
 int cmd_search(const std::vector<std::string>& args) {
@@ -457,6 +477,8 @@ int cmd_graph(const std::vector<std::string>& args) {
 int cmd_serve(const std::vector<std::string>& args) {
   mcp::ServeOptions opts;
   opts.brain_id = brain_id_from_args(args);
+  opts.tool_profile = opt(args,"--tool-profile","full");
+  if(opts.tool_profile!="full" && opts.tool_profile!="memory") throw memory::Error("invalid_tool_profile");
   opts.allow_write = flag(args, "--allow-write");
   if (const char* e = std::getenv("QBRAIN_MCP_ALLOW_WRITE")) {
     if (std::string(e) == "1" || std::string(e) == "true") opts.allow_write = true;
@@ -664,6 +686,8 @@ int run(int argc, char** argv) {
   try {
     const auto& cmd = args[0];
     std::vector<std::string> rest(args.begin() + 1, args.end());
+    if (cmd == "context") return cmd_context(rest);
+    if (cmd == "hook") return integration::run_hook(rest);
     if (cmd == "init") return cmd_init(rest);
     if (cmd == "doctor") return cmd_doctor(rest);
     if (cmd == "config") return cmd_config(rest);

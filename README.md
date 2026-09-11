@@ -1,51 +1,49 @@
 # Qbrain
 
-**Windows 原生个人知识与 Agent 记忆项目**。保持 C++20 / MSVC 与 PowerShell 路线，不把 WSL、Docker 或 Python 服务作为产品运行前提。默认使用 SQLite + FTS5；可选 PostgreSQL 后端需单独构建和验证。
+Windows 原生 C++20 / PowerShell Agent 记忆与知识库。默认 SQLite + FTS5，不要求 Docker、WSL 或 Python 服务。由 `Lordakee/qbrain` 的 MIT 代码继续开发；gbrain / OpenViking 是设计参考，不是完整功能等价声明。
 
-本仓库由项目所有者选定为后续开发位置。原始代码来自 MIT 许可的 `Lordakee/qbrain`，固定基线为 `2e5c4f0bf310ca4f340b3a2295d2dfd79d3b8325`，灵感来自 gbrain。
+## 当前交付：经过原生验证的记忆预览版
 
-## 当前状态：N42 基础修复开发版
+- [PR #4：自动记忆接入、目录上下文、精简 MCP](https://github.com/youq616/qbrain/pull/4)
+- [Windows 完整验证](https://github.com/youq616/qbrain/actions/runs/34616855167)
+- [中文安装与卸载](docs/integration/QUICKSTART.zh-CN.md)
+- [命令与行为边界](docs/integration/WINDOWS-MEMORY.md)
+- [机器可读验证结果](docs/nodes/n44-evidence/RESULT.json)
+- [剩余全盘优化路线](https://github.com/youq616/qbrain/issues/2)
 
-- [PR #1：N42 源码修改与验证](https://github.com/youq616/qbrain/pull/1)
-- [Issue #2：后续完整优化路线](https://github.com/youq616/qbrain/issues/2)
-- [原生 Windows / 局部可移植测试](https://github.com/youq616/qbrain/actions)
-- [开发状态与限制](docs/integration/DEVELOPMENT-STATUS.md)
+测试对应源码 `5ee79dfd5ab2512f024fefc9054bd3da12d64f1f`。后续审核/文档修订不改变该次验证的二进制；预览包用 MANIFEST 和源码 SHA 标识，不凭旧的内部版本号判断新旧。
 
-`main` 在合并前保留导入基线，修复位于 `optimization/n42-foundation`。请核对所看的分支和 CI 的实际提交号。
+已实现：会话归档与有原文证据的记忆、自动采集开关、来源隔离、重试去重、遗忘防恢复；Claude/Codex 项目级 Hooks 和可撤销安装；L0/L1 摘录与可选模型摘要、L2 原文分页、缓存失效；六工具 MCP 模式与有限批处理。
 
-本批已经修改：检索结果保留来源身份、按正确来源读取综合回答的证据、UTF-8 安全显示、受影响读取接口的来源检查、去除图片查询的隐式上传、禁止只读 MCP 综合回答隐式保存、重排结果校验，以及原生 Windows CRLF 宏续行识别。新增测试连接到原有构建与回归入口。
+**开发预览，不是“全盘优化已完成”。** 本批通过真实 Qbrain 进程的宿主事件重放，不是登录 Claude/Codex 后的模型回答质量验收。默认提取是保守规则，默认摘要是原文摘录。新记忆和上下文模块仅支持 SQLite。没有 Cursor 自动安装器、完整 gbrain 对等、ANN 或实际 token/费用节省保证。
 
-**本批没有完成：**会话正文语义提取、各 Agent 自动读写 Hooks、L0/L1 语义摘要、完整 gbrain 协议、全项目 ACL 审计和总成本基准。不要把接口数量等同于功能等价，也不要将本批描述为“全盘优化完成”。
+## 使用与数据
 
-## 构建和测试
+从匹配的已验证开发包完整解压；执行其中的 PowerShell 安装器，不要使用历史 `dist/` 文件。安装默认只召回，`-EnableCapture` 明确开启该项目的本地采集。外发模型许可和 MCP 写权限不会自动开启。
 
-在装有 MSVC Build Tools 的 Windows 测试环境中，从仓库根目录运行：
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-QbrainMemory.ps1 -HostName Claude -ProjectPath "D:\Projects\MyProject" -Binary ".\qbrain.exe" -EnableCapture
+```
+
+Codex 将 `-HostName Claude` 改为 `-HostName Codex`。客户端的项目/Hook 信任确认仍由用户审核，安装器不绕过。默认数据位于 `%LOCALAPPDATA%\Qbrain\`，不上传真实会话、数据库或密钥到仓库。试用已有脑库前备份；卸载保留记忆与备份。
+
+## 验证
+
+Windows/MSVC 完整应用构建通过；44 个注册回归组全部报告通过，其中需要真实 PostgreSQL DSN 的用例明确跳过，不能计作 PG 验收。真实进程 memory 44、MCP 17、Hooks 69、context 65、项目本地配置 6 项通过。PowerShell 5.1/7 各安装 69、采集许可/路径 16、字节传输 8 项通过。GCC 可移植 CI 通过；另完成 C++ 记忆与上下文的 ASan/UBSan 检查。
+
+完整日志、范围和失败修复见 [开发状态](docs/integration/DEVELOPMENT-STATUS.md) 与 [操作增量台账](docs/OPS-PARITY-DELTA-N44.md)。合成测试中的工具定义字节量由 30,224 降为 2,600；不代表实际 token 或账单下降相同比例。
+
+## 从源码构建
+
+在隔离的 Windows 开发环境，准备 MSVC Build Tools 后：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-cl.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-tests-cl.ps1 -SkipProductionBuild
 ```
 
-第二条仅在第一条已成功且源码未改变时复用同一轮生产对象；不确定时不传 `-SkipProductionBuild`。测试应放在隔离的开发环境，不要让真实凭据或生产数据库环境变量进入测试。
-
-CI 另用 Python 编排真实可执行文件的 MCP 测试；Python 仅为测试工具，不是 C++ 产品运行依赖。没有 PostgreSQL 测试 DSN 时，相关集成组明确跳过，不计作真实 PostgreSQL 验证。
-
-## MCP 与数据
-
-默认只读，需要 Agent 写入时显式选择 `--allow-write`：
-
-```powershell
-claude mcp add qbrain -- "D:\Projects\Qbrain\build\cl\qbrain.exe" serve
-```
-
-路径须换成本机实际构建路径。仅连接 MCP 不代表自动采集与召回 Hooks 已安装。
-
-数据默认位于 `%LOCALAPPDATA%\Qbrain\`。不要将数据库、API Key、Token、完整会话或真实个人资料提交到仓库。
-
-## 重要：旧产物不是修复版
-
-仓库 `dist/` 内已有的文件是上游历史产物，**不是从 N42 修复源码重新构建的安装包**。CI 成功也不等于所有 Windows 11 Agent 场景已验收。不要据此覆盖正在使用的程序或迁移生产记忆库。
+仅在生产构建成功且源码未变时使用 `-SkipProductionBuild`。CI 的 Python 是测试/打包工具，不是产品依赖。历史 `dist/` 产物并非本批重建，不能代替本批包。
 
 ## 许可
 
-MIT，保留原始版权和许可声明。借鉴其他系统的设计不代表直接复制其源码或取得额外许可证。
+MIT；保留 [LICENSE](LICENSE) 与 [第三方许可说明](THIRD-PARTY-NOTICES.md)。默认本地运行不代表开启外部模型之后资料仍完全不外发。

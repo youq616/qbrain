@@ -30,7 +30,8 @@ class Brain {
   Config& config() { return config_; }
 
   void load_config();
-  void save_config_value(const std::string& key, const std::string& value);
+  void save_config_value(const std::string& key, const std::string& value,
+                         bool mirror_to_file = true);
   std::optional<std::string> get_config_value(const std::string& key);
 
   // N2.5: canonical source identity and read-only registration lookup.

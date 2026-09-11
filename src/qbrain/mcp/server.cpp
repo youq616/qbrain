@@ -32,9 +32,15 @@ static std::string negotiate_protocol(const json& params) {
   return kProtocolVersion;
 }
 
-json tool_defs() {
+bool available(const std::string& name,const std::string& profile) {
+  if(profile=="full")return true;
+  if(profile!="memory")return false;
+  return name=="memory_read"||name=="memory_write"||name=="context_read"||name=="context_write"||name=="search"||name=="get_page";
+}
+json tool_defs(const std::string& profile) {
   json tools = json::array();
   for (auto* op : ops::global_registry().list()) {
+    if (!available(op->name,profile)) continue;
     json t;
     t["name"] = op->name;
     t["description"] = op->description.empty() ? op->name : op->description;
@@ -91,7 +97,7 @@ bool uses_ambient_source(const std::string& operation_name) {
          operation_name != "get_active_schema_pack" &&
          operation_name != "reload_schema_pack" && operation_name != "schema_stats" &&
          operation_name != "ontology_get" && operation_name != "ontology_dimensions" &&
-         operation_name != "memory_read" && operation_name != "memory_write";
+         operation_name != "context_read" && operation_name != "context_write" && operation_name != "memory_read" && operation_name != "memory_write";
 }
 
 bool is_analytics_operation(const std::string& operation_name) {
@@ -245,6 +251,11 @@ const std::unordered_map<std::string, ArgumentType>* typed_argument_schema(
   static const std::unordered_map<std::string, Type> memory_write = {
       {"source_id", Type::String}, {"action", Type::String},
       {"payload", Type::String}, {"event_id", Type::String}, {"method", Type::String}};
+  static const std::unordered_map<std::string, Type> context_read = {
+      {"source_id",Type::String},{"uri",Type::String},{"layer",Type::String},{"max_bytes",Type::UnsignedInteger},
+      {"offset",Type::UnsignedInteger},{"revision",Type::String}};
+  static const std::unordered_map<std::string, Type> context_write = {
+      {"source_id",Type::String},{"uri",Type::String},{"method",Type::String}};
   static const std::unordered_map<std::string, Type> no_arguments;
   static const std::unordered_map<std::string, Type> schema_pack_id = {
       {"id", Type::String}};
@@ -254,6 +265,8 @@ const std::unordered_map<std::string, ArgumentType>* typed_argument_schema(
   if (operation_name == "code_def" || operation_name == "code_refs" ||
       operation_name == "code_callers")
     return &code_arguments;
+  if (operation_name == "context_read") return &context_read;
+  if (operation_name == "context_write") return &context_write;
   if (operation_name == "memory_read") return &memory_read;
   if (operation_name == "memory_write") return &memory_write;
   if (operation_name == "list_link_sources") return &source_only;
@@ -329,7 +342,7 @@ json handle_request(Brain& brain, const ServeOptions& opts, const json& req,
   }
 
   if (method == "tools/list") {
-    return make_result(id, json{{"tools", tool_defs()}});
+    return make_result(id, json{{"tools", tool_defs(opts.tool_profile)}});
   }
 
   if (method == "tools/call") {
@@ -337,6 +350,7 @@ json handle_request(Brain& brain, const ServeOptions& opts, const json& req,
       return make_error(id, -32602, "tools/call requires string params.name");
     }
     auto name = params["name"].get<std::string>();
+    if (!available(name,opts.tool_profile)) return make_error(id,-32601,"Tool not available in selected profile");
     json arguments = params.contains("arguments") ? params["arguments"] : json::object();
     if (is_analytics_operation(name)) {
       auto argument_error = validate_analytics_arguments(id, arguments);

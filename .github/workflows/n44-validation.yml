@@ -1,0 +1,108 @@
+name: Native project memory and context validation
+on:
+  push:
+    branches: ['optimization/n44-context-release','main']
+    paths: ['src/**','include/**','tests/**','scripts/**','.ci/**','CMakeLists.txt','.github/workflows/n44-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n44-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: git archive --format=zip --output=qbrain-source.zip HEAD
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qbrain-n44-source
+          path: qbrain-source.zip
+          retention-days: 14
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build and exercise production processes without model credentials
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          python3 .ci/test_validate_native_log.py 2>&1 | tee evidence/evidence-gate.log
+          cmake -S . -B build/portable -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
+          cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests --parallel 2 2>&1 | tee evidence/build.log
+          build/portable/qbrain_memory_tests | tee evidence/memory-unit.log
+          build/portable/qbrain_context_tests | tee evidence/context-unit.log
+          python3 .ci/test_local_config.py --binary build/portable/qbrain | tee evidence/local-config.log
+          python3 .ci/test_memory_cycle.py --binary build/portable/qbrain | tee evidence/memory.log
+          python3 .ci/test_mcp_boundaries.py --binary build/portable/qbrain | tee evidence/mcp.log
+          python3 .ci/test_hooks.py --binary build/portable/qbrain | tee evidence/hooks.log
+          python3 .ci/test_context_process.py --binary build/portable/qbrain --report evidence/benchmark.json | tee evidence/context.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n44-portable-logs
+          path: evidence/
+          retention-days: 14
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Full native application build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-cl.ps1 2>&1 | Tee-Object evidence/build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Real memory MCP hooks context and local-config process tests
+        shell: pwsh
+        run: |
+          foreach ($suite in @('memory_cycle','mcp_boundaries','hooks','context_process','local_config')) {
+            python .ci/test_$suite.py --binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/$suite.log
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          python .ci/test_context_process.py --binary build/cl/qbrain.exe --report evidence/benchmark.json 2>&1 | Tee-Object evidence/benchmark.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: PowerShell 5.1 transport and reversible installation
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File .ci/test_windows_transport.ps1 -Binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/transport51.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          powershell -NoProfile -ExecutionPolicy Bypass -File .ci/test_install_hooks.ps1 -Binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/install51.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: PowerShell 7 transport and reversible installation
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File .ci/test_windows_transport.ps1 -Binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/transport7.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File .ci/test_install_hooks.ps1 -Binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/install7.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Full original regression plus context unit group
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 -SkipProductionBuild 2>&1 | Tee-Object evidence/regression.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify all gates and package exact tested binary
+        shell: pwsh
+        run: python .ci/package_n44_development.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n44-windows-logs
+          path: evidence/
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: qbrain-n44-windows-development-package
+          path: package/
+          retention-days: 14

@@ -413,6 +413,29 @@ Json read(Brain& b, const std::string& source, const std::string& query, int lim
   return result;
 }
 
+Json drain(Brain& b,const std::string& source,const std::string& method,int limit) {
+  source_check(b,source);
+  if((method!="local"&&method!="model")||limit<1||limit>16)throw Error("invalid_batch_request");
+  Json out={{"status","empty"},{"events",Json::array()},{"limit",limit},{"max_attempts",3},{"provider_calls",0},{"cost",nullptr}};
+  if(method=="model"&&b.get_config_value("memory.external_extraction").value_or("")!="allow") {out["reason"]="external_extraction_denied";return out;}
+  if(method=="model"&&resolve_api_key(b.config(),true).empty()){out["reason"]="model_unconfigured";return out;}
+  if(!ready(b.db()))return out;
+  std::vector<std::string> ids;
+  {auto s=b.db().prepare("SELECT event_id FROM memory_events WHERE source_id=? AND status IN ('archived','extracting') AND attempts<3 AND lease_until<=? AND (expires_at=0 OR expires_at>?) AND (automatic=0 OR ?<>'off') ORDER BY created_at,event_id LIMIT ?");
+   s.bind_text(1,source);s.bind_int(2,now());s.bind_int(3,now());s.bind_text(4,mode(b));s.bind_int(5,limit);while(s.step())ids.push_back(s.column_text(0));}
+  const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(30);
+  int provider_calls=0;
+  for(const auto& id:ids){
+    if(std::chrono::steady_clock::now()>=deadline){out["deadline_reached"]=true;break;}
+    try {auto item=extract(b,source,id,method);provider_calls+=item.value("provider_attempts",0);out["events"].push_back(item);}
+    catch(const Error& e){out["events"].push_back({{"event_id",id},{"error_code",e.what()}});}
+    catch(...){out["events"].push_back({{"event_id",id},{"error_code","storage_busy_or_failed"}});}
+  }
+  out["provider_calls"]=provider_calls;out["status"]=out["events"].empty()?"empty":"processed";
+  // Deadline is checked between calls; an in-flight provider has its own 30s bound.
+  return out;
+}
+
 Json forget(Brain& b, const std::string& source, const std::string& id) {
   source_check(b,source); auto& db=b.db(); if(!ready(db)) throw Error("event_not_found");
   Tx tx(db); const auto e=event(db,source,id);
