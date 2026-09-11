@@ -1,5 +1,5 @@
 # N44B — Project-scoped native memory hooks
-Status: approved after N44B-PLAN-AUDIT.md; owner-delegated ChatGPT review.
+Status: scoped preview accepted; see N44B-HARD-AUDIT.md. Owner-delegated ChatGPT review; live host/model acceptance remains excluded.
 
 Goal: Connect N43 to documented Claude Code/Codex SessionStart, UserPromptSubmit,
 Stop, PreCompact, SessionEnd. C++20 runtime and reversible PowerShell 5.1/7 install.

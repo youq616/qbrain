@@ -70,7 +70,10 @@ A batch selects at most eight eligible events, skips events after three attempts
 and checks its time budget between calls. Existing leases/transactions still govern
 actual extraction. External model extraction additionally requires persistent
 `memory.external_extraction=allow` and configured model credentials. This command
-never grants itself consent; an in-flight call has its own 30-second bound.
+never grants itself consent. Memory model extraction passes a 60,000 ms timeout
+to the current transport; this is not a guaranteed overall wall-clock deadline.
+The drain budget is checked between calls. Do not run model batches on the prompt
+hook path; native prompt hooks in this build use local or deferred extraction.
 
 ## Directory context and exact raw reads
 
@@ -118,3 +121,11 @@ not measure actual model quality, tokens or fees. No ANN speedup claim. New modu
 are SQLite-only; optional historical PostgreSQL functionality is not parity with
 this memory/context layer. No real Win11 account, live host/model lifecycle, external
 provider, signed installer or complete gbrain functional equivalence is certified.
+
+## Development-preview errata
+
+The native CI package for `5ee79dfd` included an incorrect 30-second statement
+for model extraction. The paragraph above corrects documentation only; it does
+not change the binary. Hook fixtures do not validate live upstream HTTP services.
+Default case-insensitive Windows directories were tested; installation identities
+for distinct case-sensitive NTFS directory names have not been validated.

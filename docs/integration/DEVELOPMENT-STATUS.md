@@ -1,28 +1,30 @@
-# Qbrain development status - 2026-09-11
+# Qbrain verified memory preview
 
-Repository: `youq616/qbrain`. Original `Lordakee/qbrain` remains unchanged.
-Main baseline: `c65f8686b5f7a9c730df9f1770af400ae801d6ea`, imported from MIT revision `2e5c4f0bf310ca4f340b3a2295d2dfd79d3b8325`.
-Development: `optimization/n42-foundation`, PR #1. Full roadmap: issue #2.
+Repository: youq616/qbrain. Original upstream is unchanged.
+Tested code: `5ee79dfd5ab2512f024fefc9054bd3da12d64f1f`.
+Workflow: https://github.com/youq616/qbrain/actions/runs/34616855167
+PR #1 (N42) and #3 (N43/N44A) were merged before this wave. PR #4 carries N44B, N45 and scoped N46A. GitHub's PR state, not this prose, determines whether the latest wave is merged.
 
-## N42 bounded foundation repair: validated
+## Verified scope
 
-Tested code: `d8fcec42b343668836af6974e38c05550083a655`; later completion updates are documentation only.
-Workflow: https://github.com/youq616/qbrain/actions/runs/34556246262
+Windows/MSVC complete application, 44 registered regression groups, 44 real memory checks, 17 prior MCP checks, 69 hook fixtures, 65 context fixtures and six local-configuration checks. On EACH PowerShell 5.1 and 7: 69 installer, 16 consent/path and eight transport checks passed. Packaging also revalidated the logs and launched the identical executable in an isolated directory with only System32 on PATH. The old optional PostgreSQL real-DSN integration was skipped, not certified by its enclosing group's status.
 
-Windows/MSVC full application build passed. Original 41 test groups plus the new N42 group: 42/42 PASS. Real executable stdio MCP integration: 17/17 PASS with successful cleanup. Three focused CTest targets passed under each of GCC and Clang. Raw log artifact hashes and exact scope are in `docs/nodes/N42-HARD-AUDIT.md` and `docs/nodes/n42-evidence/RESULT.json`.
+C++ memory/context ASan and UBSan checks passed locally (82 + 37 assertions); this is not sanitizer coverage of PowerShell, the entire bundled C library, live WinHTTP or a logged-in host. See `../nodes/n44-evidence/RESULT.json` for hashes and exact limits.
 
-Actual PostgreSQL integration was not run because `QBRAIN_PG_TEST_DSN` was absent. Real model providers and actual Windows 11 Agent lifecycle integration remain unverified; the Windows CI result is not a claim about those environments.
+## Failures found and fixed
 
-## Delivered code
+Native CI found three genuine defects before delivery: PowerShell's null backup argument for File.Replace, project configuration accidentally mirroring brain_id into global config, and Process.Start inheriting a different working directory than Set-Location. Repairs preserve atomic replacement, add explicit DB-only `config set ... --local`, and set the child filesystem working directory. Original assertions remained; no failing regression was removed.
 
-Cross-source search identity; correct-source synthesis evidence; UTF-8 bounded excerpts; affected page/fact authorization; no implicit image upload; no save in read-only MCP synthesis; rerank validation; and Windows CRLF macro continuation. No new runtime service or schema/data migration.
+Capture also now requires the installation's own opt-in even for an already salient shared brain. Reinstall without opt-in returns to recall-only. Case-alias checks use filesystem identity. Installer support for distinct case-sensitive NTFS A/a names is not certified.
 
-Native testing exposed and fixed a parser newline bug and a Python test SQLite cleanup bug. Original golden outputs and assertions were retained. Normal CI has read-only repository access; one-time source application workflows were removed. The initial `.ci/n42.applied.json` records first application, not current post-repair file hashes.
+## Artifact and usage boundaries
 
-## Remaining work
+The EXE SHA-256 is `3bd43e8a099d9b4136aa0b96bd941fed7366a320a09b8bd253a0f272194ecdf8` (3,792,384 bytes, PE32+ x86-64, unsigned). Its upstream internal version was not changed; identify this preview by SHA and manifest. Historical dist installers are not this executable.
 
-Semantic session extraction, automatic Agent recall/capture hooks, semantic directory L0/L1 layers, full gbrain protocol, all-operation ACL review, Windows Unicode argv and total-cost benchmarks are issue #2 work. N42 completion does not complete these features or imply universal token savings.
+The original CI package contains a model-timeout documentation error, corrected in WINDOWS-MEMORY.md. A documentation-only repack must retain executable and script bytes and preserve the original manifest/provenance. Model drain checks its budget between calls; the configured 60,000 ms transport timeout is not a guaranteed total wall-clock bound.
 
-## Historical binaries are not the repair build
+## Not completed by this milestone
 
-`dist/` contains upstream artifacts, not rebuilt N42 binaries. No new installation package has been released. Do not overwrite a working executable or migrate production memory using those old files. The new tests use disposable synthetic data; user memory and credentials were not published.
+Real logged-in Claude/Codex model consumption, Win11 user-environment acceptance, online model quality/billing, new PostgreSQL memory/context parity, Cursor automation, semantic cross-session conflict merging, ANN, complete multi-tenant ACL/DLP, and full gbrain equivalence. Default L0/L1 is an extractive preview. Synthetic byte/latency results are not task-quality or token-cost results.
+
+Roadmap remains open in issue #2. Node audits are owner-delegated ChatGPT reviews, not independent Claude Code audits. Full project completion is not claimed.

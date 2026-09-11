@@ -1,5 +1,5 @@
 # N45 — Logical directory context, bounded previews and exact raw reads
-Status: approved by N45-PLAN-AUDIT.md.
+Status: scoped preview accepted; see N45-HARD-AUDIT.md. Not full OpenViking parity.
 Scope: independent C++20 design inspired by directory context, no upstream code.
 Logical qbrain://source/{memories,resources,skills}/ paths are never disk paths.
 L0/L1 previews explicitly extractive by default; optional model summary requires

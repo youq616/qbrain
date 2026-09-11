@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "repository": "youq616/qbrain",
+  "tested_source_commit": "5ee79dfd5ab2512f024fefc9054bd3da12d64f1f",
+  "workflow_run": 34616855167,
+  "native_result": "PASS",
+  "registered_groups": ["rrf","n43_memory","n45_context","n42_foundation","vector","chunker","extract","storage","mcp","rerank","minions","migration_v6","n12_dream","live_sync","n13","codeintel","analytics","n19","n20","n22","n23","n20_23","n24_25","n26_27","wave4","wave5","doctor","n14","n15","n16","n17","n18","n30_c_routing_storage","n30_b_auth_redaction","n31_c_negatives","n31_a_counts_mapping","n32_scan_integration","n34","n33_multimodal","n35_contract_suite","n36_token_scope","n37_packaging","n38_pg_backend","n39_rerank_config"],
+  "checks": {
+    "memory_process":44,"mcp_process":17,"hooks_process":69,"context_process":65,
+    "installer_powershell_51":69,"installer_powershell_7":69,
+    "consent_powershell_51":16,"consent_powershell_7":16,
+    "transport_powershell_51":8,"transport_powershell_7":8,
+    "local_configuration_process":6,"evidence_parser_unit":5
+  },
+  "binary": {"sha256":"3bd43e8a099d9b4136aa0b96bd941fed7366a320a09b8bd253a0f272194ecdf8","bytes":3792384,"machine":"PE32+ x86-64","signed":false},
+  "artifacts": {
+    "windows_logs":{"id":10270422765,"sha256":"aa73772d02792c2a1b194912b5b92414139f221f9a3d9c82fec2a79b62651624"},
+    "package":{"id":10271347236,"sha256":"1a9e6b4e297d1a6495170f33bc22850acdda58ddbae766833d2b4cb290e820a9"},
+    "source":{"id":10271126688,"sha256":"0ee25ccab3e26a68d68e1a3375c88456a256c86466c3ac7fd218d3850c696172"}
+  },
+  "original_inner_zip_sha256":"f0cd29eb823b0523ed3fe785b08624e043ec30a17aa44785af9762aef09fd1d9",
+  "local_sanitizers": {
+    "scope":"C++ memory/context modules; not PowerShell or live provider",
+    "exit_code":0,"memory_checks":82,"context_checks":37,
+    "sanitizers":["address","undefined"],
+    "source_binary_relation":"C++ source identical to 6edc60ff / 5ee79dfd; latest changes are bridge only",
+    "log_sha256":"15abbd09de3e716f9ee8dfb91b45d8a1e9d22891ddde4813075592aad4e30354"
+  },
+  "benchmark": {
+    "format_version":1,"scope":"synthetic local fixture; no LLM answer-quality or billing evaluation",
+    "platform":"Windows-2025Server-10.0.26100-SP0","checks":65,"documents":96,
+    "original_body_bytes":860160,"cached_L1_response_bytes":8166,"cached_L1_truncated":true,
+    "full_tool_count":112,"compact_tool_count":6,"full_tool_definition_bytes":30224,"compact_tool_definition_bytes":2600,
+    "cached_read_with_process_start_median_ms":29.4024,"cached_read_with_process_start_max_ms":31.3829,"latency_samples":9,
+    "provider_calls":0,"provider_tokens":null,"monetary_savings":null,"accuracy_improvement":null,
+    "limitations":["L1 is an extractive preview, not all original evidence","Byte reduction is not token or fee reduction","Latency includes process start and storage open","No cross-hardware latency guarantee"]
+  },
+  "unverified":["actual logged-in host/model consumption","Windows 11 client environment","live model quality and billing","new PostgreSQL memory/context modules","complete gbrain parity","complete multi-tenant ACL and DLP","case-sensitive NTFS installer identities"]
+}

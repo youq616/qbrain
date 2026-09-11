@@ -1,5 +1,5 @@
 # N46A — bounded maintenance and measurement (scoped)
-Status: approved for integration validation; no outcome claim.
+Status: bounded integration subset accepted by N46A-HARD-AUDIT.md; full N46 remains open.
 The N45 integration includes bounded explicit batch maintenance and compact MCP.
 This audit also reviews their implemented diff before native validation; it is not
 claimed as a pre-implementation independent audit for that already-written portion.
