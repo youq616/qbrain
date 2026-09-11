@@ -12,7 +12,8 @@ import zipfile
 
 root=Path.cwd();e=root/'evidence'
 def read(name): return (e/name).read_text(encoding='utf-8-sig')
-expected=verified_groups((root/'tests/test_main.cpp').read_text(),read('regression.log'))
+# N46B adds exactly one named group; retain the historical validator default.
+expected=verified_groups((root/'tests/test_main.cpp').read_text(),read('regression.log'),expected_count=45)
 with (e/'evidence-gate-tests.log').open('wb') as log:
     subprocess.run([sys.executable,'.ci/test_validate_native_log.py'],stdout=log,stderr=subprocess.STDOUT,check=True)
 for file,text in [('memory_cycle.log','44 checks passed'),('mcp_boundaries.log','17 checks passed'),('hooks.log','69 passed'),('context_process.log','65 passed'),('transport51.log','8 checks passed'),('transport7.log','8 checks passed')]:
@@ -47,7 +48,7 @@ with tempfile.TemporaryDirectory(prefix='qbrain-package-smoke-') as t:
     subprocess.run([str(exe),'init','--brain','package-smoke','--no-default'],cwd=home,env=env,capture_output=True,check=True,timeout=15)
     assert hashlib.sha256(exe.read_bytes()).hexdigest()==digest
 (e/'validation.json').write_text(json.dumps(report,indent=2)+'\n')
-files={'qbrain.exe':binary,'LICENSE':root/'LICENSE','THIRD-PARTY-NOTICES.md':root/'THIRD-PARTY-NOTICES.md','WINDOWS-MEMORY.md':root/'docs/integration/WINDOWS-MEMORY.md','QUICKSTART.zh-CN.md':root/'docs/integration/QUICKSTART.zh-CN.md','scripts/Install-QbrainMemory.ps1':root/'scripts/Install-QbrainMemory.ps1','scripts/Invoke-QbrainJson.ps1':root/'scripts/Invoke-QbrainJson.ps1','verification/validation.json':e/'validation.json','verification/benchmark.json':e/'benchmark.json','verification/http-transport.json':e/'http-transport.json'}
+files={'HTTP-TRANSPORT.md':root/'docs/integration/HTTP-TRANSPORT.md','qbrain.exe':binary,'LICENSE':root/'LICENSE','THIRD-PARTY-NOTICES.md':root/'THIRD-PARTY-NOTICES.md','WINDOWS-MEMORY.md':root/'docs/integration/WINDOWS-MEMORY.md','QUICKSTART.zh-CN.md':root/'docs/integration/QUICKSTART.zh-CN.md','scripts/Install-QbrainMemory.ps1':root/'scripts/Install-QbrainMemory.ps1','scripts/Invoke-QbrainJson.ps1':root/'scripts/Invoke-QbrainJson.ps1','verification/validation.json':e/'validation.json','verification/benchmark.json':e/'benchmark.json','verification/http-transport.json':e/'http-transport.json'}
 manifest={**report,'files':{n:{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for n,p in files.items()}}
 out=root/'package';out.mkdir(exist_ok=True);archive=out/'qbrain-windows-x64-development.zip'
 with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
