@@ -1,0 +1,96 @@
+name: N42 native and portable validation
+
+on:
+  push:
+    branches: ['optimization/n42-foundation']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qbrain-n42-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/optimization/n42-foundation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      commit: ${{ steps.apply.outputs.commit }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Validate and apply source patch once
+        id: apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .ci/apply_n42.py
+          if ! git diff --quiet || test -n "$(git ls-files --others --exclude-standard)"; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add -A
+            git commit -m 'fix(n42): apply source identity, UTF-8 and read-boundary repairs'
+            git push origin HEAD:refs/heads/optimization/n42-foundation
+          fi
+          SHA=$(git rev-parse HEAD)
+          echo "commit=$SHA" >> "$GITHUB_OUTPUT"
+          printf 'Validated source commit: `%s`\n' "$SHA" >> "$GITHUB_STEP_SUMMARY"
+          git archive --format=zip --output=qbrain-n42-source.zip HEAD
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qbrain-n42-source
+          path: qbrain-n42-source.zip
+          retention-days: 14
+
+  portable:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - name: Compile and run focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S tests/n42 -B build/n42 -DQBRAIN_N42_SQLITE_ADAPTER_TEST=ON
+          cmake --build build/n42 --parallel 2
+          ctest --test-dir build/n42 --output-on-failure
+
+  windows:
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - name: Full native MSVC application build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          "Source commit: ${{ needs.prepare.outputs.commit }}" | Set-Content evidence/source.txt
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-cl.ps1 2>&1 | Tee-Object evidence/windows-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Original full regression suite plus N42 tests
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/windows-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload native logs even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qbrain-n42-windows-logs
+          path: evidence/
+          retention-days: 14
