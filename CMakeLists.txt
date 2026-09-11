@@ -187,8 +187,8 @@ if(WIN32)
 endif()
 
 qbrain_lib(service
-  src/qbrain/service/inbox_watch.cpp
   src/qbrain/service/live_sync.cpp
+  src/qbrain/service/inbox_watch.cpp
 )
 target_link_libraries(qbrain_service PUBLIC qbrain_core qbrain_ingest qbrain_util)
 
@@ -240,6 +240,7 @@ add_executable(qbrain_tests
   tests/test_main.cpp
   tests/test_n43.cpp
   tests/test_n45.cpp
+  tests/test_n46b.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
   tests/test_vector.cpp
@@ -305,3 +306,11 @@ add_executable(qbrain_context_tests tests/test_n45.cpp)
 target_compile_definitions(qbrain_context_tests PRIVATE QBRAIN_CONTEXT_STANDALONE=1)
 target_link_libraries(qbrain_context_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory)
 add_test(NAME qbrain_context_unit COMMAND qbrain_context_tests)
+
+# Native HTTP loopback fixtures exercise the production WinHTTP implementation.
+add_executable(qbrain_http_tests tests/test_n46b.cpp)
+target_compile_definitions(qbrain_http_tests PRIVATE QBRAIN_HTTP_STANDALONE=1)
+target_link_libraries(qbrain_http_tests PRIVATE qbrain_ai)
+add_test(NAME qbrain_http_input_unit COMMAND qbrain_http_tests)
+add_executable(qbrain_http_probe tests/http_probe.cpp)
+target_link_libraries(qbrain_http_probe PRIVATE qbrain_ai qbrain_core)

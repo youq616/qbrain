@@ -1,27 +1,11 @@
 #include <iostream>
-#include <vector>
-#include <functional>
+#include <stdexcept>
 #include <string>
 
-using TestFn = void (*)();
-static std::vector<std::pair<const char*, TestFn>>& registry() {
-  static std::vector<std::pair<const char*, TestFn>> r;
-  return r;
-}
-
-struct Reg {
-  Reg(const char* n, TestFn f) { registry().push_back({n, f}); }
-};
-
-#define QB_TEST(name)                         \
-  void name();                                \
-  static Reg reg_##name(#name, name);         \
-  void name()
-
-#define QB_CHECK(cond)                                                  \
+#define QB_CHECK(x)                                                     \
   do {                                                                  \
-    if (!(cond)) {                                                      \
-      throw std::runtime_error(std::string("CHECK failed: ") + #cond +  \
+    if (!(x)) {                                                         \
+      throw std::runtime_error(std::string("check failed: ") + #x +     \
                                " @ " + __FILE__ + ":" + std::to_string(__LINE__)); \
     }                                                                   \
   } while (0)
@@ -30,6 +14,7 @@ struct Reg {
 void test_rrf();
 void test_n43();
 void test_n45();
+void test_n46b();
 void test_n42_foundation();
 void test_vector();
 void test_chunker();
@@ -81,6 +66,7 @@ int main() {
       {"rrf", test_rrf},
       {"n43_memory", test_n43},
       {"n45_context", test_n45},
+      {"n46b_http", test_n46b},
       {"n42_foundation", test_n42_foundation},
       {"vector", test_vector},
       {"chunker", test_chunker},
