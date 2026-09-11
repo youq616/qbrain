@@ -197,11 +197,12 @@ qbrain_lib(files
   src/qbrain/files/image_meta.cpp
 )
 
-qbrain_lib(memory src/qbrain/memory/session_memory.cpp)
+qbrain_lib(memory src/qbrain/memory/session_memory.cpp src/qbrain/integration/hook.cpp src/qbrain/context/context.cpp)
 target_link_libraries(qbrain_memory PUBLIC qbrain_core qbrain_ai qbrain_util)
 
 qbrain_lib(ops
   src/qbrain/ops/memory_ops.cpp
+  src/qbrain/ops/context_ops.cpp
   src/qbrain/ops/registry.cpp
   src/qbrain/ops/handlers.cpp
 )
@@ -238,6 +239,7 @@ enable_testing()
 add_executable(qbrain_tests
   tests/test_main.cpp
   tests/test_n43.cpp
+  tests/test_n45.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
   tests/test_vector.cpp
@@ -298,3 +300,8 @@ add_executable(qbrain_memory_tests tests/test_n43.cpp)
 target_compile_definitions(qbrain_memory_tests PRIVATE QBRAIN_MEMORY_STANDALONE=1)
 target_link_libraries(qbrain_memory_tests PRIVATE qbrain_ops qbrain_memory)
 add_test(NAME qbrain_memory_unit COMMAND qbrain_memory_tests)
+
+add_executable(qbrain_context_tests tests/test_n45.cpp)
+target_compile_definitions(qbrain_context_tests PRIVATE QBRAIN_CONTEXT_STANDALONE=1)
+target_link_libraries(qbrain_context_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory)
+add_test(NAME qbrain_context_unit COMMAND qbrain_context_tests)

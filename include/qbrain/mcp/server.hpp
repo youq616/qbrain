@@ -8,6 +8,7 @@ namespace qbrain::mcp {
 struct ServeOptions {
   std::string brain_id = "default";
   bool allow_write = false;
+  std::string tool_profile = "full";
   // N30 D3: transport discriminator. stdio is a local trusted pipe (allow_write
   // honored, ctx.remote=false); HTTP is network-exposed (ctx.remote=true, so the
   // registry centrally denies Write/Admin regardless of allow_write).
