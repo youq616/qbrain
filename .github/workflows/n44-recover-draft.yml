@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Recover and validate draft bytes, never execute or apply
+      - name: Recover bytes for inspection; partial content is not a validated patch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -28,21 +28,18 @@ jobs:
               request = urllib.request.Request('https://api.github.com/repos/youq616/qbrain/git/blobs/' + sha, headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
               with urllib.request.urlopen(request, timeout=30) as response:
                   blob = json.load(response)
-              assert blob['encoding'] == 'base64'
               data = base64.b64decode(blob['content'])
               assert hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest() == sha
               parts.append(data.decode('ascii').strip())
           compressed = base64.b64decode(''.join(parts), validate=True)
           decoder = lzma.LZMADecompressor(memlimit=268435456)
           raw = decoder.decompress(compressed, max_length=4194304)
-          assert decoder.eof and not decoder.unused_data
-          bundle = json.loads(raw)
-          (out / 'draft.json').write_bytes(raw)
-          print('Recovered JSON fields:', list(bundle))
-          print('Decoded byte count:', len(raw), 'SHA256:', hashlib.sha256(raw).hexdigest())
-          if 'files' in bundle:
-              print('File manifest:', json.dumps(bundle['files'], ensure_ascii=True))
-          subprocess.run(['git','archive','--format=zip','--output=recovered/base-source.zip','52c07fdb10efea7d7603e4bab5f22067d37448ec'], check=True)
+          (out / 'draft.partial.txt').write_bytes(raw)
+          status = {'complete': decoder.eof and not decoder.unused_data, 'length':len(raw), 'sha256':hashlib.sha256(raw).hexdigest(), 'compressed_sha256':hashlib.sha256(compressed).hexdigest()}
+          (out / 'status.json').write_text(json.dumps(status, indent=2))
+          print(status)
+          print('Prefix:',repr(raw[:160]), 'Suffix:',repr(raw[-160:]))
+          subprocess.run(['git','archive','--format=zip','--output=recovered/base-source.zip','HEAD'], check=True)
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
