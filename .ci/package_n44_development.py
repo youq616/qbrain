@@ -20,10 +20,15 @@ for name in ['install51.log','install7.log']:
     m=re.search(r'Native installer: (\d+) checks passed',read(name))
     assert m and int(m[1])>=60,name
     installer[name]=int(m[1])
+# Additional opt-in/path-identity regressions use the same tested native binary.
+for shell,name in [('powershell','consent51.log'),('pwsh','consent7.log')]:
+    proc=subprocess.run([shell,'-NoProfile','-ExecutionPolicy','Bypass','-File','.ci/test_install_consent.ps1','-Binary','build/cl/qbrain.exe'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=180)
+    (e/name).write_bytes(proc.stdout)
+    print(proc.stdout.decode('utf-8',errors='replace'))
+    assert proc.returncode==0 and b'16 checks passed' in proc.stdout,name
 commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
 binary=root/'build/cl/qbrain.exe';digest=hashlib.sha256(binary.read_bytes()).hexdigest()
-report={'source_commit':commit,'binary_sha256':digest,'result':'PASS','registered_groups':len(expected),'installer_checks':installer,'real_host_model_consumption_verified':False,'signed':False,'postgres_memory_context_verified':False}
-(e/'validation.json').write_text(json.dumps(report,indent=2)+'\n')
+report={'source_commit':commit,'binary_sha256':digest,'result':'PASS','registered_groups':len(expected),'installer_checks':installer,'additional_consent_checks_per_shell':16,'real_host_model_consumption_verified':False,'signed':False,'postgres_memory_context_verified':False}
 # Staged native startup without development DLL paths or real user state.
 with tempfile.TemporaryDirectory(prefix='qbrain-package-smoke-') as t:
     home=Path(t); exe=home/'qbrain.exe';exe.write_bytes(binary.read_bytes())
@@ -31,13 +36,14 @@ with tempfile.TemporaryDirectory(prefix='qbrain-package-smoke-') as t:
     env.update(HOME=t,LOCALAPPDATA=t,USERPROFILE=t,PATH=os.environ['SystemRoot']+'\\System32')
     subprocess.run([str(exe),'init','--brain','package-smoke','--no-default'],cwd=home,env=env,capture_output=True,check=True,timeout=15)
     assert hashlib.sha256(exe.read_bytes()).hexdigest()==digest
-files={'qbrain.exe':binary,'LICENSE':root/'LICENSE','WINDOWS-MEMORY.md':root/'docs/integration/WINDOWS-MEMORY.md','scripts/Install-QbrainMemory.ps1':root/'scripts/Install-QbrainMemory.ps1','scripts/Invoke-QbrainJson.ps1':root/'scripts/Invoke-QbrainJson.ps1','verification/validation.json':e/'validation.json','verification/benchmark.json':e/'benchmark.json'}
+(e/'validation.json').write_text(json.dumps(report,indent=2)+'\n')
+files={'qbrain.exe':binary,'LICENSE':root/'LICENSE','THIRD-PARTY-NOTICES.md':root/'THIRD-PARTY-NOTICES.md','WINDOWS-MEMORY.md':root/'docs/integration/WINDOWS-MEMORY.md','QUICKSTART.zh-CN.md':root/'docs/integration/QUICKSTART.zh-CN.md','scripts/Install-QbrainMemory.ps1':root/'scripts/Install-QbrainMemory.ps1','scripts/Invoke-QbrainJson.ps1':root/'scripts/Invoke-QbrainJson.ps1','verification/validation.json':e/'validation.json','verification/benchmark.json':e/'benchmark.json'}
 manifest={**report,'files':{n:{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for n,p in files.items()}}
 out=root/'package';out.mkdir(exist_ok=True);archive=out/'qbrain-windows-x64-development.zip'
 with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
     for n,p in files.items():z.write(p,n)
     z.writestr('MANIFEST.json',json.dumps(manifest,indent=2)+'\n')
-    z.writestr('README-FIRST.txt','Development build, unsigned. See WINDOWS-MEMORY.md and verification. Hook fixtures are not live Agent/model acceptance. Back up existing databases. Do not use historical dist installers.\n')
+    z.writestr('README-FIRST.txt','Development build, unsigned. See QUICKSTART.zh-CN.md, WINDOWS-MEMORY.md and verification. Hook fixtures are not live Agent/model acceptance. Back up existing databases. Do not use historical dist installers.\n')
 with zipfile.ZipFile(archive) as z:
     assert z.testzip() is None
     for n,p in files.items():assert hashlib.sha256(z.read(n)).hexdigest()==manifest['files'][n]['sha256']

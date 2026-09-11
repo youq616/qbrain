@@ -46,7 +46,7 @@ function Write-Atomic([string]$p,[AllowNull()]$s){
  [void][IO.Directory]::CreateDirectory((Split-Path -Parent $p))
  if($null -eq $s){if([IO.File]::Exists($p)){[IO.File]::Delete($p)};return}
  [IO.File]::WriteAllText($temp,$s,$utf8)
- if([IO.File]::Exists($p)){[IO.File]::Replace($temp,$p,$null)}else{[IO.File]::Move($temp,$p)}
+ if([IO.File]::Exists($p)){[IO.File]::Replace($temp,$p,[System.Management.Automation.Language.NullString]::Value)}else{[IO.File]::Move($temp,$p)}
 }
 function Same($a,$b){return (Json $a) -ceq (Json $b)}
 $project=Safe ((Resolve-Path -LiteralPath $ProjectPath).ProviderPath)
@@ -130,7 +130,7 @@ try {
   if(-not $BrainId){$BrainId='project-'+$id}
   if($BrainId -cnotmatch '^[a-z0-9][a-z0-9_-]{0,63}$'){throw 'Use a safe lowercase brain identifier.'}
   $bridgeSource=Join-Path $PSScriptRoot 'Invoke-QbrainJson.ps1'
-  $cfg=[pscustomobject]@{version=1;host=$hostKey;project_root=$project;brain_id=$BrainId;source_id='default';enabled=$true;capture=$true;extraction='local';recall_bytes=4096;max_items=8}
+  $cfg=[pscustomobject]@{version=1;host=$hostKey;project_root=$project;brain_id=$BrainId;source_id='default';enabled=$true;capture=[bool]$EnableCapture;extraction='local';recall_bytes=4096;max_items=8}
   $entry=[pscustomobject]@{type='command';command=$exe;args=@('hook','--config',$cfgPath);timeout=10}
   if($hostKey -eq 'codex'){
    function Literal([string]$s){return "'"+$s.Replace("'","''")+"'"}

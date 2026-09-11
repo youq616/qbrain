@@ -88,9 +88,16 @@ int run_hook(const std::vector<std::string>& args) {
     const auto event=J::parse(bounded(std::cin,memory::max_payload_bytes));
     if(!event.is_object())throw std::runtime_error("event");
     const auto cwd=fs::canonical(util::utf8_to_path(str(event,"cwd",4096)));
-    if(cwd!=fs::canonical(fs::current_path()))throw std::runtime_error("cwd");
-    const auto rel=cwd.lexically_relative(root);
-    if(rel.empty()||rel.is_absolute()||*rel.begin()==fs::path(".."))throw std::runtime_error("project");
+    // Compare filesystem identities, not case-folded strings. This supports
+    // ordinary Windows case aliases without authorizing a distinct directory
+    // in a case-sensitive NTFS subtree (or on another platform).
+    if(!fs::equivalent(cwd,fs::current_path()))throw std::runtime_error("cwd");
+    auto ancestor=cwd;bool inside=false;
+    for(unsigned depth=0;depth<256&&!ancestor.empty();++depth) {
+      if(fs::equivalent(ancestor,root)){inside=true;break;}
+      auto parent=ancestor.parent_path();if(parent==ancestor)break;ancestor=parent;
+    }
+    if(!inside)throw std::runtime_error("project");
     const auto kind=str(event,"hook_event_name",32);
     if(!std::set<std::string>{"SessionStart","UserPromptSubmit","Stop","PreCompact","SessionEnd"}.count(kind))throw std::runtime_error("event");
     const auto session=str(event,"session_id",128),brain=str(cfg,"brain_id",64),source=str(cfg,"source_id",128);
