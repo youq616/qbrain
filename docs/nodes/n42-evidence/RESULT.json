@@ -1,0 +1,18 @@
+{
+  "code_commit": "d8fcec42b343668836af6974e38c05550083a655",
+  "workflow_run": 34556246262,
+  "windows_job": 103129467321,
+  "log_artifact": 10182811445,
+  "log_artifact_sha256": "3653e3d33d94668094e4169de4f52091470bf4387fbcc438bde181c6acaf3265",
+  "registered_test_groups": 42,
+  "passed_test_groups": 42,
+  "failed_test_groups": [],
+  "real_mcp_checks_passed": 17,
+  "explicit_skip": "Real PostgreSQL integration: no QBRAIN_PG_TEST_DSN",
+  "logs": {
+    "source.txt": "15123b5bf0b7d100bc0ddc1ba45a0bd7c121c7a385e8afc2dc606928981567b8",
+    "windows-mcp.log": "e7addc6fc037b88e08b2da4a30af373c7684c0cb1be2045fea83a2aaff73a6e9",
+    "windows-build.log": "84c58ad74e8a8a8d3d93a3c199f270ba75c6421854dc91fd9d7af5af74e2ffa6",
+    "windows-tests.log": "63ec1e5f9c5ab2439d4eb4e30c0f39ffc294c8b07ff02e048d0254c842ab8312"
+  }
+}
