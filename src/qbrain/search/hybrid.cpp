@@ -1,4 +1,8 @@
 #include "qbrain/search/hybrid.hpp"
+#include "qbrain/search/result_identity.hpp"
+#include "qbrain/util/utf8_display.hpp"
+#include <cmath>
+#include <utility>
 #include "qbrain/search/rerank.hpp"
 #include "qbrain/search/rrf.hpp"
 #include "qbrain/search/vector.hpp"
@@ -8,9 +12,35 @@
 
 namespace qbrain::search {
 
+namespace {
+// FtsRow predates source identity. Resolve all candidates in one read instead
+// of adding one SQL query per hit or changing both storage backend contracts.
+// Deleted/stale rows and unknown sources are never silently mapped to default.
+void attach_sources(Brain& brain, std::vector<SearchHit>& hits,
+                    const std::string& requested_source) {
+  if (hits.empty()) return;
+  std::string sql = "SELECT id, source_id, slug FROM pages WHERE deleted_at IS NULL AND id IN (";
+  for (size_t i = 0; i < hits.size(); ++i) sql += i ? ",?" : "?";
+  sql += ")";
+  auto st = brain.db().prepare(sql);
+  for (size_t i = 0; i < hits.size(); ++i) st.bind_int(static_cast<int>(i + 1), hits[i].page_id);
+  std::unordered_map<int64_t, std::pair<std::string, std::string>> identities;
+  while (st.step()) identities.emplace(st.column_int(0), std::make_pair(st.column_text(1), st.column_text(2)));
+  hits.erase(std::remove_if(hits.begin(), hits.end(), [&](SearchHit& h) {
+    const auto it = identities.find(h.page_id);
+    if (it == identities.end() || it->second.first.empty() || it->second.second != h.slug ||
+        (!requested_source.empty() && it->second.first != requested_source)) return true;
+    h.source_id = it->second.first;
+    h.snippet = util::utf8_excerpt(h.snippet, h.snippet.size());
+    return false;
+  }), hits.end());
+}
+}  // namespace
+
 std::vector<SearchHit> fts_search(Brain& brain, const std::string& query, int limit,
                                   const std::string& source_id) {
   std::vector<SearchHit> out;
+  limit = std::clamp(limit, 1, 500);
   // N38 D0.5 (P0-3): the FTS5 MATCH statement now lives behind the storage
   // backend seam (IStorageBackend::fts_search / SqliteBackend::fts_search --
   // same SQL text, same bind order, same backend-side query quoting moved
@@ -32,6 +62,7 @@ std::vector<SearchHit> fts_search(Brain& brain, const std::string& query, int li
       ++rank;
     }
   } catch (...) {
+    out.clear();  // do not mix partial FTS output with the fallback
     std::string sql2 =
         "SELECT id, slug, title, type, substr(body,1,160) FROM pages "
         "WHERE deleted_at IS NULL AND (title LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\' "
@@ -66,15 +97,17 @@ std::vector<SearchHit> fts_search(Brain& brain, const std::string& query, int li
       out.push_back(std::move(h));
     }
   }
+  attach_sources(brain, out, source_id);
   return out;
 }
 
 std::vector<SearchHit> vector_search(Brain& brain, const std::vector<float>& qemb, int limit,
                                      const std::string& source_id) {
   std::vector<SearchHit> out;
-  if (qemb.empty()) return out;
+  if (qemb.empty() || !std::all_of(qemb.begin(), qemb.end(), [](float v) { return std::isfinite(v); })) return out;
+  limit = std::clamp(limit, 1, 500);
   std::string sql =
-      "SELECT c.page_id, p.slug, p.title, p.type, c.text, c.embedding "
+      "SELECT c.page_id, p.slug, p.title, p.type, c.text, c.embedding, p.source_id "
       "FROM content_chunks c JOIN pages p ON p.id = c.page_id "
       "WHERE p.deleted_at IS NULL AND c.embedding IS NOT NULL";
   if (!source_id.empty()) sql += " AND p.source_id = ?";
@@ -88,26 +121,34 @@ std::vector<SearchHit> vector_search(Brain& brain, const std::vector<float>& qem
   while (st.step()) {
     auto blob = st.column_blob(5);
     auto emb = unpack_f32(blob);
+    if (emb.size() != qemb.size() || !std::all_of(emb.begin(), emb.end(), [](float v) { return std::isfinite(v); })) continue;
     double sim = cosine_similarity(qemb, emb);
+    if (!std::isfinite(sim)) continue;
     SearchHit h;
     h.page_id = st.column_int(0);
     h.slug = st.column_text(1);
     h.title = st.column_text(2);
     h.type = st.column_text(3);
-    h.snippet = st.column_text(4).substr(0, 200);
+    h.snippet = util::utf8_excerpt(st.column_text(4), 200);
+    h.source_id = st.column_text(6);
     h.score = sim;
     cands.push_back({std::move(h), sim});
   }
   std::unordered_map<std::string, Cand> best;
   for (auto& c : cands) {
-    auto it = best.find(c.h.slug);
-    if (it == best.end() || c.sim > it->second.sim) best[c.h.slug] = std::move(c);
+    const auto key = result_identity(c.h);
+    auto it = best.find(key);
+    if (it == best.end() || c.sim > it->second.sim ||
+        (c.sim == it->second.sim && c.h.snippet < it->second.h.snippet))
+      best[key] = std::move(c);
   }
   std::vector<Cand> uniq;
   uniq.reserve(best.size());
   for (auto& [_, c] : best) uniq.push_back(std::move(c));
   std::sort(uniq.begin(), uniq.end(),
-            [](const Cand& a, const Cand& b) { return a.sim > b.sim; });
+            [](const Cand& a, const Cand& b) {
+              return a.sim != b.sim ? a.sim > b.sim : result_identity_less(a.h, b.h);
+            });
   if (static_cast<int>(uniq.size()) > limit) uniq.resize(static_cast<size_t>(limit));
   int rank = 1;
   for (auto& c : uniq) {
@@ -151,13 +192,11 @@ std::vector<SearchHit> hybrid_search(Brain& brain, const std::string& query,
         }
       }
     }
-    auto backs = brain.get_links_to(h.slug, opts.source_id.empty() ? "default" : opts.source_id);
+    auto backs = brain.get_links_to(h.slug, h.source_id);
     if (!backs.empty()) h.score *= (1.0 + 0.05 * std::min<size_t>(backs.size(), 5));
   }
-  const bool conservative = opts.mode == "conservative";
-  std::sort(fused.begin(), fused.end(), [conservative](const SearchHit& a, const SearchHit& b) {
-    if (!conservative || a.score != b.score) return a.score > b.score;
-    return a.slug < b.slug;
+  std::sort(fused.begin(), fused.end(), [](const SearchHit& a, const SearchHit& b) {
+    return a.score != b.score ? a.score > b.score : result_identity_less(a, b);
   });
 
   // N12: fail-open rerank (local always; optional LLM). tokenmax enables by default.

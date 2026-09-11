@@ -1,4 +1,5 @@
 #include "qbrain/ops/registry.hpp"
+#include "qbrain/util/utf8_display.hpp"
 #include "qbrain/ai/chat.hpp"
 #include "qbrain/ai/embed.hpp"
 #include "qbrain/codeintel/scan.hpp"
@@ -396,6 +397,26 @@ std::optional<std::string> resolve_source(OpContext& ctx, bool require_existing,
   return canon;
 }
 
+// N42: page-owned facts inherit the same source boundary as page reads.
+// Unowned legacy facts remain available to unscoped local CLI calls only.
+std::optional<std::vector<std::string>> visible_fact_texts(
+    OpContext& ctx, const std::string& entity, int limit, OpResult& error) {
+  if (!(ctx.via_mcp || ctx.remote) && !ctx.args.count("source_id"))
+    return ctx.brain->list_facts(entity, limit);
+  const auto source = resolve_source(ctx, true, error);
+  if (!source) return std::nullopt;
+  std::vector<std::string> result;
+  auto st = ctx.brain->db().prepare(
+      "SELECT f.predicate || ': ' || f.object_text FROM facts f "
+      "JOIN pages p ON p.id=f.page_id WHERE f.entity_slug=? AND f.active=1 "
+      "AND p.source_id=? AND p.deleted_at IS NULL ORDER BY f.id DESC LIMIT ?");
+  st.bind_text(1, entity);
+  st.bind_text(2, *source);
+  st.bind_int(3, std::clamp(limit, 0, 100));
+  while (st.step()) result.push_back(st.column_text(0));
+  return result;
+}
+
 bool date_parts_valid(const std::string& value) {
   if (value.size() < 10 || value[4] != '-' || value[7] != '-') return false;
   constexpr size_t digit_positions[] = {0, 1, 2, 3, 5, 6, 8, 9};
@@ -629,7 +650,10 @@ void register_pages_ops() {
       "get_page", Scope::Read, [](OpContext& ctx) {
     OpResult r;
     auto slug = arg(ctx, "slug");
-    auto page = ctx.brain->get_page(slug, arg(ctx, "source_id", "default"));
+    OpResult source_error;
+    const auto source = resolve_source(ctx, true, source_error);
+    if (!source) return source_error;
+    auto page = ctx.brain->get_page(slug, *source);
     if (!page) {
       r.ok = false;
       r.exit_code = 1;
@@ -637,6 +661,7 @@ void register_pages_ops() {
       return r;
     }
     json j = {{"id", page->id},
+              {"source_id", page->source_id},
               {"slug", page->slug},
               {"type", page->type},
               {"title", page->title},
@@ -653,18 +678,27 @@ void register_pages_ops() {
     OpResult r;
     int limit = arg_int(ctx, "limit", 50);
     auto type = arg(ctx, "type");
-    auto pages = ctx.brain->list_pages(limit, type);
+    std::vector<Page> pages;
+    if (ctx.via_mcp || ctx.remote || ctx.args.count("source_id")) {
+      OpResult source_error;
+      const auto source = resolve_source(ctx, true, source_error);
+      if (!source) return source_error;
+      pages = type.empty() ? ctx.brain->list_pages_for_source(*source, limit)
+                           : ctx.brain->list_pages_for_source(*source, limit, type);
+    } else {
+      pages = ctx.brain->list_pages(limit, type);
+    }
     json arr = json::array();
     std::ostringstream oss;
     for (auto& p : pages) {
-      arr.push_back({{"slug", p.slug}, {"type", p.type}, {"title", p.title}, {"updated_at", p.updated_at}});
+      arr.push_back({{"source_id", p.source_id}, {"slug", p.slug}, {"type", p.type}, {"title", p.title}, {"updated_at", p.updated_at}});
       oss << p.slug << "\t" << p.type << "\t" << p.title << "\n";
     }
     r.json = arr.dump(2);
     r.text = oss.str();
     return r;
   }, false, "List pages",
-      R"({"type":"object","properties":{"limit":{"type":"integer"},"type":{"type":"string"}}})");
+      R"({"type":"object","properties":{"limit":{"type":"integer"},"type":{"type":"string"},"source_id":{"type":"string"}}})");
 }
 
 // N31 D4: search / think ops (2) — moved verbatim from register_builtin_ops;
@@ -684,6 +718,13 @@ void register_search_ops() {
     opts.limit = arg_int(ctx, "limit", ctx.brain->config().search_default_limit);
     opts.rrf_k = ctx.brain->config().search_rrf_k;
     opts.source_id = arg(ctx, "source_id");
+    // Resolve before any embedding/model call; local unscoped search stays available.
+    if (ctx.via_mcp || ctx.remote || ctx.args.count("source_id")) {
+      OpResult source_error;
+      const auto source = resolve_source(ctx, true, source_error);
+      if (!source) return source_error;
+      opts.source_id = *source;
+    }
     opts.mode = arg(ctx, "mode", "balanced");
     opts.config = &ctx.brain->config();
     auto rr = arg(ctx, "rerank");
@@ -707,6 +748,8 @@ void register_search_ops() {
     int i = 1;
     for (auto& h : hits) {
       arr.push_back({{"rank", i},
+                     {"source_id", h.source_id},
+                     {"page_id", h.page_id},
                      {"slug", h.slug},
                      {"title", h.title},
                      {"score", h.score},
@@ -725,6 +768,9 @@ void register_search_ops() {
   register_one(
       "think", Scope::Read, [](OpContext& ctx) {
     OpResult r;
+    const auto save = arg(ctx, "save");
+    if ((ctx.via_mcp || ctx.remote) && (save == "1" || save == "true"))
+      return argument_error("write_denied", "save", "Use an explicitly authorized write tool to save a synthesis");
     auto q = arg(ctx, "question");
     if (q.empty()) {
       r.ok = false;
@@ -736,6 +782,13 @@ void register_search_ops() {
     opts.limit = arg_int(ctx, "limit", 8);
     opts.rrf_k = ctx.brain->config().search_rrf_k;
     opts.source_id = arg(ctx, "source_id");
+    // Resolve before any embedding/model call; local unscoped search stays available.
+    if (ctx.via_mcp || ctx.remote || ctx.args.count("source_id")) {
+      OpResult source_error;
+      const auto source = resolve_source(ctx, true, source_error);
+      if (!source) return source_error;
+      opts.source_id = *source;
+    }
     std::vector<float> emb;
     std::vector<float>* pemb = nullptr;
     auto er = ai::embed_texts(ctx.brain->config(), {q});
@@ -747,13 +800,12 @@ void register_search_ops() {
     std::ostringstream evidence;
     int i = 1;
     for (auto& h : hits) {
-      auto page = ctx.brain->get_page(h.slug);
-      evidence << "[" << i << "] " << h.slug << " — " << h.title << "\n";
-      if (page) {
-        auto body = page->body;
-        if (body.size() > 1200) body = body.substr(0, 1200) + "…";
-        evidence << body << "\n\n";
-      }
+      if (h.source_id.empty()) continue;  // no default-source fallback
+      auto page = ctx.brain->get_page(h.slug, h.source_id);
+      if (!page || page->id != h.page_id) continue;  // stale/deleted/replaced hit
+      evidence << "[" << i << "] " << h.source_id << "/" << h.slug
+               << " — " << page->title << "\n";
+      evidence << util::utf8_excerpt(page->body, 1200, true) << "\n\n";
       ++i;
     }
     std::string system =
@@ -764,7 +816,7 @@ void register_search_ops() {
                                 {{"system", system}, {"user", user}});
     json j;
     j["question"] = q;
-    j["hits"] = hits.size();
+    j["hits"] = i - 1;  // count only evidence actually read
     if (!cr.ok) {
       j["degraded"] = true;
       j["error"] = cr.error;
@@ -778,7 +830,7 @@ void register_search_ops() {
     r.json = j.dump(2, ' ', false, json::error_handler_t::replace);
     r.text = cr.content + "\n";
     // save is a write side-effect: only when not remote, or allow_write
-    if (arg(ctx, "save") == "1" && (!ctx.via_mcp || ctx.allow_write)) {
+    if ((arg(ctx, "save") == "1" || arg(ctx, "save") == "true") && !ctx.via_mcp && !ctx.remote) {
       PageInput in;
       auto h = util::sha256_hex(q);
       if (h.size() > 8) h = h.substr(0, 8);
@@ -1033,14 +1085,17 @@ void register_knowledge_ops() {
     auto entity = arg(ctx, "entity_slug");
     if (entity.empty()) entity = arg(ctx, "entity");
     int limit = std::clamp(arg_int(ctx, "limit", 50), 0, 100);
-    auto facts = ctx.brain->list_facts(entity, limit);
+    OpResult source_error;
+    const auto visible = visible_fact_texts(ctx, entity, limit, source_error);
+    if (!visible) return source_error;
+    const auto& facts = *visible;
     json arr = json::array();
     for (auto& f : facts) arr.push_back(f);
     r.json = arr.dump(2);
     r.text = r.json;
     return r;
   }, false, "List active facts for an entity slug",
-      R"({"type":"object","properties":{"entity_slug":{"type":"string"},"entity":{"type":"string"},"limit":{"type":"integer"}}})");
+      R"({"type":"object","properties":{"entity_slug":{"type":"string"},"entity":{"type":"string"},"limit":{"type":"integer"},"source_id":{"type":"string"}}})");
 
   register_one(
       "find_trajectory", Scope::Read, [](OpContext& ctx) {
@@ -1050,7 +1105,10 @@ void register_knowledge_ops() {
     if (entity.empty()) entity = arg(ctx, "query");
     int depth = std::clamp(arg_int(ctx, "depth", 2), 0, 4);
     int limit = std::clamp(arg_int(ctx, "limit", 50), 0, 100);
-    auto facts = ctx.brain->list_facts(entity, limit);
+    OpResult source_error;
+    const auto visible = visible_fact_texts(ctx, entity, limit, source_error);
+    if (!visible) return source_error;
+    const auto& facts = *visible;
     json arr = json::array();
     int i = 0;
     for (auto& f : facts) {
@@ -1063,7 +1121,7 @@ void register_knowledge_ops() {
     (void)depth;  // facts are direct steps today; input is still clamped for future traversal.
     return r;
   }, false, "Bounded facts/links trajectory for an entity slug",
-      R"({"type":"object","properties":{"entity_slug":{"type":"string"},"entity":{"type":"string"},"query":{"type":"string"},"depth":{"type":"integer"},"limit":{"type":"integer"}}})");
+      R"({"type":"object","properties":{"entity_slug":{"type":"string"},"entity":{"type":"string"},"query":{"type":"string"},"depth":{"type":"integer"},"limit":{"type":"integer"},"source_id":{"type":"string"}}})");
 
   register_one(
       "list_skills", Scope::Read, [](OpContext& ctx) {
@@ -3455,6 +3513,10 @@ void register_raw_ops() {
   register_one(
       "search_by_image", Scope::Read, [](OpContext& ctx) {
         OpResult r;
+        // The file index has no source ownership contract yet. A name is not
+        // permission to read/egress a host file. Keep this lane local-only.
+        if (ctx.via_mcp || ctx.remote)
+          return argument_error("local_only", "operation", "Image search is restricted to explicit local calls pending source-scoped file access");
         auto path = arg(ctx, "path");
         auto name = arg(ctx, "name");
         if (path.empty() && name.empty()) {
@@ -3465,9 +3527,9 @@ void register_raw_ops() {
         std::string stem = name;
         if (!path.empty()) {
           namespace fs = std::filesystem;
-          stem = util::path_to_utf8(fs::path(path).stem());
-          // best-effort index (existing behavior)
-          files::upload(*ctx.brain, path, name);
+          stem = util::path_to_utf8(util::utf8_to_path(path).stem());
+          // N42: query bytes only; explicit file_upload owns copying/indexing.
+          // No write side effect is permitted on the search path.
         }
         // N33: deterministic fail-open — structured unavailable, exit 0.
         auto unavailable = [&r](const std::string& reason) {

@@ -1,4 +1,5 @@
 #include "qbrain/search/rerank.hpp"
+#include "qbrain/util/utf8_display.hpp"
 #include "qbrain/ai/chat.hpp"
 #include "qbrain/ai/http_client.hpp"
 #include "qbrain/core/brain.hpp"
@@ -209,7 +210,8 @@ void sanitize_fallback_scores(std::vector<SearchHit>& results) noexcept {
 }
 
 bool same_identity(const SearchHit& left, const SearchHit& right) noexcept {
-  return left.page_id == right.page_id && left.slug == right.slug;
+  return left.page_id == right.page_id && left.slug == right.slug &&
+         left.source_id == right.source_id;
 }
 
 bool canonicalize_callback_order(const std::vector<SearchHit>& proposed,
@@ -319,7 +321,7 @@ LlmAttempt request_native_rerank(const Config& cfg, const std::string& query,
   auto docs = nlohmann::json::array();
   for (const auto& h : baseline) {
     auto text = h.title + " " + h.snippet;
-    if (text.size() > 480) text.resize(480);
+    text = util::utf8_excerpt(text, 480);
     docs.push_back({{"title", h.title}, {"text", text}});
   }
   body["documents"] = docs;
@@ -335,12 +337,16 @@ LlmAttempt request_native_rerank(const Config& cfg, const std::string& query,
       return {false, {}, FailureReason::malformed_response};
     // Build score-indexed order; fall back to original on any inconsistency.
     std::vector<std::pair<double, size_t>> scored;
+    std::vector<bool> seen(baseline.size(), false);
     for (const auto& item : j["results"]) {
       auto idx = item.value("index", -1);
       auto score = item.value("relevance_score", 0.0);
       if (idx < 0 || static_cast<size_t>(idx) >= baseline.size())
         return {false, {}, FailureReason::malformed_response};
-      scored.emplace_back(score, static_cast<size_t>(idx));
+      if (!std::isfinite(score) || seen[static_cast<size_t>(idx)])
+        return {false, {}, FailureReason::malformed_response};
+      seen[static_cast<size_t>(idx)] = true;
+      scored.emplace_back(std::clamp(score, 0.0, 1.0), static_cast<size_t>(idx));
     }
     if (scored.size() != baseline.size())
       return {false, {}, FailureReason::malformed_response};
@@ -365,7 +371,7 @@ LlmAttempt request_llm_reorder(const Config& cfg, const std::string& query,
   std::ostringstream documents;
   for (size_t index = 0; index < baseline.size(); ++index) {
     auto snippet = baseline[index].snippet;
-    if (snippet.size() > 240) snippet.resize(240);
+    snippet = util::utf8_excerpt(snippet, 240);
     documents << index << ". title=" << baseline[index].title << " | " << snippet << "\n";
   }
   const std::string system =
