@@ -1,0 +1,34 @@
+name: Publish pinned verified memory preview
+on:
+  push:
+    branches: ['delivery/memory-preview-5ee79dfd']
+    paths: ['.github/workflows/publish-verified-memory-preview.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: publish-memory-preview-5ee79dfd
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/memory-preview-5ee79dfd'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify pinned native run, immutable bytes and draft asset hashes before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .ci/publish_verified_preview.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-preview-publication-evidence
+          path: preview-work/out/
+          retention-days: 14

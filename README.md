@@ -4,6 +4,8 @@ Windows 原生 C++20 / PowerShell Agent 记忆与知识库。默认 SQLite + FTS
 
 ## 当前交付：经过原生验证的记忆预览版
 
+**[下载 Windows x64 记忆预览版](https://github.com/youq616/qbrain/releases/tag/memory-preview-5ee79dfd)**。选择 `qbrain-windows-x64-memory-preview.zip`，完整解压后阅读中文说明。该包未签名，ZIP SHA-256 为 `fa106efa7066264c177c31f856d22828d750602ad953390088041d656d38296c`。原始 Windows 验证日志、校验值和来源信息同时发布。
+
 - [PR #4：自动记忆接入、目录上下文、精简 MCP](https://github.com/youq616/qbrain/pull/4)
 - [Windows 完整验证](https://github.com/youq616/qbrain/actions/runs/34616855167)
 - [中文安装与卸载](docs/integration/QUICKSTART.zh-CN.md)

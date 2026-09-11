@@ -1,0 +1,9 @@
+# Verified preview publication review
+
+Reviewer: owner-delegated ChatGPT. Scope: distribution of already-tested native artifacts, not a new product capability or additional model-quality claim. Review before actual publication: approved with explicit unsigned-prerelease labeling.
+
+The native code is pinned to 5ee79dfd and successful run 34616855167; the doc-only revision 14a7708a is checked to change README/docs only. Packaging verifies the original ZIP SHA-256, exact member set and file manifest, native executable hash, exact corrected Git document blob and canonical evidence hash. The repack changes only documentation and provenance; all executable/script bytes must match original CI. Seven local artifact-based checks passed, including deterministic repacking and refusal of mismatch/overwrite; the same checks run in publication CI.
+
+Publication has no arbitrary run, tag, repository or ref input. It requires this repository and the fixed delivery branch. It does not use pull_request_target or execute downloaded binary/source. Only contents:write/actions:read are granted to the isolated publication job; normal product validation stays read-only. A pre-existing release or a wrong existing tag causes a stop, not overwrite. Assets first enter a draft; remote size/digest and tag target must match before promotion to a prerelease. An error leaves an unpromoted draft for explicit inspection rather than destroying prior releases.
+
+The actual release outcome must be checked via GitHub after this review; this document alone is not publication proof. Artifacts may expire, in which case the pinned publishing workflow must fail. No release-signing key, user memory, provider key or credential is packaged. A provenance checksum is not a cryptographic software signature. Internal upstream version metadata remains; identify the preview by commit and hashes. Full project work remains open in issue #2.
