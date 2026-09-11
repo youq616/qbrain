@@ -1,0 +1,5 @@
+# N44A plan review
+Auditor: ChatGPT under the owner's project development/review permission; not Claude Code.
+Verdict: PASS for Unicode/transport prerequisite only, before implementation.
+The scope is independent of N43's storage work. Microsoft documents that -1 conversion lengths include the terminator; fixed explicit lengths plus invalid-sequence errors avoid the old allocation mismatch. wmain must convert once and keep argv backing strings alive. Wide environment lookup is required because changing console code pages does not fix getenv or narrow CRT argv. Tests must run the actual executable under both PowerShell hosts; local GCC is supplementary. P0: none. P1: no claim of full host injection; native logs required. P2: other legacy filesystem APIs outside the changed path are not an all-project Unicode certification.
+References: https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-widechartomultibyte ; https://learn.microsoft.com/en-us/cpp/cpp/main-function-command-line-args

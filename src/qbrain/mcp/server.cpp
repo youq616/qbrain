@@ -90,7 +90,8 @@ bool uses_ambient_source(const std::string& operation_name) {
           operation_name != "list_schema_packs" &&
          operation_name != "get_active_schema_pack" &&
          operation_name != "reload_schema_pack" && operation_name != "schema_stats" &&
-         operation_name != "ontology_get" && operation_name != "ontology_dimensions";
+         operation_name != "ontology_get" && operation_name != "ontology_dimensions" &&
+         operation_name != "memory_read" && operation_name != "memory_write";
 }
 
 bool is_analytics_operation(const std::string& operation_name) {
@@ -237,6 +238,13 @@ const std::unordered_map<std::string, ArgumentType>* typed_argument_schema(
   static const std::unordered_map<std::string, Type> code_blast = {
       {"symbol", Type::String}, {"name", Type::String}, {"source_id", Type::String},
       {"limit", Type::UnsignedInteger}, {"page_limit", Type::UnsignedInteger}};
+  static const std::unordered_map<std::string, Type> memory_read = {
+      {"source_id", Type::String}, {"query", Type::String},
+      {"event_id", Type::String}, {"limit", Type::UnsignedInteger},
+      {"max_bytes", Type::UnsignedInteger}};
+  static const std::unordered_map<std::string, Type> memory_write = {
+      {"source_id", Type::String}, {"action", Type::String},
+      {"payload", Type::String}, {"event_id", Type::String}, {"method", Type::String}};
   static const std::unordered_map<std::string, Type> no_arguments;
   static const std::unordered_map<std::string, Type> schema_pack_id = {
       {"id", Type::String}};
@@ -246,6 +254,8 @@ const std::unordered_map<std::string, ArgumentType>* typed_argument_schema(
   if (operation_name == "code_def" || operation_name == "code_refs" ||
       operation_name == "code_callers")
     return &code_arguments;
+  if (operation_name == "memory_read") return &memory_read;
+  if (operation_name == "memory_write") return &memory_write;
   if (operation_name == "list_link_sources") return &source_only;
   if (operation_name == "log_ingest") return &ingest_write;
   if (operation_name == "get_ingest_log") return &ingest_read;

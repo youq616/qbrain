@@ -1,0 +1,7 @@
+# N43 plan review
+Auditor: ChatGPT, under the owner's earlier explicit permission to modify and review this project and current instruction to continue; not Claude Code and not an independent third-party audit.
+Verdict: PASS for the bounded implementation scope, before implementation.
+
+Reviewed against Issue #2 and N42 source. Acceptance is falsifiable and scoped: storage, trust, deduplication and failure states can be exercised without real personal data. Windows C++20/PowerShell remain primary. Additive module version avoids falsely claiming a PostgreSQL upgrade. The two MCP scopes must not be collapsed into a mixed read/write tool. Manual archival must not imply external consent. Model results must pass exact quote + user role checks as a complete batch, rather than partially committing good-looking rows. A worker must recheck lease, parent-page hash/deletion and mode after a provider returns. Forgotten events need a persistent identity tombstone. Core global facts must not be populated until their existing readers enforce all memory invalidation rules.
+
+P0: none after these requirements were included. P1 acceptance gates: full native regression, no DDL on off/read/denied paths, complete concurrency/fault tests and original N31 inventory accounting. P2: credential patterns are necessarily incomplete; claims are caller-attested, not verified truth; live provider cost and full host lifecycle remain separate work. These limitations must remain in the outcome report.

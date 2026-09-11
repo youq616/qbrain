@@ -24,6 +24,9 @@ struct ChatResult {
   std::string error;
   std::string content;
   ChatFailureKind failure_kind = ChatFailureKind::none;
+  // Provider-reported usage only; -1 means unknown, never an estimated zero.
+  int64_t input_tokens = -1;
+  int64_t output_tokens = -1;
 };
 
 ChatResult chat_complete(const Config& cfg, const std::vector<ChatMessage>& messages,

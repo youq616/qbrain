@@ -69,6 +69,16 @@ ChatResult chat_complete(const Config& cfg, const std::vector<ChatMessage>& mess
   }
   try {
     auto j = json::parse(resp.body);
+    const auto token_count = [](const json& usage, const char* name) -> int64_t {
+      if (!usage.is_object() || !usage.contains(name)) return -1;
+      const auto& value = usage[name];
+      if (!value.is_number_integer() || value < 0 || value > INT64_MAX) return -1;
+      return value.get<int64_t>();
+    };
+    if (j.contains("usage")) {
+      r.input_tokens = token_count(j["usage"], use_responses ? "input_tokens" : "prompt_tokens");
+      r.output_tokens = token_count(j["usage"], use_responses ? "output_tokens" : "completion_tokens");
+    }
     if (use_responses) {
       // Responses API returns output items; concatenate message texts.
       std::string text;

@@ -79,6 +79,7 @@ if (-not (Test-Path (Join-Path $ObjDir "commands.obj"))) {
 
 $defaultTestSources = @(
   "tests\test_main.cpp",
+  "tests\test_n43.cpp",
   "tests\test_rrf.cpp",
   "tests\test_vector.cpp",
   "tests\test_chunker.cpp",
@@ -139,7 +140,7 @@ $testObjList = ($selected | ForEach-Object { [IO.Path]::GetFileNameWithoutExtens
 $prodObjs = @(
   "paths","hash","log","string_util","time_util","database","migrate","pg_backend","types","brain",
   "extract","traverse","analytics","scan","astlite","packs","lint","store","image_meta","vector","rrf","hybrid","rerank","minions","dream",
-  "chunker","markdown","import","http_client","embed","chat","registry","handlers",
+  "chunker","markdown","import","http_client","embed","chat","registry","handlers","memory_ops","session_memory",
   "inbox_watch","live_sync","jsonrpc","server","auth","http_server","commands","sqlite3"
 ) | ForEach-Object { "`"$ObjDir\$_.obj`"" }
 $prodObjList = $prodObjs -join " "
