@@ -30,7 +30,7 @@ function ConvertTo-CrtArgument([AllowEmptyString()][string]$Value) {
         }
         $slashes = 0
     }
-    if ($slashes) { [void]$builder.Append(('\' * $slashes)) }
+    if ($slashes) { [void]$builder.Append(('\' * (2 * $slashes))) }
     [void]$builder.Append('"')
     return $builder.ToString()
 }
