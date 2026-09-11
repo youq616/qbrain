@@ -34,10 +34,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir evidence
+          python3 .ci/test_validate_native_log.py 2>&1 | tee evidence/evidence-gate.log
           cmake -S . -B build/portable -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
           cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests --parallel 2 2>&1 | tee evidence/build.log
           build/portable/qbrain_memory_tests | tee evidence/memory-unit.log
           build/portable/qbrain_context_tests | tee evidence/context-unit.log
+          python3 .ci/test_local_config.py --binary build/portable/qbrain | tee evidence/local-config.log
           python3 .ci/test_memory_cycle.py --binary build/portable/qbrain | tee evidence/memory.log
           python3 .ci/test_mcp_boundaries.py --binary build/portable/qbrain | tee evidence/mcp.log
           python3 .ci/test_hooks.py --binary build/portable/qbrain | tee evidence/hooks.log
@@ -61,19 +63,14 @@ jobs:
           New-Item -ItemType Directory -Force evidence | Out-Null
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-cl.ps1 2>&1 | Tee-Object evidence/build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Real memory MCP hooks and context process tests
+      - name: Real memory MCP hooks context and local-config process tests
         shell: pwsh
         run: |
-          foreach ($suite in @('memory_cycle','mcp_boundaries','hooks','context_process')) {
+          foreach ($suite in @('memory_cycle','mcp_boundaries','hooks','context_process','local_config')) {
             python .ci/test_$suite.py --binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/$suite.log
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           python .ci/test_context_process.py --binary build/cl/qbrain.exe --report evidence/benchmark.json 2>&1 | Tee-Object evidence/benchmark.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Full original regression plus context unit group
-        shell: pwsh
-        run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 -SkipProductionBuild 2>&1 | Tee-Object evidence/regression.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: PowerShell 5.1 transport and reversible installation
         shell: pwsh
@@ -88,6 +85,11 @@ jobs:
           pwsh -NoProfile -File .ci/test_windows_transport.ps1 -Binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/transport7.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh -NoProfile -File .ci/test_install_hooks.ps1 -Binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/install7.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Full original regression plus context unit group
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 -SkipProductionBuild 2>&1 | Tee-Object evidence/regression.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify all gates and package exact tested binary
         shell: pwsh
