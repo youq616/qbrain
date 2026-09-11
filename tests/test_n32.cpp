@@ -252,6 +252,25 @@ void run_fixture_golden(qbrain::Brain& brain, int fixture_index,
   const std::string body = read_binary_file(fixture);
   const auto language = fixture_language(fixture);
 
+  // Preserve every golden assertion below; exercise Windows and Unix
+  // newlines explicitly for the lexical-trap fixtures on every platform.
+  if (name == "cpp_traps.cpp" || name == "ts_traps.ts") {
+    std::string lf;
+    for (size_t i = 0; i < body.size(); ++i) {
+      if (body[i] == '\r' && i + 1 < body.size() && body[i + 1] == '\n') continue;
+      lf += body[i];
+    }
+    std::string crlf;
+    for (char c : lf) {
+      if (c == '\n') crlf += '\r';
+      crlf += c;
+    }
+    QB_CHECK(qbrain::codeintel::astlite::to_json(
+                 qbrain::codeintel::astlite::parse_content(lf, language)) ==
+             qbrain::codeintel::astlite::to_json(
+                 qbrain::codeintel::astlite::parse_content(crlf, language)));
+  }
+
   // 1. parser golden + determinism: two parses serialize byte-identically and
   //    match the sidecar structure exactly (every symbol, line and column).
   //    Byte-level determinism is asserted on to_json output; the sidecar is

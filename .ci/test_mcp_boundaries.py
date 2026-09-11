@@ -6,6 +6,7 @@ services are used. Fixtures are written through SQLite after real migrations.
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 import hashlib
 import json
 import os
@@ -46,7 +47,7 @@ def main() -> None:
         data_root = root if os.name == "nt" else root / ".local" / "share"
         db_path = data_root / "Qbrain" / "brains" / "n42-ci" / "brain.db"
         check(db_path.is_file(), "real executable creates isolated migrated database")
-        with sqlite3.connect(db_path) as db:
+        with closing(sqlite3.connect(db_path)) as db:
             for source in ("alpha", "beta"):
                 db.execute("INSERT INTO sources(id,name) VALUES(?,?)", (source, source))
             db.execute("INSERT INTO config(key,value) VALUES('mcp.allowed_sources','alpha')")
@@ -69,7 +70,7 @@ def main() -> None:
         tables = ("pages", "facts", "file_index", "content_chunks", "jobs", "page_versions")
 
         def snapshot() -> str:
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn:
                 state = {t: conn.execute(f'SELECT * FROM "{t}" ORDER BY rowid').fetchall() for t in tables}
             return hashlib.sha256(repr(state).encode("utf-8")).hexdigest()
 

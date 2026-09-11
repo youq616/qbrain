@@ -16,6 +16,17 @@ endif()
 enable_testing()
 add_test(NAME n42_foundation COMMAND qbrain_n42_foundation)
 
+add_executable(qbrain_n42_newlines test_astlite_newlines.cpp
+  "${QBRAIN_ROOT}/src/qbrain/codeintel/astlite.cpp")
+target_include_directories(qbrain_n42_newlines PRIVATE "${QBRAIN_ROOT}/include"
+  "${QBRAIN_ROOT}/third_party")
+if(MSVC)
+  target_compile_options(qbrain_n42_newlines PRIVATE /utf-8 /EHsc)
+  target_link_options(qbrain_n42_newlines PRIVATE /MANIFEST:NO)
+endif()
+add_test(NAME n42_astlite_newlines COMMAND qbrain_n42_newlines
+  "${QBRAIN_ROOT}/tests/fixtures/astlite")
+
 option(QBRAIN_N42_SQLITE_ADAPTER_TEST "Test production search code using a test-only SQLite adapter" OFF)
 if(QBRAIN_N42_SQLITE_ADAPTER_TEST)
   set(SQLITE_SRC "${QBRAIN_ROOT}/third_party/sqlite/sqlite-amalgamation-3460100/sqlite3.c")
