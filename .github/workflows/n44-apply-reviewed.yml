@@ -1,0 +1,78 @@
+name: Import reviewed N44 source once
+on:
+  push:
+    branches: ['optimization/n44-context-release']
+    paths: ['.github/workflows/n44-apply-reviewed.yml']
+permissions:
+  contents: read
+jobs:
+  apply:
+    if: github.repository == 'youq616/qbrain'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+      - name: Verify sources and import without workflow changes or force push
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, lzma, os, pathlib, re, subprocess, tempfile, urllib.request
+          ROOT=pathlib.Path.cwd()
+          def git(*args): return subprocess.check_output(['git',*args],text=True).strip()
+          def digest(p): return hashlib.sha256(p.read_bytes()).hexdigest()
+          assert os.environ['GITHUB_REF']=='refs/heads/optimization/n44-context-release'
+          assert git('rev-parse','HEAD^')=='fb6125ecb1a9e74b001faae365d76cbaf4bfb231'
+          def fetch(sha):
+              req=urllib.request.Request('https://api.github.com/repos/youq616/qbrain/git/blobs/'+sha,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(req,timeout=30) as res: blob=json.load(res)
+              raw=base64.b64decode(blob['content']);assert hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==sha
+              return raw.decode('ascii').strip()
+          encoded=''.join(fetch(s) for s in ['9965b3eed0576bbddb0f286368c81e6d9afb06aa','f46298df4c219cdf1ed6d8a2b0c321d82cac37d3','a9632413a0987d939db1609a09fab8a898bb3c95'])
+          data=base64.b64decode(encoded,validate=True)
+          assert hashlib.sha256(data).hexdigest()=='ed8bc273b19ad44a0a51c206dca80159e6d73b6f00421f9791be9cea2d39f389'
+          decoder=lzma.LZMADecompressor(memlimit=268435456);raw=decoder.decompress(data,max_length=83311)
+          assert decoder.eof and len(raw)==83310 and not decoder.unused_data
+          bundle=json.loads(raw)
+          assert set(bundle)=={'patch','files','recover_tests'} and len(bundle['files'])==29
+          for name,entry in bundle['files'].items():
+              path=ROOT/name
+              assert not name.startswith(('.github/','.git/')) and path.resolve().is_relative_to(ROOT) and not path.is_symlink()
+              assert not path.exists() if entry['before'] is None else digest(path)==entry['before'], name
+          # Recover only complete test files from old draft, NEVER its incomplete source.
+          old=''.join(fetch(s) for s in ['53cbeaf6966021bca74bed12634007a3043c6d02','f8670ec3335b188a7428b635c06b6a46c453a92b','0eac260cdc4805632f18540d956dca89ce4b9d8e'])
+          d=lzma.LZMADecompressor(memlimit=268435456);partial=d.decompress(base64.b64decode(old,validate=True),max_length=4194304).decode('utf-8',errors='ignore')
+          assert partial.startswith('{"patch":')
+          end=partial.index('\\ndiff --git a/.gitignore ')
+          recovered=json.loads(partial[len('{"patch":'):end]+'"')
+          tests={}
+          for section in re.split(r'(?=^diff --git )',recovered,flags=re.M):
+              if not section: continue
+              name=section.splitlines()[0].split(' b/',1)[1]
+              if name in bundle['recover_tests']:
+                  assert 'new file mode 100644' in section
+                  text='\n'.join(line[1:] for line in section.splitlines() if line.startswith('+') and not line.startswith('+++'))+'\n'
+                  if name=='.ci/test_install_hooks.ps1':
+                      text=text.replace('-BrainId $brainId','-BrainId $brainId -EnableCapture')
+                      text='\n'.join(line.rstrip() for line in text.splitlines())+'\n'
+                  tests[name]=text
+          assert set(tests)==set(bundle['recover_tests'])
+          for name,text in tests.items(): (ROOT/name).write_text(text,encoding='utf-8')
+          with tempfile.TemporaryDirectory() as tmp:
+              patch=pathlib.Path(tmp)/'source.patch';patch.write_text(bundle['patch'],encoding='utf-8')
+              subprocess.run(['git','apply','--check',str(patch)],check=True)
+              subprocess.run(['git','apply',str(patch)],check=True)
+          for name,entry in bundle['files'].items(): assert digest(ROOT/name)==entry['after'],name
+          subprocess.run(['git','diff','--check'],check=True)
+          git('config','user.name','github-actions[bot]');git('config','user.email','41898282+github-actions[bot]@users.noreply.github.com')
+          git('add','--',*bundle['files'])
+          git('commit','-m','feat: add native project memory hooks, reversible install and layered context')
+          remote=git('ls-remote','origin',os.environ['GITHUB_REF']).split()[0]
+          assert remote==os.environ['GITHUB_SHA'],'Concurrent update, refusing push'
+          git('push','origin','HEAD:'+os.environ['GITHUB_REF'])
+          print('Verified all 29 source files and committed',git('rev-parse','HEAD'))
+          PY
