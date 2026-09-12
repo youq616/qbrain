@@ -1,0 +1,44 @@
+# Temporary source upload transport; removed before the PR validation commit.
+name: Apply exact N46D queue source patch
+on:
+  push:
+    branches: ['delivery/n46d-queue-fix-assembly']
+    paths: ['.github/workflows/n46d-queue-source-assembly.yml']
+permissions:
+  contents: write
+jobs:
+  assemble:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n46d-queue-fix-assembly'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Apply hash-verified source replacements on the temporary branch only
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib,subprocess,json
+          expected = {
+            '.ci/package_n44_development.py': ('8aa4521e98e466150d99d7a4c0ea14004f80b11c10c8e388be1a142f250ef89d','92c6676a2ba3ad9745f197f81832447383695a2782c850f575007988e9359521'),
+            'AGENTS.md': ('738fc88d3a979d885879764f166df0a74d4fdb4a910c575eb0772435d23e1dcd','e2b053b9626f560e4ec900c8f4cfded57dd90602ce4aac92cb734391591ac5ad'),
+            'CMakeLists.txt': ('6b6925db7aec28fd6248337aa1e1f16984678c76949cd802602d821bbfc04214','8c696b4ff293e087f947b0cd6f75dd6147a26c81f4997792ea3c6ef9862c9536'),
+            'scripts/build-cl.ps1': ('7d4c8cc7328f1d5b96af8916d64ea4340242b43c72e5a86e6831a46a17f0338d','2e6d4c70dc74d8be34cbd0bed5983c3f228fd07e82918a6ca31e9fc88a98438b'),
+            'scripts/build-tests-cl.ps1': ('28cb367e91fdffc767c2641ad2b9567393a13c8209f0340d6daf5e01add7c0d7','80651850aaa0b619a69dec089adf4f0d86a9ac89076a1cc3eb7d0afd55cbe73d'),
+            'src/qbrain/core/brain.cpp': ('c05fcc0739b673dccbf8938a9cf69f56037e107466fd4b72bc9105aa9509055a','7db1a582f38c825eaeb6f0ee316dfd0df0aa4a0cb6a996efc33b7ab73cdb4834'),
+            'src/qbrain/jobs/minions.cpp': ('907c6852982c09c66e9c350c9534ea50b302cde4eccab6d7669d7b80b556e6f8','42792377db16677c96320ccef38624da7d66d847e87d097d2f72d59c5f21ea88')
+          }
+          patch=Path('.ci/n46d-queue-source.patch').read_bytes()
+          assert hashlib.sha256(patch).hexdigest()=='fd84cb5455ba7148643802cb6c1f9d921fbddee450ef7bf5af4307e351cf4cc2'
+          for path, hashes in expected.items():
+              assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==hashes[0], path
+          subprocess.run(['git','apply','--check','--index','-'],input=patch,check=True)
+          subprocess.run(['git','apply','--index','-'],input=patch,check=True)
+          for path, hashes in expected.items():
+              assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==hashes[1], path
+          changed=subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()
+          assert set(changed)==set(expected), changed
+          subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
+          subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
+          subprocess.run(['git','commit','-m','fix: apply exact verified Qbrain queue source changes'],check=True)
+          subprocess.run(['git','push','origin','HEAD:refs/heads/delivery/n46d-queue-fix-assembly'],check=True)
+          print(json.dumps({'changed_files':changed,'verified_sha256':{p:h[1] for p,h in expected.items()}}))

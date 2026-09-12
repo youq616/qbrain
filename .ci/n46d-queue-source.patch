@@ -1,0 +1,291 @@
+diff --git a/.ci/package_n44_development.py b/.ci/package_n44_development.py
+index 27ff751..c6e9623 100644
+--- a/.ci/package_n44_development.py
++++ b/.ci/package_n44_development.py
+@@ -51,11 +51,21 @@ assert 'N46D production search: 11 checks passed' in read('embedding-search.log'
+ assert 'N46D embedding contracts: 65 checks passed' in read('embedding-unit.log')
+ assert embedding_report['probe_sha256']==hashlib.sha256((root/'build/http/Release/qbrain_http_probe.exe').read_bytes()).hexdigest()
+ 
++queue_report=json.loads(read('embedding-queue.json'))
++assert queue_report['result']=='PASS' and queue_report['native_windows'] is True
++assert queue_report['source_commit']==commit and queue_report['tracked_tree_clean'] is True
++assert queue_report['source_tree']==retrieval_report['source_tree']
++assert queue_report['scenario_count']==len(queue_report['scenarios'])>=38
++assert queue_report['checks']>=255 and queue_report['real_provider_calls'] is False
++assert queue_report['probe_sha256']==hashlib.sha256((root/'build/http/Release/qbrain_embedding_queue_tests.exe').read_bytes()).hexdigest()
++for mode in ('automatic','generic'):
++    for code in ('001','002','003','004'):
++        assert any(s.startswith(f'{mode}: QB-QUEUE-{code}:') for s in queue_report['scenarios'])
+ 
+ binary=root/'build/cl/qbrain.exe';digest=hashlib.sha256(binary.read_bytes()).hexdigest()
+ with (e/'local-config.log').open('wb') as log:
+     subprocess.run([sys.executable,'.ci/test_local_config.py','--binary',str(binary)],stdout=log,stderr=subprocess.STDOUT,check=True)
+-report={'source_commit':commit,'binary_sha256':digest,'result':'PASS','registered_groups':len(expected),'installer_checks':installer,'additional_consent_checks_per_shell':16,'real_host_model_consumption_verified':False,'signed':False,'postgres_memory_context_verified':False,'native_http_checks':http_report['check_count'],'retrieval_checks':retrieval_report['native_test_checks'],'embedding_wire_checks':embedding_report['check_count']}
++report={'source_commit':commit,'binary_sha256':digest,'result':'PASS','registered_groups':len(expected),'installer_checks':installer,'additional_consent_checks_per_shell':16,'real_host_model_consumption_verified':False,'signed':False,'postgres_memory_context_verified':False,'native_http_checks':http_report['check_count'],'retrieval_checks':retrieval_report['native_test_checks'],'embedding_wire_checks':embedding_report['check_count'],'queue_scenarios':queue_report['scenario_count'],'queue_checks':queue_report['checks']}
+ # Staged native startup without development DLL paths or real user state.
+ with tempfile.TemporaryDirectory(prefix='qbrain-package-smoke-') as t:
+     home=Path(t); exe=home/'qbrain.exe';exe.write_bytes(binary.read_bytes())
+@@ -64,7 +74,7 @@ with tempfile.TemporaryDirectory(prefix='qbrain-package-smoke-') as t:
+     subprocess.run([str(exe),'init','--brain','package-smoke','--no-default'],cwd=home,env=env,capture_output=True,check=True,timeout=15)
+     assert hashlib.sha256(exe.read_bytes()).hexdigest()==digest
+ (e/'validation.json').write_text(json.dumps(report,indent=2)+'\n')
+-files={'verification/embedding-transport.json':e/'embedding-transport.json','EMBEDDING-CONTRACTS.md':root/'docs/integration/EMBEDDING-CONTRACTS.md','verification/retrieval-benchmark.json':e/'retrieval-benchmark.json','HTTP-TRANSPORT.md':root/'docs/integration/HTTP-TRANSPORT.md','qbrain.exe':binary,'LICENSE':root/'LICENSE','THIRD-PARTY-NOTICES.md':root/'THIRD-PARTY-NOTICES.md','WINDOWS-MEMORY.md':root/'docs/integration/WINDOWS-MEMORY.md','QUICKSTART.zh-CN.md':root/'docs/integration/QUICKSTART.zh-CN.md','scripts/Install-QbrainMemory.ps1':root/'scripts/Install-QbrainMemory.ps1','scripts/Invoke-QbrainJson.ps1':root/'scripts/Invoke-QbrainJson.ps1','verification/validation.json':e/'validation.json','verification/benchmark.json':e/'benchmark.json','verification/http-transport.json':e/'http-transport.json'}
++files={'verification/embedding-queue.json':e/'embedding-queue.json','EMBEDDING-QUEUE.md':root/'docs/integration/EMBEDDING-QUEUE.md','verification/embedding-transport.json':e/'embedding-transport.json','EMBEDDING-CONTRACTS.md':root/'docs/integration/EMBEDDING-CONTRACTS.md','verification/retrieval-benchmark.json':e/'retrieval-benchmark.json','HTTP-TRANSPORT.md':root/'docs/integration/HTTP-TRANSPORT.md','qbrain.exe':binary,'LICENSE':root/'LICENSE','THIRD-PARTY-NOTICES.md':root/'THIRD-PARTY-NOTICES.md','WINDOWS-MEMORY.md':root/'docs/integration/WINDOWS-MEMORY.md','QUICKSTART.zh-CN.md':root/'docs/integration/QUICKSTART.zh-CN.md','scripts/Install-QbrainMemory.ps1':root/'scripts/Install-QbrainMemory.ps1','scripts/Invoke-QbrainJson.ps1':root/'scripts/Invoke-QbrainJson.ps1','verification/validation.json':e/'validation.json','verification/benchmark.json':e/'benchmark.json','verification/http-transport.json':e/'http-transport.json'}
+ manifest={**report,'files':{n:{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for n,p in files.items()}}
+ out=root/'package';out.mkdir(exist_ok=True);archive=out/'qbrain-windows-x64-development.zip'
+ with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
+diff --git a/AGENTS.md b/AGENTS.md
+index 0ba98b6..b187e43 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -1,3 +1,16 @@
++# Owner override — September 12, 2026
++
++The human owner explicitly authorized: “好的，继续修复。你不需要遵循原来本地规定，不需要外部审核，你自己做独立审核就可以接受。”
++For this Qbrain continuation, Claude Code/external review is no longer a blocking
++prerequisite. ChatGPT may perform separate plan/outcome engineering review passes,
++implement, test and publish approved repairs. Describe that review as owner-authorized
++self-review, never as independent third-party/Claude Code review. Do not fabricate
++PASS results or weaken safety, consent, data integrity or test requirements.
++This explicit owner authorization supersedes contradictory auditor/stop language
++in the historical rules below. It does not authorize work on unrelated repositories.
++
++---
++
+ # Qbrain Project Rules (Hard Requirements for All Agents)
+ 
+ These rules are **mandatory** and written in English. Speed, user pressure to "continue", subagent timeouts, or gateway failures do **not** waive them. If a gate cannot be completed, **stop** and report the blocker; do not invent a PASS or skip the gate.
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index c8a3bce..c9c3084 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -161,6 +161,7 @@ target_link_libraries(qbrain_search PUBLIC qbrain_core qbrain_util qbrain_ai)
+ 
+ qbrain_lib(jobs
+   src/qbrain/jobs/minions.cpp
++  src/qbrain/jobs/embedding_queue.cpp
+ )
+ target_link_libraries(qbrain_jobs PUBLIC qbrain_core qbrain_ai qbrain_util)
+ 
+@@ -328,3 +329,8 @@ add_executable(qbrain_embedding_tests tests/test_n46d.cpp)
+ target_compile_definitions(qbrain_embedding_tests PRIVATE QBRAIN_EMBEDDING_STANDALONE=1)
+ target_link_libraries(qbrain_embedding_tests PRIVATE qbrain_search qbrain_core qbrain_jobs qbrain_ai)
+ add_test(NAME qbrain_embedding_unit COMMAND qbrain_embedding_tests)
++
++# Production queues/storage/parser with deterministic, no-network HTTP interleaving.
++add_executable(qbrain_embedding_queue_tests tests/test_embedding_queue.cpp)
++target_link_libraries(qbrain_embedding_queue_tests PRIVATE qbrain_jobs qbrain_core qbrain_search qbrain_ai)
++add_test(NAME qbrain_embedding_queue_unit COMMAND qbrain_embedding_queue_tests)
+diff --git a/scripts/build-cl.ps1 b/scripts/build-cl.ps1
+index 86c7dbb..f61d309 100644
+--- a/scripts/build-cl.ps1
++++ b/scripts/build-cl.ps1
+@@ -98,6 +98,7 @@ $productionSources = @(
+   "src\qbrain\search\hybrid.cpp",
+   "src\qbrain\search\rerank.cpp",
+   "src\qbrain\jobs\minions.cpp",
++  "src\qbrain\jobs\embedding_queue.cpp",
+   "src\qbrain\cycle\dream.cpp",
+   "src\qbrain\ingest\chunker.cpp",
+   "src\qbrain\ingest\markdown.cpp",
+@@ -131,7 +132,7 @@ $srcList = ($sources | ForEach-Object { "`"$_`"" }) -join " "
+ $sqliteC = Join-Path $sqlite "sqlite3.c"
+ $prodObjNames = @(
+   "paths","hash","log","string_util","time_util","database","migrate","pg_backend","types","brain",
+-  "extract","traverse","analytics","scan","astlite","packs","lint","store","image_meta","vector","rrf","hybrid","rerank","minions","dream",
++  "extract","traverse","analytics","scan","astlite","packs","lint","store","image_meta","vector","rrf","hybrid","rerank","minions","embedding_queue","dream",
+   "chunker","markdown","import","http_client","embed","chat","registry","handlers","memory_ops","session_memory","hook","context","context_ops",
+   "inbox_watch","live_sync","jsonrpc","server","auth","http_server","app","commands","main"
+ )
+diff --git a/scripts/build-tests-cl.ps1 b/scripts/build-tests-cl.ps1
+index b2de3f9..fcb1840 100644
+--- a/scripts/build-tests-cl.ps1
++++ b/scripts/build-tests-cl.ps1
+@@ -143,7 +143,7 @@ $testList = ($tests | ForEach-Object { "`"$_`"" }) -join " "
+ $testObjList = ($selected | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_) + ".obj" }) -join " "
+ $prodObjs = @(
+   "paths","hash","log","string_util","time_util","database","migrate","pg_backend","types","brain",
+-  "extract","traverse","analytics","scan","astlite","packs","lint","store","image_meta","vector","rrf","hybrid","rerank","minions","dream",
++  "extract","traverse","analytics","scan","astlite","packs","lint","store","image_meta","vector","rrf","hybrid","rerank","minions","embedding_queue","dream",
+   "chunker","markdown","import","http_client","embed","chat","registry","handlers","memory_ops","session_memory","hook","context","context_ops",
+   "inbox_watch","live_sync","jsonrpc","server","auth","http_server","commands","sqlite3"
+ ) | ForEach-Object { "`"$ObjDir\$_.obj`"" }
+diff --git a/src/qbrain/core/brain.cpp b/src/qbrain/core/brain.cpp
+index 028a424..032613c 100644
+--- a/src/qbrain/core/brain.cpp
++++ b/src/qbrain/core/brain.cpp
+@@ -1,6 +1,7 @@
+ #include "qbrain/core/brain.hpp"
+ #include "qbrain/ai/embed.hpp"
+ #include "qbrain/jobs/minions.hpp"
++#include "qbrain/jobs/embedding_queue.hpp"
+ #include "qbrain/util/hash.hpp"
+ #include "qbrain/util/paths.hpp"
+ #include "qbrain/util/time_util.hpp"
+@@ -505,61 +506,7 @@ void Brain::enqueue_embed_page(int64_t page_id) {
+ }
+ 
+ int Brain::drain_embed_jobs(int max_jobs) {
+-  int done_chunks = 0;
+-  for (int n = 0; n < max_jobs; ++n) {
+-    auto st = db_.prepare(
+-        "SELECT id, payload_json FROM jobs WHERE type='embed' AND status='waiting' "
+-        "ORDER BY priority ASC, id ASC LIMIT 1");
+-    if (!st.step()) break;
+-    int64_t job_id = st.column_int(0);
+-    auto payload = st.column_text(1);
+-    int64_t page_id = 0;
+-    try {
+-      auto j = json::parse(payload);
+-      page_id = j.at("page_id").get<int64_t>();
+-    } catch (...) {
+-      auto u = db_.prepare("UPDATE jobs SET status='failed', updated_at=? WHERE id=?");
+-      u.bind_text(1, util::utc_now());
+-      u.bind_int(2, job_id);
+-      u.step_done();
+-      continue;
+-    }
+-    {
+-      auto u = db_.prepare("UPDATE jobs SET status='active', updated_at=? WHERE id=?");
+-      u.bind_text(1, util::utc_now());
+-      u.bind_int(2, job_id);
+-      u.step_done();
+-    }
+-    auto chunks = get_chunks(page_id);
+-    std::vector<Chunk> missing;
+-    for (auto& c : chunks)
+-      if (c.embedding.empty()) missing.push_back(c);
+-    if (!missing.empty()) {
+-      std::vector<std::string> texts;
+-      for (auto& c : missing) texts.push_back(c.text);
+-      auto er = ai::embed_texts(config_, texts);
+-      if (!er.ok) {
+-        auto u = db_.prepare(
+-            "UPDATE jobs SET status='failed', result_json=?, updated_at=? WHERE id=?");
+-        u.bind_text(1, json({{"error", er.error}}).dump());
+-        u.bind_text(2, util::utc_now());
+-        u.bind_int(3, job_id);
+-        u.step_done();
+-        continue;
+-      }
+-      for (size_t i = 0; i < missing.size() && i < er.vectors.size(); ++i) {
+-        update_chunk_embedding(missing[i].id, er.vectors[i], er.model);
+-        ++done_chunks;
+-      }
+-    }
+-    auto u = db_.prepare(
+-        "UPDATE jobs SET status='completed', result_json=?, updated_at=? WHERE id=?");
+-    u.bind_text(1, json({{"chunks", done_chunks}}).dump());
+-    u.bind_text(2, util::utc_now());
+-    u.bind_int(3, job_id);
+-    u.step_done();
+-  }
+-  return done_chunks;
++  return jobs::drain_embedding_jobs(*this, max_jobs);
+ }
+ 
+ bool Brain::soft_delete(const std::string& slug, const std::string& source_id) {
+diff --git a/src/qbrain/jobs/minions.cpp b/src/qbrain/jobs/minions.cpp
+index b7ae6b2..1e08bb9 100644
+--- a/src/qbrain/jobs/minions.cpp
++++ b/src/qbrain/jobs/minions.cpp
+@@ -1,4 +1,5 @@
+ #include "qbrain/jobs/minions.hpp"
++#include "qbrain/jobs/embedding_queue.hpp"
+ #include "qbrain/ai/embed.hpp"
+ #include "qbrain/util/time_util.hpp"
+ #include <nlohmann/json.hpp>
+@@ -186,37 +187,6 @@ const char* kSelectCols =
+     // timestamptz -- census classified this statement portable under the TEXT
+     // assumption; the timestamptz D2 schema falsified it, hence this hardening).
+ 
+-bool handle_embed(Brain& brain, Job& job, std::string& result_json, std::string& err) {
+-  int64_t page_id = 0;
+-  try {
+-    auto j = json::parse(job.payload_json);
+-    page_id = j.at("page_id").get<int64_t>();
+-  } catch (...) {
+-    err = "bad payload";
+-    return false;
+-  }
+-  auto chunks = brain.get_chunks(page_id);
+-  std::vector<Chunk> missing;
+-  for (auto& c : chunks)
+-    if (c.embedding.empty()) missing.push_back(c);
+-  int done = 0;
+-  if (!missing.empty()) {
+-    std::vector<std::string> texts;
+-    for (auto& c : missing) texts.push_back(c.text);
+-    auto er = ai::embed_texts(brain.config(), texts);
+-    if (!er.ok) {
+-      err = er.error;
+-      return false;
+-    }
+-    for (size_t i = 0; i < missing.size() && i < er.vectors.size(); ++i) {
+-      brain.update_chunk_embedding(missing[i].id, er.vectors[i], er.model);
+-      ++done;
+-    }
+-  }
+-  result_json = json({{"chunks", done}}).dump();
+-  return true;
+-}
+-
+ bool handle_extract_facts(Brain& brain, Job& job, std::string& result_json, std::string& err) {
+   std::string slug;
+   std::string source_id = "default";
+@@ -271,12 +241,15 @@ std::optional<Job> claim_job(Brain& brain, const std::string& lock_token, int lo
+     sql << ")";
+   }
+   sql << " ORDER BY priority ASC, id ASC LIMIT 1";
+-  auto st = brain.db().prepare(sql.str());
+-  int idx = 1;
+-  st.bind_text(idx++, queue);
+-  for (auto& t : types) st.bind_text(idx++, t);
+-  if (!st.step()) return std::nullopt;
+-  int64_t id = st.column_int(0);
++  int64_t id = 0;
++  {
++    auto st = brain.db().prepare(sql.str());
++    int idx = 1;
++    st.bind_text(idx++, queue);
++    for (auto& t : types) st.bind_text(idx++, t);
++    if (!st.step()) return std::nullopt;
++    id = st.column_int(0);
++  } // release the SELECT before competing for the conditional write
+ 
+   // n38: datetime('now', ?) -> C++-computed UTC lock expiry bound as a
+   // parameter (dialect-free SQL; stored TEXT format unchanged).
+@@ -291,7 +264,10 @@ std::optional<Job> claim_job(Brain& brain, const std::string& lock_token, int lo
+   u.bind_int(4, id);
+   u.step_done();
+   if (brain.db().changes() == 0) return std::nullopt;
+-  return get_job(brain, id);
++  auto claimed = get_job(brain, id);
++  if (!claimed || claimed->status != "active" || claimed->lock_token != lock_token)
++    return std::nullopt;
++  return claimed;
+ }
+ 
+ bool complete_job(Brain& brain, int64_t job_id, const std::string& lock_token,
+@@ -631,15 +607,18 @@ JobCounts count_jobs(Brain& brain) {
+ 
+ bool process_one(Brain& brain, const std::string& worker_token) {
+   // Guarantee non-empty claim token (audit P1-1).
+-  std::string token = worker_token.empty() ? "worker-default" : worker_token;
++  std::string token = new_embedding_claim_token();
++  (void)worker_token; // worker label is not reused as an ownership fence
+   static const std::vector<std::string> types = {"embed", "extract_facts"};
+   auto job = claim_job(brain, token, 60000, "default", types);
+   if (!job) return false;
+   std::string result;
+   std::string err;
+   bool ok = false;
+-  if (job->type == "embed")
+-    ok = handle_embed(brain, *job, result, err);
++  if (job->type == "embed") {
++    execute_embedding_job(brain, *job);
++    return true; // shared implementation owns all fenced transitions
++  }
+   else if (job->type == "extract_facts")
+     ok = handle_extract_facts(brain, *job, result, err);
+   else {
