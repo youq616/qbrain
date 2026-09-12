@@ -1,6 +1,6 @@
 # N46D — embedding response contracts and model-scoped retrieval
 
-Status: implementation after the recorded engineering plan review; outcome pending. Baseline: youq616/qbrain @ 93f80b64756ee520885d8d890bfecfc36eb6af7f.
+Status: implementation and automated verification completed; required independent review pending. Not marked done. Baseline: youq616/qbrain @ 93f80b64756ee520885d8d890bfecfc36eb6af7f.
 Windows native C++20 only. No runtime services, database migrations or paid calls.
 
 ## Scope and acceptance

@@ -1,0 +1,81 @@
+{
+  "repository": "youq616/qbrain",
+  "node": "N46D",
+  "node_status": "implemented and automatically tested; independent review pending",
+  "source_commit": "6f88c073ad8332e0e629d3ab33ab6cd0b621451b",
+  "source_tree": "c93e7d720fb3b866332a5682bef980de2f4be5b5",
+  "workflow_run_id": 34672404417,
+  "n42_workflow_run_id": 34672404422,
+  "workflow_states": {
+    "34672404417": {
+      "status": "completed",
+      "conclusion": "success",
+      "updated_at_utc": "2026-09-12T04:26:01Z"
+    },
+    "34672404422": {
+      "status": "completed",
+      "conclusion": "success",
+      "updated_at_utc": "2026-09-12T04:21:32Z"
+    }
+  },
+  "artifact_ids": {
+    "source": 10291341344,
+    "windows_logs": 10291057794,
+    "windows_package": 10291467038,
+    "portable_logs": 10291481328,
+    "n42_windows_logs": 10291107384
+  },
+  "package": {
+    "filename": "qbrain-windows-x64-n46d-6f88c073.zip",
+    "bytes": 1837987,
+    "sha256": "e057f6e4eda2306357643b963f2d8b9a62e0748b14a8b71bfd46de29607c7deb"
+  },
+  "executable": {
+    "bytes": 3806208,
+    "sha256": "d3c8ff4b565117e785c933b35cb6795cee4ee580f0d696c575ca467480fcce5f",
+    "embedded_authenticode": false
+  },
+  "source_readback": {
+    "repository": "youq616/qbrain",
+    "source_commit": "6f88c073ad8332e0e629d3ab33ab6cd0b621451b",
+    "tree": "c93e7d720fb3b866332a5682bef980de2f4be5b5",
+    "files": 644,
+    "source_archive_all_bytes_match": true,
+    "outer_sha256": "99ce280a5003d4504d0884711d97ea91f5da022d216139dbd8fe8873d59f206a",
+    "source_artifact_id": 10291341344
+  },
+  "review_status": "Engineering self-review and CI only; independent Claude Code review not performed",
+  "merge_status": "PR #9 remains draft; no merge performed in this continuation",
+  "limitations": [
+    "Model label and width, not provider/endpoint/weights attestation",
+    "No live paid provider or signed-in Win11 lifecycle acceptance",
+    "Real PostgreSQL integration remains skipped",
+    "Legacy low-level raw C++ helper intentionally retains unfiltered mode",
+    "No signed production release"
+  ],
+  "automated_validation": "PASS",
+  "registered_native_groups": 47,
+  "embedding_unit_checks": 65,
+  "embedding_wire_checks": 26,
+  "production_search_checks": 11,
+  "http_wire_checks": 51,
+  "readback_checks": 86,
+  "local_additional_checks": {
+    "focused_ctest": "5/5 PASS",
+    "n42_ctest": "3/3 PASS",
+    "clang_c_cpp_asan_ubsan": "65 checks PASS; only executed embedding suite, not Windows transport or whole program",
+    "parser_mutations": 20000,
+    "parser_boundary_and_mutation_assertions": 21454,
+    "full_linux_regression_build": "NOT PASS: existing _putenv_s Windows-specific code in historical tests",
+    "old_package_substitution": "Old N46C package rejected for missing N46D embedding report",
+    "logs_sha256": {
+      "qbrain-n46d-final-local.log": "35cc02074ead5714b43382c4931b975fd6f28c4025c20f27113bf19ad6ab98ea",
+      "qbrain-n46d-n42.log": "96e085e7f64e13a243a10ee66ff6db92c97026c499231c729e4747feb343aa10",
+      "qbrain-n46d-process.log": "c50787018cc015cf3c644e005a4a99f7e9addf4502752a02a90fa711f8d466e0",
+      "qbrain-n46d-clang.log": "83a7211a3ebf57de79a64b0cdcc7bf4bc9a9abda89e31fcdbc282b88aa52ae83",
+      "qbrain-n46d-parser-probe.log": "7b56b35cb5def0703acda0f630903f895af9a400af2652623139491187798c70",
+      "qbrain-n46d-tests-build.log": "4a2024463e93bae52ba453b632e371edc340b669a32276ec58bf7b4eaa8f1d59",
+      "qbrain-n46d-old-package-rejection.log": "4c49c13fa539db1372fbb81b0b6b80436f34838fa2486061775cbc59aaaf0961"
+    }
+  }
+}
