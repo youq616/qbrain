@@ -1,6 +1,6 @@
 # N46C — exact bounded candidate selection and batched backlink scoring
 
-Status: approved after N46C-PLAN-AUDIT.md; outcome pending. Baseline: youq616/qbrain @ c9f3ed5229f43e9a88a53fc64b988d8d0bb89502.
+Status: done for scoped N46C after N46C-HARD-AUDIT.md; not full-project completion. Baseline: youq616/qbrain @ c9f3ed5229f43e9a88a53fc64b988d8d0bb89502.
 Scope: native Windows C++20 Qbrain only; issue #2's candidate-scan performance item.
 
 ## Implementation scope

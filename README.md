@@ -2,7 +2,28 @@
 
 Windows 原生 C++20 / PowerShell Agent 记忆与知识库。默认 SQLite + FTS5，不要求 Docker、WSL 或 Python 服务。由 `Lordakee/qbrain` 的 MIT 代码继续开发；gbrain / OpenViking 是设计参考，不是完整功能等价声明。
 
-## 最新已验证代码：N46B Windows 模型传输优化
+## N46C：已验证的精确检索优化
+
+测试源码 `728c2502ff66cedae218722458cac47f957236fc`；[PR #7](https://github.com/youq616/qbrain/pull/7) 与
+[Windows 原生验证及开发包](https://github.com/youq616/qbrain/actions/runs/34661114802)。
+在该运行的 Artifacts 选择 `qbrain-n44-windows-development-package`；名称沿用 N44，
+以包内 MANIFEST 的源码 SHA 为准。CI Artifact 保留 14 天，不是永久 Release。
+
+保留完整向量扫描与精确排序，同时把候选保留改为有界 Top-K；反向链接评分改为
+来源隔离的批量计数，不读取链接正文。没有数据库迁移、新服务、缓存、ANN 或外发许可变更。
+46 个原生注册回归组、51 项 HTTP 检查及原有记忆/MCP/Hook/两版 PowerShell 全部通过。
+
+Windows 合成基准（2,000 页、16,000 片段、64 维、K=50）：候选保留由16,000条
+片段记录变为最多50个页面；向量阶段7轮中位数 45.74→12.80ms；反向链接SQL
+554→6次，结果与旧版完全一致。
+这不是整个进程内存、实际模型召回正确率或Agent总延迟/费用的改善承诺。
+
+开发ZIP SHA-256：`1f25ebbed82051f9f824485d92ea6b4a63871993b6a24cfe05780ad1feb9507b`。包未签名。
+[逐项验收及失败诊断](docs/nodes/N46C-HARD-AUDIT.md) ·
+[原始数值与交付清单](docs/nodes/n46c-evidence/RESULT.json)。真实Win11登录宿主、
+PostgreSQL对等、语义质量与付费费用仍未完成。以下N46B和旧Release为历史交付记录。
+
+## N46B 历史已验证代码：Windows 模型传输优化
 
 测试源码 `2661e5205ba480c993210405d35c463efd8c6b6c`；
 [PR #6](https://github.com/youq616/qbrain/pull/6) 和

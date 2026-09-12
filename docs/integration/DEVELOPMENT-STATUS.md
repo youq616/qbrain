@@ -1,3 +1,16 @@
+# Current continuation: N46C exact retrieval
+
+Tested source `728c2502ff66cedae218722458cac47f957236fc`. [Run 34661114802](https://github.com/youq616/qbrain/actions/runs/34661114802)
+passed the native Windows/portable/source gates and exact 46-group package gate.
+[Outcome and failed-check analysis](../nodes/N46C-HARD-AUDIT.md),
+[numeric source-bound evidence](../nodes/n46c-evidence/RESULT.json).
+Full scan and exact outputs remain; candidates bounded to K and backlinks counted
+in source-scoped batches. Synthetic timings are not semantic quality, billing,
+process-RSS or end-to-end latency promises. Native Win11 host, PG and signing
+remain unverified. The records below describe older source/artifacts.
+
+---
+
 # Current continuation: N46B native HTTP boundaries
 
 Tested source `2661e5205ba480c993210405d35c463efd8c6b6c`; final run
