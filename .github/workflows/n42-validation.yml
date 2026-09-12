@@ -2,7 +2,7 @@ name: N42 native and portable validation
 
 on:
   push:
-    branches: [main, 'optimization/n42-foundation']
+    branches: [main, 'optimization/n42-foundation', 'optimization/n46d-embedding-contracts']
     paths:
       - 'src/**'
       - 'include/**'

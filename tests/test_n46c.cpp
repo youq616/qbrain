@@ -133,7 +133,7 @@ void database_equivalence() {
     }
   }
   for (int limit : {1,34,67,100}) for (const std::string& source:{std::string{},std::string("alpha"),std::string("beta")}) {
-    HybridOpts opts; opts.limit=limit; opts.source_id=source;
+    HybridOpts opts; opts.embedding_model="synthetic-fixture"; opts.limit=limit; opts.source_id=source;
     RetrievalDiagnostics d; opts.diagnostics=&d;
     sqlite3_set_authorizer(brain.db().handle(), [](void*, int action, const char* table,
         const char* column, const char*, const char*) -> int {
@@ -153,7 +153,7 @@ void database_equivalence() {
     opts.diagnostics=nullptr;
     same(actual,n46c_reference::reference_hybrid_search(brain,"retrieval",&query,opts));
   }
-  HybridOpts opts; opts.mode="conservative"; RetrievalDiagnostics d; opts.diagnostics=&d;
+  HybridOpts opts; opts.embedding_model="synthetic-fixture"; opts.mode="conservative"; RetrievalDiagnostics d; opts.diagnostics=&d;
   same(hybrid_search(brain,"retrieval",&query,opts),n46c_reference::reference_hybrid_search(brain,"retrieval",&query,opts));
   check(d.chunks_scanned==0,"conservative mode still avoids vector scan");
   same(hybrid_search(brain,"absent-token",nullptr,opts),n46c_reference::reference_hybrid_search(brain,"absent-token",nullptr,opts));
@@ -190,7 +190,7 @@ J benchmark() {
     run(i%2==0); run(i%2!=0); same(new_result,old_result);
   }
   check(d.chunks_scanned==pages*chunks && d.valid_chunks==pages*chunks && d.peak_retained_pages<=limit,"benchmark full scan and candidate cap");
-  HybridOpts opts; opts.limit=100;
+  HybridOpts opts; opts.embedding_model="synthetic-fixture"; opts.limit=100;
   Trace before; sqlite3_trace_v2(brain.db().handle(),SQLITE_TRACE_STMT,Trace::record,&before);
   auto legacy=n46c_reference::reference_hybrid_search(brain,"retrieval",&query,opts);
   Trace after; sqlite3_trace_v2(brain.db().handle(),SQLITE_TRACE_STMT,Trace::record,&after);

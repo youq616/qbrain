@@ -1,6 +1,7 @@
 // Loopback fixture driver; not included in the installed Qbrain application.
 #include "qbrain/ai/http_client.hpp"
 #include "qbrain/ai/chat.hpp"
+#include "qbrain/ai/embed.hpp"
 #include "qbrain/core/brain.hpp"
 #include <nlohmann/json.hpp>
 #include <chrono>
@@ -17,7 +18,19 @@ using J = nlohmann::json;
 J invoke(const J& j) {
   const auto start = std::chrono::steady_clock::now();
   J result;
-  if (j.value("chat",false)) {
+  if (j.value("embedding",false)) {
+    qbrain::Config cfg;
+    cfg.embedding_base_url=j.at("base"); cfg.embedding_model="fixture-model";
+    cfg.embedding_dimensions=j.value("dimensions",3); cfg.embedding_api_key="fixture-token";
+    if (j.value("image",false)) {
+      const auto r=qbrain::ai::embed_image(cfg,"synthetic-image-bytes");
+      result={{"ok",r.ok},{"unavailable",r.unavailable},{"vectors",J::array({r.vector})},{"error",r.error},{"model",r.model}};
+    } else {
+      const auto texts=j.value("texts",std::vector<std::string>{"one","two"});
+      const auto r=qbrain::ai::embed_texts(cfg,texts);
+      result={{"ok",r.ok},{"vectors",r.vectors},{"error",r.error},{"model",r.model}};
+    }
+  } else if (j.value("chat",false)) {
     qbrain::Config cfg;
     cfg.chat_base_url=j.at("base"); cfg.chat_model="loopback-fixture";
     cfg.chat_endpoint="chat/completions"; cfg.chat_api_key="fixture-token";

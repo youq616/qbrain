@@ -1,4 +1,5 @@
 #include "qbrain/ai/embed.hpp"
+#include "qbrain/ai/detail/embedding_response.hpp"
 #include "qbrain/ai/http_client.hpp"
 #include "qbrain/core/brain.hpp"
 #include "qbrain/util/hash.hpp"
@@ -131,17 +132,21 @@ EmbedResult embed_texts(const Config& cfg, const std::vector<std::string>& texts
     r.ok = true;
     return r;
   }
-  if (const char* mock = std::getenv("QBRAIN_EMBED_MOCK")) {
-    if (std::string(mock) == "1" || std::string(mock) == "true") {
-      r.ok = true;
-      r.model = "mock-embedding";
-      r.vectors.reserve(texts.size());
-      for (size_t i = 0; i < texts.size(); ++i) {
-        float base = static_cast<float>((texts[i].size() % 17) + 1);
-        r.vectors.push_back({base, 1.0f, static_cast<float>(i + 1)});
-      }
-      return r;
+  if (texts.size() > EMBED_MAX_BATCH || !valid_embedding_model(cfg.embedding_model) ||
+      cfg.embedding_dimensions < 0 ||
+      static_cast<std::size_t>(cfg.embedding_dimensions) > EMBED_MAX_DIMENSIONS) {
+    r.error = "invalid embedding request";
+    return r;
+  }
+  if (embedding_mock_enabled()) {
+    r.ok = true;
+    r.model = "mock-embedding";
+    r.vectors.reserve(texts.size());
+    for (size_t i = 0; i < texts.size(); ++i) {
+      float base = static_cast<float>((texts[i].size() % 17) + 1);
+      r.vectors.push_back({base, 1.0f, static_cast<float>(i + 1)});
     }
+    return r;
   }
   auto key = resolve_api_key(cfg, false);
   if (key.empty()) {
@@ -151,6 +156,7 @@ EmbedResult embed_texts(const Config& cfg, const std::vector<std::string>& texts
   json body;
   body["model"] = cfg.embedding_model;
   body["input"] = texts;
+  body["encoding_format"] = "float";
   if (cfg.embedding_dimensions > 0) body["dimensions"] = cfg.embedding_dimensions;
 
   auto resp = http_post_json(cfg.embedding_base_url, "/embeddings", key, body.dump());
@@ -162,20 +168,8 @@ EmbedResult embed_texts(const Config& cfg, const std::vector<std::string>& texts
     r.error = resp.error.empty() ? resp.body : resp.error;
     return r;
   }
-  try {
-    auto j = json::parse(resp.body);
-    auto& data = j.at("data");
-    r.vectors.resize(data.size());
-    for (auto& item : data) {
-      size_t idx = item.at("index").get<size_t>();
-      if (idx >= r.vectors.size()) r.vectors.resize(idx + 1);
-      r.vectors[idx] = item.at("embedding").get<std::vector<float>>();
-    }
-    r.ok = true;
-  } catch (const std::exception& e) {
-    r.error = std::string("parse embeddings: ") + e.what();
-  }
-  return r;
+  return detail::parse_embedding_response(resp.body, cfg.embedding_model, texts.size(),
+                                           cfg.embedding_dimensions);
 }
 
 ImageEmbedResult embed_image(const Config& cfg, std::string_view image_bytes) {
@@ -188,17 +182,16 @@ ImageEmbedResult embed_image(const Config& cfg, std::string_view image_bytes) {
     return r;
   };
   if (image_bytes.empty()) return degrade("empty image input", false);
+  if (!valid_embedding_model(cfg.embedding_model)) return degrade("invalid embedding model", false);
   if (image_bytes.size() > kImageMaxInputBytes) {
     return degrade("image exceeds size limit", false);
   }
-  if (const char* mock = std::getenv("QBRAIN_EMBED_MOCK")) {
-    if (std::string(mock) == "1" || std::string(mock) == "true") {
-      r.ok = true;
-      r.mock = true;
-      r.model = "mock-image-embedding";
-      r.vector = mock_image_vector(image_bytes);
-      return r;
-    }
+  if (embedding_mock_enabled()) {
+    r.ok = true;
+    r.mock = true;
+    r.model = "mock-image-embedding";
+    r.vector = mock_image_vector(image_bytes);
+    return r;
   }
   const std::string key = resolve_api_key(cfg, false);
   if (key.empty()) return degrade("no provider credentials", true);
@@ -211,11 +204,12 @@ ImageEmbedResult embed_image(const Config& cfg, std::string_view image_bytes) {
   }
   json body;
   body["model"] = cfg.embedding_model;
+  body["encoding_format"] = "float";
   body["input"] = json::array({json{{"type", "image_url"},
                                     {"image_url", {{"url", "data:" + mime + ";base64," +
                                                                  base64_encode(image_bytes)}}}}});
   auto resp = http_post_json(cfg.embedding_base_url, "/embeddings", key, body.dump(),
-                             kImageEmbedTimeoutMs);
+                             kImageEmbedTimeoutMs, kImageMaxResponseBytes);
   if (resp.body.size() > kImageMaxResponseBytes) {
     return degrade("embedding response exceeds size limit", false);
   }
@@ -225,14 +219,11 @@ ImageEmbedResult embed_image(const Config& cfg, std::string_view image_bytes) {
   if (resp.status < 200 || resp.status >= 300) {
     return degrade(!resp.error.empty() ? resp.error : resp.body, false);
   }
-  try {
-    auto j = json::parse(resp.body);
-    r.vector = j.at("data").at(0).at("embedding").get<std::vector<float>>();
-    if (r.vector.empty()) return degrade("embedding provider returned empty vector", false);
-    r.ok = true;
-  } catch (const std::exception& e) {
-    return degrade(std::string("parse embedding response: ") + e.what(), false);
-  }
+  auto parsed = detail::parse_embedding_response(resp.body, cfg.embedding_model, 1, 0,
+                                                  kImageMaxResponseBytes);
+  if (!parsed.ok) return degrade(parsed.error, false);
+  r.vector = std::move(parsed.vectors[0]);
+  r.ok = true;
   return r;
 }
 

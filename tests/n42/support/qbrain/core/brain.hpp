@@ -3,6 +3,7 @@
 // production storage backend, migration layer, authorization or provider code.
 #include "qbrain/core/types.hpp"
 #include <sqlite3.h>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -30,6 +31,7 @@ class N42Database {
     Statement(const Statement&)=delete;
     Statement& operator=(const Statement&)=delete;
     Statement(Statement&&o)noexcept:p_(std::exchange(o.p_,nullptr)){}
+    void bind_null(int i){checked(sqlite3_bind_null(p_,i));}
     void bind_int(int i,int64_t v){checked(sqlite3_bind_int64(p_,i,v));}
     void bind_text(int i,std::string_view v){checked(sqlite3_bind_text(p_,i,v.data(),static_cast<int>(v.size()),SQLITE_TRANSIENT));}
     void bind_blob(int i,const void* p,int n){checked(sqlite3_bind_blob(p_,i,p,n,SQLITE_TRANSIENT));}
@@ -54,7 +56,31 @@ class N42Database {
 };
 class Brain {
   N42Database db_;
+  Config config_;
  public:
+  static std::optional<std::string> canonical_source_id(const std::string& source_id) {
+  if (source_id.empty() || source_id.size() > 64) return std::nullopt;
+  std::string canon;
+  canon.reserve(source_id.size());
+  for (unsigned char c : source_id) {
+    if (c >= 'A' && c <= 'Z') {
+      canon.push_back(static_cast<char>(c - 'A' + 'a'));
+    } else if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-') {
+      canon.push_back(static_cast<char>(c));
+    } else {
+      return std::nullopt;
+    }
+  }
+  static const char* kReserved[] = {"con",  "prn",  "aux",  "nul",  "com1", "com2", "com3",
+                                    "com4", "com5", "com6", "com7", "com8", "com9", "lpt1",
+                                    "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8",
+                                    "lpt9"};
+  for (auto* reserved : kReserved) {
+    if (canon == reserved) return std::nullopt;
+  }
+  return canon;
+  }
+  Config& config(){return config_;}
   N42Database& db(){return db_;}
   std::vector<Link> get_links_to(const std::string&slug,const std::string&source){
     auto st=db_.prepare("SELECT from_slug FROM links WHERE to_slug=? AND source_id=?");

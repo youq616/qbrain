@@ -9,7 +9,7 @@ int main(){
   int checks=0;
   try{
     qbrain::Brain b;
-    b.db().exec("CREATE TABLE pages(id INTEGER PRIMARY KEY,source_id TEXT,slug TEXT,title TEXT,type TEXT,body TEXT,updated_at TEXT,deleted_at TEXT); CREATE TABLE content_chunks(page_id INTEGER,text TEXT,embedding BLOB); CREATE TABLE links(source_id TEXT,from_slug TEXT,to_slug TEXT); CREATE VIRTUAL TABLE page_fts USING fts5(title,body);");
+    b.db().exec("CREATE TABLE pages(id INTEGER PRIMARY KEY,source_id TEXT,slug TEXT,title TEXT,type TEXT,body TEXT,updated_at TEXT,deleted_at TEXT); CREATE TABLE content_chunks(page_id INTEGER,text TEXT,embedding BLOB); CREATE TABLE links(id INTEGER PRIMARY KEY,source_id TEXT,from_slug TEXT,to_slug TEXT); CREATE VIRTUAL TABLE page_fts USING fts5(title,body);");
     auto add=[&](int id,const std::string&source,const std::string&slug,const std::string&body,const std::vector<float>&vec){
       auto st=b.db().prepare("INSERT INTO pages VALUES(?,?,?,?,'note',?,'2026-09-10',NULL)");
       st.bind_int(1,id);st.bind_text(2,source);st.bind_text(3,slug);st.bind_text(4,slug);st.bind_text(5,body);st.step();
