@@ -1,3 +1,13 @@
+# Owner-authorized review disposition — September 12, 2026
+
+The owner explicitly removed the Claude Code/external-review requirement and
+accepted ChatGPT review. The engineering plan review below is accepted under that
+authorization, not retroactively attributed to Claude Code. Queue follow-up and
+contention amendments were reviewed separately in N46D-QUEUE-PLAN.md; outcome
+acceptance is in N46D-QUEUE-HARD-AUDIT.md. No safety or testing gate was waived.
+
+---
+
 # N46D engineering plan review
 
 Reviewer: ChatGPT, continuing the owner-accepted N46B/N46C development workflow.

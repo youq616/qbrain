@@ -2,6 +2,22 @@
 
 Windows 原生 C++20 / PowerShell Agent 记忆与知识库。默认 SQLite + FTS5，不要求 Docker、WSL 或 Python 服务。由 `Lordakee/qbrain` 的 MIT 代码继续开发；gbrain / OpenViking 是设计参考，不是完整功能等价声明。
 
+## N46D：已验证的模型隔离与队列修复
+
+测试源码 `464045e2451ec71ca37dd8e92bcf4ac0d9325a0b`；[PR #9](https://github.com/youq616/qbrain/pull/9) 与
+[Windows 开发包和验证](https://github.com/youq616/qbrain/actions/runs/34682889565)。
+选择运行 Artifacts 中的 `qbrain-n44-windows-development-package`，以 MANIFEST
+源码 SHA 为准。内层 ZIP SHA-256：`4f43e91853602bd141822ad11650ddab9643a3471f8a86bd2c615ffb61c460ee`。
+
+大页面自动分批；已删除页面不再从待执行队列发送，过期片段响应不再误报成功；
+每个任务按实际提交计数。自动队列与通用队列共用实现，增加租约保护、批次回滚和
+有界锁等待。47个原生注册组、40个队列场景/776项断言及原有流程通过。
+
+包未签名；不迁移脑库、不自动重新生成旧向量或开启外发权限。已有数据先备份。
+外部审核已由用户明确授权的工程自审替代，不冒称第三方审核。真实付费模型、PG、
+登录Win11宿主与全项目完成仍未验收。[验收及限制](docs/nodes/N46D-QUEUE-HARD-AUDIT.md)。
+以下为历史版本记录；它们的旧包不包含全部队列修复。
+
 ## N46C：已验证的精确检索优化
 
 测试源码 `728c2502ff66cedae218722458cac47f957236fc`；[PR #7](https://github.com/youq616/qbrain/pull/7) 与

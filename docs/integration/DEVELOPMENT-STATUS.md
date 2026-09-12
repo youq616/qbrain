@@ -1,3 +1,19 @@
+# Current continuation: N46D contracts and queue repairs
+
+Tested source `464045e2451ec71ca37dd8e92bcf4ac0d9325a0b`. Development run 34682889565 and N42 run
+34682889570 completed successfully. The dedicated queue suite reports 40 scenarios /
+776 assertions (including repeated simultaneous-claim races), in addition to the 47
+original native registered groups and existing process/wire/PowerShell gates.
+
+Owner-authorized self-review supersedes the earlier external-review blocker.
+[Outcome review](../nodes/N46D-QUEUE-HARD-AUDIT.md) and
+[current evidence](../nodes/n46d-queue-evidence/SUMMARY.json) are authoritative for
+this milestone. The 6f88c073 package predates queue repairs and is not current.
+No new migration, required service, provider consent or MCP permission. Unsigned
+development, not complete PG/live-provider/signed-in Win11 acceptance.
+
+---
+
 # Current continuation: N46C exact retrieval
 
 Tested source `728c2502ff66cedae218722458cac47f957236fc`. [Run 34661114802](https://github.com/youq616/qbrain/actions/runs/34661114802)

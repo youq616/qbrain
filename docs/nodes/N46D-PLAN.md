@@ -1,6 +1,6 @@
 # N46D — embedding response contracts and model-scoped retrieval
 
-Status: implementation and automated verification completed; required independent review pending. Not marked done. Baseline: youq616/qbrain @ 93f80b64756ee520885d8d890bfecfc36eb6af7f.
+Status: done for scoped N46D after N46D-QUEUE-HARD-AUDIT.md; owner-authorized self-review replaces external review. Baseline: youq616/qbrain @ 93f80b64756ee520885d8d890bfecfc36eb6af7f.
 Windows native C++20 only. No runtime services, database migrations or paid calls.
 
 ## Scope and acceptance
@@ -46,3 +46,5 @@ The mock is synthetic and not a semantic-quality model.
 Work on optimization/n46d-embedding-contracts. Record real failures, exact source
 and CI evidence. No successful previous run can certify changed production code.
 Rollback: revert code/tests/build changes; no database downgrade is needed.
+
+Queue follow-up scope and amendment: [N46D-QUEUE-PLAN.md](N46D-QUEUE-PLAN.md).

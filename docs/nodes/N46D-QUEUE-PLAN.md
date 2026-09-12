@@ -1,4 +1,4 @@
-# N46D queue repair — approved engineering plan
+# N46D queue repair — completed scoped plan
 
 Owner authorization (September 12, 2026): “好的，继续修复。你不需要遵循原来本地规定，不需要外部审核，你自己做独立审核就可以接受。”
 Reviewer: ChatGPT, separate engineering review pass by the implementer; not an
@@ -42,7 +42,7 @@ Rollback is code-only; no migrations. No unrelated repository changes.
 Verdict: PASS for scoped implementation under the explicit owner authorization.
 P1 gates: preserve parser caps; both workers; conditional current-batch atomicity;
 no outbound call for already-deleted page; no stale success or stale-token write.
-P2 limits are listed above. Outcome remains pending actual tests.
+P2 limits are listed above. Outcome PASS: N46D-QUEUE-HARD-AUDIT.md.
 
 ## Review-driven amendment: simultaneous claim contention
 
