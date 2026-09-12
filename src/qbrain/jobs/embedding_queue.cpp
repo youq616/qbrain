@@ -1,4 +1,5 @@
 #include "qbrain/jobs/embedding_queue.hpp"
+#include "qbrain/jobs/detail/busy_wait.hpp"
 #include "qbrain/ai/embed.hpp"
 #include "qbrain/ai/embedding_policy.hpp"
 #include "qbrain/ai/http_client.hpp"
@@ -28,10 +29,11 @@ struct LostClaim {};
 
 // Short transactions only; no provider call occurs while an instance is active.
 class Transaction {
+  detail::ScopedQueueBusyWait busy_;
   Database& db_;
   bool active_ = true;
  public:
-  explicit Transaction(Database& db) : db_(db) {
+  explicit Transaction(Database& db) : busy_(db), db_(db) {
     db_.exec(db_.backend_kind() == storage::BackendKind::sqlite ? "BEGIN IMMEDIATE" : "BEGIN");
     try {
       // Unlike SQLite, PG BEGIN alone does not exclude competing writers. The

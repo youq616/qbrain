@@ -46,3 +46,9 @@ CI tests execute the real C++ queues, migrations, SQLite and embedding parser wi
 only HTTP replaced by a deterministic in-process provider. They include native
 Windows execution but are not real paid model calls or Win11 signed-in Agent tests.
 Existing native WinHTTP wire fixtures remain separate and must also pass.
+
+SQLite claim and short transaction scopes use a bounded busy wait (2000 ms when
+the connection had none, capped at 2000 ms and honoring shorter configured waits).
+The previous setting is restored afterwards, including exception paths. This
+handles transient simultaneous writers, not unlimited lock contention; a held
+write lock can still cause a bounded error. It does not extend model HTTP deadlines.

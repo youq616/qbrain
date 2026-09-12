@@ -43,3 +43,17 @@ Verdict: PASS for scoped implementation under the explicit owner authorization.
 P1 gates: preserve parser caps; both workers; conditional current-batch atomicity;
 no outbound call for already-deleted page; no stale success or stale-token write.
 P2 limits are listed above. Outcome remains pending actual tests.
+
+## Review-driven amendment: simultaneous claim contention
+
+A supplemental two-thread simultaneous claim test on candidate 0cbcc031 stopped
+with SQLite database-is-locked (initial iteration count was not recorded). This
+is distinct from the earlier interleaving test where worker 2 arrives after a
+claim is active. Preserve that failure as evidence. Add scoped SQLite busy waits
+to claims and short queue transactions: default 2000 ms, honoring a shorter
+positive existing timeout, restoring the previous timeout on success/failure.
+No SQL lock timeout is added to model I/O. Continued lock contention still fails
+within the configured bound; do not spin indefinitely or drop the claim fence.
+Acceptance adds repeated simultaneous claim races (exactly one winner), timeout
+restoration and a held-write-lock failure. Approved under the same owner-authorized
+engineering review; Windows rerun is required for this changed source.

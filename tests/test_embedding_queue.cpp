@@ -6,6 +6,7 @@
 #include "qbrain/util/paths.hpp"
 #include <nlohmann/json.hpp>
 #include <atomic>
+#include <barrier>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
@@ -207,6 +208,54 @@ void paths(bool generic) {
     scenario("invalid UTF-8 before network");
   }
 }
+int busy_timeout(qbrain::Brain& brain) {
+  auto st=brain.db().prepare("PRAGMA busy_timeout");
+  if (!st.step()) throw std::runtime_error("missing busy timeout");
+  return static_cast<int>(st.column_int(0));
+}
+void simultaneous_claims() {
+  {
+    Fixture f("simultaneous");
+    const auto old_a=busy_timeout(f.b),old_b=busy_timeout(f.peer);
+    for (int i=0;i<128;++i) {
+      auto id=qbrain::jobs::submit_job(f.b,"embed","{\"page_id\":1}");
+      std::barrier ready(3);
+      std::optional<qbrain::jobs::Job> one,two;
+      std::exception_ptr e1,e2;
+      const auto t1=qbrain::jobs::new_embedding_claim_token(),t2=qbrain::jobs::new_embedding_claim_token();
+      std::thread x([&]{ready.arrive_and_wait();try{one=qbrain::jobs::claim_job(f.b,t1,180000,"default",{"embed"});}catch(...){e1=std::current_exception();}});
+      std::thread y([&]{ready.arrive_and_wait();try{two=qbrain::jobs::claim_job(f.peer,t2,180000,"default",{"embed"});}catch(...){e2=std::current_exception();}});
+      ready.arrive_and_wait();x.join();y.join();
+      if (e1) std::rethrow_exception(e1);
+      if (e2) std::rethrow_exception(e2);
+      check(bool(one)!=bool(two),"simultaneous claim has exactly one winner");
+      const auto job=qbrain::jobs::get_job(f.b,id);
+      check(job&&job->status=="active"&&job->attempts==1,"one active attempt under simultaneous claim");
+      check(job->lock_token==(one?t1:t2),"simultaneous winner owns the token");
+      check(qbrain::jobs::complete_job(f.b,id,job->lock_token,"{}"),"close simultaneous-claim round");
+    }
+    check(busy_timeout(f.b)==old_a&&busy_timeout(f.peer)==old_b,"both claim timeout settings restored");
+    scenarios.push_back("128 simultaneous two-connection claim races: one winner");
+  }
+  {
+    Fixture f("busy-bound");auto p=f.page("held-lock");auto id=f.queue(p);
+    f.b.db().exec("PRAGMA busy_timeout=50");
+    f.peer.db().exec("BEGIN IMMEDIATE");
+    const auto start=std::chrono::steady_clock::now();
+    bool failed=false;
+    try {qbrain::jobs::claim_job(f.b,"contended",180000,"default",{"embed"});}
+    catch(const std::exception&){failed=true;}
+    const auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-start).count();
+    f.peer.db().exec("ROLLBACK");
+    check(failed&&elapsed<1500,"held writer causes bounded failure, never unbounded retry");
+    check(busy_timeout(f.b)==50,"short configured timeout restored on exception");
+    check(f.job(id)["status"]=="waiting"&&calls.empty(),"busy claim failure leaves job pending without provider call");
+    f.run(false);
+    check(f.embedded(p)==1&&busy_timeout(f.b)==50,"queue transaction restores caller timeout too");
+    scenarios.push_back("held SQLite writer: bounded failure and timeout restoration");
+  }
+}
+
 void bounds_and_overlap() {
   {
     Fixture f("bytes");auto p=f.page("bytes",2);
@@ -271,7 +320,7 @@ int main() {
 #else
     unsetenv("QBRAIN_EMBED_MOCK");
 #endif
-    paths(false);paths(true);bounds_and_overlap();
+    paths(false);paths(true);bounds_and_overlap();simultaneous_claims();
     std::cout<<J({{"result","PASS"},{"checks",checks},{"scenarios",scenarios},
                  {"scenario_count",scenarios.size()},{"provider","in-process synthetic HTTP replacement"},
                  {"real_provider_calls",false},{"production_queue_and_storage",true}}).dump()<<'\n';

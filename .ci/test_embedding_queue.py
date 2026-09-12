@@ -24,8 +24,8 @@ with tempfile.TemporaryDirectory(prefix='qbrain-queue-env-') as home:
 if result.returncode:
     raise SystemExit(result.stderr or 'Queue regression process failed')
 report=json.loads(result.stdout)
-assert report['result']=='PASS' and report['checks']>=255
-assert report['scenario_count']==len(report['scenarios'])>=38
+assert report['result']=='PASS' and report['checks']>=776
+assert report['scenario_count']==len(report['scenarios'])>=40
 assert len(set(report['scenarios']))==report['scenario_count']
 for mode in ('automatic','generic'):
     for code in ('001','002','003','004'):

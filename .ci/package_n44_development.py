@@ -55,8 +55,8 @@ queue_report=json.loads(read('embedding-queue.json'))
 assert queue_report['result']=='PASS' and queue_report['native_windows'] is True
 assert queue_report['source_commit']==commit and queue_report['tracked_tree_clean'] is True
 assert queue_report['source_tree']==retrieval_report['source_tree']
-assert queue_report['scenario_count']==len(queue_report['scenarios'])>=38
-assert queue_report['checks']>=255 and queue_report['real_provider_calls'] is False
+assert queue_report['scenario_count']==len(queue_report['scenarios'])>=40
+assert queue_report['checks']>=776 and queue_report['real_provider_calls'] is False
 assert queue_report['probe_sha256']==hashlib.sha256((root/'build/http/Release/qbrain_embedding_queue_tests.exe').read_bytes()).hexdigest()
 for mode in ('automatic','generic'):
     for code in ('001','002','003','004'):

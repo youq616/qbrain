@@ -1,5 +1,6 @@
 #include "qbrain/jobs/minions.hpp"
 #include "qbrain/jobs/embedding_queue.hpp"
+#include "qbrain/jobs/detail/busy_wait.hpp"
 #include "qbrain/ai/embed.hpp"
 #include "qbrain/util/time_util.hpp"
 #include <nlohmann/json.hpp>
@@ -229,6 +230,7 @@ std::optional<Job> claim_job(Brain& brain, const std::string& lock_token, int lo
                              const std::string& queue, const std::vector<std::string>& types) {
   // Token fence: empty token cannot claim (workers must identify themselves).
   if (lock_token.empty()) return std::nullopt;
+  detail::ScopedQueueBusyWait busy(brain.db());
   reclaim_stalled(brain, queue);
   std::ostringstream sql;
   sql << "SELECT id FROM jobs WHERE queue=? AND status='waiting'";
