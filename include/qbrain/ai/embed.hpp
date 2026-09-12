@@ -13,6 +13,9 @@ struct EmbedResult {
   std::string model;
 };
 
+// N46D: provider batches are atomic and input-indexed. Invalid/partial replies
+// return no vectors and do not echo provider text. Application ceilings and
+// compatibility are documented in docs/integration/EMBEDDING-INTEGRITY.md.
 EmbedResult embed_texts(const Config& cfg, const std::vector<std::string>& texts);
 
 // N33 D3: optional multimodal image-embedding provider contract.
@@ -20,7 +23,8 @@ EmbedResult embed_texts(const Config& cfg, const std::vector<std::string>& texts
 //   (Config embedding_api_key -> OPENAI_API_KEY -> QBRAIN_API_KEY).
 // - With credentials: POST base64 (data-URL) to the configured
 //   OpenAI-compatible /embeddings endpoint, 30s timeout, response body
-//   capped at 2 MiB; any failure degrades to `unavailable`.
+//   capped at 2 MiB while receiving; any failure degrades to `unavailable`
+//   with an empty vector. Only a missing single-image index is tolerated.
 // - Without credentials: immediate `unavailable`, no network request.
 // - QBRAIN_EMBED_MOCK=1|true: deterministic local vector (hash of the
 //   first 4 KiB -> 64-bit seed -> deterministic RNG); no network.

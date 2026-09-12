@@ -1,6 +1,7 @@
 // Loopback fixture driver; not included in the installed Qbrain application.
 #include "qbrain/ai/http_client.hpp"
 #include "qbrain/ai/chat.hpp"
+#include "embedding_probe.hpp"
 #include "qbrain/core/brain.hpp"
 #include <nlohmann/json.hpp>
 #include <chrono>
@@ -17,7 +18,9 @@ using J = nlohmann::json;
 J invoke(const J& j) {
   const auto start = std::chrono::steady_clock::now();
   J result;
-  if (j.value("chat",false)) {
+  if (j.contains("embed")) {
+    result = invoke_embedding(j);
+  } else if (j.value("chat",false)) {
     qbrain::Config cfg;
     cfg.chat_base_url=j.at("base"); cfg.chat_model="loopback-fixture";
     cfg.chat_endpoint="chat/completions"; cfg.chat_api_key="fixture-token";

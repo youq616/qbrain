@@ -242,6 +242,7 @@ add_executable(qbrain_tests
   tests/test_n45.cpp
   tests/test_n46b.cpp
   tests/test_n46c.cpp
+  tests/test_n46d.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
   tests/test_vector.cpp
@@ -321,3 +322,9 @@ add_executable(qbrain_retrieval_tests tests/test_n46c.cpp)
 target_compile_definitions(qbrain_retrieval_tests PRIVATE QBRAIN_RETRIEVAL_STANDALONE=1)
 target_link_libraries(qbrain_retrieval_tests PRIVATE qbrain_search qbrain_core qbrain_jobs qbrain_ai)
 add_test(NAME qbrain_retrieval_unit COMMAND qbrain_retrieval_tests)
+
+# N46D: the same bounded parser used by production text/image embedding.
+add_executable(qbrain_embedding_tests tests/test_n46d.cpp)
+target_compile_definitions(qbrain_embedding_tests PRIVATE QBRAIN_EMBEDDING_STANDALONE=1)
+target_link_libraries(qbrain_embedding_tests PRIVATE qbrain_ai)
+add_test(NAME qbrain_embedding_unit COMMAND qbrain_embedding_tests)
