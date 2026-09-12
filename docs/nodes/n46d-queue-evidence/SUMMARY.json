@@ -1,0 +1,87 @@
+{
+  "repository": "youq616/qbrain",
+  "node": "N46D with queue repairs",
+  "review": "PASS for scoped implementation and test evidence, under explicit owner authorization",
+  "reviewer": "ChatGPT engineering self-review; not an independent third-party or Claude Code review",
+  "owner_authorization": "好的，继续修复。你不需要遵循原来本地规定，不需要外部审核，你自己做独立审核就可以接受。",
+  "source_commit": "464045e2451ec71ca37dd8e92bcf4ac0d9325a0b",
+  "source_tree": "15b5f46daf7d125dc19b9b34dffed05f0df77253",
+  "workflows": {
+    "development": {
+      "run_id": 34682889565,
+      "status": "completed",
+      "conclusion": "success",
+      "source_commit": "464045e2451ec71ca37dd8e92bcf4ac0d9325a0b",
+      "updated_at_utc": "2026-09-12T08:31:51Z",
+      "windows_job_id": 103524680904
+    },
+    "n42": {
+      "run_id": 34682889570,
+      "status": "completed",
+      "conclusion": "success",
+      "source_commit": "464045e2451ec71ca37dd8e92bcf4ac0d9325a0b",
+      "updated_at_utc": "2026-09-12T08:28:34Z",
+      "windows_job_id": 103524667818
+    }
+  },
+  "registered_native_groups": 47,
+  "queue_scenarios": 40,
+  "queue_assertions": 776,
+  "simultaneous_claim_races_per_queue_suite": 128,
+  "embedding_unit_checks": 65,
+  "embedding_wire_checks": 26,
+  "production_search_checks": 11,
+  "http_wire_checks": 51,
+  "readback_checks": 108,
+  "source_archive_files": 654,
+  "package": {
+    "filename": "qbrain-windows-x64-n46d-queuefix-464045e2.zip",
+    "bytes": 1848103,
+    "sha256": "4f43e91853602bd141822ad11650ddab9643a3471f8a86bd2c615ffb61c460ee"
+  },
+  "executable": {
+    "bytes": 3817984,
+    "sha256": "0fae586ddb6d2d12a539c94d87d5a6532da42682e34e3e8d039af140f8058d7c",
+    "pe32_plus_amd64": true,
+    "embedded_authenticode": false
+  },
+  "artifact_ids": {
+    "source": 10295290125,
+    "logs": 10294517784,
+    "package": 10294432906
+  },
+  "artifact_digests": {
+    "source": "sha256:989156bab4c32ea481347b5acca57eca1151c4575e43bdcd3dbc55c84c3fa371",
+    "logs": "sha256:4d14c8b9bb7efc45584d5ab4727c6cef1d1e77f7c243d9aaa85107f152cd844e",
+    "package": "sha256:93cf0c7b64d0eb0d7ef8646802776cbda5c7ab1f1d5d26a42ff1b6a285defa60"
+  },
+  "local_sanitizer": "Final Clang C/C++ ASan/UBSan queue suite: 40 scenarios / 776 assertions PASS; not Windows sanitizer coverage",
+  "preserved_failure": {
+    "source": "0cbcc03119eef2f28157f8c6d72e4a8a486b8843",
+    "diagnostic": "supplemental simultaneous initial claim: step: database is locked",
+    "iterations_before_failure": "not recorded",
+    "resolution": "scoped bounded SQLite waits; two new mandatory native scenarios; no assertion removed"
+  },
+  "scope": {
+    "new_mcp_operations": 0,
+    "database_migrations": 0,
+    "new_required_services": 0,
+    "paid_provider_calls": false,
+    "provider_permissions_changed": false
+  },
+  "limitations": [
+    "No paid provider calls or billing/semantic-quality evaluation",
+    "Windows Server CI is not signed-in Windows 11 Agent acceptance",
+    "Real PostgreSQL integration skipped",
+    "No exactly-once provider billing after crash/lease expiry",
+    "Already transmitted bytes cannot be recalled after a concurrent deletion",
+    "Unsigned development package"
+  ],
+  "log_sha256": {
+    "contention-check.log": "51d7bea5e89ec3dafb6dfdefe1a8872a4ee43260130a26d7f6f4471ff84485a4",
+    "queue-final-sanitizer.log": "0db052110b51be7bd06025d517b5dcc47dd26b5ee9081b16a25471f1bb6374aa",
+    "final-source-readback.json": "474dc0ec9139512a5c210eb066626d3739e41dc32035d00d297f9d7ef4181bb1",
+    "initial-claim-race-failure.json": "cddc59cd06c4127b7061602a73b573aec1f99fda7a475e8c63f89eb0e45d4e5c",
+    "old-package-rejection.json": "1e84000a13dbeb21195743aaad29db5d29ef68c39386f6df172f0c0d61dae531"
+  }
+}

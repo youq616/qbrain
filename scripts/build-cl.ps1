@@ -98,6 +98,7 @@ $productionSources = @(
   "src\qbrain\search\hybrid.cpp",
   "src\qbrain\search\rerank.cpp",
   "src\qbrain\jobs\minions.cpp",
+  "src\qbrain\jobs\embedding_queue.cpp",
   "src\qbrain\cycle\dream.cpp",
   "src\qbrain\ingest\chunker.cpp",
   "src\qbrain\ingest\markdown.cpp",
@@ -131,7 +132,7 @@ $srcList = ($sources | ForEach-Object { "`"$_`"" }) -join " "
 $sqliteC = Join-Path $sqlite "sqlite3.c"
 $prodObjNames = @(
   "paths","hash","log","string_util","time_util","database","migrate","pg_backend","types","brain",
-  "extract","traverse","analytics","scan","astlite","packs","lint","store","image_meta","vector","rrf","hybrid","rerank","minions","dream",
+  "extract","traverse","analytics","scan","astlite","packs","lint","store","image_meta","vector","rrf","hybrid","rerank","minions","embedding_queue","dream",
   "chunker","markdown","import","http_client","embed","chat","registry","handlers","memory_ops","session_memory","hook","context","context_ops",
   "inbox_watch","live_sync","jsonrpc","server","auth","http_server","app","commands","main"
 )

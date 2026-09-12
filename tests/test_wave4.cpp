@@ -104,6 +104,7 @@ void test_wave4() {
   std::vector<float> qemb = {1.0f, 0.0f, 0.0f};
   qbrain::search::HybridOpts balanced;
   balanced.mode = "balanced";
+  balanced.embedding_model = "test"; // Synthetic query vector above is from this model.
   balanced.limit = 10;
   auto vec_hits = qbrain::search::hybrid_search(b, "zzznomatch", &qemb, balanced);
   QB_CHECK(index_of(vec_hits, "vector-only") >= 0);

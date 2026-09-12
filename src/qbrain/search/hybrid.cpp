@@ -1,4 +1,5 @@
 #include "qbrain/search/hybrid.hpp"
+#include "qbrain/ai/embedding_policy.hpp"
 #include "qbrain/search/result_identity.hpp"
 #include "qbrain/search/detail/exact_topk.hpp"
 #include "qbrain/util/utf8_display.hpp"
@@ -136,21 +137,35 @@ std::vector<SearchHit> fts_search(Brain& brain, const std::string& query, int li
 
 std::vector<SearchHit> vector_search(Brain& brain, const std::vector<float>& qemb, int limit,
                                      const std::string& source_id,
-                                     RetrievalDiagnostics* diagnostics) {
+                                     RetrievalDiagnostics* diagnostics,
+                                     const std::string& expected_model) {
   if (diagnostics) *diagnostics = {};
   if (qemb.empty() || !std::all_of(qemb.begin(), qemb.end(), [](float v) { return std::isfinite(v); })) return {};
+  if (!expected_model.empty() && std::none_of(qemb.begin(), qemb.end(),
+      [](float value) { return value != 0.0f; })) return {};
   detail::ExactPageTopK best(limit);
   std::string sql =
       "SELECT c.page_id, p.slug, p.title, p.type, c.text, c.embedding, p.source_id "
       "FROM content_chunks c JOIN pages p ON p.id = c.page_id "
       "WHERE p.deleted_at IS NULL AND c.embedding IS NOT NULL";
   if (!source_id.empty()) sql += " AND p.source_id = ?";
+  if (!expected_model.empty()) sql += " AND c.model = ? AND c.dim = ?";
   auto st = brain.db().prepare(sql);
-  if (!source_id.empty()) st.bind_text(1, source_id);
+  int parameter = 1;
+  if (!source_id.empty()) st.bind_text(parameter++, source_id);
+  if (!expected_model.empty()) {
+    st.bind_text(parameter++, expected_model);
+    st.bind_int(parameter, static_cast<int64_t>(qemb.size()));
+  }
   while (st.step()) {
     if (diagnostics) ++diagnostics->chunks_scanned;
     const auto emb = unpack_f32(st.column_blob(5));
     if (emb.size() != qemb.size() || !std::all_of(emb.begin(), emb.end(), [](float v) { return std::isfinite(v); })) {
+      if (diagnostics) ++diagnostics->invalid_chunks;
+      continue;
+    }
+    if (!expected_model.empty() && std::none_of(emb.begin(), emb.end(),
+        [](float value) { return value != 0.0f; })) {
       if (diagnostics) ++diagnostics->invalid_chunks;
       continue;
     }
@@ -193,8 +208,10 @@ std::vector<SearchHit> hybrid_search(Brain& brain, const std::string& query,
   auto fts = fts_search(brain, query, cand, opts.source_id);
   std::vector<std::vector<SearchHit>> lists;
   lists.push_back(fts);
-  if (use_vec && qemb && !qemb->empty()) {
-    lists.push_back(vector_search(brain, *qemb, cand, opts.source_id, opts.diagnostics));
+  const auto& config = opts.config ? *opts.config : brain.config();
+  const std::string model = opts.embedding_model.value_or(ai::active_embedding_model(config));
+  if (use_vec && qemb && !qemb->empty() && ai::valid_embedding_model(model)) {
+    lists.push_back(vector_search(brain, *qemb, cand, opts.source_id, opts.diagnostics, model));
   }
   auto fused = rrf_fusion(lists, opts.rrf_k);
   // N3 post-fusion: title / backlink boosts (lightweight)

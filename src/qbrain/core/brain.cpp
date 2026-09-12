@@ -1,6 +1,7 @@
 #include "qbrain/core/brain.hpp"
 #include "qbrain/ai/embed.hpp"
 #include "qbrain/jobs/minions.hpp"
+#include "qbrain/jobs/embedding_queue.hpp"
 #include "qbrain/util/hash.hpp"
 #include "qbrain/util/paths.hpp"
 #include "qbrain/util/time_util.hpp"
@@ -505,61 +506,7 @@ void Brain::enqueue_embed_page(int64_t page_id) {
 }
 
 int Brain::drain_embed_jobs(int max_jobs) {
-  int done_chunks = 0;
-  for (int n = 0; n < max_jobs; ++n) {
-    auto st = db_.prepare(
-        "SELECT id, payload_json FROM jobs WHERE type='embed' AND status='waiting' "
-        "ORDER BY priority ASC, id ASC LIMIT 1");
-    if (!st.step()) break;
-    int64_t job_id = st.column_int(0);
-    auto payload = st.column_text(1);
-    int64_t page_id = 0;
-    try {
-      auto j = json::parse(payload);
-      page_id = j.at("page_id").get<int64_t>();
-    } catch (...) {
-      auto u = db_.prepare("UPDATE jobs SET status='failed', updated_at=? WHERE id=?");
-      u.bind_text(1, util::utc_now());
-      u.bind_int(2, job_id);
-      u.step_done();
-      continue;
-    }
-    {
-      auto u = db_.prepare("UPDATE jobs SET status='active', updated_at=? WHERE id=?");
-      u.bind_text(1, util::utc_now());
-      u.bind_int(2, job_id);
-      u.step_done();
-    }
-    auto chunks = get_chunks(page_id);
-    std::vector<Chunk> missing;
-    for (auto& c : chunks)
-      if (c.embedding.empty()) missing.push_back(c);
-    if (!missing.empty()) {
-      std::vector<std::string> texts;
-      for (auto& c : missing) texts.push_back(c.text);
-      auto er = ai::embed_texts(config_, texts);
-      if (!er.ok) {
-        auto u = db_.prepare(
-            "UPDATE jobs SET status='failed', result_json=?, updated_at=? WHERE id=?");
-        u.bind_text(1, json({{"error", er.error}}).dump());
-        u.bind_text(2, util::utc_now());
-        u.bind_int(3, job_id);
-        u.step_done();
-        continue;
-      }
-      for (size_t i = 0; i < missing.size() && i < er.vectors.size(); ++i) {
-        update_chunk_embedding(missing[i].id, er.vectors[i], er.model);
-        ++done_chunks;
-      }
-    }
-    auto u = db_.prepare(
-        "UPDATE jobs SET status='completed', result_json=?, updated_at=? WHERE id=?");
-    u.bind_text(1, json({{"chunks", done_chunks}}).dump());
-    u.bind_text(2, util::utc_now());
-    u.bind_int(3, job_id);
-    u.step_done();
-  }
-  return done_chunks;
+  return jobs::drain_embedding_jobs(*this, max_jobs);
 }
 
 bool Brain::soft_delete(const std::string& slug, const std::string& source_id) {

@@ -1,4 +1,6 @@
 #include "qbrain/jobs/minions.hpp"
+#include "qbrain/jobs/embedding_queue.hpp"
+#include "qbrain/jobs/detail/busy_wait.hpp"
 #include "qbrain/ai/embed.hpp"
 #include "qbrain/util/time_util.hpp"
 #include <nlohmann/json.hpp>
@@ -186,37 +188,6 @@ const char* kSelectCols =
     // timestamptz -- census classified this statement portable under the TEXT
     // assumption; the timestamptz D2 schema falsified it, hence this hardening).
 
-bool handle_embed(Brain& brain, Job& job, std::string& result_json, std::string& err) {
-  int64_t page_id = 0;
-  try {
-    auto j = json::parse(job.payload_json);
-    page_id = j.at("page_id").get<int64_t>();
-  } catch (...) {
-    err = "bad payload";
-    return false;
-  }
-  auto chunks = brain.get_chunks(page_id);
-  std::vector<Chunk> missing;
-  for (auto& c : chunks)
-    if (c.embedding.empty()) missing.push_back(c);
-  int done = 0;
-  if (!missing.empty()) {
-    std::vector<std::string> texts;
-    for (auto& c : missing) texts.push_back(c.text);
-    auto er = ai::embed_texts(brain.config(), texts);
-    if (!er.ok) {
-      err = er.error;
-      return false;
-    }
-    for (size_t i = 0; i < missing.size() && i < er.vectors.size(); ++i) {
-      brain.update_chunk_embedding(missing[i].id, er.vectors[i], er.model);
-      ++done;
-    }
-  }
-  result_json = json({{"chunks", done}}).dump();
-  return true;
-}
-
 bool handle_extract_facts(Brain& brain, Job& job, std::string& result_json, std::string& err) {
   std::string slug;
   std::string source_id = "default";
@@ -259,6 +230,7 @@ std::optional<Job> claim_job(Brain& brain, const std::string& lock_token, int lo
                              const std::string& queue, const std::vector<std::string>& types) {
   // Token fence: empty token cannot claim (workers must identify themselves).
   if (lock_token.empty()) return std::nullopt;
+  detail::ScopedQueueBusyWait busy(brain.db());
   reclaim_stalled(brain, queue);
   std::ostringstream sql;
   sql << "SELECT id FROM jobs WHERE queue=? AND status='waiting'";
@@ -271,12 +243,15 @@ std::optional<Job> claim_job(Brain& brain, const std::string& lock_token, int lo
     sql << ")";
   }
   sql << " ORDER BY priority ASC, id ASC LIMIT 1";
-  auto st = brain.db().prepare(sql.str());
-  int idx = 1;
-  st.bind_text(idx++, queue);
-  for (auto& t : types) st.bind_text(idx++, t);
-  if (!st.step()) return std::nullopt;
-  int64_t id = st.column_int(0);
+  int64_t id = 0;
+  {
+    auto st = brain.db().prepare(sql.str());
+    int idx = 1;
+    st.bind_text(idx++, queue);
+    for (auto& t : types) st.bind_text(idx++, t);
+    if (!st.step()) return std::nullopt;
+    id = st.column_int(0);
+  } // release the SELECT before competing for the conditional write
 
   // n38: datetime('now', ?) -> C++-computed UTC lock expiry bound as a
   // parameter (dialect-free SQL; stored TEXT format unchanged).
@@ -291,7 +266,10 @@ std::optional<Job> claim_job(Brain& brain, const std::string& lock_token, int lo
   u.bind_int(4, id);
   u.step_done();
   if (brain.db().changes() == 0) return std::nullopt;
-  return get_job(brain, id);
+  auto claimed = get_job(brain, id);
+  if (!claimed || claimed->status != "active" || claimed->lock_token != lock_token)
+    return std::nullopt;
+  return claimed;
 }
 
 bool complete_job(Brain& brain, int64_t job_id, const std::string& lock_token,
@@ -631,15 +609,18 @@ JobCounts count_jobs(Brain& brain) {
 
 bool process_one(Brain& brain, const std::string& worker_token) {
   // Guarantee non-empty claim token (audit P1-1).
-  std::string token = worker_token.empty() ? "worker-default" : worker_token;
+  std::string token = new_embedding_claim_token();
+  (void)worker_token; // worker label is not reused as an ownership fence
   static const std::vector<std::string> types = {"embed", "extract_facts"};
   auto job = claim_job(brain, token, 60000, "default", types);
   if (!job) return false;
   std::string result;
   std::string err;
   bool ok = false;
-  if (job->type == "embed")
-    ok = handle_embed(brain, *job, result, err);
+  if (job->type == "embed") {
+    execute_embedding_job(brain, *job);
+    return true; // shared implementation owns all fenced transitions
+  }
   else if (job->type == "extract_facts")
     ok = handle_extract_facts(brain, *job, result, err);
   else {
