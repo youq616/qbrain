@@ -1,6 +1,9 @@
 #include "qbrain/ai/http_client.hpp"
 #include "qbrain/version.hpp"
 #include <algorithm>
+#ifdef QBRAIN_HTTP_DIAGNOSTICS
+#include <atomic>
+#endif
 #include <array>
 #include <chrono>
 #include <condition_variable>
@@ -71,15 +74,40 @@ bool to_wide(std::string_view s, std::wstring& out) {
                             static_cast<int>(s.size()), out.data(), n) == n;
 }
 
+#ifdef QBRAIN_HTTP_DIAGNOSTICS
+// Observation only, compiled exclusively into the standalone diagnostic driver.
+std::atomic<long> diagnostic_handles{0}, diagnostic_states{0};
+std::atomic<long> diagnostic_created{0}, diagnostic_closed{0}, diagnostic_close_errors{0};
+std::atomic<long> diagnostic_final_callbacks{0};
+#endif
+
 struct InternetHandle {
   HINTERNET value = nullptr;
-  explicit InternetHandle(HINTERNET h) : value(h) {}
+  explicit InternetHandle(HINTERNET h) : value(h) {
+#ifdef QBRAIN_HTTP_DIAGNOSTICS
+    if (value) { ++diagnostic_handles; ++diagnostic_created; }
+#endif
+  }
   InternetHandle(const InternetHandle&) = delete;
   InternetHandle& operator=(const InternetHandle&) = delete;
-  ~InternetHandle() { if (value) WinHttpCloseHandle(value); }
+  ~InternetHandle() {
+    if (value) {
+#ifdef QBRAIN_HTTP_DIAGNOSTICS
+      if (!WinHttpCloseHandle(value)) ++diagnostic_close_errors;
+      ++diagnostic_closed;
+      --diagnostic_handles;
+#else
+      WinHttpCloseHandle(value);
+#endif
+    }
+  }
 };
 
 struct AsyncState {
+#ifdef QBRAIN_HTTP_DIAGNOSTICS
+  AsyncState() { ++diagnostic_states; }
+  ~AsyncState() { --diagnostic_states; }
+#endif
   std::mutex mutex;
   std::condition_variable ready;
   DWORD completion = 0;
@@ -97,6 +125,9 @@ void CALLBACK on_status(HINTERNET, DWORD_PTR context, DWORD status, LPVOID info,
   if (!context) return;
   auto* state = reinterpret_cast<AsyncState*>(context);
   if (status == WINHTTP_CALLBACK_STATUS_HANDLE_CLOSING) {
+#ifdef QBRAIN_HTTP_DIAGNOSTICS
+    ++diagnostic_final_callbacks;
+#endif
     // Microsoft documents this as the final callback for this request handle.
     auto release_after_callback = std::move(state->handle_lifetime);
     return;

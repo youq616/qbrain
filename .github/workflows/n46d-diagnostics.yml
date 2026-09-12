@@ -1,0 +1,35 @@
+name: N46D fixed-sample HTTP lifecycle diagnostics
+on:
+  push:
+    branches: ['optimization/n46d-embedding-integrity']
+    paths: ['src/qbrain/ai/http_client.cpp','tests/http_diagnostics/**','.ci/test_http_lifecycle.py','.github/workflows/n46d-diagnostics.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build standalone observed production transport
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          cmake -S tests/http_diagnostics -B build/lifecycle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/lifecycle --config Release 2>&1 | Tee-Object evidence/build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Fixed cancellation batches and lifetime observations
+        shell: pwsh
+        run: |
+          python .ci/test_http_lifecycle.py --probe build/lifecycle/Release/qbrain_http_lifecycle_probe.exe --report evidence/lifecycle.json 2>&1 | Tee-Object evidence/lifecycle.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n46d-http-lifecycle
+          path: evidence/
+          retention-days: 14

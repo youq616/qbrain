@@ -29,3 +29,16 @@ P0: provider index overflow/allocation and partial batch acceptance must be clos
 P1: no raw exception echo; enforce image transport cap; do not regress old tests.
 P2: model aliases/provenance and older already-stored embeddings remain separate;
 Windows Server CI is not a logged-in Windows 11 Agent lifecycle acceptance.
+
+## Diagnostic amendment review
+
+ChatGPT review before the diagnostic implementation: approved for observation
+only. Evidence is the preserved initial run and its 222/243 handle samples.
+Count owned objects and closing callbacks separately from aggregate process
+handles; fixed samples, no retry-until-green or numeric ceiling change.
+Compile observers only into a separate diagnostic executable, not the shipped
+application or original HTTP probe. Original HTTP checks remain blocking.
+The independent embedding suite may run after failure to collect evidence; an
+earlier failed step must still prevent an overall PASS and package delivery.
+No cause is inferred before these measurements. Any product lifecycle change
+requires a further scoped review and complete native regression.

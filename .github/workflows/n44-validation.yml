@@ -81,6 +81,7 @@ jobs:
           python .ci/test_http_transport.py --probe build/http/Release/qbrain_http_probe.exe --report evidence/http-transport.json 2>&1 | Tee-Object evidence/http-transport.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Atomic embedding responses and persistence boundaries
+        if: success() || failure()
         shell: pwsh
         run: |
           & build/http/Release/qbrain_embedding_tests.exe 2>&1 | Tee-Object evidence/embedding-unit.log

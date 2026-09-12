@@ -55,3 +55,17 @@ or semantic-quality guarantee: finite vectors do not prove the intended model ra
 Oversized batches should be split by callers; no automatic retry that incurs cost.
 Rollback is a code/test/build revert, not a data-format migration. Work on an
 isolated optimization branch; retain main until reviewed native acceptance.
+
+## Diagnostic amendment after initial native failure
+
+Run 34667568814 built all native targets but failed the existing HTTP process-
+handle growth gate: 222 to 243 versus +16, at both fixed sample times. Native
+embedding cases were skipped by that earlier failure. Preserve this failed run.
+Before changing any transport policy or threshold, add test-only compile-time
+lifetime counters for Qbrain-owned WinHTTP wrappers, async states and final
+callbacks. A separate Windows diagnostic executable includes the production
+transport, samples repeated cancellations and process threads/handles, and waits
+a fixed final interval. Counters are absent from normal builds. No threshold is
+relaxed; diagnostics are not a substitute for the existing acceptance gate.
+Allow the independent embedding step to run after an earlier test failure, but
+retain failure status and block packaging/merge unless all required gates pass.
