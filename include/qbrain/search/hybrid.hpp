@@ -6,6 +6,16 @@
 
 namespace qbrain::search {
 
+// Numeric per-call observations, not process-memory or semantic-quality metrics.
+struct RetrievalDiagnostics {
+  std::size_t chunks_scanned = 0;
+  std::size_t valid_chunks = 0;
+  std::size_t invalid_chunks = 0;
+  std::size_t peak_retained_pages = 0;
+  std::size_t backlink_candidates = 0;
+  std::size_t backlink_queries = 0;
+};
+
 struct HybridOpts {
   int limit = 10;
   int rrf_k = 60;
@@ -17,12 +27,14 @@ struct HybridOpts {
   const Config* config = nullptr;  // needed for LLM rerank; optional
   int* candidate_budget_out = nullptr;  // test hook
   int* pre_autocut_count_out = nullptr; // test hook
+  RetrievalDiagnostics* diagnostics = nullptr; // optional; no memory text
 };
 
 std::vector<SearchHit> fts_search(Brain& brain, const std::string& query, int limit,
                                   const std::string& source_id = {});
 std::vector<SearchHit> vector_search(Brain& brain, const std::vector<float>& qemb, int limit,
-                                     const std::string& source_id = {});
+                                     const std::string& source_id = {},
+                                     RetrievalDiagnostics* diagnostics = nullptr);
 std::vector<SearchHit> hybrid_search(Brain& brain, const std::string& query,
                                      const std::vector<float>* qemb,
                                      const HybridOpts& opts);

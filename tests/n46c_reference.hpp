@@ -1,6 +1,8 @@
+#pragma once
+// Frozen MIT Qbrain hybrid.cpp at c9f3ed5; only namespace/free-function names changed.
+// Test oracle only. Never linked into the production application.
 #include "qbrain/search/hybrid.hpp"
 #include "qbrain/search/result_identity.hpp"
-#include "qbrain/search/detail/exact_topk.hpp"
 #include "qbrain/util/utf8_display.hpp"
 #include <cmath>
 #include <utility>
@@ -11,7 +13,7 @@
 #include <algorithm>
 #include <unordered_map>
 
-namespace qbrain::search {
+namespace qbrain::search::n46c_reference {
 
 namespace {
 // FtsRow predates source identity. Resolve all candidates in one read instead
@@ -36,41 +38,9 @@ void attach_sources(Brain& brain, std::vector<SearchHit>& hits,
     return false;
   }), hits.end());
 }
-// Count, do not materialize, the same source-scoped links as get_links_to.
-// Bound the batch to 100 candidates / 300 parameters, including all-source
-// searches. No slug, source or other caller data is interpolated into SQL.
-std::vector<int64_t> backlink_counts(Brain& brain, const std::vector<SearchHit>& hits,
-                                     RetrievalDiagnostics* diagnostics) {
-  std::vector<int64_t> counts(hits.size(), 0);
-  if (diagnostics) diagnostics->backlink_candidates = hits.size();
-  constexpr std::size_t batch_size = 100;
-  for (std::size_t first = 0; first < hits.size(); first += batch_size) {
-    const auto last = std::min(hits.size(), first + batch_size);
-    std::string sql = "WITH wanted(hit_index, source_id, slug) AS (VALUES ";
-    for (std::size_t i = first; i < last; ++i) sql += i == first ? "(?,?,?)" : ",(?,?,?)";
-    sql += ") SELECT w.hit_index, COUNT(l.id) FROM wanted w LEFT JOIN links l "
-           "ON l.source_id=w.source_id AND l.to_slug=w.slug GROUP BY w.hit_index";
-    auto st = brain.db().prepare(sql);
-    int parameter = 1;
-    for (std::size_t i = first; i < last; ++i) {
-      const auto source = Brain::canonical_source_id(hits[i].source_id.empty() ? "default" : hits[i].source_id);
-      st.bind_int(parameter++, static_cast<int64_t>(i));
-      if (source) st.bind_text(parameter++, *source);
-      else st.bind_null(parameter++); // invalid identity counted as zero, never default
-      st.bind_text(parameter++, hits[i].slug);
-    }
-    if (diagnostics) ++diagnostics->backlink_queries;
-    while (st.step()) {
-      const auto index = st.column_int(0);
-      if (index >= static_cast<int64_t>(first) && index < static_cast<int64_t>(last))
-        counts[static_cast<std::size_t>(index)] = st.column_int(1);
-    }
-  }
-  return counts;
-}
 }  // namespace
 
-std::vector<SearchHit> fts_search(Brain& brain, const std::string& query, int limit,
+std::vector<SearchHit> reference_fts_search(Brain& brain, const std::string& query, int limit,
                                   const std::string& source_id) {
   std::vector<SearchHit> out;
   limit = std::clamp(limit, 1, 500);
@@ -134,12 +104,11 @@ std::vector<SearchHit> fts_search(Brain& brain, const std::string& query, int li
   return out;
 }
 
-std::vector<SearchHit> vector_search(Brain& brain, const std::vector<float>& qemb, int limit,
-                                     const std::string& source_id,
-                                     RetrievalDiagnostics* diagnostics) {
-  if (diagnostics) *diagnostics = {};
-  if (qemb.empty() || !std::all_of(qemb.begin(), qemb.end(), [](float v) { return std::isfinite(v); })) return {};
-  detail::ExactPageTopK best(limit);
+std::vector<SearchHit> reference_vector_search(Brain& brain, const std::vector<float>& qemb, int limit,
+                                     const std::string& source_id) {
+  std::vector<SearchHit> out;
+  if (qemb.empty() || !std::all_of(qemb.begin(), qemb.end(), [](float v) { return std::isfinite(v); })) return out;
+  limit = std::clamp(limit, 1, 500);
   std::string sql =
       "SELECT c.page_id, p.slug, p.title, p.type, c.text, c.embedding, p.source_id "
       "FROM content_chunks c JOIN pages p ON p.id = c.page_id "
@@ -147,22 +116,17 @@ std::vector<SearchHit> vector_search(Brain& brain, const std::vector<float>& qem
   if (!source_id.empty()) sql += " AND p.source_id = ?";
   auto st = brain.db().prepare(sql);
   if (!source_id.empty()) st.bind_text(1, source_id);
+  struct Cand {
+    SearchHit h;
+    double sim;
+  };
+  std::vector<Cand> cands;
   while (st.step()) {
-    if (diagnostics) ++diagnostics->chunks_scanned;
-    const auto emb = unpack_f32(st.column_blob(5));
-    if (emb.size() != qemb.size() || !std::all_of(emb.begin(), emb.end(), [](float v) { return std::isfinite(v); })) {
-      if (diagnostics) ++diagnostics->invalid_chunks;
-      continue;
-    }
-    const double sim = cosine_similarity(qemb, emb);
-    if (!std::isfinite(sim)) {
-      if (diagnostics) ++diagnostics->invalid_chunks;
-      continue;
-    }
-    if (diagnostics) ++diagnostics->valid_chunks;
-    // Same cosine, full scan, no model or source-policy change. Avoid copying
-    // title/snippet metadata for scores already below the exact K-th threshold.
-    if (best.below_threshold(sim)) continue;
+    auto blob = st.column_blob(5);
+    auto emb = unpack_f32(blob);
+    if (emb.size() != qemb.size() || !std::all_of(emb.begin(), emb.end(), [](float v) { return std::isfinite(v); })) continue;
+    double sim = cosine_similarity(qemb, emb);
+    if (!std::isfinite(sim)) continue;
     SearchHit h;
     h.page_id = st.column_int(0);
     h.slug = st.column_text(1);
@@ -171,15 +135,35 @@ std::vector<SearchHit> vector_search(Brain& brain, const std::vector<float>& qem
     h.snippet = util::utf8_excerpt(st.column_text(4), 200);
     h.source_id = st.column_text(6);
     h.score = sim;
-    best.consider(std::move(h));
-    if (diagnostics) diagnostics->peak_retained_pages = std::max(diagnostics->peak_retained_pages, best.size());
+    cands.push_back({std::move(h), sim});
   }
-  return best.results();
+  std::unordered_map<std::string, Cand> best;
+  for (auto& c : cands) {
+    const auto key = result_identity(c.h);
+    auto it = best.find(key);
+    if (it == best.end() || c.sim > it->second.sim ||
+        (c.sim == it->second.sim && c.h.snippet < it->second.h.snippet))
+      best[key] = std::move(c);
+  }
+  std::vector<Cand> uniq;
+  uniq.reserve(best.size());
+  for (auto& [_, c] : best) uniq.push_back(std::move(c));
+  std::sort(uniq.begin(), uniq.end(),
+            [](const Cand& a, const Cand& b) {
+              return a.sim != b.sim ? a.sim > b.sim : result_identity_less(a.h, b.h);
+            });
+  if (static_cast<int>(uniq.size()) > limit) uniq.resize(static_cast<size_t>(limit));
+  int rank = 1;
+  for (auto& c : uniq) {
+    c.h.vector_rank = static_cast<double>(rank++);
+    c.h.score = c.sim;
+    out.push_back(std::move(c.h));
+  }
+  return out;
 }
 
-std::vector<SearchHit> hybrid_search(Brain& brain, const std::string& query,
+std::vector<SearchHit> reference_hybrid_search(Brain& brain, const std::string& query,
                                      const std::vector<float>* qemb, const HybridOpts& opts) {
-  if (opts.diagnostics) *opts.diagnostics = {};
   int limit = std::clamp(opts.limit, 1, 100);
   int cand = limit * 3;
   bool use_vec = opts.use_vector;
@@ -190,18 +174,16 @@ std::vector<SearchHit> hybrid_search(Brain& brain, const std::string& query,
     cand = limit * 5;
   }
   if (opts.candidate_budget_out) *opts.candidate_budget_out = cand;
-  auto fts = fts_search(brain, query, cand, opts.source_id);
+  auto fts = reference_fts_search(brain, query, cand, opts.source_id);
   std::vector<std::vector<SearchHit>> lists;
   lists.push_back(fts);
   if (use_vec && qemb && !qemb->empty()) {
-    lists.push_back(vector_search(brain, *qemb, cand, opts.source_id, opts.diagnostics));
+    lists.push_back(reference_vector_search(brain, *qemb, cand, opts.source_id));
   }
   auto fused = rrf_fusion(lists, opts.rrf_k);
   // N3 post-fusion: title / backlink boosts (lightweight)
-  const auto counts = backlink_counts(brain, fused, opts.diagnostics);
-  const auto ql = util::to_lower(query);
-  std::size_t position = 0;
   for (auto& h : fused) {
+    auto ql = util::to_lower(query);
     auto tl = util::to_lower(h.title);
     if (!tl.empty() && tl.find(ql) != std::string::npos) h.score *= 1.25;
     else if (!ql.empty() && !tl.empty()) {
@@ -213,8 +195,8 @@ std::vector<SearchHit> hybrid_search(Brain& brain, const std::string& query,
         }
       }
     }
-    const auto count = counts[position++];
-    if (count > 0) h.score *= (1.0 + 0.05 * std::min<int64_t>(count, 5));
+    auto backs = brain.get_links_to(h.slug, h.source_id);
+    if (!backs.empty()) h.score *= (1.0 + 0.05 * std::min<size_t>(backs.size(), 5));
   }
   std::sort(fused.begin(), fused.end(), [](const SearchHit& a, const SearchHit& b) {
     return a.score != b.score ? a.score > b.score : result_identity_less(a, b);
@@ -251,4 +233,4 @@ std::vector<SearchHit> hybrid_search(Brain& brain, const std::string& query,
   return fused;
 }
 
-}  // namespace qbrain::search
+}  // namespace qbrain::search::n46c_reference
