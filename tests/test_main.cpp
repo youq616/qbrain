@@ -32,6 +32,7 @@ void test_n43();
 void test_n45();
 void test_n46b();
 void test_n46c();
+void test_n46d();
 void test_n42_foundation();
 void test_vector();
 void test_chunker();
@@ -85,6 +86,7 @@ int main() {
       {"n45_context", test_n45},
       {"n46b_http", test_n46b},
       {"n46c_retrieval", test_n46c},
+      {"n46d_embedding", test_n46d},
       {"n42_foundation", test_n42_foundation},
       {"vector", test_vector},
       {"chunker", test_chunker},

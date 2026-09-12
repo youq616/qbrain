@@ -1,5 +1,7 @@
 #include "qbrain/ai/embed.hpp"
 #include "qbrain/ai/http_client.hpp"
+#include "qbrain/ai/detail/embedding_response.hpp"
+#include "qbrain/util/utf8_display.hpp"
 #include "qbrain/core/brain.hpp"
 #include "qbrain/util/hash.hpp"
 #include <nlohmann/json.hpp>
@@ -15,7 +17,7 @@ namespace {
 
 // ---- N33 D3: image embedding provider contract ----
 
-constexpr int kImageEmbedTimeoutMs = 30000;           // 30s hard timeout
+constexpr int kImageEmbedTimeoutMs = 30000;           // shared monotonic network deadline
 constexpr size_t kImageMaxResponseBytes = 2u * 1024 * 1024;  // response <= 2 MiB
 constexpr size_t kImageMaxInputBytes = 32u * 1024 * 1024;    // 32 MiB input cap
 constexpr size_t kImageMockHashPrefix = 4096;         // hash first 4 KiB only
@@ -143,38 +145,66 @@ EmbedResult embed_texts(const Config& cfg, const std::vector<std::string>& texts
       return r;
     }
   }
+  if (texts.size() > detail::EMBED_MAX_BATCH || cfg.embedding_dimensions < 0 ||
+      static_cast<std::size_t>(cfg.embedding_dimensions) > detail::EMBED_MAX_DIMENSIONS ||
+      cfg.embedding_model.empty() || cfg.embedding_model.size() > 1024 ||
+      !util::valid_utf8(cfg.embedding_model)) {
+    r.error = "invalid embedding request configuration";
+    return r;
+  }
+  if (cfg.embedding_dimensions > 0 &&
+      texts.size() > detail::EMBED_MAX_COMPONENTS / static_cast<std::size_t>(cfg.embedding_dimensions)) {
+    r.error = "embedding request exceeds component limit";
+    return r;
+  }
+  for (const auto& text : texts) {
+    if (text.empty() || text.size() > HTTP_MAX_REQUEST_BYTES || !util::valid_utf8(text)) {
+      r.error = "invalid embedding text input";
+      return r;
+    }
+  }
   auto key = resolve_api_key(cfg, false);
   if (key.empty()) {
     r.error = "missing embedding API key";
     return r;
   }
-  json body;
-  body["model"] = cfg.embedding_model;
-  body["input"] = texts;
-  if (cfg.embedding_dimensions > 0) body["dimensions"] = cfg.embedding_dimensions;
-
-  auto resp = http_post_json(cfg.embedding_base_url, "/embeddings", key, body.dump());
-  if (!resp.error.empty() && resp.status == 0) {
-    r.error = resp.error;
-    return r;
-  }
-  if (resp.status < 200 || resp.status >= 300) {
-    r.error = resp.error.empty() ? resp.body : resp.error;
-    return r;
-  }
+  std::string encoded;
   try {
-    auto j = json::parse(resp.body);
-    auto& data = j.at("data");
-    r.vectors.resize(data.size());
-    for (auto& item : data) {
-      size_t idx = item.at("index").get<size_t>();
-      if (idx >= r.vectors.size()) r.vectors.resize(idx + 1);
-      r.vectors[idx] = item.at("embedding").get<std::vector<float>>();
+    json body = {{"model", cfg.embedding_model}, {"input", json::array()},
+                 {"encoding_format", "float"}};
+    if (cfg.embedding_dimensions > 0) body["dimensions"] = cfg.embedding_dimensions;
+    std::size_t bytes = body.dump().size();
+    for (std::size_t i = 0; i < texts.size(); ++i) {
+      if (i) ++bytes; // comma between array entries
+      if (bytes > HTTP_MAX_REQUEST_BYTES) {
+        r.error = "embedding request exceeds byte limit";
+        return r;
+      }
+      const auto extra = detail::json_string_bytes(texts[i], HTTP_MAX_REQUEST_BYTES - bytes);
+      if (extra > HTTP_MAX_REQUEST_BYTES - bytes) {
+        r.error = "embedding request exceeds byte limit";
+        return r;
+      }
+      bytes += extra;
     }
-    r.ok = true;
-  } catch (const std::exception& e) {
-    r.error = std::string("parse embeddings: ") + e.what();
+    body["input"] = texts;
+    encoded = body.dump();
+  } catch (const std::exception&) {
+    r.error = "embedding request could not be encoded";
+    return r;
   }
+  const auto resp = http_post_json(cfg.embedding_base_url, "/embeddings", key, encoded);
+  if (resp.failure != HttpFailure::none || resp.status < 200 || resp.status >= 300) {
+    r.error = resp.error.empty() ? "embedding HTTP request failed" : resp.error;
+    return r;
+  }
+  auto parsed = detail::parse_embedding_response(resp.body, texts.size(), cfg.embedding_dimensions);
+  if (!parsed.ok) {
+    r.error = std::move(parsed.error);
+    return r;
+  }
+  r.vectors = std::move(parsed.vectors);
+  r.ok = true;
   return r;
 }
 
@@ -182,6 +212,8 @@ ImageEmbedResult embed_image(const Config& cfg, std::string_view image_bytes) {
   ImageEmbedResult r;
   r.model = cfg.embedding_model;
   auto degrade = [&](const std::string& message, bool no_credentials) {
+    r.ok = false;
+    r.vector.clear();
     r.unavailable = true;
     r.no_credentials = no_credentials;
     r.error = redact_provider_error(message, cfg, resolve_api_key(cfg, false));
@@ -209,30 +241,35 @@ ImageEmbedResult embed_image(const Config& cfg, std::string_view image_bytes) {
       static_cast<unsigned char>(image_bytes[2]) == 0xFF) {
     mime = "image/jpeg";
   }
-  json body;
-  body["model"] = cfg.embedding_model;
-  body["input"] = json::array({json{{"type", "image_url"},
-                                    {"image_url", {{"url", "data:" + mime + ";base64," +
-                                                                 base64_encode(image_bytes)}}}}});
-  auto resp = http_post_json(cfg.embedding_base_url, "/embeddings", key, body.dump(),
-                             kImageEmbedTimeoutMs);
-  if (resp.body.size() > kImageMaxResponseBytes) {
-    return degrade("embedding response exceeds size limit", false);
-  }
-  if (resp.status == 0 && !resp.error.empty()) {
-    return degrade("embedding provider unavailable: " + resp.error, false);
-  }
-  if (resp.status < 200 || resp.status >= 300) {
-    return degrade(!resp.error.empty() ? resp.error : resp.body, false);
-  }
+  if (cfg.embedding_model.empty() || cfg.embedding_model.size() > 1024 ||
+      !util::valid_utf8(cfg.embedding_model))
+    return degrade("invalid embedding request configuration", false);
+  std::string encoded;
   try {
-    auto j = json::parse(resp.body);
-    r.vector = j.at("data").at(0).at("embedding").get<std::vector<float>>();
-    if (r.vector.empty()) return degrade("embedding provider returned empty vector", false);
-    r.ok = true;
-  } catch (const std::exception& e) {
-    return degrade(std::string("parse embedding response: ") + e.what(), false);
+    const std::string prefix = "data:" + mime + ";base64,";
+    json body = {{"model", cfg.embedding_model}, {"encoding_format", "float"},
+                 {"input", json::array({json{{"type", "image_url"},
+                                           {"image_url", {{"url", prefix}}}}})}};
+    const auto header_bytes = body.dump().size();
+    const auto base64_bytes = ((image_bytes.size() + 2) / 3) * 4;
+    if (header_bytes > HTTP_MAX_REQUEST_BYTES ||
+        base64_bytes > HTTP_MAX_REQUEST_BYTES - header_bytes)
+      return degrade("embedding request exceeds byte limit", false);
+    body["input"][0]["image_url"]["url"] = prefix + base64_encode(image_bytes);
+    encoded = body.dump();
+  } catch (const std::exception&) {
+    return degrade("embedding request could not be encoded", false);
   }
+  const auto resp = http_post_json(cfg.embedding_base_url, "/embeddings", key, encoded,
+                                   kImageEmbedTimeoutMs, kImageMaxResponseBytes);
+  if (resp.failure != HttpFailure::none || resp.status < 200 || resp.status >= 300)
+    return degrade(resp.error.empty() ? "embedding HTTP request failed" : resp.error, false);
+  // Some image gateways omit the single item's index; accept only that legacy
+  // omission, never a supplied out-of-range index or a multi-item response.
+  auto parsed = detail::parse_embedding_response(resp.body, 1, 0, true, kImageMaxResponseBytes);
+  if (!parsed.ok) return degrade(parsed.error, false);
+  r.vector = std::move(parsed.vectors.front());
+  r.ok = true;
   return r;
 }
 
