@@ -1,0 +1,41 @@
+# Temporary exact patch transport on a dedicated branch; removed before validation.
+name: Apply exact N46D contention repair
+on:
+  push:
+    branches: ['delivery/n46d-queue-fix-assembly']
+    paths: ['.github/workflows/n46d-queue-source-assembly.yml']
+permissions:
+  contents: write
+jobs:
+  assemble:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n46d-queue-fix-assembly'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Apply exact hash-checked changes to temporary branch
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib,subprocess
+          expected={
+            '.ci/package_n44_development.py':('92c6676a2ba3ad9745f197f81832447383695a2782c850f575007988e9359521','b29a6950eb1723e7c3605e6ff2bd2624d0dc6096a156b6dcd2a28a1c99a79330'),
+            '.ci/test_embedding_queue.py':('07d1d09f6acd2eca1e1240bddd92cef7eb0187d6901d50d89ccff2bf7e0e1c91','033ac59f84de64f7549c95e52271f5f38a5e30f5e4280ffb6fc69808152f9044'),
+            'docs/integration/EMBEDDING-QUEUE.md':('b52e7b8ed5f4bad7560645bb85c427a766aa0a96ada6821a3b13b5a80ffd3298','a78e3a93af13c4e349bfb119438de41aed552f9260f19a06d2b7c7cf728d59dc'),
+            'docs/nodes/N46D-QUEUE-PLAN.md':('6f77986ac4977241680df5c5cc958ee8bfb03174504d1483a0adf05101995df0','be3aa8e8a0528f115303cbd3226f5ec09ceda540f7d196955d895198f63201a0'),
+            'src/qbrain/jobs/embedding_queue.cpp':('338e2a1097fb8457b2500dc200a0b4e9a0069c35207cb2fe4bb559385a18de1d','89e678c0da276a49d7116f3ece176ce325439c9e3ba3ec96cf17868c7651cf68'),
+            'src/qbrain/jobs/minions.cpp':('42792377db16677c96320ccef38624da7d66d847e87d097d2f72d59c5f21ea88','eed71848b806e1d2a67fe5b30a220ffc3412d218af939ba28329f9957669990c'),
+            'tests/test_embedding_queue.cpp':('07cbe00cc4e78d9ad6a714641932b3b2fd7c5e27088064935ca8c2dd2c967f3d','fbbd422f419a7c27dff6e70a087aa77051a8b8df89a3b86975c6c4f79831bf66')}
+          patch=Path('.ci/n46d-contention.patch').read_bytes()
+          assert hashlib.sha256(patch).hexdigest()=='f86f185956a438ef9b7a74aed09864654e9c4ec5187f97df9ce752bd12abb358'
+          for path,hashes in expected.items():
+              assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==hashes[0],path
+          subprocess.run(['git','apply','--check','--index','-'],input=patch,check=True)
+          subprocess.run(['git','apply','--index','-'],input=patch,check=True)
+          for path,hashes in expected.items():
+              assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==hashes[1],path
+          assert set(subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines())==set(expected)
+          subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
+          subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
+          subprocess.run(['git','commit','-m','fix: apply verified bounded queue lock-wait and race regressions'],check=True)
+          subprocess.run(['git','push','origin','HEAD:refs/heads/delivery/n46d-queue-fix-assembly'],check=True)
