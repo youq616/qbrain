@@ -161,6 +161,7 @@ target_link_libraries(qbrain_search PUBLIC qbrain_core qbrain_util qbrain_ai)
 
 qbrain_lib(jobs
   src/qbrain/jobs/minions.cpp
+  src/qbrain/jobs/embedding_queue.cpp
 )
 target_link_libraries(qbrain_jobs PUBLIC qbrain_core qbrain_ai qbrain_util)
 
@@ -328,3 +329,8 @@ add_executable(qbrain_embedding_tests tests/test_n46d.cpp)
 target_compile_definitions(qbrain_embedding_tests PRIVATE QBRAIN_EMBEDDING_STANDALONE=1)
 target_link_libraries(qbrain_embedding_tests PRIVATE qbrain_search qbrain_core qbrain_jobs qbrain_ai)
 add_test(NAME qbrain_embedding_unit COMMAND qbrain_embedding_tests)
+
+# Production queues/storage/parser with deterministic, no-network HTTP interleaving.
+add_executable(qbrain_embedding_queue_tests tests/test_embedding_queue.cpp)
+target_link_libraries(qbrain_embedding_queue_tests PRIVATE qbrain_jobs qbrain_core qbrain_search qbrain_ai)
+add_test(NAME qbrain_embedding_queue_unit COMMAND qbrain_embedding_queue_tests)

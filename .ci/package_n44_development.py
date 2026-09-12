@@ -51,11 +51,21 @@ assert 'N46D production search: 11 checks passed' in read('embedding-search.log'
 assert 'N46D embedding contracts: 65 checks passed' in read('embedding-unit.log')
 assert embedding_report['probe_sha256']==hashlib.sha256((root/'build/http/Release/qbrain_http_probe.exe').read_bytes()).hexdigest()
 
+queue_report=json.loads(read('embedding-queue.json'))
+assert queue_report['result']=='PASS' and queue_report['native_windows'] is True
+assert queue_report['source_commit']==commit and queue_report['tracked_tree_clean'] is True
+assert queue_report['source_tree']==retrieval_report['source_tree']
+assert queue_report['scenario_count']==len(queue_report['scenarios'])>=38
+assert queue_report['checks']>=255 and queue_report['real_provider_calls'] is False
+assert queue_report['probe_sha256']==hashlib.sha256((root/'build/http/Release/qbrain_embedding_queue_tests.exe').read_bytes()).hexdigest()
+for mode in ('automatic','generic'):
+    for code in ('001','002','003','004'):
+        assert any(s.startswith(f'{mode}: QB-QUEUE-{code}:') for s in queue_report['scenarios'])
 
 binary=root/'build/cl/qbrain.exe';digest=hashlib.sha256(binary.read_bytes()).hexdigest()
 with (e/'local-config.log').open('wb') as log:
     subprocess.run([sys.executable,'.ci/test_local_config.py','--binary',str(binary)],stdout=log,stderr=subprocess.STDOUT,check=True)
-report={'source_commit':commit,'binary_sha256':digest,'result':'PASS','registered_groups':len(expected),'installer_checks':installer,'additional_consent_checks_per_shell':16,'real_host_model_consumption_verified':False,'signed':False,'postgres_memory_context_verified':False,'native_http_checks':http_report['check_count'],'retrieval_checks':retrieval_report['native_test_checks'],'embedding_wire_checks':embedding_report['check_count']}
+report={'source_commit':commit,'binary_sha256':digest,'result':'PASS','registered_groups':len(expected),'installer_checks':installer,'additional_consent_checks_per_shell':16,'real_host_model_consumption_verified':False,'signed':False,'postgres_memory_context_verified':False,'native_http_checks':http_report['check_count'],'retrieval_checks':retrieval_report['native_test_checks'],'embedding_wire_checks':embedding_report['check_count'],'queue_scenarios':queue_report['scenario_count'],'queue_checks':queue_report['checks']}
 # Staged native startup without development DLL paths or real user state.
 with tempfile.TemporaryDirectory(prefix='qbrain-package-smoke-') as t:
     home=Path(t); exe=home/'qbrain.exe';exe.write_bytes(binary.read_bytes())
@@ -64,7 +74,7 @@ with tempfile.TemporaryDirectory(prefix='qbrain-package-smoke-') as t:
     subprocess.run([str(exe),'init','--brain','package-smoke','--no-default'],cwd=home,env=env,capture_output=True,check=True,timeout=15)
     assert hashlib.sha256(exe.read_bytes()).hexdigest()==digest
 (e/'validation.json').write_text(json.dumps(report,indent=2)+'\n')
-files={'verification/embedding-transport.json':e/'embedding-transport.json','EMBEDDING-CONTRACTS.md':root/'docs/integration/EMBEDDING-CONTRACTS.md','verification/retrieval-benchmark.json':e/'retrieval-benchmark.json','HTTP-TRANSPORT.md':root/'docs/integration/HTTP-TRANSPORT.md','qbrain.exe':binary,'LICENSE':root/'LICENSE','THIRD-PARTY-NOTICES.md':root/'THIRD-PARTY-NOTICES.md','WINDOWS-MEMORY.md':root/'docs/integration/WINDOWS-MEMORY.md','QUICKSTART.zh-CN.md':root/'docs/integration/QUICKSTART.zh-CN.md','scripts/Install-QbrainMemory.ps1':root/'scripts/Install-QbrainMemory.ps1','scripts/Invoke-QbrainJson.ps1':root/'scripts/Invoke-QbrainJson.ps1','verification/validation.json':e/'validation.json','verification/benchmark.json':e/'benchmark.json','verification/http-transport.json':e/'http-transport.json'}
+files={'verification/embedding-queue.json':e/'embedding-queue.json','EMBEDDING-QUEUE.md':root/'docs/integration/EMBEDDING-QUEUE.md','verification/embedding-transport.json':e/'embedding-transport.json','EMBEDDING-CONTRACTS.md':root/'docs/integration/EMBEDDING-CONTRACTS.md','verification/retrieval-benchmark.json':e/'retrieval-benchmark.json','HTTP-TRANSPORT.md':root/'docs/integration/HTTP-TRANSPORT.md','qbrain.exe':binary,'LICENSE':root/'LICENSE','THIRD-PARTY-NOTICES.md':root/'THIRD-PARTY-NOTICES.md','WINDOWS-MEMORY.md':root/'docs/integration/WINDOWS-MEMORY.md','QUICKSTART.zh-CN.md':root/'docs/integration/QUICKSTART.zh-CN.md','scripts/Install-QbrainMemory.ps1':root/'scripts/Install-QbrainMemory.ps1','scripts/Invoke-QbrainJson.ps1':root/'scripts/Invoke-QbrainJson.ps1','verification/validation.json':e/'validation.json','verification/benchmark.json':e/'benchmark.json','verification/http-transport.json':e/'http-transport.json'}
 manifest={**report,'files':{n:{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for n,p in files.items()}}
 out=root/'package';out.mkdir(exist_ok=True);archive=out/'qbrain-windows-x64-development.zip'
 with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
