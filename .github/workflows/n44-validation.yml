@@ -1,7 +1,7 @@
 name: Native project memory and context validation
 on:
   push:
-    branches: ['optimization/n44-context-release','optimization/n46b-http-boundaries','main']
+    branches: ['optimization/n44-context-release','optimization/n46b-http-boundaries','optimization/n46c-exact-retrieval','main']
     paths: ['src/**','include/**','tests/**','scripts/**','.ci/**','CMakeLists.txt','.github/workflows/n44-validation.yml']
   workflow_dispatch:
 permissions:
@@ -36,7 +36,8 @@ jobs:
           mkdir evidence
           python3 .ci/test_validate_native_log.py 2>&1 | tee evidence/evidence-gate.log
           cmake -S . -B build/portable -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
-          cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_http_tests --parallel 2 2>&1 | tee evidence/build.log
+          cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_http_tests qbrain_retrieval_tests --parallel 2 2>&1 | tee evidence/build.log
+          python3 .ci/test_retrieval_benchmark.py --binary build/portable/qbrain_retrieval_tests --report evidence/retrieval-benchmark.json | tee evidence/retrieval.log
           build/portable/qbrain_http_tests | tee evidence/http-input.log
           build/portable/qbrain_memory_tests | tee evidence/memory-unit.log
           build/portable/qbrain_context_tests | tee evidence/context-unit.log
@@ -69,11 +70,16 @@ jobs:
         run: |
           cmake -S . -B build/http -DQBRAIN_WITH_PG=OFF
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build/http --config Release --target qbrain_http_tests qbrain_http_probe --parallel 2 2>&1 | Tee-Object evidence/http-build.log
+          cmake --build build/http --config Release --target qbrain_http_tests qbrain_http_probe qbrain_retrieval_tests --parallel 2 2>&1 | Tee-Object evidence/http-build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & build/http/Release/qbrain_http_tests.exe 2>&1 | Tee-Object evidence/http-input.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_http_transport.py --probe build/http/Release/qbrain_http_probe.exe --report evidence/http-transport.json 2>&1 | Tee-Object evidence/http-transport.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Exact retrieval differential checks and synthetic baseline benchmark
+        shell: pwsh
+        run: |
+          python .ci/test_retrieval_benchmark.py --binary build/http/Release/qbrain_retrieval_tests.exe --report evidence/retrieval-benchmark.json --require-windows 2>&1 | Tee-Object evidence/retrieval.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Real memory MCP hooks context and local-config process tests
         shell: pwsh

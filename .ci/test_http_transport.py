@@ -22,6 +22,7 @@ if os.name != 'nt':
 requests = []
 lock = threading.Lock()
 stop = threading.Event()
+peer_resets = 0
 payload = json.dumps({'text': '原生 Windows 😀', 'ok': True}, ensure_ascii=False).encode()
 secret_marker = b'fixture-private-provider-error-not-a-secret'
 
@@ -31,6 +32,19 @@ class Fixture(BaseHTTPRequestHandler):
 
     def log_message(self, *_):
         pass
+
+    def handle(self):
+        global peer_resets
+        try:
+            super().handle()
+        except (ConnectionResetError, BrokenPipeError):
+            # Deliberate client cancellation may reset the socket while the
+            # base handler is waiting for another keep-alive request. Count
+            # that expected condition instead of flooding the fixture's pipe.
+            # Other exceptions and all client-result assertions stay visible.
+            with lock:
+                peer_resets += 1
+            self.close_connection = True
 
     def do_POST(self):
         try:
@@ -225,8 +239,16 @@ try:
     # Long-lived process: cancellation must not leave stack-backed receive buffers
     # dangling or accumulate request/connection/session handles across iterations.
     batch = [{'base': base, 'path': '/stall-body', 'timeout': 40} for _ in range(32)]
-    first = call(batch=batch)
-    second = call(batch=batch)
+    first = call(batch=batch, handle_settle_ms=2000)
+    second = call(batch=batch, handle_settle_ms=2000)
+    handle_samples = {
+        'at_250ms': [first['process_handles_at_250ms'], second['process_handles_at_250ms']],
+        'after_fixed_2000ms': [first['process_handles'], second['process_handles']],
+        'allowed_growth': 16,
+    }
+    # Preserve both the historical sample point and the settled observation,
+    # even when the leak assertion below fails. Never retry until a green sample.
+    print(json.dumps({'cancellation_handle_samples': handle_samples}), flush=True)
     check(all(r['failure'] == 3 and not r['body'] for r in first['results'] + second['results']),
           '64 repeated cancellations complete safely')
     check(second['process_handles'] <= first['process_handles'] + 16,
@@ -249,6 +271,7 @@ try:
     report = {'result': 'PASS', 'native_windows': True, 'checks': checks,
               'check_count': len(checks), 'timings_ms': timing,
               'handle_counts': [first['process_handles'], second['process_handles']],
+              'handle_samples': handle_samples, 'expected_peer_resets': peer_resets,
               'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
               'probe_sha256': hashlib.sha256(args.probe.read_bytes()).hexdigest(),
               'platform': platform.platform(), 'live_provider_verified': False,

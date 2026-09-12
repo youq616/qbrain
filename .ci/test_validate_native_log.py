@@ -31,17 +31,27 @@ class NativeEvidenceTests(unittest.TestCase):
     def test_n46b_exact_registry(self):
         source = (Path(__file__).resolve().parents[1] / 'tests/test_main.cpp').read_text(encoding='utf-8')
         names = re.findall(r'\{"([^"\r\n]+)",\s*test_\w+\}', source)
-        self.assertEqual(len(names), 45)
+        self.assertEqual(len(names), 46)
         self.assertIn('n46b_http', names)
+        self.assertIn('n46c_retrieval', names)
         log = ''.join('[PASS] ' + name + '\n' for name in names)
-        self.assertEqual(verified_groups(source, log, 45), names)
+        self.assertEqual(verified_groups(source, log, 46), names)
         with self.assertRaises(ValueError):
-            verified_groups(source, log)  # Old default of 44 must not certify 45.
+            verified_groups(source, log)  # Old default of 44 must not certify 46.
 
     def test_n46b_cannot_reuse_old_log(self):
         source = (Path(__file__).resolve().parents[1] / 'tests/test_main.cpp').read_text(encoding='utf-8')
         names = re.findall(r'\{"([^"\r\n]+)",\s*test_\w+\}', source)
         log = ''.join('[PASS] ' + name + '\n' for name in names if name != 'n46b_http')
+        with self.assertRaises(ValueError):
+            verified_groups(source, log, 46)
+
+    def test_n46c_cannot_reuse_45_group_log(self):
+        source = (Path(__file__).resolve().parents[1] / 'tests/test_main.cpp').read_text(encoding='utf-8')
+        names = re.findall(r'\{"([^"\r\n]+)",\s*test_\w+\}', source)
+        log = ''.join('[PASS] ' + name + '\n' for name in names if name != 'n46c_retrieval')
+        with self.assertRaises(ValueError):
+            verified_groups(source, log, 46)
         with self.assertRaises(ValueError):
             verified_groups(source, log, 45)
 

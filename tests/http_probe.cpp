@@ -50,11 +50,20 @@ int main() {
         } else {
           for (const auto& item:j["batch"]) out["results"].push_back(invoke(item));
         }
+        const int settle_ms=j.value("handle_settle_ms",250);
+        if (settle_ms<250 || settle_ms>2000) throw std::runtime_error("invalid handle sample delay");
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
 #ifdef _WIN32
         DWORD count=0;
         if (!GetProcessHandleCount(GetCurrentProcess(),&count)) throw std::runtime_error("handle diagnostics failed");
+        out["process_handles_at_250ms"]=count;
+        // Network calls have already returned; this fixed, bounded observation
+        // delay is not added to any request deadline. A leaked handle will not
+        // disappear just because the peer/WinHTTP teardown has settled.
+        std::this_thread::sleep_for(std::chrono::milliseconds(settle_ms-250));
+        if (!GetProcessHandleCount(GetCurrentProcess(),&count)) throw std::runtime_error("handle diagnostics failed");
         out["process_handles"]=count;
+        out["handle_settle_ms"]=settle_ms;
 #endif
       } else out=invoke(j);
       std::cout<<out.dump()<<std::endl;

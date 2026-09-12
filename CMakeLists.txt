@@ -241,6 +241,7 @@ add_executable(qbrain_tests
   tests/test_n43.cpp
   tests/test_n45.cpp
   tests/test_n46b.cpp
+  tests/test_n46c.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
   tests/test_vector.cpp
@@ -314,3 +315,9 @@ target_link_libraries(qbrain_http_tests PRIVATE qbrain_ai)
 add_test(NAME qbrain_http_input_unit COMMAND qbrain_http_tests)
 add_executable(qbrain_http_probe tests/http_probe.cpp)
 target_link_libraries(qbrain_http_probe PRIVATE qbrain_ai qbrain_core qbrain_search qbrain_jobs qbrain_ai)
+
+# N46C exact-selector, SQLite differential tests and synthetic benchmark.
+add_executable(qbrain_retrieval_tests tests/test_n46c.cpp)
+target_compile_definitions(qbrain_retrieval_tests PRIVATE QBRAIN_RETRIEVAL_STANDALONE=1)
+target_link_libraries(qbrain_retrieval_tests PRIVATE qbrain_search qbrain_core qbrain_jobs qbrain_ai)
+add_test(NAME qbrain_retrieval_unit COMMAND qbrain_retrieval_tests)
