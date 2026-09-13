@@ -1,4 +1,5 @@
 #include "qbrain/storage/database.hpp"
+#include "qbrain/storage/detail/cjk_literal.hpp"
 #include "qbrain/util/string_util.hpp"
 #include <stdexcept>
 #include <type_traits>
@@ -181,6 +182,42 @@ WHERE pages_fts MATCH ? AND p.deleted_at IS NULL
       r.snippet = st->column_text(4);
       r.rank = st->column_double(5);
       out.push_back(std::move(r));
+    }
+    // unicode61 indexes a continuous CJK run as one token. A successful MATCH
+    // with zero (or only some) hits is not a transport/SQL error, so the legacy
+    // exception fallback cannot recover a substring. Keep FTS ranks first and
+    // fill remaining slots with bound literal matches; no tokenizer migration.
+    const auto literal = util::trim(query);
+    if (limit > 0 && limit <= 500 && out.size() < static_cast<std::size_t>(limit) &&
+        detail::cjk_literal_eligible(query) && !literal.empty()) {
+      std::string extra_sql =
+        "SELECT p.id,p.slug,p.title,p.type,"
+        "substr(p.body,max(1,instr(lower(p.body),lower(?))-40),160) FROM pages p "
+        "WHERE p.deleted_at IS NULL AND (instr(lower(p.title),lower(?))>0 "
+        "OR instr(lower(p.body),lower(?))>0 OR instr(lower(p.slug),lower(?))>0)";
+      if (!source_id.empty()) extra_sql += " AND p.source_id=?";
+      if (!out.empty()) {
+        extra_sql += " AND p.id NOT IN (";
+        for (std::size_t i = 0; i < out.size(); ++i) extra_sql += i ? ",?" : "?";
+        extra_sql += ")";
+      }
+      extra_sql += " ORDER BY p.updated_at DESC,p.source_id COLLATE BINARY ASC,"
+                   "p.slug COLLATE BINARY ASC,p.id ASC LIMIT ?";
+      auto extra = create_statement();
+      extra->prepare(*this, extra_sql);
+      int parameter = 1;
+      for (int i = 0; i < 4; ++i) extra->bind_text(parameter++, literal);
+      if (!source_id.empty()) extra->bind_text(parameter++, source_id);
+      for (const auto& row : out) extra->bind_int(parameter++, row.page_id);
+      extra->bind_int(parameter, limit - static_cast<int>(out.size()));
+      while (extra->step()) {
+        FtsRow row;
+        row.page_id = extra->column_int(0); row.slug = extra->column_text(1);
+        row.title = extra->column_text(2); row.type = extra->column_text(3);
+        row.snippet = extra->column_text(4);
+        row.rank = 0.0; // Literal matches do not have a BM25 score.
+        out.push_back(std::move(row));
+      }
     }
     return out;
   }

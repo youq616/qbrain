@@ -81,7 +81,11 @@ class Fixture(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(secret_marker)
                 return
-            if mode == 'chat':  # unused direct path; explicit fixture endpoint below
+            if mode == 'echo':
+                data = json.dumps({'authorization': self.headers.get('Authorization'),
+                                   'body': body.decode('utf-8'), 'port': self.server.server_port,
+                                   'cookie': self.headers.get('Cookie')}).encode()
+            elif mode == 'chat':  # unused direct path; explicit fixture endpoint below
                 data = payload
             elif mode == 'completions' or '/chat-truncated/' in self.path:
                 data = b'{"choices":[{"message":{"content":"native fixture completion"}}]}'
@@ -94,6 +98,8 @@ class Fixture(BaseHTTPRequestHandler):
             else:
                 data = payload
             self.send_response(200)
+            if mode == 'echo':
+                self.send_header('Set-Cookie', 'qbrain_fixture=synthetic; Path=/')
             if mode.startswith('chunked') or mode in ('trickle', 'stall-body', 'broken-chunk'):
                 self.send_header('Transfer-Encoding', 'chunked')
             elif mode == 'oversized-length':
@@ -268,6 +274,29 @@ try:
           'chat preserves redacted HTTP failure')
     chat = call(base=base + '/chat-truncated', chat=True)
     check(not chat['ok'] and not chat['body'], 'chat never consumes incomplete 2xx response')
+    # Shared session must not become shared bearer/body/timeout state. Exercise
+    # both origins and different request budgets using the same long-lived probe.
+    commands = [{'base': f'http://127.0.0.1:{server.server_port if n % 2 else sink.server_port}',
+                 'path': '/echo', 'token': f'fixture-token-{n}', 'body': f'message-{n}',
+                 'timeout': 2000 + n * 10} for n in range(12)]
+    echo = call(batch=commands, parallel=True)
+    for n, item in enumerate(echo['results']):
+        check(item['status'] == 200 and item['failure'] == 0,
+              f'parallel request {n} succeeded with isolated settings')
+        returned = json.loads(item['body'])
+        check(returned == {'authorization': f'Bearer fixture-token-{n}', 'body': f'message-{n}',
+                            'port': server.server_port if n % 2 else sink.server_port, 'cookie': None},
+              f'parallel request {n} does not share bearer/body/origin state')
+    deadlines = call(batch=[{'base': base, 'path': '/stall-body', 'timeout': 100},
+                           {'base': base, 'path': '/stall-body', 'timeout': 600}], parallel=True)
+    for r, lower, upper in zip(deadlines['results'], (70, 450), (450, 1400)):
+        rejected(r, 3, 'different concurrent deadline remains a timeout')
+        check(lower <= r['elapsed_ms'] < upper, 'concurrent timeout setting remains request-local')
+    anonymous = request('/echo', token='', body='no-auth')
+    check(anonymous['status'] == 200, 'anonymous request succeeds after authenticated parallel work')
+    anonymous_body = json.loads(anonymous['body'])
+    check(anonymous_body['authorization'] is None and anonymous_body['cookie'] is None,
+          'cached session retains neither bearer nor cookie headers')
     report = {'result': 'PASS', 'native_windows': True, 'checks': checks,
               'check_count': len(checks), 'timings_ms': timing,
               'handle_counts': [first['process_handles'], second['process_handles']],

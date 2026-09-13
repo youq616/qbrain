@@ -1,7 +1,7 @@
 name: Native project memory and context validation
 on:
   push:
-    branches: ['optimization/n44-context-release','optimization/n46b-http-boundaries','optimization/n46c-exact-retrieval','optimization/n46d-embedding-contracts','main']
+    branches: ['optimization/n44-context-release','optimization/n46b-http-boundaries','optimization/n46c-exact-retrieval','optimization/n46d-embedding-contracts','optimization/n46f-cjk-recall','main']
     paths: ['src/**','include/**','tests/**','scripts/**','.ci/**','CMakeLists.txt','.github/workflows/n44-validation.yml']
   workflow_dispatch:
 permissions:
@@ -35,13 +35,17 @@ jobs:
           set -euo pipefail
           mkdir evidence
           python3 .ci/test_validate_native_log.py 2>&1 | tee evidence/evidence-gate.log
+          python3 .ci/test_http_lifecycle_report.py 2>&1 | tee evidence/lifecycle-report-gate.log
+          python3 .ci/test_cjk_report.py 2>&1 | tee evidence/cjk-report-gate-tests.log
           cmake -S . -B build/portable -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
-          cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_http_tests qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests --parallel 2 2>&1 | tee evidence/build.log
+          cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_http_tests qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests --parallel 2 2>&1 | tee evidence/build.log
           python3 .ci/test_retrieval_benchmark.py --binary build/portable/qbrain_retrieval_tests --report evidence/retrieval-benchmark.json | tee evidence/retrieval.log
           cmake -S tests/n42 -B build/n42 -DQBRAIN_N42_SQLITE_ADAPTER_TEST=ON
           cmake --build build/n42 --parallel 2
           ctest --test-dir build/n42 --output-on-failure | tee evidence/n42-regression.log
           python3 .ci/test_embedding_queue.py --binary build/portable/qbrain_embedding_queue_tests --report evidence/embedding-queue.json | tee evidence/embedding-queue.log
+          build/portable/qbrain_cjk_tests | tee evidence/cjk-unit.log
+          python3 .ci/test_cjk_recall.py --binary build/portable/qbrain --report evidence/cjk-recall.json | tee evidence/cjk-recall.log
           build/portable/qbrain_embedding_tests | tee evidence/embedding-unit.log
           python3 .ci/test_embedding_search.py --binary build/portable/qbrain | tee evidence/embedding-search.log
           build/portable/qbrain_http_tests | tee evidence/http-input.log
@@ -76,9 +80,15 @@ jobs:
         run: |
           cmake -S . -B build/http -DQBRAIN_WITH_PG=OFF
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build/http --config Release --target qbrain_http_tests qbrain_http_probe qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests --parallel 2 2>&1 | Tee-Object evidence/http-build.log
+          cmake --build build/http --config Release --target qbrain_http_tests qbrain_http_probe qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests --parallel 2 2>&1 | Tee-Object evidence/http-build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & build/http/Release/qbrain_http_tests.exe 2>&1 | Tee-Object evidence/http-input.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake -S tests/http_lifecycle -B build/http-lifecycle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/http-lifecycle --config Release --parallel 2 2>&1 | Tee-Object evidence/lifecycle-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_http_lifecycle.py --probe build/http-lifecycle/Release/qbrain_http_lifecycle_current.exe --baseline build/http-lifecycle/Release/qbrain_http_lifecycle_legacy.exe --per-call build/http-lifecycle/Release/qbrain_http_lifecycle_per_call.exe --report evidence/http-lifecycle.json 2>&1 | Tee-Object evidence/http-lifecycle.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_http_transport.py --probe build/http/Release/qbrain_http_probe.exe --report evidence/http-transport.json 2>&1 | Tee-Object evidence/http-transport.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -97,6 +107,13 @@ jobs:
           python .ci/test_embedding_transport.py --probe build/http/Release/qbrain_http_probe.exe --report evidence/embedding-transport.json 2>&1 | Tee-Object evidence/embedding-transport.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_embedding_search.py --binary build/cl/qbrain.exe 2>&1 | Tee-Object evidence/embedding-search.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: CJK literal page recall and memory endpoint regression
+        shell: pwsh
+        run: |
+          & build/http/Release/qbrain_cjk_tests.exe 2>&1 | Tee-Object evidence/cjk-unit.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_cjk_recall.py --binary build/cl/qbrain.exe --report evidence/cjk-recall.json 2>&1 | Tee-Object evidence/cjk-recall.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Real memory MCP hooks context and local-config process tests
         shell: pwsh
@@ -128,7 +145,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify all gates and package exact tested binary
         shell: pwsh
-        run: python .ci/package_n44_development.py
+        run: |
+          python .ci/package_n44_development.py 2>&1 | Tee-Object evidence/package-gate.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -141,3 +160,54 @@ jobs:
           name: qbrain-n44-windows-development-package
           path: package/
           retention-days: 14
+  windows-http-2022:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build and validate the same HTTP source on Server 2022
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          [Environment]::OSVersion.VersionString | Set-Content evidence/platform.txt
+          cmake -S . -B build/http -DQBRAIN_WITH_PG=OFF
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/http --config Release --target qbrain_http_probe qbrain_http_tests --parallel 2 2>&1 | Tee-Object evidence/build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake -S tests/http_lifecycle -B build/http-lifecycle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/http-lifecycle --config Release --parallel 2 2>&1 | Tee-Object evidence/lifecycle-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & build/http/Release/qbrain_http_tests.exe 2>&1 | Tee-Object evidence/input.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_http_transport.py --probe build/http/Release/qbrain_http_probe.exe --report evidence/http-transport.json 2>&1 | Tee-Object evidence/http-transport.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_http_lifecycle.py --probe build/http-lifecycle/Release/qbrain_http_lifecycle_current.exe --baseline build/http-lifecycle/Release/qbrain_http_lifecycle_legacy.exe --per-call build/http-lifecycle/Release/qbrain_http_lifecycle_per_call.exe --report evidence/http-lifecycle.json 2>&1 | Tee-Object evidence/http-lifecycle.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_http_lifecycle_report.py 2>&1 | Tee-Object evidence/report-gate.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n46f-server2022-http-evidence
+          path: evidence/
+          retention-days: 14
+  publish-cjk-preview:
+    needs: [source, portable, windows, windows-http-2022]
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/optimization/n46f-cjk-recall' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify same-run package, upload draft, read back, then publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B tools/delivery/publish_cjk_preview.py

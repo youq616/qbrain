@@ -244,6 +244,7 @@ add_executable(qbrain_tests
   tests/test_n46b.cpp
   tests/test_n46c.cpp
   tests/test_n46d.cpp
+  tests/test_n46f.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
   tests/test_vector.cpp
@@ -334,3 +335,9 @@ add_test(NAME qbrain_embedding_unit COMMAND qbrain_embedding_tests)
 add_executable(qbrain_embedding_queue_tests tests/test_embedding_queue.cpp)
 target_link_libraries(qbrain_embedding_queue_tests PRIVATE qbrain_jobs qbrain_core qbrain_search qbrain_ai)
 add_test(NAME qbrain_embedding_queue_unit COMMAND qbrain_embedding_queue_tests)
+
+# N46F: CJK page-search supplementation and unchanged literal memory reads.
+add_executable(qbrain_cjk_tests tests/test_n46f.cpp)
+target_compile_definitions(qbrain_cjk_tests PRIVATE QBRAIN_CJK_STANDALONE=1)
+target_link_libraries(qbrain_cjk_tests PRIVATE qbrain_memory qbrain_search qbrain_core qbrain_jobs qbrain_ai)
+add_test(NAME qbrain_cjk_unit COMMAND qbrain_cjk_tests)
