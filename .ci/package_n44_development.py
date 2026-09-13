@@ -8,6 +8,7 @@ import subprocess
 import sys
 from validate_native_log import verified_groups
 from validate_cjk_report import validate_report
+from validate_http_lifecycle import validate_report as validate_lifecycle
 import tempfile
 import zipfile
 
@@ -71,9 +72,11 @@ validate_report(cjk_report, source_commit=commit, binary_sha256=digest,
 with (e/'cjk-report-gate-tests.log').open('wb') as log:
     subprocess.run([sys.executable,'.ci/test_cjk_report.py'], stdout=log, stderr=subprocess.STDOUT, check=True)
 lifetime_report=json.loads(read('http-lifecycle.json'))
-assert lifetime_report['result']=='PASS' and lifetime_report['source_commit']==commit
-assert lifetime_report['native_windows'] is True and lifetime_report['rounds_per_variant']==8
-assert lifetime_report['requests_per_round']==32 and lifetime_report['allowed_growth']==16
+validate_lifecycle(lifetime_report, source_commit=commit,
+    probe_hashes={name:hashlib.sha256((root/f'build/http-lifecycle/Release/qbrain_http_lifecycle_{name}.exe').read_bytes()).hexdigest()
+                  for name in ('legacy','pooled','current')})
+with (e/'lifecycle-report-gate.log').open('wb') as log:
+    subprocess.run([sys.executable,'.ci/test_http_lifecycle_report.py'],stdout=log,stderr=subprocess.STDOUT,check=True)
 
 with (e/'local-config.log').open('wb') as log:
     subprocess.run([sys.executable,'.ci/test_local_config.py','--binary',str(binary)],stdout=log,stderr=subprocess.STDOUT,check=True)

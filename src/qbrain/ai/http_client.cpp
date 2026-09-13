@@ -24,8 +24,8 @@
 
 namespace qbrain::ai {
 namespace {
-#if defined(QBRAIN_HTTP_TEST_EARLY_PARENTS) && !defined(QBRAIN_HTTP_DIAGNOSTICS)
-#error Legacy lifetime control is allowed only in the standalone diagnostic build
+#if (defined(QBRAIN_HTTP_TEST_EARLY_PARENTS) || defined(QBRAIN_HTTP_TEST_GLOBAL_POOL)) && !defined(QBRAIN_HTTP_DIAGNOSTICS)
+#error Legacy HTTP controls are allowed only in the standalone diagnostic build
 #endif
 #ifdef QBRAIN_HTTP_DIAGNOSTICS
 std::atomic<std::uint64_t> handles_opened{0}, handles_closed{0}, close_errors{0};
@@ -218,6 +218,13 @@ HttpResponse http_post_json(std::string_view base_url, std::string_view path,
   InternetHandle session(WinHttpOpen(agent.c_str(), WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
       WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC));
   if (!session.value) return network_error(GetLastError());
+#if !defined(QBRAIN_HTTP_TEST_EARLY_PARENTS) && !defined(QBRAIN_HTTP_TEST_GLOBAL_POOL)
+  // Keep connection reuse inside this session, not WinHTTP's legacy cross-session
+  // pool. A closed per-call session must not leave connections in that global pool.
+  // This session-only option takes no input buffer; fail closed if unsupported.
+  if (!WinHttpSetOption(session.value, WINHTTP_OPTION_DISABLE_GLOBAL_POOLING, nullptr, 0))
+    return network_error(GetLastError());
+#endif
   if (!WinHttpSetTimeouts(session.value, timeout_ms, timeout_ms, timeout_ms, timeout_ms))
     return network_error(GetLastError());
   InternetHandle connection(WinHttpConnect(session.value, host.c_str(), parts.nPort, 0));

@@ -35,6 +35,7 @@ jobs:
           set -euo pipefail
           mkdir evidence
           python3 .ci/test_validate_native_log.py 2>&1 | tee evidence/evidence-gate.log
+          python3 .ci/test_http_lifecycle_report.py 2>&1 | tee evidence/lifecycle-report-gate.log
           python3 .ci/test_cjk_report.py 2>&1 | tee evidence/cjk-report-gate-tests.log
           cmake -S . -B build/portable -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
           cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_http_tests qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests --parallel 2 2>&1 | tee evidence/build.log
@@ -87,7 +88,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build/http-lifecycle --config Release --parallel 2 2>&1 | Tee-Object evidence/lifecycle-build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python .ci/test_http_lifecycle.py --probe build/http-lifecycle/Release/qbrain_http_lifecycle_current.exe --baseline build/http-lifecycle/Release/qbrain_http_lifecycle_legacy.exe --report evidence/http-lifecycle.json 2>&1 | Tee-Object evidence/http-lifecycle.log
+          python .ci/test_http_lifecycle.py --probe build/http-lifecycle/Release/qbrain_http_lifecycle_current.exe --baseline build/http-lifecycle/Release/qbrain_http_lifecycle_legacy.exe --pooled build/http-lifecycle/Release/qbrain_http_lifecycle_pooled.exe --report evidence/http-lifecycle.json 2>&1 | Tee-Object evidence/http-lifecycle.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_http_transport.py --probe build/http/Release/qbrain_http_probe.exe --report evidence/http-transport.json 2>&1 | Tee-Object evidence/http-transport.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
