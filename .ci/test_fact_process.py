@@ -11,6 +11,8 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
+import re
 
 EXPECTED_CHECKS = frozenset({
     'lazy_read', 'no_read_migration', 'no_unextracted_promotion', 'exact_quote_claim',
@@ -22,8 +24,11 @@ EXPECTED_CHECKS = frozenset({
     'explicit_conflict', 'stale_revision_denied', 'supersession_history', 'mcp_history_boolean',
     'no_cycle', 'replacement_forget_no_revival', 'retraction_persists',
     'last_support_forget_purges', 'no_hidden_model_jobs', 'independent_processes',
-    'parallel_idempotent_create', 'tamper_suppression', 'ordinary_memory_unchanged'
+    'parallel_idempotent_create', 'parallel_cold_start_rounds', 'tamper_suppression', 'ordinary_memory_unchanged'
 })
+
+RACE_ROUNDS = 32
+EXPECTED_COMMAND_COUNT = 56 + 2 * (RACE_ROUNDS - 1)
 
 def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -44,13 +49,29 @@ def execute(binary: Path, checks: list[dict], commands: list[dict]) -> None:
         env.update(HOME=str(root), LOCALAPPDATA=str(root), USERPROFILE=str(root), APPDATA=str(root))
         data = root if os.name == 'nt' else root / '.local' / 'share'
         db_path = data / 'Qbrain' / 'brains' / 'facts-ci' / 'brain.db'
+        record_lock = threading.Lock()
+        def record_result(args, r, expected):
+            entry = {'args': args, 'exit_code': r.returncode, 'expected_exit': expected}
+            if r.returncode != expected:
+                # Disposable fixture only: no real credentials or user state.
+                for key, raw in (('stdout_excerpt', r.stdout), ('stderr_excerpt', r.stderr)):
+                    text = raw.decode('utf-8', errors='replace').replace(str(root), '<fixture>')
+                    text = re.sub(r'(?i)(bearer\s+|(?:api[_-]?key|token|secret)\s*[=:]\s*)\S+',
+                                  r'\1[REDACTED]', text)
+                    entry[key] = text[:2048]
+                entry['output_truncated'] = len(r.stdout)>2048 or len(r.stderr)>2048
+            with record_lock:
+                commands.append(entry)
+                number = len(commands)
+                if r.returncode != expected:
+                    checks.append({'name': 'unexpected_process_exit_' + str(number), 'status': 'FAIL'})
+            if r.returncode != expected:
+                raise AssertionError('Unexpected command exit; see command ' + str(number))
         def process(args: list[str], payload=None, expected=0):
             raw = b'' if payload is None else encode(payload)
             r = subprocess.run([str(binary), *args, '--brain', 'facts-ci'], input=raw,
                 cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
-            commands.append({'args': args, 'exit_code': r.returncode, 'expected_exit': expected})
-            if r.returncode != expected:
-                raise AssertionError('Unexpected exit for '+repr(args)+': '+r.stdout.decode('utf-8',errors='replace'))
+            record_result(args, r, expected)
             return r.stdout.decode('utf-8-sig')
         def sql(query, params=(), rows=False):
             with closing(sqlite3.connect(db_path, timeout=5)) as db:
@@ -83,8 +104,7 @@ def execute(binary: Path, checks: list[dict], commands: list[dict]) -> None:
             argv=[str(binary),'serve','--brain','facts-ci','--tool-profile','memory']
             if write: argv.append('--allow-write')
             r=subprocess.run(argv,input=raw,cwd=root,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
-            commands.append({'args':['serve',name],'exit_code':r.returncode,'expected_exit':0})
-            if r.returncode: raise AssertionError('MCP process failed')
+            record_result(['serve',name], r, 0)
             return next(x['result'] for x in [json.loads(line) for line in r.stdout.decode('utf-8').splitlines()] if x.get('id')==1)
         def result(reply):
             return json.loads(reply['content'][-1]['text'])
@@ -164,10 +184,21 @@ def execute(binary: Path, checks: list[dict], commands: list[dict]) -> None:
         check(sql('SELECT COUNT(*) FROM memory_facts')==0 and sql('SELECT COUNT(*) FROM memory_fact_relations')==0,'last_support_forget_purges')
         check(sql('SELECT COUNT(*) FROM jobs')==0 and sql('SELECT COUNT(*) FROM content_chunks')==0,'no_hidden_model_jobs')
         e=seed('parallel')
-        # Only the newly recorded fact is raced, not schema setup or user state.
+        # Fixed schedule, fresh processes and no held-open DB connection. Never
+        # retry failed rounds or weaken the one-create/one-duplicate assertion.
+        rounds = []
         with ThreadPoolExecutor(max_workers=2) as pool:
-            both=list(pool.map(lambda _:create(e),range(2)))
-        check(both[0]['fact_id']==both[1]['fact_id'] and {b['duplicate'] for b in both}=={False,True},'parallel_idempotent_create')
+            for n in range(RACE_ROUNDS):
+                start = threading.Barrier(2)
+                def attempt(_):
+                    start.wait(timeout=10)
+                    return create(e, predicate='race.' + str(n))
+                both = list(pool.map(attempt, range(2)))
+                rounds.append(both[0]['fact_id']==both[1]['fact_id'] and
+                              {b['duplicate'] for b in both}=={False,True})
+        check(all(rounds), 'parallel_idempotent_create')
+        check(len(rounds)==RACE_ROUNDS and sql('SELECT COUNT(*) FROM memory_facts')==RACE_ROUNDS,
+              'parallel_cold_start_rounds')
         f=both[0]
         check(read_one(f)['object']==e['quote'],'independent_processes')
         sql("UPDATE memory_items SET quote='I prefer forged value' WHERE item_id=?",(e['item'],))
@@ -189,6 +220,8 @@ def main() -> int:
         report['result']='PASS'
     except Exception as e:
         report['error_type']=type(e).__name__;report['error']=str(e)
+        if not any(c.get('status')=='FAIL' for c in checks):
+            checks.append({'name':'execution_interrupted', 'status':'FAIL'})
     report['check_count']=len(checks)
     report['counts']={key:sum(c['status']==key.upper() for c in checks) for key in ('pass','fail')}
     report['counts']['total']=len(checks)

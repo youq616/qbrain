@@ -12,11 +12,11 @@ class FactReportTests(unittest.TestCase):
         return dict(result='PASS',source_commit='source',tracked_tree_clean=True,native_windows=True,
             binary_sha256='binary',script_sha256='script',checks=[dict(name=n,status='PASS') for n in names],
             check_count=len(names),counts={'total':len(names),'pass':len(names),'fail':0},
-            commands=[{'exit_code':0,'expected_exit':0}]*55+[{'exit_code':1,'expected_exit':1}])
+            commands=[{'exit_code':0,'expected_exit':0}]*(suite.EXPECTED_COMMAND_COUNT-1)+[{'exit_code':1,'expected_exit':1}])
     def validate(self,r):
         return validate_report(r,source_commit='source',binary_sha256='binary',script_sha256='script')
     def test_complete(self):
-        self.assertEqual(self.validate(self.fixture())['named_checks'],33)
+        self.assertEqual(self.validate(self.fixture())['named_checks'],34)
     def test_empty_missing_duplicate(self):
         for mode in ('empty','missing','duplicate'):
             r=self.fixture()
@@ -42,7 +42,7 @@ class FactReportTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.validate(r)
     def test_command_history_fail_closed(self):
         for rows in ([],[{'exit_code':0,'expected_exit':0}],
-                     [{'exit_code':False,'expected_exit':0}]*56,[{'exit_code':None,'expected_exit':0}]*56):
+                     [{'exit_code':False,'expected_exit':0}]*suite.EXPECTED_COMMAND_COUNT,[{'exit_code':None,'expected_exit':0}]*suite.EXPECTED_COMMAND_COUNT):
             r=self.fixture();r['commands']=rows
             with self.assertRaises(ValueError):self.validate(r)
     def test_failure_record_preserves_previous_checks(self):
@@ -55,6 +55,20 @@ class FactReportTests(unittest.TestCase):
                 self.assertEqual(suite.main(),1)
             r=json.loads(report.read_text(encoding='utf-8'))
             self.assertEqual(r['counts'],{'total':2,'pass':1,'fail':1});self.assertEqual(len(r['commands']),1)
+    def test_exception_before_named_check_counts_failure(self):
+        with tempfile.TemporaryDirectory() as d:
+            binary=Path(d)/'fake';binary.write_bytes(b'not executed');report=Path(d)/'report.json'
+            def fail(_binary,checks,commands):
+                checks.append({'name':'earlier','status':'PASS'})
+                commands.append({'exit_code':2,'expected_exit':0})
+                raise AssertionError('synthetic startup failure')
+            with patch.object(suite,'execute',side_effect=fail),patch('sys.argv',['test','--binary',str(binary),'--report',str(report)]):
+                self.assertEqual(suite.main(),1)
+            r=json.loads(report.read_text(encoding='utf-8'))
+            self.assertEqual(r['counts'],{'total':2,'pass':1,'fail':1})
+            self.assertEqual(r['checks'][-1]['name'],'execution_interrupted')
+            self.assertEqual(r['commands'][0]['exit_code'],2)
+
     def test_windows_default_encoding_not_used(self):
         original=Path.read_text
         def read_with_windows_default(path,encoding=None,errors=None):
@@ -63,16 +77,16 @@ class FactReportTests(unittest.TestCase):
             self.test_failure_record_preserves_previous_checks()
 
     def unit_fixture(self):
-        names=['scenario-'+str(i) for i in range(14)]
+        names=['scenario-'+str(i) for i in range(15)]
         rows=[dict(name=n,status='PASS',assertions=26) for n in names]
-        rows[-1]['assertions']=28
+        rows[-1]['assertions']=16
         return dict(result='PASS',source_commit='source',tracked_tree_clean=True,native_windows=True,
             binary_sha256='binary',test_sha256='test',exit_code=0,provider_calls=False,
-            scenarios=rows,scenario_count=14,checks=366),names
+            scenarios=rows,scenario_count=15,checks=380),names
     def unit_validate(self,r,names):
         return validate_unit_report(r,source_commit='source',binary_sha256='binary',test_sha256='test',expected_scenarios=names)
     def test_unit_complete(self):
-        r,n=self.unit_fixture();self.assertEqual(self.unit_validate(r,n)['assertions'],366)
+        r,n=self.unit_fixture();self.assertEqual(self.unit_validate(r,n)['assertions'],380)
     def test_unit_rejects_partial_or_failed(self):
         for mode in ('missing','status','assertions','sum','exit','bool','dirty','source','binary','test','native','error'):
             r,n=self.unit_fixture()

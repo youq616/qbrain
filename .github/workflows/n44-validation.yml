@@ -223,7 +223,9 @@ jobs:
         run: python -B tools/delivery/publish_cjk_preview.py
   publish-fact-preview:
     needs: [source, portable, windows, windows-http-2022]
-    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/optimization/n47a-evidence-facts' && github.event_name == 'push'
+    # Owner requires an actual independent subagent review before stage publication.
+    # A successful CI run alone is not a review. Keep candidate artifacts only.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

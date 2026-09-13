@@ -4,6 +4,7 @@
 #include "qbrain/util/hash.hpp"
 #include "qbrain/util/paths.hpp"
 #include <barrier>
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -302,9 +303,67 @@ void concurrent_test() {
     std::filesystem::remove_all(path);
   });
 }
+void startup_lock_test() {
+  scenario("new SQLite connection startup has bounded lock waiting",[] {
+    const auto path=std::filesystem::temp_directory_path()/std::filesystem::path("qbrain-n47a-open-"+
+        util::sha256_hex(std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())).substr(0,16));
+    std::filesystem::create_directory(path);
+    const auto file=util::path_to_utf8(path/"brain.db");
+    { Brain initial; initial.open_at(file); }
+    struct Holder {
+      sqlite3* handle=nullptr;
+      ~Holder() { if(handle) sqlite3_close(handle); }
+      void exec(const char* sql) {
+        if(sqlite3_exec(handle,sql,nullptr,nullptr,nullptr)!=SQLITE_OK)
+          throw std::runtime_error("startup test holder SQL failed");
+      }
+    } holder;
+    check(sqlite3_open(file.c_str(),&holder.handle)==SQLITE_OK,"holder opens actual database");
+    holder.exec("PRAGMA journal_mode=DELETE; BEGIN EXCLUSIVE");
+    std::atomic<int> released{SQLITE_ERROR};
+    std::jthread release([&] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(150));
+      released=sqlite3_exec(holder.handle,"ROLLBACK",nullptr,nullptr,nullptr);
+    });
+    storage::Database opened;
+    auto start=std::chrono::steady_clock::now();
+    opened.open(file);
+    release.join();
+    auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-start).count();
+    check(released==SQLITE_OK && elapsed>=100 && elapsed<8000,"temporary startup lock is waited for");
+    { auto s=opened.prepare("PRAGMA busy_timeout"); check(s.step() && s.column_int(0)==0,"startup handler does not change runtime timeout"); }
+    { auto s=opened.prepare("PRAGMA foreign_keys"); check(s.step() && s.column_int(0)==1,"foreign key policy retained"); }
+    { auto s=opened.prepare("PRAGMA journal_mode"); check(s.step() && s.column_text(0)=="wal","WAL policy retained"); }
+    opened.close();
+    // Reopen after the other connection switched the persistent journal mode.
+    // A cached holder can otherwise remain WAL and EXCLUSIVE permits readers.
+    check(sqlite3_close(holder.handle)==SQLITE_OK,"refresh holder after journal-mode change");
+    holder.handle=nullptr;
+    check(sqlite3_open(file.c_str(),&holder.handle)==SQLITE_OK,"fresh persistent-lock holder");
+    holder.exec("PRAGMA journal_mode=DELETE; BEGIN EXCLUSIVE");
+    { sqlite3_stmt* statement=nullptr;
+      check(sqlite3_prepare_v2(holder.handle,"PRAGMA journal_mode",-1,&statement,nullptr)==SQLITE_OK,
+            "journal-mode observation prepared");
+      const bool rollback=sqlite3_step(statement)==SQLITE_ROW &&
+          std::string(reinterpret_cast<const char*>(sqlite3_column_text(statement,0)))=="delete";
+      sqlite3_finalize(statement);check(rollback,"persistent lock fixture really uses rollback journal"); }
+
+    start=std::chrono::steady_clock::now();
+    denied([&]{opened.open(file);});
+    elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-start).count();
+    check(elapsed>=2000 && elapsed<8000,"persistent startup lock stops after one bounded wait");
+    check(!opened.is_open(),"failed startup closes the new database connection");
+    holder.exec("ROLLBACK");
+    opened.open(file);
+    { auto s=opened.prepare("PRAGMA busy_timeout"); check(s.step() && s.column_int(0)==0,"connection is reusable with original default timeout"); }
+    opened.close();
+    check(sqlite3_close(holder.handle)==SQLITE_OK,"holder closes");holder.handle=nullptr;
+    std::filesystem::remove_all(path);
+  });
+}
 } // namespace
 void test_n47a() {
-  checks=0;scenarios=J::array();lifecycle_tests();integrity_tests();bounded_read_test();concurrent_test();
+  checks=0;scenarios=J::array();lifecycle_tests();integrity_tests();bounded_read_test();concurrent_test();startup_lock_test();
   std::cout<<"N47A evidence facts: "<<scenarios.size()<<" scenarios, "<<checks<<" checks passed\n";
 }
 #ifdef QBRAIN_FACT_STANDALONE

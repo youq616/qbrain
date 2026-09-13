@@ -1,5 +1,5 @@
 """Fail-closed N47A process evidence. Counts describe executed cases, not truth."""
-from test_fact_process import EXPECTED_CHECKS
+from test_fact_process import EXPECTED_CHECKS, EXPECTED_COMMAND_COUNT
 
 
 def require(ok, message):
@@ -23,7 +23,7 @@ def validate_report(r, *, source_commit, binary_sha256, script_sha256, native=Tr
             all(type(v) is int for v in counts.values()) and
             counts=={'total':len(names),'pass':len(names),'fail':0},'wrong fact totals')
     commands=r.get('commands')
-    require(isinstance(commands,list) and len(commands)==56,'incomplete fact command history')
+    require(isinstance(commands,list) and len(commands)==EXPECTED_COMMAND_COUNT,'incomplete fact command history')
     require(all(isinstance(c,dict) and type(c.get('exit_code')) is int and
                 type(c.get('expected_exit')) is int and c['expected_exit'] in (0,1) and
                 c['exit_code']==c['expected_exit'] for c in commands),'unexpected fact command exit')
@@ -43,13 +43,13 @@ def validate_unit_report(r, *, source_commit, binary_sha256, test_sha256,
             'wrong unit binary/test source')
     require(type(r.get('exit_code')) is int and r['exit_code']==0,'unit exit failed')
     rows=r.get('scenarios');require(isinstance(rows,list),'missing scenarios')
-    require(len(expected_scenarios)==14 and len(set(expected_scenarios))==14,'unexpected fact registry')
-    require(len(rows)==14 and all(isinstance(x,dict) for x in rows),'incomplete fact scenarios')
+    require(len(expected_scenarios)==15 and len(set(expected_scenarios))==15,'unexpected fact registry')
+    require(len(rows)==15 and all(isinstance(x,dict) for x in rows),'incomplete fact scenarios')
     require([x.get('name') for x in rows]==expected_scenarios,'wrong fact scenario order or names')
     require(all(x.get('status')=='PASS' and type(x.get('assertions')) is int and x['assertions']>0
                 for x in rows),'scenario failure or missing assertions')
     require(type(r.get('scenario_count')) is int and r['scenario_count']==len(rows),'scenario count mismatch')
-    require(type(r.get('checks')) is int and r['checks']>=366 and
+    require(type(r.get('checks')) is int and r['checks']>=380 and
             sum(x['assertions'] for x in rows)==r['checks'],'assertion counts mismatch')
     require(r.get('provider_calls') is False and 'error_type' not in r,'unit scope/status mismatch')
     return {'scenarios':len(rows),'assertions':r['checks']}
