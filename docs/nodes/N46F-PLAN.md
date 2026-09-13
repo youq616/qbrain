@@ -1,13 +1,17 @@
 # N46F — CJK literal recall, with endpoint-specific evidence
 
 Baseline: youq616/qbrain main 48a498bbf2ea14b39f1023cd1d67e30fb98848f9.
-Status: approved for the scoped implementation after N46F-PLAN-AUDIT.md.
+Status: done for scoped N46F after N46F-HARD-AUDIT.md; not whole-project or N47 completion.
+Tested source c665cb29cb44a6827670b8910b3d6adb568aa2c1; native run 34765651987.
 Only Windows-native Qbrain; not N47 and not a change to client credentials.
+The final HTTP design is N46F-SHARED-SESSION-PLAN.md; earlier pool-option ideas
+are retained as rejected history, not the shipped implementation.
 
-The owner relayed a local acceptance summary, not the raw issues/log archive.
-The summary attributes a Chinese memory_read miss to FTS5. Code review shows
-memory_read uses bound instr(lower(quote),lower(query)), not FTS5. Do not present
-that attribution as established. Reproduce both endpoints separately.
+Historical starting point: the owner relayed a local summary, not raw logs.
+That summary attributed a Chinese memory_read miss to FTS5. Code review showed
+memory_read uses bound instr(lower(quote),lower(query)), not FTS5. Subsequent
+source handoff and local reproduction established that the spaced query was
+not a contiguous substring. Ordinary page search, not memory_read, needed repair.
 
 Implementation: retain indexed SQLite FTS results first, then fill remaining
 slots with literal CJK-containing substring matches against title/body/slug.
@@ -35,6 +39,5 @@ when required jobs pass; do not modify existing release assets.
 Limitations: result count does not bound total SQLite rows examined. Literal
 CJK supplementation can scan pages in the selected source; no latency or ANN
 claim. No word segmentation, simplified/traditional conversion or semantic recall.
-Unknown original local query remains unverified without a minimal synthetic
-reproduction. Codex provider 401 is separate; do not read/change/test real keys.
+Codex provider 401 is separate; do not read/change/test real keys.
 Rollback is a source revert; stored data needs no downgrade.

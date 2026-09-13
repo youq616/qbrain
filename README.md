@@ -1,108 +1,90 @@
 # Qbrain
 
-Windows 原生 C++20 / PowerShell Agent 记忆与知识库。默认 SQLite + FTS5，不要求 Docker、WSL 或 Python 服务。由 `Lordakee/qbrain` 的 MIT 代码继续开发；gbrain / OpenViking 是设计参考，不是完整功能等价声明。
+Windows 原生 C++20 / PowerShell Agent 记忆与知识库，默认 SQLite + FTS5。
+不要求 Docker、WSL 或 Python 服务。由 `Lordakee/qbrain` 的 MIT 代码继续开发；
+gbrain / OpenViking 是设计参考，不是完整功能等价声明。
 
-## N46D：已验证的模型隔离与队列修复
+## 当前已验证开发版：N46F
 
-测试源码 `464045e2451ec71ca37dd8e92bcf4ac0d9325a0b`；[PR #9](https://github.com/youq616/qbrain/pull/9) 与
-[Windows 开发包和验证](https://github.com/youq616/qbrain/actions/runs/34682889565)。
-选择运行 Artifacts 中的 `qbrain-n44-windows-development-package`，以 MANIFEST
-源码 SHA 为准。内层 ZIP SHA-256：`4f43e91853602bd141822ad11650ddab9643a3471f8a86bd2c615ffb61c460ee`。
+**[下载 Windows x64 预览版](https://github.com/youq616/qbrain/releases/tag/cjk-preview-c665cb29)**，
+选择 `qbrain-windows-x64-cjk.zip`，完整解压。ZIP SHA-256：
+`d47918eb402692af9c3e4e332bf1f3faf0a86a71f49917dbc549fcf505bc217d`。
 
-大页面自动分批；已删除页面不再从待执行队列发送，过期片段响应不再误报成功；
-每个任务按实际提交计数。自动队列与通用队列共用实现，增加租约保护、批次回滚和
-有界锁等待。47个原生注册组、40个队列场景/776项断言及原有流程通过。
+实际测试源码：`c665cb29cb44a6827670b8910b3d6adb568aa2c1`。
+[完整原生验证与发布运行](https://github.com/youq616/qbrain/actions/runs/34765651987)
+已成功结束；[PR #12](https://github.com/youq616/qbrain/pull/12) 的实时状态决定合并状态。
+后续文档提交不改变经过验证的 EXE 和脚本字节。旧内部版本号不足以识别修复范围，
+以包内 MANIFEST、源码 SHA 和外部固定摘要为准。历史 `dist/` 不是本批产物。
 
-包未签名；不迁移脑库、不自动重新生成旧向量或开启外发权限。已有数据先备份。
-外部审核已由用户明确授权的工程自审替代，不冒称第三方审核。真实付费模型、PG、
-登录Win11宿主与全项目完成仍未验收。[验收及限制](docs/nodes/N46D-QUEUE-HARD-AUDIT.md)。
-以下为历史版本记录；它们的旧包不包含全部队列修复。
+本轮普通 search 增加中文、假名、韩文连续字串补充，保留全文优先、来源隔离、
+删除过滤、去重和稳定排序。memory_read 仍读取经过提取的连续原文字串，不是语义
+问答；它的算法没有改变。新增 72 项 CJK 单元和 36 项真实 CLI/MCP 检查通过。
 
-## N46C：已验证的精确检索优化
+HTTP 最终改用一个不可变共享会话，连接、认证头、正文、回调和时限逐请求隔离；
+父对象保留至最终回调。Server 2022 和 Server 2025 的 HTTP 81 项检查及固定取消
+对照通过。没有提高句柄增长阈值或关闭 TLS 验证；系统代理变更后须重启进程。
 
-测试源码 `728c2502ff66cedae218722458cac47f957236fc`；[PR #7](https://github.com/youq616/qbrain/pull/7) 与
-[Windows 原生验证及开发包](https://github.com/youq616/qbrain/actions/runs/34661114802)。
-在该运行的 Artifacts 选择 `qbrain-n44-windows-development-package`；名称沿用 N44，
-以包内 MANIFEST 的源码 SHA 为准。CI Artifact 保留 14 天，不是永久 Release。
+完整 Windows 48 个注册组、原有记忆/MCP/Hook/上下文/Embedding、40 个队列场景
+和双 PowerShell 门槛通过。真实 PostgreSQL DSN 用例明确跳过，不计作 PG 验收。
+交付回读完成 87 项检查，发布任务核验了上传后字节。包仍未签名。
 
-保留完整向量扫描与精确排序，同时把候选保留改为有界 Top-K；反向链接评分改为
-来源隔离的批量计数，不读取链接正文。没有数据库迁移、新服务、缓存、ANN 或外发许可变更。
-46 个原生注册回归组、51 项 HTTP 检查及原有记忆/MCP/Hook/两版 PowerShell 全部通过。
+[当前项目状态](CURRENT-STATUS.md) · [工程复核](docs/nodes/N46F-HARD-AUDIT.md) ·
+[机器可读证据](docs/nodes/n46f-evidence/SUMMARY.json) ·
+[中文检索语义与免编译专项复测](docs/integration/CJK-RECALL.zh-CN.md)
 
-Windows 合成基准（2,000 页、16,000 片段、64 维、K=50）：候选保留由16,000条
-片段记录变为最多50个页面；向量阶段7轮中位数 45.74→12.80ms；反向链接SQL
-554→6次，结果与旧版完全一致。
-这不是整个进程内存、实际模型召回正确率或Agent总延迟/费用的改善承诺。
+## 已有能力与边界
 
-开发ZIP SHA-256：`1f25ebbed82051f9f824485d92ea6b4a63871993b6a24cfe05780ad1feb9507b`。包未签名。
-[逐项验收及失败诊断](docs/nodes/N46C-HARD-AUDIT.md) ·
-[原始数值与交付清单](docs/nodes/n46c-evidence/RESULT.json)。真实Win11登录宿主、
-PostgreSQL对等、语义质量与付费费用仍未完成。以下N46B和旧Release为历史交付记录。
+会话归档和有原文证据的记忆；采集开关、来源隔离、重试去重、遗忘防恢复；
+Claude/Codex 项目级 Hooks、可撤销安装；L0/L1 摘录和单独许可的可选摘要；
+L2 原文分页、缓存失效、六工具 MCP；精确有界向量候选、模型标签隔离、
+可靠的批量 Embedding 队列、过期结果拒绝和有界锁等待。
 
-## N46B 历史已验证代码：Windows 模型传输优化
-
-测试源码 `2661e5205ba480c993210405d35c463efd8c6b6c`；
-[PR #6](https://github.com/youq616/qbrain/pull/6) 和
-[完整原生验证与开发包](https://github.com/youq616/qbrain/actions/runs/34626277700)。
-在该运行的 Artifacts 中选择 `qbrain-n44-windows-development-package`；外层归档中
-包含 `qbrain-windows-x64-development.zip` 和校验文件。Artifact 名称沿用 N44，但
-来源与 MANIFEST 必须是上述 N46B 提交。CI Artifact 保留期为 14 天，不是永久 Release。
-
-本轮修复整次网络请求截止时间、超大响应、半截结果、自动重定向和取消后的缓冲区
-生命周期；45 个原生回归组、51 项原生网络检查，以及原有记忆/MCP/Hook/两版
-PowerShell 验收全部通过。内层开发 ZIP SHA-256：
-`750b5835ad4c924365ba052aef2ed2e7482e0033558cdf84bf15db6b724f160b`。
-
-[本轮验收](docs/nodes/N46B-HARD-AUDIT.md) ·
-[机器可读结果](docs/nodes/n46b-evidence/RESULT.json) ·
-[升级兼容性](docs/integration/N46B-UPGRADE.zh-CN.md)。
-开发包未签名；真实登录 Win11 Agent、付费模型质量/费用及 PostgreSQL 对等没有在
-本轮完成。未改变采集、模型外发许可或数据库格式。
-
-## 历史永久预览包：不包含 N46B 修复
-
-**[下载 Windows x64 记忆预览版](https://github.com/youq616/qbrain/releases/tag/memory-preview-5ee79dfd)**。选择 `qbrain-windows-x64-memory-preview.zip`，完整解压后阅读中文说明。该包未签名，ZIP SHA-256 为 `fa106efa7066264c177c31f856d22828d750602ad953390088041d656d38296c`。原始 Windows 验证日志、校验值和来源信息同时发布。
-
-- [PR #4：自动记忆接入、目录上下文、精简 MCP](https://github.com/youq616/qbrain/pull/4)
-- [Windows 完整验证](https://github.com/youq616/qbrain/actions/runs/34616855167)
-- [中文安装与卸载](docs/integration/QUICKSTART.zh-CN.md)
-- [命令与行为边界](docs/integration/WINDOWS-MEMORY.md)
-- [机器可读验证结果](docs/nodes/n44-evidence/RESULT.json)
-- [剩余全盘优化路线](https://github.com/youq616/qbrain/issues/2)
-
-测试对应源码 `5ee79dfd5ab2512f024fefc9054bd3da12d64f1f`。后续审核/文档修订不改变该次验证的二进制；预览包用 MANIFEST 和源码 SHA 标识，不凭旧的内部版本号判断新旧。
-
-已实现：会话归档与有原文证据的记忆、自动采集开关、来源隔离、重试去重、遗忘防恢复；Claude/Codex 项目级 Hooks 和可撤销安装；L0/L1 摘录与可选模型摘要、L2 原文分页、缓存失效；六工具 MCP 模式与有限批处理。
-
-**开发预览，不是“全盘优化已完成”。** 本批通过真实 Qbrain 进程的宿主事件重放，不是登录 Claude/Codex 后的模型回答质量验收。默认提取是保守规则，默认摘要是原文摘录。新记忆和上下文模块仅支持 SQLite。没有 Cursor 自动安装器、完整 gbrain 对等、ANN 或实际 token/费用节省保证。
+**可试用的开发预览，不是全盘开发完成。** N47 事实图和语义冲突处理仍待实现。
+新 memory/context 目前仅 SQLite。真实模型质量/费用、全应用 ACL/DLP、
+Codex 登录宿主闭环、Win11 正式验收和签名发行没有由本轮完成。
+合成事件、有限取消样本和字节/速度基准不是全场景质量或零泄漏保证。
 
 ## 使用与数据
 
-从匹配的已验证开发包完整解压；执行其中的 PowerShell 安装器，不要使用历史 `dist/` 文件。安装默认只召回，`-EnableCapture` 明确开启该项目的本地采集。外发模型许可和 MCP 写权限不会自动开启。
+升级前备份已有脑库；完整解压同一个开发包，使用其中的安装器。
+安装默认只召回，`-EnableCapture` 单独开启该项目本地采集；不会自动开启
+Qbrain 模型外发或 MCP 写权限。客户端项目/Hook 信任仍须正常确认。
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-QbrainMemory.ps1 -HostName Claude -ProjectPath "D:\Projects\MyProject" -Binary ".\qbrain.exe" -EnableCapture
 ```
 
-Codex 将 `-HostName Claude` 改为 `-HostName Codex`。客户端的项目/Hook 信任确认仍由用户审核，安装器不绕过。默认数据位于 `%LOCALAPPDATA%\Qbrain\`，不上传真实会话、数据库或密钥到仓库。试用已有脑库前备份；卸载保留记忆与备份。
-
-## 早期记忆预览版验证（N44/N45/N46A）
-
-Windows/MSVC 完整应用构建通过；44 个注册回归组全部报告通过，其中需要真实 PostgreSQL DSN 的用例明确跳过，不能计作 PG 验收。真实进程 memory 44、MCP 17、Hooks 69、context 65、项目本地配置 6 项通过。PowerShell 5.1/7 各安装 69、采集许可/路径 16、字节传输 8 项通过。GCC 可移植 CI 通过；另完成 C++ 记忆与上下文的 ASan/UBSan 检查。
-
-完整日志、范围和失败修复见 [开发状态](docs/integration/DEVELOPMENT-STATUS.md) 与 [操作增量台账](docs/OPS-PARITY-DELTA-N44.md)。合成测试中的工具定义字节量由 30,224 降为 2,600；不代表实际 token 或账单下降相同比例。
+Codex 使用 `-HostName Codex`，实际版本和认证/Hook 行为需单独验收。
+默认数据位于 `%LOCALAPPDATA%\Qbrain\`；卸载保留记忆与备份。
+不上传真实会话、数据库或密钥。不要用固定旧 464045e2 摘要的 N46E 工具装载新包。
+[中文安装与卸载](docs/integration/QUICKSTART.zh-CN.md) ·
+[完整行为说明](docs/integration/WINDOWS-MEMORY.md) ·
+[本地 Agent 单提示词交接规范](LOCAL-AGENT-HANDOFF.md)
 
 ## 从源码构建
 
-在隔离的 Windows 开发环境，准备 MSVC Build Tools 后：
+准备 Windows MSVC Build Tools，在仓库目录执行：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-cl.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-tests-cl.ps1 -SkipProductionBuild
 ```
 
-仅在生产构建成功且源码未变时使用 `-SkipProductionBuild`。CI 的 Python 是测试/打包工具，不是产品依赖。历史 `dist/` 产物并非本批重建，不能代替本批包。
+仅在同轮生产构建成功且源码未变时跳过再次生产构建。CI 的 Python 是测试/打包
+工具，不是产品必需服务。运行已验证的开发包不要求本机安装编译器。
+
+## 历史交付与路线
+
+历史报告和失败证据保留，不回写为新版本通过：
+[N46D 队列修复](docs/nodes/N46D-QUEUE-HARD-AUDIT.md)、
+[N46C 精确检索](docs/nodes/N46C-HARD-AUDIT.md)、
+[N46B HTTP 边界](docs/nodes/N46B-HARD-AUDIT.md)、
+[N44/N45 早期记录](docs/integration/DEVELOPMENT-STATUS.md)。
+[Issue #2](https://github.com/youq616/qbrain/issues/2) 保持开放。
+旧 `memory-preview-5ee79dfd` 和 `local-acceptance-n46e-v1` 不包含 N46F 修复。
 
 ## 许可
 
-MIT；保留 [LICENSE](LICENSE) 与 [第三方许可说明](THIRD-PARTY-NOTICES.md)。默认本地运行不代表开启外部模型之后资料仍完全不外发。
+MIT；保留 [LICENSE](LICENSE) 和 [第三方许可说明](THIRD-PARTY-NOTICES.md)。
+默认本地运行不表示开启外部模型后资料仍不外发。评审按所有者授权为工程自审，
+不冒称第三方独立审核。
