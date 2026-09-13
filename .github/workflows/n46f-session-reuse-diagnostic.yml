@@ -1,0 +1,97 @@
+name: N46F session reuse diagnosis
+on:
+  push:
+    branches: ['verification/n46f-server2022-pool']
+    paths: ['.github/workflows/n46f-session-reuse-diagnostic.yml']
+permissions:
+  contents: read
+jobs:
+  observe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: dcf8d45eaf83cc8090d527489a4944efccb5bddd
+          persist-credentials: false
+      - name: Compile isolated shared-session and original controls
+        shell: python
+        run: |
+          from pathlib import Path
+          import os,hashlib,json,subprocess
+          root=Path.cwd();out=Path(os.environ['RUNNER_TEMP'])/'qbrain-session-diagnostic';out.mkdir()
+          original=(root/'src/qbrain/ai/http_client.cpp').read_text(encoding='utf-8')
+          code=original
+          changes=[('  InternetHandle session;','  std::shared_ptr<InternetHandle> session;'),
+            ('!state->session.value','(!state->session || !state->session->value)'),
+            ('  InternetHandle session(WinHttpOpen(agent.c_str(), WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,\n      WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC));','  static const auto session = std::make_shared<InternetHandle>(WinHttpOpen(agent.c_str(), WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,\n      WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC));'),
+            ('  if (!WinHttpSetTimeouts(session.value, timeout_ms, timeout_ms, timeout_ms, timeout_ms))\n    return network_error(GetLastError());\n',''),
+            ('  state->session.value = std::exchange(session.value, nullptr);','  state->session = session;'),
+            ('  if (!request.value) return network_error(GetLastError());','  if (!request.value) return network_error(GetLastError());\n  if (!WinHttpSetTimeouts(request.value, timeout_ms, timeout_ms, timeout_ms, timeout_ms)) return network_error(GetLastError());')]
+          for old,new in changes:
+              assert code.count(old)==1,(old,code.count(old))
+              code=code.replace(old,new)
+          code=code.replace('session.value','session->value')
+          (out/'original.cpp').write_text(original,encoding='utf-8')
+          (out/'shared.cpp').write_text(code,encoding='utf-8')
+          (out/'probe.cpp').write_bytes((root/'tests/http_lifecycle_probe.cpp').read_bytes())
+          cmake='cmake_minimum_required(VERSION 3.24)\nproject(sessiondiag LANGUAGES CXX)\nset(CMAKE_CXX_STANDARD 20)\nadd_compile_options(/utf-8 /EHsc)\n'
+          for name in ('original','shared'):
+              cmake+=f'add_executable({name} probe.cpp {name}.cpp)\ntarget_compile_definitions({name} PRIVATE QBRAIN_HTTP_DIAGNOSTICS=1 NOMINMAX)\n'
+              cmake+=f'target_include_directories({name} PRIVATE "{root.as_posix()}/include" "{root.as_posix()}/third_party")\ntarget_link_libraries({name} PRIVATE winhttp)\n'
+          (out/'CMakeLists.txt').write_text(cmake,encoding='utf-8')
+          subprocess.run(['cmake','-S',str(out),'-B',str(out/'build')],check=True)
+          subprocess.run(['cmake','--build',str(out/'build'),'--config','Release','--parallel','2'],check=True)
+          (out/'source.json').write_text(json.dumps({'base':'dcf8d45eaf83cc8090d527489a4944efccb5bddd','product_acceptance':False,'hashes':{n:hashlib.sha256((out/n).read_bytes()).hexdigest() for n in ('original.cpp','shared.cpp','probe.cpp','CMakeLists.txt')}},indent=2),encoding='utf-8')
+      - name: Record the predetermined schedule
+        shell: python
+        run: |
+          import json,os,subprocess,threading,platform
+          from pathlib import Path
+          from concurrent.futures import ThreadPoolExecutor
+          from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
+          root=Path(os.environ['RUNNER_TEMP'])/'qbrain-session-diagnostic';stop=threading.Event()
+          class Fixture(BaseHTTPRequestHandler):
+              protocol_version='HTTP/1.1'
+              def log_message(self,*args):pass
+              def handle(self):
+                  try:super().handle()
+                  except OSError:self.close_connection=True
+              def do_POST(self):
+                  self.rfile.read(int(self.headers.get('Content-Length','0')))
+                  self.send_response(200);self.send_header('Transfer-Encoding','chunked');self.end_headers()
+                  stop.wait(1.5);self.close_connection=True
+          server=ThreadingHTTPServer(('127.0.0.1',0),Fixture);server.daemon_threads=True
+          threading.Thread(target=server.serve_forever,daemon=True).start()
+          report={'status':'INCOMPLETE_DIAGNOSTIC','platform':platform.platform(),'variants':{},'product_acceptance':False}
+          try:
+              for label,name in [('original','original'),('shared','shared'),('shared_repeat','shared')]:
+                  p=subprocess.Popen([str(root/f'build/Release/{name}.exe')],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8')
+                  reader=ThreadPoolExecutor(max_workers=1);rows=[];report['variants'][label]=rows
+                  try:
+                      for n in range(8):
+                          p.stdin.write(json.dumps({'base':f'http://127.0.0.1:{server.server_port}','count':32})+'\n');p.stdin.flush()
+                          row=json.loads(reader.submit(p.stdout.readline).result(timeout=15));rows.append(row)
+                          print(json.dumps({'variant':label,'round':n+1,**row}),flush=True)
+                      p.stdin.close();p.wait(timeout=5);assert p.returncode==0
+                  finally:
+                      if not p.stdin.closed:p.stdin.close()
+                      try:p.wait(timeout=5)
+                      except subprocess.TimeoutExpired:p.kill();p.wait(timeout=5)
+                      reader.shutdown(wait=True,cancel_futures=True)
+              report['status']='OBSERVED_NOT_ACCEPTANCE'
+          finally:
+              stop.set();server.shutdown();server.server_close()
+              (root/'observations.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: n46f-session-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/qbrain-session-diagnostic/observations.json
+            ${{ runner.temp }}/qbrain-session-diagnostic/source.json
+          retention-days: 14
