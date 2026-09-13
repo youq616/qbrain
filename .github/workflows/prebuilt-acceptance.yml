@@ -1,0 +1,62 @@
+name: Pinned prebuilt acceptance helper
+on:
+  push:
+    branches: ['optimization/n46e-prebuilt-acceptance', 'main']
+    paths: ['scripts/prebuilt_acceptance.py', 'scripts/Start-QbrainPrebuiltAcceptance.ps1', 'tests/test_prebuilt_acceptance.py', '.github/workflows/prebuilt-acceptance.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  helper:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify helper failure and isolation contracts
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -m unittest discover -s tests -p test_prebuilt_acceptance.py -v
+      - name: Read the exact previously verified artifact, never latest
+        if: runner.os == 'Windows'
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          from pathlib import Path
+          import hashlib, io, os, subprocess, zipfile
+          root = Path(os.environ['RUNNER_TEMP']) / 'qbrain-prebuilt-ci'
+          root.mkdir()
+          outer = root / 'artifact.zip'
+          with outer.open('wb') as out:
+              subprocess.run(['gh', 'api', 'repos/youq616/qbrain/actions/artifacts/10294432906/zip'], stdout=out, check=True, timeout=90)
+          data = outer.read_bytes()
+          assert hashlib.sha256(data).hexdigest() == '93cf0c7b64d0eb0d7ef8646802776cbda5c7ab1f1d5d26a42ff1b6a285defa60'
+          with zipfile.ZipFile(io.BytesIO(data)) as z:
+              (root / 'package.zip').write_bytes(z.read('qbrain-windows-x64-development.zip'))
+      - name: Execute the pinned binary without invoking any compiler
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $base = Join-Path $env:RUNNER_TEMP 'qbrain-prebuilt-ci'
+          python scripts/prebuilt_acceptance.py --package "$base/package.zip" --output "$base/native" --run-smoke
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-QbrainPrebuiltAcceptance.ps1 -Package "$base/package.zip" -OutputDirectory "$base/ps51"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File scripts/Start-QbrainPrebuiltAcceptance.ps1 -Package "$base/package.zip" -OutputDirectory "$base/ps7"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && runner.os == 'Windows'
+        with:
+          name: qbrain-prebuilt-acceptance-evidence
+          path: |
+            ${{ runner.temp }}/qbrain-prebuilt-ci/native/summary.json
+            ${{ runner.temp }}/qbrain-prebuilt-ci/native/logs/
+            ${{ runner.temp }}/qbrain-prebuilt-ci/ps51/summary.json
+            ${{ runner.temp }}/qbrain-prebuilt-ci/ps7/summary.json
+          retention-days: 14
