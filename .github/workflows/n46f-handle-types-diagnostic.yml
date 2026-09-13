@@ -1,0 +1,74 @@
+name: N46F aggregate handle type diagnosis
+on:
+  push:
+    branches: ['verification/n46f-server2022-pool']
+    paths: ['.github/workflows/n46f-handle-types-diagnostic.yml']
+permissions:
+  contents: read
+jobs:
+  observe:
+    strategy:
+      matrix:
+        os: [windows-2022, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: dcf8d45eaf83cc8090d527489a4944efccb5bddd
+          persist-credentials: false
+      - name: Add aggregate-only inspection to the diagnostic driver
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib,json
+          p=Path('tests/http_lifecycle_probe.cpp')
+          code=p.read_text(encoding='utf-8')
+          helper=r'''
+          #include <processsnapshot.h>
+          struct SnapshotOwner { HPSS value=nullptr; ~SnapshotOwner(){if(value) PssFreeSnapshot(GetCurrentProcess(),value);} };
+          struct MarkerOwner { HPSSWALK value=nullptr; ~MarkerOwner(){if(value) PssWalkMarkerFree(value);} };
+          nlohmann::json handle_types() {
+            SnapshotOwner snapshot; MarkerOwner marker;
+            const auto flags=static_cast<PSS_CAPTURE_FLAGS>(PSS_CAPTURE_HANDLES | PSS_CAPTURE_HANDLE_NAME_INFORMATION);
+            if(PssCaptureSnapshot(GetCurrentProcess(),flags,0,&snapshot.value)!=ERROR_SUCCESS) throw std::runtime_error("PSS capture failed");
+            if(PssWalkMarkerCreate(nullptr,&marker.value)!=ERROR_SUCCESS) throw std::runtime_error("PSS marker failed");
+            nlohmann::json out=nlohmann::json::object();
+            PSS_HANDLE_ENTRY entry{};
+            for (;;) {
+              const DWORD result=PssWalkSnapshot(snapshot.value,PSS_WALK_HANDLES,marker.value,&entry,sizeof(entry));
+              if(result==ERROR_NO_MORE_ITEMS) break;
+              if(result!=ERROR_SUCCESS) throw std::runtime_error("PSS walk failed");
+              std::string type="unknown";
+              if(entry.TypeName && entry.TypeNameLength) {
+                type.clear();
+                for(unsigned i=0;i<entry.TypeNameLength/sizeof(wchar_t);++i) type += entry.TypeName[i]<128 ? char(entry.TypeName[i]) : '?';
+              }
+              // Do not read or log ObjectName, handle values, or process memory.
+              out[type]=out.value(type,0)+1;
+            }
+            return out;
+          }
+          '''
+          code=code.replace('#include <windows.h>','#include <windows.h>\n'+helper)
+          old='{{"timeout_count",timeout_count}'
+          assert code.count(old)==1
+          code=code.replace(old,'{{"handle_types",handle_types()},{"timeout_count",timeout_count}')
+          p.write_text(code,encoding='utf-8')
+          Path('evidence').mkdir()
+          Path('evidence/diagnostic-source.json').write_text(json.dumps({'base':'dcf8d45eaf83cc8090d527489a4944efccb5bddd','modified_probe_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'product_code_unchanged':True,'product_acceptance':False}),encoding='utf-8')
+      - name: Compile and observe the original fixed schedule
+        shell: pwsh
+        run: |
+          cmake -S tests/http_lifecycle -B build/types
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/types --config Release --parallel 2 2>&1 | Tee-Object evidence/build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_http_lifecycle.py --probe build/types/Release/qbrain_http_lifecycle_current.exe --baseline build/types/Release/qbrain_http_lifecycle_legacy.exe --report evidence/type-observations.json 2>&1 | Tee-Object evidence/observations.log
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: n46f-handle-types-${{ matrix.os }}
+          path: evidence/
+          retention-days: 14
