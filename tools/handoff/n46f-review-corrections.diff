@@ -1,0 +1,316 @@
+diff --git a/.ci/package_n44_development.py b/.ci/package_n44_development.py
+index 952300a4fd294d9f04570a5ae8ee1e8648a9f2a8..994cd83dfa4a638698eb19dfcc934fa7912a169b 100644
+--- a/.ci/package_n44_development.py
++++ b/.ci/package_n44_development.py
+@@ -9,2 +9,3 @@ import sys
+ from validate_native_log import verified_groups
++from validate_cjk_report import validate_report
+ import tempfile
+@@ -14,4 +15,4 @@ root=Path.cwd();e=root/'evidence'
+ def read(name): return (e/name).read_text(encoding='utf-8-sig')
+-# N46D requires all 47 named groups; retain the historical validator default.
+-expected=verified_groups((root/'tests/test_main.cpp').read_text(),read('regression.log'),expected_count=47)
++# N46F requires all 48 named groups; retain the historical validator default.
++expected=verified_groups((root/'tests/test_main.cpp').read_text(),read('regression.log'),expected_count=48)
+ with (e/'evidence-gate-tests.log').open('wb') as log:
+@@ -65,8 +66,9 @@ for mode in ('automatic','generic'):
+ cjk_report=json.loads(read('cjk-recall.json'))
+-assert cjk_report['result']=='PASS'
+-assert cjk_report['source_commit']==commit and cjk_report['check_count']==len(cjk_report['checks'])
+-assert all(c['status']=='PASS' for c in cjk_report['checks'])
+ cjk_binary=root/'build/cl/qbrain.exe'
+-assert cjk_report['binary_sha256']==hashlib.sha256(cjk_binary.read_bytes()).hexdigest()
+-assert cjk_report['script_sha256']==hashlib.sha256((root/'.ci/test_cjk_recall.py').read_bytes()).hexdigest()
++validate_report(cjk_report, source_commit=commit,
++                binary_sha256=hashlib.sha256(cjk_binary.read_bytes()).hexdigest(),
++                script_sha256=hashlib.sha256((root/'.ci/test_cjk_recall.py').read_bytes()).hexdigest())
++with (e/'cjk-report-gate-tests.log').open('wb') as log:
++    subprocess.run([sys.executable,'.ci/test_cjk_report.py'], stdout=log, stderr=subprocess.STDOUT, check=True)
++
+ 
+ diff --git a/.ci/test_cjk_recall.py b/.ci/test_cjk_recall.py
+index ee167377a53e9a72c8740666d3aefa2329f00c3d..9603c5789ef501afb4cd97707f329fe2ad37159c 100644
+--- a/.ci/test_cjk_recall.py
++++ b/.ci/test_cjk_recall.py
+@@ -9,2 +9,3 @@ from __future__ import annotations
+ import argparse
++from collections import Counter
+ import hashlib
+@@ -26,6 +27,28 @@ class CheckFailure(AssertionError):
+ 
+-def run(args: argparse.Namespace) -> dict:
++def status_counts(checks: list[dict]) -> dict:
++    counts = Counter(item["status"] for item in checks)
++    if set(counts) - {"PASS", "FAIL"}:
++        raise ValueError("Unexpected CJK check status")
++    return {"total": len(checks), "pass": counts["PASS"], "fail": counts["FAIL"]}
++
++
++def add_source_provenance(report: dict, script: Path) -> None:
++    try:
++        head = subprocess.check_output(["git", "rev-parse", "HEAD"],
++                                       cwd=script.parent.parent, text=True,
++                                       stderr=subprocess.DEVNULL).strip()
++        clean = subprocess.run(["git", "diff", "--quiet", "HEAD", "--"],
++                               cwd=script.parent.parent, stderr=subprocess.DEVNULL).returncode == 0
++        report.update(source_commit=head if clean else None, head_commit=head,
++                      tracked_tree_clean=clean)
++    except (OSError, subprocess.SubprocessError):
++        report.update(source_commit=None, head_commit=None, tracked_tree_clean=False)
++
++
++def run(args: argparse.Namespace, checks: list[dict] | None = None,
++        commands: list[dict] | None = None) -> dict:
+     binary = args.binary.resolve()
+     script = Path(__file__).resolve()
+-    checks: list[dict] = []
++    checks = [] if checks is None else checks
++    commands = [] if commands is None else commands
+ 
+@@ -48,5 +71,12 @@ def run(args: argparse.Namespace) -> dict:
+         def process(arguments: list[str], payload: bytes | None = None):
+-            return subprocess.run([str(binary), *arguments], input=payload,
+-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+-                                  cwd=root, env=env, timeout=60, check=False)
++            try:
++                result = subprocess.run([str(binary), *arguments], input=payload,
++                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
++                                        cwd=root, env=env, timeout=60, check=False)
++            except (OSError, subprocess.TimeoutExpired) as error:
++                commands.append({"arguments": arguments, "exit_code": None,
++                                 "error_type": type(error).__name__})
++                raise
++            commands.append({"arguments": arguments, "exit_code": result.returncode})
++            return result
+ 
+@@ -204,3 +234,4 @@ def run(args: argparse.Namespace) -> dict:
+ 
+-        check("ascii_fts_still_works", any(h["slug"] == "cjk-fixture"
++        put("ascii-token", "ASCII fixture", "QBCJKfixture")
++        check("ascii_fts_still_works", any(h["slug"] == "ascii-token"
+                                            for h in search("QBCJKfixture")),
+@@ -214,2 +245,4 @@ def run(args: argparse.Namespace) -> dict:
+         put("order-new", "顺序新", "顺序检查包含日志前缀的新页面")
++        sql("UPDATE pages SET updated_at=? WHERE source_id='default' AND slug=?", ("2026-01-01 00:00:00", "order-old"))
++        sql("UPDATE pages SET updated_at=? WHERE source_id='default' AND slug=?", ("2026-01-02 00:00:00", "order-new"))
+         ordered = [h["slug"] for h in search("日志前缀") if h["slug"].startswith("order-")]
+@@ -219,3 +252,3 @@ def run(args: argparse.Namespace) -> dict:
+         check("search_limit", len(search("日志前缀", limit=1)) == 1, "search limit=1 生效")
+-        long_quote = "超长原话" + "详" * 1200 + "日志前缀结束"
++        long_quote = "我偏好超长原话" + "详" * 1200 + "日志前缀结束"
+         cap = {"session_id": "n46f-long", "fragment_id": "f2",
+@@ -270,10 +303,5 @@ def run(args: argparse.Namespace) -> dict:
+         "check_count": len(checks),
+-        "counts": {"total": len(checks), "pass": len(checks)},
++        "counts": status_counts(checks), "commands": commands,
+     }
+-    try:
+-        report["source_commit"] = subprocess.check_output(
+-            ["git", "rev-parse", "HEAD"], cwd=script.parent.parent,
+-            text=True, stderr=subprocess.DEVNULL).strip()
+-    except Exception:
+-        report["source_commit"] = None
++    add_source_provenance(report, script)
+     return report
+@@ -286,8 +314,14 @@ def main() -> int:
+     args = parser.parse_args()
++    checks: list[dict] = []
++    commands: list[dict] = []
+     try:
+-        report = run(args)
++        report = run(args, checks, commands)
+         failed = 0
+-    except CheckFailure as failure:
++    except (AssertionError, OSError, ValueError, KeyError, TypeError,
++            subprocess.SubprocessError) as failure:
+         failed = 1
+-        partial = getattr(failure, "partial_checks", [])
++        if not checks or checks[-1]["status"] != "FAIL":
++            checks.append({"name": "execution_error", "status": "FAIL",
++                           "detail": type(failure).__name__})
++        partial = checks
+         report = {
+@@ -295,3 +329,4 @@ def main() -> int:
+             "binary": str(args.binary.resolve()),
+-            "binary_sha256": hashlib.sha256(args.binary.resolve().read_bytes()).hexdigest(),
++            "binary_sha256": (hashlib.sha256(args.binary.read_bytes()).hexdigest()
++                              if args.binary.is_file() else None),
+             "script_sha256": hashlib.sha256(Path(__file__).resolve().read_bytes()).hexdigest(),
+@@ -299,10 +334,5 @@ def main() -> int:
+             "check_count": len(partial),
+-            "counts": {"total": len(partial), "pass": len(partial)},
++            "counts": status_counts(partial), "commands": commands,
+         }
+-        try:
+-            report["source_commit"] = subprocess.check_output(
+-                ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent.parent,
+-                text=True, stderr=subprocess.DEVNULL).strip()
+-        except Exception:
+-            report["source_commit"] = None
++        add_source_provenance(report, Path(__file__).resolve())
+         print(f"N46F CJK recall FAILED: {failure}", file=sys.stderr)
+diff --git a/.ci/test_cjk_report.py b/.ci/test_cjk_report.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..63cf7a6f91cb0c8f406a671768ca798e9540c448
+--- /dev/null
++++ b/.ci/test_cjk_report.py
+@@ -0,0 +1,72 @@
++import copy
++import json
++from pathlib import Path
++from types import SimpleNamespace
++import tempfile
++import unittest
++from unittest.mock import patch
++
++import test_cjk_recall as suite
++from validate_cjk_report import EXPECTED_CHECKS, validate_report
++
++
++class CjkReportTests(unittest.TestCase):
++    def fixture(self):
++        checks = [{"name": name, "status": "PASS"} for name in sorted(EXPECTED_CHECKS)]
++        return dict(result="PASS", checks=checks, check_count=len(checks),
++                    counts=suite.status_counts(checks), source_commit="source",
++                    binary_sha256="binary", script_sha256="script",
++                    commands=[{"exit_code": 0}])
++
++    def validate(self, report):
++        return validate_report(report, source_commit="source", binary_sha256="binary", script_sha256="script")
++
++    def test_valid_complete(self):
++        self.validate(self.fixture())
++
++    def test_failure_count_is_not_pass(self):
++        checks = [{"status": "PASS"}] * 5 + [{"status": "FAIL"}]
++        self.assertEqual(suite.status_counts(checks), {"total": 6, "pass": 5, "fail": 1})
++
++    def test_empty_cannot_certify(self):
++        report = self.fixture()
++        report.update(checks=[], check_count=0, counts={"total": 0, "pass": 0, "fail": 0})
++        with self.assertRaises(ValueError): self.validate(report)
++
++    def test_missing_duplicate_wrong_counts(self):
++        for kind in ("missing", "duplicate", "counts", "failure"):
++            report = self.fixture()
++            if kind == "missing": report["checks"].pop()
++            elif kind == "duplicate": report["checks"][0] = report["checks"][1].copy()
++            elif kind == "counts": report["counts"]["pass"] += 1
++            else: report["checks"][0]["status"] = "FAIL"
++            with self.subTest(kind=kind), self.assertRaises(ValueError): self.validate(report)
++
++    def test_each_provenance_must_match(self):
++        for key in ("source_commit", "binary_sha256", "script_sha256"):
++            report = self.fixture(); report[key] = "different"
++            with self.subTest(key=key), self.assertRaises(ValueError): self.validate(report)
++
++    def test_failed_or_absent_command(self):
++        for commands in ([], [{"exit_code": 1}], [{"exit_code": None}], [{"exit_code": False}]):
++            report = self.fixture(); report["commands"] = commands
++            with self.assertRaises(ValueError): self.validate(report)
++
++    def test_exception_preserves_prior_checks(self):
++        with tempfile.TemporaryDirectory() as d:
++            binary, output = Path(d) / "fake", Path(d) / "result.json"
++            binary.write_bytes(b"not executed")
++            def fail(args, checks, commands):
++                checks.extend([{"name": "earlier", "status": "PASS", "detail": "synthetic completed check"}])
++                commands.append({"exit_code": 7})
++                raise suite.CheckFailure("synthetic failure")
++            with patch.object(suite, "run", side_effect=fail), patch("sys.argv", [
++                    "test", "--binary", str(binary), "--report", str(output)]):
++                self.assertEqual(suite.main(), 1)
++            result = json.loads(output.read_text())
++            self.assertEqual(result["counts"], {"total": 2, "pass": 1, "fail": 1})
++            self.assertEqual(result["commands"], [{"exit_code": 7}])
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/.ci/test_validate_native_log.py b/.ci/test_validate_native_log.py
+index c8b5c262d3fbf122469d568e78b47f632e51f1ec..2e5d762781537fa8ffd835bc738a0841029cb300 100644
+--- a/.ci/test_validate_native_log.py
++++ b/.ci/test_validate_native_log.py
+@@ -33,3 +33,3 @@ class NativeEvidenceTests(unittest.TestCase):
+         names = re.findall(r'\{"([^"\r\n]+)",\s*test_\w+\}', source)
+-        self.assertEqual(len(names), 47)
++        self.assertEqual(len(names), 48)
+         self.assertIn('n46b_http', names)
+@@ -37,6 +37,7 @@ class NativeEvidenceTests(unittest.TestCase):
+         self.assertIn('n46d_embedding', names)
++        self.assertIn('n46f_cjk_literal', names)
+         log = ''.join('[PASS] ' + name + '\n' for name in names)
+-        self.assertEqual(verified_groups(source, log, 47), names)
++        self.assertEqual(verified_groups(source, log, 48), names)
+         with self.assertRaises(ValueError):
+-            verified_groups(source, log)  # Old default of 44 must not certify 47.
++            verified_groups(source, log)  # Old default of 44 must not certify 48.
+ 
+@@ -47,3 +48,3 @@ class NativeEvidenceTests(unittest.TestCase):
+         with self.assertRaises(ValueError):
+-            verified_groups(source, log, 47)
++            verified_groups(source, log, 48)
+ 
+@@ -54,3 +55,3 @@ class NativeEvidenceTests(unittest.TestCase):
+         with self.assertRaises(ValueError):
+-            verified_groups(source, log, 47)
++            verified_groups(source, log, 48)
+         with self.assertRaises(ValueError):
+@@ -63,3 +64,3 @@ class NativeEvidenceTests(unittest.TestCase):
+         with self.assertRaises(ValueError):
+-            verified_groups(source, log, 47)
++            verified_groups(source, log, 48)
+         with self.assertRaises(ValueError):
+@@ -67,2 +68,11 @@ class NativeEvidenceTests(unittest.TestCase):
+ 
++    def test_n46f_cannot_reuse_47_group_log(self):
++        source = (Path(__file__).resolve().parents[1] / 'tests/test_main.cpp').read_text(encoding='utf-8')
++        names = re.findall(r'\{"([^"\r\n]+)",\s*test_\w+\}', source)
++        log = ''.join('[PASS] ' + name + '\n' for name in names if name != 'n46f_cjk_literal')
++        with self.assertRaises(ValueError):
++            verified_groups(source, log, 48)
++        with self.assertRaises(ValueError):
++            verified_groups(source, log, 47)
++
+ 
+ diff --git a/.ci/validate_cjk_report.py b/.ci/validate_cjk_report.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..9e8fe0325f6b294f16e8c372ceecfb7140e5dbfe
+--- /dev/null
++++ b/.ci/validate_cjk_report.py
+@@ -0,0 +1,26 @@
++"""CJK evidence gate; compare identities as well as reported totals."""
++from test_cjk_recall import status_counts
++
++EXPECTED_CHECKS = frozenset(['memory_single_char', 'memory_double_char', 'memory_mixed_ascii', 'memory_noncontiguous_miss', 'mcp_memory_read_hit', 'search_phrase_hits', 'search_single_char_hits', 'search_ext_block_hits', 'search_kana_hits', 'search_hangul_hits', 'append_beside_fts', 'dedupe_by_page', 'mcp_put_alpha_ok', 'source_filter_alpha', 'source_denied', 'like_special_literal', 'sql_style_literal', 'db_alive_after_sql', 'title_match', 'slug_match', 'ascii_fts_still_works', 'ascii_no_supplement_noise', 'stable_order', 'search_limit', 'memory_limit_and_bytes', 'update_visible', 'update_old_gone', 'soft_delete_excluded', 'hard_delete_excluded', 'memory_forget', 'read_does_not_write'])
++
++
++def validate_report(report: dict, *, source_commit: str, binary_sha256: str,
++                    script_sha256: str) -> None:
++    checks = report.get("checks")
++    if not isinstance(checks, list) or not checks:
++        raise ValueError("Missing CJK checks")
++    names = [item.get("name") for item in checks]
++    if len(names) != len(set(names)) or set(names) != EXPECTED_CHECKS:
++        raise ValueError("Incomplete or duplicated CJK checks")
++    counts = status_counts(checks)
++    if (report.get("result") != "PASS" or counts["fail"] != 0 or
++            report.get("check_count") != counts["total"] or report.get("counts") != counts):
++        raise ValueError("CJK result/count mismatch")
++    for key, expected in (("source_commit", source_commit), ("binary_sha256", binary_sha256),
++                          ("script_sha256", script_sha256)):
++        if not expected or report.get(key) != expected:
++            raise ValueError("CJK provenance mismatch: " + key)
++    commands = report.get("commands")
++    if not isinstance(commands, list) or not commands or any(
++            type(item.get("exit_code")) is not int or item["exit_code"] != 0 for item in commands):
++        raise ValueError("CJK command evidence missing or failed")
+diff --git a/tests/test_n46f.cpp b/tests/test_n46f.cpp
+index 6ce605b9bb6c2bc89ebb631ffa77e894d700790d..f543969dd3366c37539a8ce3c8200f64f2427fc9 100644
+--- a/tests/test_n46f.cpp
++++ b/tests/test_n46f.cpp
+@@ -50,3 +50,3 @@ void test_n46f_cjk_literal() {
+     check(!classify_cjk_literal("\xf5\x80\x80\x80").well_formed, "out-of-range lead rejected");
+-    check(!classify_cjk_literal("a\xffb").well_formed, "interior bad byte rejected");
++    check(!classify_cjk_literal("a\xff" "b").well_formed, "interior bad byte rejected");
+   }
