@@ -51,7 +51,16 @@ class CjkReportTests(unittest.TestCase):
                 raise suite.CheckFailure('synthetic failure')
             with patch.object(suite,'run',side_effect=fail),patch('sys.argv',['test','--binary',str(binary),'--report',str(output)]):
                 self.assertEqual(suite.main(),1)
-            r=json.loads(output.read_text());self.assertEqual(r['counts'],{'total':2,'pass':1,'fail':1});self.assertEqual(r['commands'],[{'exit_code':7}])
+            r=json.loads(output.read_text(encoding="utf-8"));self.assertEqual(r['counts'],{'total':2,'pass':1,'fail':1});self.assertEqual(r['commands'],[{'exit_code':7}])
+    def test_report_reading_does_not_depend_on_windows_code_page(self):
+        # Model pathlib's Windows default explicitly even on a UTF-8 Linux host.
+        # The same exception/evidence test must read the producer's UTF-8 JSON.
+        original = Path.read_text
+        def read_with_windows_default(path, encoding=None, errors=None):
+            return original(path, encoding=encoding or "cp1252", errors=errors)
+        with patch.object(Path, 'read_text', read_with_windows_default):
+            self.test_exception_keeps_completed_checks()
+
     def test_non_windows_cannot_be_reported_native(self):
         # Metadata field is generated from the actual interpreter OS, not CLI input.
         import inspect
