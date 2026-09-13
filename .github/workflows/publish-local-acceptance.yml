@@ -1,0 +1,62 @@
+name: Publish single-prompt acceptance kit
+on:
+  push:
+    branches: ['delivery/single-prompt-v1']
+    paths: ['tools/delivery/**', 'docs/integration/LOCAL-AGENT-RUNBOOK.zh-CN.md', '.github/workflows/publish-local-acceptance.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qbrain-local-acceptance-release-v1
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/single-prompt-v1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Recheck unchanged helper
+        run: python -B -m unittest discover -s tests -p test_prebuilt_acceptance.py -v
+      - name: Obtain fixed original artifact and build deterministic kit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B - <<'PY'
+          import hashlib, io, os, subprocess, zipfile
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'qbrain-delivery-v1'
+          root.mkdir()
+          outer = root / 'artifact.zip'
+          with outer.open('xb') as out:
+              subprocess.run(['gh','api','repos/youq616/qbrain/actions/artifacts/10294432906/zip'],stdout=out,check=True,timeout=90)
+          data = outer.read_bytes()
+          assert hashlib.sha256(data).hexdigest() == '93cf0c7b64d0eb0d7ef8646802776cbda5c7ab1f1d5d26a42ff1b6a285defa60'
+          with zipfile.ZipFile(io.BytesIO(data)) as z:
+              (root / 'product.zip').write_bytes(z.read('qbrain-windows-x64-development.zip'))
+          subprocess.run(['python','-B','tools/delivery/build_acceptance_kit.py','--product',str(root/'product.zip'),'--output',str(root/'release')],check=True)
+          kit = root / 'release/qbrain-local-acceptance-kit.zip'
+          assert hashlib.sha256(kit.read_bytes()).hexdigest() == 'ba805d405fe8b107be09dba4309a23fed2f65005ed5f8c8bd1e82ebff2260df2'
+          PY
+      - name: Create draft, verify uploaded bytes, then publish without changing latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/qbrain-delivery-v1/release"
+          tag=local-acceptance-n46e-v1
+          gh release create "$tag" "$out/qbrain-local-acceptance-kit.zip" "$out/SHA256SUMS.txt" "$out/PROVENANCE.json" --repo youq616/qbrain --target "$TARGET_SHA" --draft --prerelease --latest=false --title 'Qbrain single-prompt local acceptance kit v1' --notes 'One unified local acceptance runbook, unchanged N46E helper and original N46D queue-fix binary. No compiler required locally. This is an unsigned development delivery, not new Win11/Server2022/logged-in Agent acceptance. Kit SHA256: ba805d405fe8b107be09dba4309a23fed2f65005ed5f8c8bd1e82ebff2260df2. Read RUNBOOK.zh-CN.md inside the ZIP; no second prompt or chat attachment is needed.'
+          gh release download "$tag" --repo youq616/qbrain --dir "$RUNNER_TEMP/qbrain-delivery-v1/readback"
+          for name in qbrain-local-acceptance-kit.zip SHA256SUMS.txt PROVENANCE.json; do
+            cmp "$out/$name" "$RUNNER_TEMP/qbrain-delivery-v1/readback/$name"
+          done
+          gh release edit "$tag" --repo youq616/qbrain --draft=false --prerelease --latest=false
