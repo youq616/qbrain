@@ -73,7 +73,7 @@ def main():
     run = api('actions/runs/' + run_id)
     assert run['head_sha'] == source and run['head_branch'] == BRANCH and run['event'] == 'push'
     jobs = api(f'actions/runs/{run_id}/jobs?per_page=100')['jobs']
-    for name in ('source', 'portable', 'windows'):
+    for name in ('source', 'portable', 'windows', 'windows-http-2022'):
         matching = [j for j in jobs if j['name'] == name]
         assert len(matching) == 1 and matching[0]['conclusion'] == 'success'
     artifacts = api(f'actions/runs/{run_id}/artifacts?per_page=100')['artifacts']

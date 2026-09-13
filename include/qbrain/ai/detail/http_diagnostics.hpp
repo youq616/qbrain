@@ -9,5 +9,7 @@ struct HttpDiagnostics {
   std::uint64_t callbacks_without_parents;
 };
 HttpDiagnostics http_diagnostics() noexcept;
+// Reject release while requests still own state. Not compiled into the product.
+bool release_http_session_for_tests() noexcept;
 }
 #endif

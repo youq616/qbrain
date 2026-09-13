@@ -2,21 +2,24 @@ import unittest
 from validate_http_lifecycle import validate_report, VARIANTS
 
 SOURCE = "a" * 40
-HASHES = {"legacy": "1" * 64, "pooled": "2" * 64, "current": "3" * 64}
+HASHES = {"legacy": "1" * 64, "per_call": "2" * 64, "current": "3" * 64}
 
 
 def fixture():
     out = {"result":"PASS", "native_windows":True, "source_commit":SOURCE,
            "rounds_per_variant":8, "requests_per_round":32, "allowed_growth":16,
-           "pool_policy":"session_private", "variants":{}}
+           "session_policy":"shared_immutable_request_timeouts", "variants":{}}
     for name in VARIANTS:
         rows=[]
         for n in range(1,9):
-            rows.append(dict(timeout_count=32, requested=32, opened=n*96, closed=n*96,
+            shared=name.startswith("current")
+            opened=n*(64 if shared else 96)+int(shared)
+            rows.append(dict(cache_released=False,timeout_count=32, requested=32, opened=opened, closed=opened-int(shared),
                 close_errors=0, states_created=n*32, states_destroyed=n*32, final_callbacks=n*32,
                 callbacks_without_parents=n*32 if name=="legacy" else 0,
                 handles_at_250ms=180+n, handles_at_2000ms=180+n))
-        out["variants"][name]={"sha256":HASHES["current" if name=="current_repeat" else name],
+        shutdown=dict(rows[-1],cache_released=True,timeout_count=0,requested=0,closed=rows[-1]["opened"])
+        out["variants"][name]={"shutdown":shutdown,"sha256":HASHES["current" if name=="current_repeat" else name],
                               "samples":rows, "exit_code":0}
     return out
 
@@ -31,7 +34,7 @@ class LifecycleReportTests(unittest.TestCase):
     def test_controls_are_not_current_acceptance(self):
         r=fixture()
         r["variants"]["legacy"]["samples"][-1]["handles_at_2000ms"]=999
-        r["variants"]["pooled"]["samples"][-1]["handles_at_2000ms"]=999
+        r["variants"]["per_call"]["samples"][-1]["handles_at_2000ms"]=999
         self.validate(r)
 
     def test_missing_and_extra_variants(self):
@@ -71,7 +74,7 @@ class LifecycleReportTests(unittest.TestCase):
 
     def test_wrong_binary_source_or_policy(self):
         for field,val in (("source_commit","b"*40),("native_windows",False),
-                          ("pool_policy","global"),("result","FAIL"),
+                          ("session_policy","global"),("result","FAIL"),
                           ("requests_per_round",31),("rounds_per_variant",7)):
             r=fixture();r[field]=val
             with self.subTest(field=field), self.assertRaises(ValueError): self.validate(r)
@@ -84,7 +87,7 @@ class LifecycleReportTests(unittest.TestCase):
             with self.subTest(value=val), self.assertRaises(ValueError): self.validate(r)
 
     def test_cannot_validate_incomplete_pending_report(self):
-        r=fixture();r["result"]="FAIL";r["variants"]["pooled"]["samples"]=[]
+        r=fixture();r["result"]="FAIL";r["variants"]["per_call"]["samples"]=[]
         with self.assertRaises(ValueError):
             validate_report(r,source_commit=SOURCE,probe_hashes=HASHES,require_pass=False)
 
@@ -93,6 +96,19 @@ class LifecycleReportTests(unittest.TestCase):
         self.assertEqual(validate_report(r,source_commit=SOURCE,probe_hashes=HASHES,
                                         require_pass=False)["variants"],4)
 
+
+    def test_shutdown_is_required_and_balanced(self):
+        for name in VARIANTS:
+            r=fixture();del r["variants"][name]["shutdown"]
+            with self.subTest(name=name), self.assertRaises(ValueError): self.validate(r)
+        for key,value in (("cache_released",False),("closed",512),("timeout_count",1),("states_destroyed",255)):
+            r=fixture();r["variants"]["current"]["shutdown"][key]=value
+            with self.subTest(field=key), self.assertRaises(ValueError): self.validate(r)
+
+    def test_cached_session_cannot_be_hidden_or_duplicated(self):
+        for key,value in (("opened",96),("closed",65),("cache_released",True)):
+            r=fixture();r["variants"]["current"]["samples"][0][key]=value
+            with self.subTest(field=key), self.assertRaises(ValueError): self.validate(r)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

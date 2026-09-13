@@ -88,7 +88,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build/http-lifecycle --config Release --parallel 2 2>&1 | Tee-Object evidence/lifecycle-build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python .ci/test_http_lifecycle.py --probe build/http-lifecycle/Release/qbrain_http_lifecycle_current.exe --baseline build/http-lifecycle/Release/qbrain_http_lifecycle_legacy.exe --pooled build/http-lifecycle/Release/qbrain_http_lifecycle_pooled.exe --report evidence/http-lifecycle.json 2>&1 | Tee-Object evidence/http-lifecycle.log
+          python .ci/test_http_lifecycle.py --probe build/http-lifecycle/Release/qbrain_http_lifecycle_current.exe --baseline build/http-lifecycle/Release/qbrain_http_lifecycle_legacy.exe --per-call build/http-lifecycle/Release/qbrain_http_lifecycle_per_call.exe --report evidence/http-lifecycle.json 2>&1 | Tee-Object evidence/http-lifecycle.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_http_transport.py --probe build/http/Release/qbrain_http_probe.exe --report evidence/http-transport.json 2>&1 | Tee-Object evidence/http-transport.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -158,8 +158,43 @@ jobs:
           name: qbrain-n44-windows-development-package
           path: package/
           retention-days: 14
+  windows-http-2022:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build and validate the same HTTP source on Server 2022
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          [Environment]::OSVersion.VersionString | Set-Content evidence/platform.txt
+          cmake -S . -B build/http -DQBRAIN_WITH_PG=OFF
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/http --config Release --target qbrain_http_probe qbrain_http_tests --parallel 2 2>&1 | Tee-Object evidence/build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake -S tests/http_lifecycle -B build/http-lifecycle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/http-lifecycle --config Release --parallel 2 2>&1 | Tee-Object evidence/lifecycle-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & build/http/Release/qbrain_http_tests.exe 2>&1 | Tee-Object evidence/input.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_http_transport.py --probe build/http/Release/qbrain_http_probe.exe --report evidence/http-transport.json 2>&1 | Tee-Object evidence/http-transport.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_http_lifecycle.py --probe build/http-lifecycle/Release/qbrain_http_lifecycle_current.exe --baseline build/http-lifecycle/Release/qbrain_http_lifecycle_legacy.exe --per-call build/http-lifecycle/Release/qbrain_http_lifecycle_per_call.exe --report evidence/http-lifecycle.json 2>&1 | Tee-Object evidence/http-lifecycle.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_http_lifecycle_report.py 2>&1 | Tee-Object evidence/report-gate.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n46f-server2022-http-evidence
+          path: evidence/
+          retention-days: 14
   publish-cjk-preview:
-    needs: [source, portable, windows]
+    needs: [source, portable, windows, windows-http-2022]
     if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/optimization/n46f-cjk-recall' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10

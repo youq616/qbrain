@@ -73,3 +73,26 @@ https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpse
 
 Microsoft option flags (redirects/authentication/cookies/header limit):
 https://learn.microsoft.com/en-us/windows/win32/winhttp/option-flags
+
+
+## N46F session lifetime follow-up
+
+The process reuses one immutable WinHTTP session instead of repeatedly opening
+and closing a session for every request. Each call still has its own connection,
+request handle, bearer/body buffers, callback state and steady-clock deadline.
+WinHttpSetTimeouts is applied to the request, never to the shared session. Cookies,
+automatic authentication and redirects remain disabled per request. The session
+cache has one owner, not a cache keyed by arbitrary URLs, model names or secrets.
+
+A session creation failure is not cached. Callback-held references keep the session
+alive during shutdown; the process-owned reference is released during normal
+process teardown. Diagnostic builds explicitly release the cached reference and
+check all owned handles closed. The product has no remote shutdown/bypass tool.
+
+System default proxy settings are observed when the session is initialized. Restart
+the process after changing those settings. This does not add proxy credentials or
+broaden authentication. The failed private-pooling option experiment was removed;
+the product does not require WINHTTP_OPTION_DISABLE_GLOBAL_POOLING (unsupported
+on the tested Server 2022). Neither that option nor DNS timer changes proved a
+sufficient repair. Fixed native cancellation and per-request bearer/body/cookie/
+origin/deadline isolation tests must pass on Server 2022 and the latest runner.

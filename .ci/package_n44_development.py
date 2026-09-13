@@ -34,7 +34,7 @@ for shell,name in [('powershell','consent51.log'),('pwsh','consent7.log')]:
 commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
 http_report=json.loads(read('http-transport.json'))
 assert http_report['result']=='PASS' and http_report['native_windows'] is True
-assert http_report['source_commit']==commit and http_report['check_count']>=50
+assert http_report['source_commit']==commit and http_report['check_count']>=81
 assert http_report['check_count']==len(http_report['checks'])
 assert 'Native WinHTTP:' in read('http-transport.log')
 retrieval_report=json.loads(read('retrieval-benchmark.json'))
@@ -74,7 +74,7 @@ with (e/'cjk-report-gate-tests.log').open('wb') as log:
 lifetime_report=json.loads(read('http-lifecycle.json'))
 validate_lifecycle(lifetime_report, source_commit=commit,
     probe_hashes={name:hashlib.sha256((root/f'build/http-lifecycle/Release/qbrain_http_lifecycle_{name}.exe').read_bytes()).hexdigest()
-                  for name in ('legacy','pooled','current')})
+                  for name in ('legacy','per_call','current')})
 with (e/'lifecycle-report-gate.log').open('wb') as log:
     subprocess.run([sys.executable,'.ci/test_http_lifecycle_report.py'],stdout=log,stderr=subprocess.STDOUT,check=True)
 

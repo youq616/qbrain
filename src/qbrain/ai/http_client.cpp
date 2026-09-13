@@ -24,7 +24,7 @@
 
 namespace qbrain::ai {
 namespace {
-#if (defined(QBRAIN_HTTP_TEST_EARLY_PARENTS) || defined(QBRAIN_HTTP_TEST_GLOBAL_POOL)) && !defined(QBRAIN_HTTP_DIAGNOSTICS)
+#if (defined(QBRAIN_HTTP_TEST_EARLY_PARENTS) || defined(QBRAIN_HTTP_TEST_PER_CALL_SESSION)) && !defined(QBRAIN_HTTP_DIAGNOSTICS)
 #error Legacy HTTP controls are allowed only in the standalone diagnostic build
 #endif
 #ifdef QBRAIN_HTTP_DIAGNOSTICS
@@ -104,11 +104,38 @@ struct InternetHandle {
   }
 };
 
+// One immutable session per process. Connections, timeouts, bearer headers and
+// callback contexts remain request-owned; no mutable per-caller option is stored
+// on the shared session. Failed initialization is not cached.
+struct SessionCache {
+  std::mutex mutex;
+  std::shared_ptr<InternetHandle> owner;
+};
+SessionCache& session_cache() { static SessionCache cache; return cache; }
+std::shared_ptr<InternetHandle> new_session(const std::wstring& agent, DWORD& error) {
+  InternetHandle fresh(WinHttpOpen(agent.c_str(), WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+      WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC));
+  if (!fresh.value) { error = GetLastError(); return {}; }
+  auto owner = std::make_shared<InternetHandle>();
+  owner->value = std::exchange(fresh.value, nullptr);
+  return owner;
+}
+std::shared_ptr<InternetHandle> acquire_session(const std::wstring& agent, DWORD& error) {
+#if defined(QBRAIN_HTTP_TEST_EARLY_PARENTS) || defined(QBRAIN_HTTP_TEST_PER_CALL_SESSION)
+  return new_session(agent, error); // Fixed historical diagnostic controls only.
+#else
+  auto& cache = session_cache();
+  std::lock_guard lock(cache.mutex);
+  if (!cache.owner) cache.owner = new_session(agent, error);
+  return cache.owner;
+#endif
+}
+
 struct AsyncState {
-  // Parents must outlive the asynchronous request's final callback, not merely
-  // the caller returning from WinHttpCloseHandle. Member destruction is reverse
-  // order: connection closes before session after the last owner releases state.
-  InternetHandle session;
+  // Parents outlive the final callback. Connection is per-request; this shared
+  // reference also keeps the session alive if the process cache is shut down.
+  // Reverse destruction releases the connection before the session reference.
+  std::shared_ptr<InternetHandle> session;
   InternetHandle connection;
 #ifdef QBRAIN_HTTP_DIAGNOSTICS
   AsyncState() { ++states_created; }
@@ -134,7 +161,7 @@ void CALLBACK on_status(HINTERNET, DWORD_PTR context, DWORD status, LPVOID info,
     // Microsoft documents this as the final callback for this request handle.
 #ifdef QBRAIN_HTTP_DIAGNOSTICS
     ++final_callbacks;
-    if (!state->session.value || !state->connection.value) ++callbacks_without_parents;
+    if ((!state->session || !state->session->value) || !state->connection.value) ++callbacks_without_parents;
 #endif
     auto release_after_callback = std::move(state->handle_lifetime);
     return;
@@ -184,6 +211,16 @@ HttpDiagnostics http_diagnostics() noexcept {
           states_created.load(), states_destroyed.load(), final_callbacks.load(),
           callbacks_without_parents.load()};
 }
+bool release_http_session_for_tests() noexcept {
+#ifdef _WIN32
+  auto& cache = session_cache();
+  std::lock_guard lock(cache.mutex);
+  if (states_created.load() != states_destroyed.load() ||
+      (cache.owner && cache.owner.use_count() != 1)) return false;
+  cache.owner.reset();
+#endif
+  return true;
+}
 }  // namespace detail
 #endif
 
@@ -215,19 +252,10 @@ HttpResponse http_post_json(std::string_view base_url, std::string_view path,
   full_path += wpath;
   std::wstring agent;
   to_wide(std::string("Qbrain/") + QBRAIN_VERSION_STRING, agent);
-  InternetHandle session(WinHttpOpen(agent.c_str(), WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-      WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC));
-  if (!session.value) return network_error(GetLastError());
-#if !defined(QBRAIN_HTTP_TEST_EARLY_PARENTS) && !defined(QBRAIN_HTTP_TEST_GLOBAL_POOL)
-  // Keep connection reuse inside this session, not WinHTTP's legacy cross-session
-  // pool. A closed per-call session must not leave connections in that global pool.
-  // This session-only option takes no input buffer; fail closed if unsupported.
-  if (!WinHttpSetOption(session.value, WINHTTP_OPTION_DISABLE_GLOBAL_POOLING, nullptr, 0))
-    return network_error(GetLastError());
-#endif
-  if (!WinHttpSetTimeouts(session.value, timeout_ms, timeout_ms, timeout_ms, timeout_ms))
-    return network_error(GetLastError());
-  InternetHandle connection(WinHttpConnect(session.value, host.c_str(), parts.nPort, 0));
+  DWORD session_error = ERROR_SUCCESS;
+  const auto session = acquire_session(agent, session_error);
+  if (!session) return network_error(session_error);
+  InternetHandle connection(WinHttpConnect(session->value, host.c_str(), parts.nPort, 0));
   if (!connection.value) return network_error(GetLastError());
   const auto state = std::make_shared<AsyncState>();
   state->outbound.assign(json_body);
@@ -237,6 +265,9 @@ HttpResponse http_post_json(std::string_view base_url, std::string_view path,
       nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
       parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0));
   if (!request.value) return network_error(GetLastError());
+  // Setting this on the shared session would race other callers' budgets.
+  if (!WinHttpSetTimeouts(request.value, timeout_ms, timeout_ms, timeout_ms, timeout_ms))
+    return network_error(GetLastError());
   DWORD disabled = WINHTTP_DISABLE_REDIRECTS | WINHTTP_DISABLE_COOKIES | WINHTTP_DISABLE_AUTHENTICATION;
   DWORD header_limit = 65536;
   if (!WinHttpSetOption(request.value, WINHTTP_OPTION_DISABLE_FEATURE, &disabled, sizeof(disabled)) ||
@@ -249,8 +280,8 @@ HttpResponse http_post_json(std::string_view base_url, std::string_view path,
       WINHTTP_CALLBACK_FLAG_ALL_COMPLETIONS | WINHTTP_CALLBACK_FLAG_HANDLES, 0) == WINHTTP_INVALID_STATUS_CALLBACK)
     return network_error(GetLastError());
 #ifndef QBRAIN_HTTP_TEST_EARLY_PARENTS
-  // Transfer the existing owners without duplicating or closing their handles.
-  state->session.value = std::exchange(session.value, nullptr);
+  // Share session ownership and transfer this request's connection owner.
+  state->session = session;
   state->connection.value = std::exchange(connection.value, nullptr);
 #endif
   state->handle_lifetime = state;

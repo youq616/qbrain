@@ -21,6 +21,9 @@ int main() {
       const auto command = J::parse(line);
       const int count = command.value("count", 32);
       if (count < 0 || count > 128) throw std::runtime_error("invalid batch size");
+      const bool release = command.value("release_session", false);
+      if (release && (count != 0 || !qbrain::ai::detail::release_http_session_for_tests()))
+        throw std::runtime_error("active session cannot be released");
       int timeout_count = 0;
       for (int n = 0; n < count; ++n) {
         auto result = qbrain::ai::http_post_json(command.at("base").get<std::string>(),
@@ -35,7 +38,7 @@ int main() {
       std::this_thread::sleep_for(std::chrono::milliseconds(1750));
       if (!GetProcessHandleCount(GetCurrentProcess(), &settled)) throw std::runtime_error("handle count");
       const auto d = qbrain::ai::detail::http_diagnostics();
-      std::cout << J({{"timeout_count",timeout_count},{"requested",count},
+      std::cout << J({{"cache_released",release},{"timeout_count",timeout_count},{"requested",count},
         {"handles_at_250ms",early},{"handles_at_2000ms",settled},
         {"opened",d.handles_opened},{"closed",d.handles_closed},{"close_errors",d.close_errors},
         {"states_created",d.states_created},{"states_destroyed",d.states_destroyed},
