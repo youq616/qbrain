@@ -35,6 +35,7 @@ jobs:
           set -euo pipefail
           mkdir evidence
           python3 .ci/test_validate_native_log.py 2>&1 | tee evidence/evidence-gate.log
+          python3 .ci/test_cjk_report.py 2>&1 | tee evidence/cjk-report-gate-tests.log
           cmake -S . -B build/portable -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
           cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_http_tests qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests --parallel 2 2>&1 | tee evidence/build.log
           python3 .ci/test_retrieval_benchmark.py --binary build/portable/qbrain_retrieval_tests --report evidence/retrieval-benchmark.json | tee evidence/retrieval.log
@@ -43,7 +44,7 @@ jobs:
           ctest --test-dir build/n42 --output-on-failure | tee evidence/n42-regression.log
           python3 .ci/test_embedding_queue.py --binary build/portable/qbrain_embedding_queue_tests --report evidence/embedding-queue.json | tee evidence/embedding-queue.log
           build/portable/qbrain_cjk_tests | tee evidence/cjk-unit.log
-          python3 .ci/test_cjk_recall.py --binary build/portable/qbrain --report evidence/cjk-recall.json --source-commit "$GITHUB_SHA" | tee evidence/cjk-recall.log
+          python3 .ci/test_cjk_recall.py --binary build/portable/qbrain --report evidence/cjk-recall.json | tee evidence/cjk-recall.log
           build/portable/qbrain_embedding_tests | tee evidence/embedding-unit.log
           python3 .ci/test_embedding_search.py --binary build/portable/qbrain | tee evidence/embedding-search.log
           build/portable/qbrain_http_tests | tee evidence/http-input.log
@@ -82,6 +83,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & build/http/Release/qbrain_http_tests.exe 2>&1 | Tee-Object evidence/http-input.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake -S tests/http_lifecycle -B build/http-lifecycle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/http-lifecycle --config Release --parallel 2 2>&1 | Tee-Object evidence/lifecycle-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_http_lifecycle.py --probe build/http-lifecycle/Release/qbrain_http_lifecycle_current.exe --baseline build/http-lifecycle/Release/qbrain_http_lifecycle_legacy.exe --report evidence/http-lifecycle.json 2>&1 | Tee-Object evidence/http-lifecycle.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_http_transport.py --probe build/http/Release/qbrain_http_probe.exe --report evidence/http-transport.json 2>&1 | Tee-Object evidence/http-transport.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Exact retrieval differential checks and synthetic baseline benchmark
@@ -105,7 +112,7 @@ jobs:
         run: |
           & build/http/Release/qbrain_cjk_tests.exe 2>&1 | Tee-Object evidence/cjk-unit.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python .ci/test_cjk_recall.py --binary build/cl/qbrain.exe --report evidence/cjk-recall.json --source-commit "$env:GITHUB_SHA" --require-windows 2>&1 | Tee-Object evidence/cjk-recall.log
+          python .ci/test_cjk_recall.py --binary build/cl/qbrain.exe --report evidence/cjk-recall.json 2>&1 | Tee-Object evidence/cjk-recall.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Real memory MCP hooks context and local-config process tests
         shell: pwsh

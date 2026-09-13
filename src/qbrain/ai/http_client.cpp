@@ -1,4 +1,8 @@
 #include "qbrain/ai/http_client.hpp"
+#include "qbrain/ai/detail/http_diagnostics.hpp"
+#ifdef QBRAIN_HTTP_DIAGNOSTICS
+#include <atomic>
+#endif
 #include "qbrain/version.hpp"
 #include <algorithm>
 #include <array>
@@ -20,6 +24,14 @@
 
 namespace qbrain::ai {
 namespace {
+#if defined(QBRAIN_HTTP_TEST_EARLY_PARENTS) && !defined(QBRAIN_HTTP_DIAGNOSTICS)
+#error Legacy lifetime control is allowed only in the standalone diagnostic build
+#endif
+#ifdef QBRAIN_HTTP_DIAGNOSTICS
+std::atomic<std::uint64_t> handles_opened{0}, handles_closed{0}, close_errors{0};
+std::atomic<std::uint64_t> states_created{0}, states_destroyed{0}, final_callbacks{0};
+std::atomic<std::uint64_t> callbacks_without_parents{0};
+#endif
 HttpResponse failure(HttpFailure kind, std::string message, int status = 0) {
   return {status, {}, std::move(message), kind};
 }
@@ -73,13 +85,35 @@ bool to_wide(std::string_view s, std::wstring& out) {
 
 struct InternetHandle {
   HINTERNET value = nullptr;
-  explicit InternetHandle(HINTERNET h) : value(h) {}
+  explicit InternetHandle(HINTERNET h = nullptr) : value(h) {
+#ifdef QBRAIN_HTTP_DIAGNOSTICS
+    if (value) ++handles_opened;
+#endif
+  }
   InternetHandle(const InternetHandle&) = delete;
   InternetHandle& operator=(const InternetHandle&) = delete;
-  ~InternetHandle() { if (value) WinHttpCloseHandle(value); }
+  ~InternetHandle() {
+    if (value) {
+      const BOOL ok = WinHttpCloseHandle(value);
+#ifdef QBRAIN_HTTP_DIAGNOSTICS
+      if (ok) ++handles_closed; else ++close_errors;
+#else
+      (void)ok;
+#endif
+    }
+  }
 };
 
 struct AsyncState {
+  // Parents must outlive the asynchronous request's final callback, not merely
+  // the caller returning from WinHttpCloseHandle. Member destruction is reverse
+  // order: connection closes before session after the last owner releases state.
+  InternetHandle session;
+  InternetHandle connection;
+#ifdef QBRAIN_HTTP_DIAGNOSTICS
+  AsyncState() { ++states_created; }
+  ~AsyncState() { ++states_destroyed; }
+#endif
   std::mutex mutex;
   std::condition_variable ready;
   DWORD completion = 0;
@@ -98,6 +132,10 @@ void CALLBACK on_status(HINTERNET, DWORD_PTR context, DWORD status, LPVOID info,
   auto* state = reinterpret_cast<AsyncState*>(context);
   if (status == WINHTTP_CALLBACK_STATUS_HANDLE_CLOSING) {
     // Microsoft documents this as the final callback for this request handle.
+#ifdef QBRAIN_HTTP_DIAGNOSTICS
+    ++final_callbacks;
+    if (!state->session.value || !state->connection.value) ++callbacks_without_parents;
+#endif
     auto release_after_callback = std::move(state->handle_lifetime);
     return;
   }
@@ -138,6 +176,16 @@ HttpResponse network_error(DWORD code) {
 }
 #endif
 }  // namespace
+
+#ifdef QBRAIN_HTTP_DIAGNOSTICS
+namespace detail {
+HttpDiagnostics http_diagnostics() noexcept {
+  return {handles_opened.load(), handles_closed.load(), close_errors.load(),
+          states_created.load(), states_destroyed.load(), final_callbacks.load(),
+          callbacks_without_parents.load()};
+}
+}  // namespace detail
+#endif
 
 HttpResponse http_post_json(std::string_view base_url, std::string_view path,
                             std::string_view bearer_token, std::string_view json_body,
@@ -193,6 +241,11 @@ HttpResponse http_post_json(std::string_view base_url, std::string_view path,
   if (WinHttpSetStatusCallback(request.value, on_status,
       WINHTTP_CALLBACK_FLAG_ALL_COMPLETIONS | WINHTTP_CALLBACK_FLAG_HANDLES, 0) == WINHTTP_INVALID_STATUS_CALLBACK)
     return network_error(GetLastError());
+#ifndef QBRAIN_HTTP_TEST_EARLY_PARENTS
+  // Transfer the existing owners without duplicating or closing their handles.
+  state->session.value = std::exchange(session.value, nullptr);
+  state->connection.value = std::exchange(connection.value, nullptr);
+#endif
   state->handle_lifetime = state;
   if (Clock::now() >= deadline) return network_error(ERROR_WINHTTP_TIMEOUT);
   if (!WinHttpSendRequest(request.value, state->headers.c_str(), static_cast<DWORD>(state->headers.size()),

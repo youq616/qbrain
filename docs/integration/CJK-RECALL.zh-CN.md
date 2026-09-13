@@ -33,8 +33,8 @@ python -B .\verification\test_cjk_recall.py --binary .\qbrain.exe --report "$env
 新建合成脑库和隔离子进程做CLI/MCP测试，不改真实脑库，不调用模型、不安装Hook。
 报告不得被当成真实Claude/Codex会话验收；Server2022不是Win11桌面。
 
-原本地摘要把“memory_read中文漏召回”归因于FTS5，但没有随摘要提供原始issues.md。
-仓库端用旧产品逻辑独立复现的是search漏子串；相同原文的memory_read已命中。
+本地后续核对已更正最初归因：漏掉的 memory_read 查询含空格，不是连续原文子串。
+仓库端与原本地源码均确认普通search的句内子串缺口；memory_read算法不需修改。
 本地复测应检查旧日志实际工具名、query是否为连续原文、是否同source、是否已提取或过期。
 保留最小合成复现，不上传真实会话或认证资料，不擅自改证据/权限过滤来得到成功结果。
 
@@ -50,3 +50,10 @@ python -B .\verification\test_cjk_recall.py --binary .\qbrain.exe --report "$env
 
 SQLite FTS5 unicode61和trigram说明：https://www.sqlite.org/fts5.html
 没有直接换用trigram：它对不足三字符的MATCH有局限，并且会引入索引迁移与维护成本。
+
+## 报告来源与取消回归
+
+本机脚本的 declared_package_source 仅为清单声明；source_commit 只来自实际干净Git
+工作区，独立解压执行时可为空。不要把声明当作新编译或CI证据。报告逐项计数并记录
+子进程退出码，任何失败都保留。HTTP取消的父句柄所有权修改及固定对照实验见本轮
+工程复核；原有请求时限与句柄增长阈值不被提高。

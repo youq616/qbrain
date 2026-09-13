@@ -32,6 +32,9 @@ void policy() {
     check(!cjk_literal_eligible(query), "non-CJK or control input leaves extra lane off");
   check(!cjk_literal_eligible(std::string("中文\0tail",11)), "embedded NUL not eligible");
   check(!cjk_literal_eligible(std::string("中文")+"\xc0\xaf"), "invalid UTF8 not eligible");
+  check(!cjk_literal_eligible(std::string("中")+"a\xff" "b"), "bad trailing byte cannot activate lane");
+  check(!cjk_literal_eligible("\xed\xa0\x80"), "surrogate rejected");
+  check(!cjk_literal_eligible("\xf4\x90\x80\x80"), "above Unicode scalar range rejected");
   check(cjk_literal_eligible(std::string("中")+std::string(1021,'x')), "exact byte cap");
   check(!cjk_literal_eligible(std::string("中")+std::string(1022,'x')), "over byte cap");
 }

@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 from validate_native_log import verified_groups
+from validate_cjk_report import validate_report
 import tempfile
 import zipfile
 
@@ -64,13 +65,15 @@ for mode in ('automatic','generic'):
 
 binary=root/'build/cl/qbrain.exe';digest=hashlib.sha256(binary.read_bytes()).hexdigest()
 cjk_report=json.loads(read('cjk-recall.json'))
-assert cjk_report['result']=='PASS' and cjk_report['native_windows'] is True
-assert cjk_report['source_commit']==commit and cjk_report['binary_sha256']==digest
-assert cjk_report['passed']==cjk_report['check_count']==len(cjk_report['checks'])>=25
-assert all(c['status']=='PASS' for c in cjk_report['checks'])
-assert {'search_recovers_continuous_chinese','mcp_memory_exact_quote_and_evidence',
-        'fts_nonzero_still_fills_missing_cjk','mcp_search_forbidden_source',
-        'tampered_evidence_excluded','forgotten_memory_excluded'} <= {c['name'] for c in cjk_report['checks']}
+assert cjk_report['native_windows'] is True
+validate_report(cjk_report, source_commit=commit, binary_sha256=digest,
+                script_sha256=hashlib.sha256((root/'.ci/test_cjk_recall.py').read_bytes()).hexdigest())
+with (e/'cjk-report-gate-tests.log').open('wb') as log:
+    subprocess.run([sys.executable,'.ci/test_cjk_report.py'], stdout=log, stderr=subprocess.STDOUT, check=True)
+lifetime_report=json.loads(read('http-lifecycle.json'))
+assert lifetime_report['result']=='PASS' and lifetime_report['source_commit']==commit
+assert lifetime_report['native_windows'] is True and lifetime_report['rounds_per_variant']==8
+assert lifetime_report['requests_per_round']==32 and lifetime_report['allowed_growth']==16
 
 with (e/'local-config.log').open('wb') as log:
     subprocess.run([sys.executable,'.ci/test_local_config.py','--binary',str(binary)],stdout=log,stderr=subprocess.STDOUT,check=True)
@@ -83,7 +86,7 @@ with tempfile.TemporaryDirectory(prefix='qbrain-package-smoke-') as t:
     subprocess.run([str(exe),'init','--brain','package-smoke','--no-default'],cwd=home,env=env,capture_output=True,check=True,timeout=15)
     assert hashlib.sha256(exe.read_bytes()).hexdigest()==digest
 (e/'validation.json').write_text(json.dumps(report,indent=2)+'\n')
-files={'CJK-RECALL.zh-CN.md':root/'docs/integration/CJK-RECALL.zh-CN.md','verification/test_cjk_recall.py':root/'.ci/test_cjk_recall.py','verification/cjk-recall.json':e/'cjk-recall.json','verification/embedding-queue.json':e/'embedding-queue.json','EMBEDDING-QUEUE.md':root/'docs/integration/EMBEDDING-QUEUE.md','verification/embedding-transport.json':e/'embedding-transport.json','EMBEDDING-CONTRACTS.md':root/'docs/integration/EMBEDDING-CONTRACTS.md','verification/retrieval-benchmark.json':e/'retrieval-benchmark.json','HTTP-TRANSPORT.md':root/'docs/integration/HTTP-TRANSPORT.md','qbrain.exe':binary,'LICENSE':root/'LICENSE','THIRD-PARTY-NOTICES.md':root/'THIRD-PARTY-NOTICES.md','WINDOWS-MEMORY.md':root/'docs/integration/WINDOWS-MEMORY.md','QUICKSTART.zh-CN.md':root/'docs/integration/QUICKSTART.zh-CN.md','scripts/Install-QbrainMemory.ps1':root/'scripts/Install-QbrainMemory.ps1','scripts/Invoke-QbrainJson.ps1':root/'scripts/Invoke-QbrainJson.ps1','verification/validation.json':e/'validation.json','verification/benchmark.json':e/'benchmark.json','verification/http-transport.json':e/'http-transport.json'}
+files={'verification/http-lifecycle.json':e/'http-lifecycle.json','CJK-RECALL.zh-CN.md':root/'docs/integration/CJK-RECALL.zh-CN.md','verification/test_cjk_recall.py':root/'.ci/test_cjk_recall.py','verification/cjk-recall.json':e/'cjk-recall.json','verification/embedding-queue.json':e/'embedding-queue.json','EMBEDDING-QUEUE.md':root/'docs/integration/EMBEDDING-QUEUE.md','verification/embedding-transport.json':e/'embedding-transport.json','EMBEDDING-CONTRACTS.md':root/'docs/integration/EMBEDDING-CONTRACTS.md','verification/retrieval-benchmark.json':e/'retrieval-benchmark.json','HTTP-TRANSPORT.md':root/'docs/integration/HTTP-TRANSPORT.md','qbrain.exe':binary,'LICENSE':root/'LICENSE','THIRD-PARTY-NOTICES.md':root/'THIRD-PARTY-NOTICES.md','WINDOWS-MEMORY.md':root/'docs/integration/WINDOWS-MEMORY.md','QUICKSTART.zh-CN.md':root/'docs/integration/QUICKSTART.zh-CN.md','scripts/Install-QbrainMemory.ps1':root/'scripts/Install-QbrainMemory.ps1','scripts/Invoke-QbrainJson.ps1':root/'scripts/Invoke-QbrainJson.ps1','verification/validation.json':e/'validation.json','verification/benchmark.json':e/'benchmark.json','verification/http-transport.json':e/'http-transport.json'}
 manifest={**report,'files':{n:{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for n,p in files.items()}}
 out=root/'package';out.mkdir(exist_ok=True);archive=out/'qbrain-windows-x64-development.zip'
 with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:

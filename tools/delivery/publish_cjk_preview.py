@@ -8,6 +8,9 @@ from pathlib import Path
 import re
 import subprocess
 import zipfile
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".ci"))
+from validate_cjk_report import validate_report
 
 REPO = 'youq616/qbrain'
 BRANCH = 'optimization/n46f-cjk-recall'
@@ -44,8 +47,9 @@ def verify_product(raw, source):
     assert manifest['source_commit'] == validation['source_commit'] == cjk['source_commit'] == source
     assert manifest['result'] == validation['result'] == cjk['result'] == 'PASS'
     assert validation['registered_groups'] == 48
-    assert cjk['native_windows'] is True and cjk['passed'] == cjk['check_count'] == len(cjk['checks']) >= 25
-    assert all(c['status'] == 'PASS' for c in cjk['checks'])
+    assert cjk['native_windows'] is True
+    validate_report(cjk, source_commit=source, binary_sha256=hashlib.sha256(files['qbrain.exe']).hexdigest(),
+                    script_sha256=hashlib.sha256(files['verification/test_cjk_recall.py']).hexdigest())
     assert cjk['real_agent_verified'] is False and cjk['live_provider_verified'] is False
     assert set(files) == set(manifest['files']) | {'MANIFEST.json', 'README-FIRST.txt'}
     for name, metadata in manifest['files'].items():
