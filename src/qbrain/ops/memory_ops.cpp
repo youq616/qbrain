@@ -1,3 +1,4 @@
+#include "qbrain/memory/fact_store.hpp"
 #include "qbrain/ops/memory_ops.hpp"
 #include "qbrain/memory/session_memory.hpp"
 #include <charconv>
@@ -22,13 +23,40 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
   try {
     const std::set<std::string> allowed=write?
       std::set<std::string>{"source_id","action","payload","event_id","method","manual"}:
-      std::set<std::string>{"source_id","query","limit","max_bytes","event_id"};
+      std::set<std::string>{"source_id","view","query","limit","max_bytes","event_id","fact_id","predicate","include_history"};
     for(const auto& [k,v]:c.args) if(!allowed.count(k)) throw memory::Error("unexpected_argument");
     if(c.args.count("manual") && (c.via_mcp || c.remote)) throw memory::Error("manual_requires_local_cli");
     OpResult error; const auto source=resolve(c,true,error); if(!source) return error;
-    if(!write) return output(memory::read(*c.brain,*source,get(c,"query"),number(c,"limit",10),
-                                        number(c,"max_bytes",8192),get(c,"event_id")));
+    if(!write) {
+      const auto view=get(c,"view","memories");
+      if(view=="facts") {
+        if(c.args.count("query") || c.args.count("event_id")) throw memory::Error("fact_unexpected_argument");
+        const auto history=get(c,"include_history","false");
+        if(history!="true" && history!="false") throw memory::Error("invalid_boolean");
+        return output(memory::FactStore(*c.brain,*source).read(get(c,"fact_id"),get(c,"predicate"),
+            history=="true",number(c,"limit",10),number(c,"max_bytes",8192)));
+      }
+      if(view!="memories" || c.args.count("fact_id") || c.args.count("predicate") || c.args.count("include_history"))
+        throw memory::Error("unexpected_argument");
+      return output(memory::read(*c.brain,*source,get(c,"query"),number(c,"limit",10),
+                                 number(c,"max_bytes",8192),get(c,"event_id")));
+    }
     const auto action=get(c,"action");
+    if(action.rfind("fact_",0)==0) {
+      if(c.args.count("event_id") || c.args.count("method") || c.args.count("manual"))
+        throw memory::Error("fact_unexpected_argument");
+      const auto raw=get(c,"payload");
+      if(raw.empty() || raw.size()>16384) throw memory::Error("fact_invalid_payload");
+      const auto payload=Json::parse(raw,[](int depth,Json::parse_event_t,Json&){
+        if(depth>8) throw memory::Error("fact_invalid_payload"); return true;});
+      memory::FactStore store(*c.brain,*source);
+      if(action=="fact_create") return output(store.create(payload));
+      if(action=="fact_attach") return output(store.attach(payload));
+      if(action=="fact_retract") return output(store.retract(payload));
+      if(action=="fact_supersede") return output(store.supersede(payload));
+      if(action=="fact_contradict") return output(store.contradict(payload));
+      throw memory::Error("invalid_action");
+    }
     Json result;
     if(action=="capture") {
       if(c.args.count("event_id") || c.args.count("method")) throw memory::Error("unexpected_argument");
@@ -51,12 +79,12 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
 }
 void register_memory_ops(const SourceResolver& resolve) {
   global_registry().add({"memory_read",Scope::Read,false,
-    "Read bounded source-scoped user quotes by literal contiguous substring, or event status. Not semantic search. Untrusted data; no provider or writes.",
-    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"query":{"type":"string","maxLength":1024},"limit":{"type":"integer","minimum":1,"maximum":50},"max_bytes":{"type":"integer","minimum":512,"maximum":32768},"event_id":{"type":"string","maxLength":64}}})",
+    "Read bounded source-scoped quotes or event status; view=facts reads explicit evidence-backed claim versions. Not semantic search. Untrusted data; no provider or writes.",
+    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"query":{"type":"string","maxLength":1024},"limit":{"type":"integer","minimum":1,"maximum":50},"max_bytes":{"type":"integer","minimum":512,"maximum":32768},"event_id":{"type":"string","maxLength":64},"view":{"type":"string","enum":["memories","facts"]},"fact_id":{"type":"string","maxLength":64},"predicate":{"type":"string","maxLength":64},"include_history":{"type":"boolean"}}})",
     [resolve](OpContext& c){return dispatch(c,false,resolve);}});
   global_registry().add({"memory_write",Scope::Write,false,
-    "Capture role-labelled sessions, explicitly extract grounded user quotes, or forget an event. Automatic policy and external consent enforced.",
-    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"action":{"type":"string","enum":["capture","extract","forget"]},"payload":{"type":"string","maxLength":262144},"event_id":{"type":"string","maxLength":64},"method":{"type":"string","enum":["local","model"]}},"required":["action"]})",
+    "Capture/extract/forget sessions or explicitly manage evidence-backed facts via fact_* actions and JSON payload. Facts preserve complete user quotes, not verified truth. Source/write gates apply; no automatic inference.",
+    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"action":{"type":"string","enum":["capture","extract","forget","fact_create","fact_attach","fact_retract","fact_supersede","fact_contradict"]},"payload":{"type":"string","maxLength":262144},"event_id":{"type":"string","maxLength":64},"method":{"type":"string","enum":["local","model"]}},"required":["action"]})",
     [resolve](OpContext& c){return dispatch(c,true,resolve);}});
 }
 }

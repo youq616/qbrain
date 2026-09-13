@@ -148,6 +148,7 @@ void print_help() {
       "  sync <notes-dir> [--watch] [--once]  live-sync notes (mtime state)\n"
       "  worker [--once]                     claim/complete minion jobs + inbox\n"
       "  dream [--apply] [--phase p] [--retention-hours N] [--json]\n"
+      "  fact create|read|attach|retract|supersede|contradict [--source id] [--stdin]\n"
       "  memory capture|extract|drain|read|status|forget [--source id]\n"
       "  session-capture [--automatic] [--session-id id] [--fragment-id id]\n"
       "  version\n"
@@ -399,6 +400,39 @@ int cmd_memory(const std::vector<std::string>& args) {
     auto r=ops::global_registry().call(reading?"memory_read":"memory_write",ctx);
     std::cout << r.json << "\n"; return r.ok?0:1;
   });
+}
+// Facts use existing operation authorization and source resolution, not a new bypass.
+int cmd_fact(const std::vector<std::string>& args) {
+  try {
+    if(args.empty()) throw memory::Error("fact_action_required");
+    const auto& action=args[0];
+    const bool reading=action=="read";
+    if(!reading && action!="create" && action!="attach" && action!="retract" &&
+       action!="supersede" && action!="contradict") throw memory::Error("invalid_action");
+    std::set<std::string> values={"--brain","--source"},flags;
+    if(reading) { values.insert({"--id","--predicate","--limit","--max-bytes"}); flags.insert("--history"); }
+    else flags.insert("--stdin");
+    std::set<std::string> seen;
+    for(std::size_t i=1;i<args.size();++i) {
+      if(!seen.insert(args[i]).second) throw memory::Error("duplicate_argument");
+      if(flags.count(args[i])) continue;
+      if(!values.count(args[i]) || i+1>=args.size()) throw memory::Error("invalid_cli_argument");
+      ++i;
+    }
+    return with_brain(args,[&](Brain& b) {
+      ops::OpContext c; c.brain=&b; c.args["source_id"]=opt(args,"--source","default");
+      if(reading) {
+        c.args["view"]="facts"; c.args["fact_id"]=opt(args,"--id");
+        c.args["predicate"]=opt(args,"--predicate"); c.args["limit"]=opt(args,"--limit","10");
+        c.args["max_bytes"]=opt(args,"--max-bytes","8192");
+        c.args["include_history"]=flag(args,"--history")?"true":"false";
+      } else { c.args["action"]="fact_"+action; c.args["payload"]=bounded_stdin(); }
+      const auto result=ops::global_registry().call(reading?"memory_read":"memory_write",c);
+      std::cout<<result.json<<"\n"; return result.ok?0:1;
+    });
+  } catch(const memory::Error& e) {
+    std::cout<<nlohmann::json({{"error",{{"code",e.what()}}}}).dump()<<"\n"; return 1;
+  }
 }
 // Legacy raw transcripts have unknown speaker attribution and cannot become user facts.
 int cmd_session_capture(const std::vector<std::string>& args) {
@@ -696,6 +730,7 @@ int run(int argc, char** argv) {
     if (cmd == "list") return cmd_list(rest);
     if (cmd == "capture") return cmd_capture(rest);
     if (cmd == "memory") return cmd_memory(rest);
+    if (cmd == "fact") return cmd_fact(rest);
     if (cmd == "session-capture") return cmd_session_capture(rest);  // N41
     if (cmd == "import") return cmd_import(rest);
     if (cmd == "search") return cmd_search(rest);

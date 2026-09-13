@@ -247,7 +247,8 @@ const std::unordered_map<std::string, ArgumentType>* typed_argument_schema(
   static const std::unordered_map<std::string, Type> memory_read = {
       {"source_id", Type::String}, {"query", Type::String},
       {"event_id", Type::String}, {"limit", Type::UnsignedInteger},
-      {"max_bytes", Type::UnsignedInteger}};
+      {"max_bytes", Type::UnsignedInteger}, {"view", Type::String},
+      {"fact_id", Type::String}, {"predicate", Type::String}, {"include_history", Type::Boolean}};
   static const std::unordered_map<std::string, Type> memory_write = {
       {"source_id", Type::String}, {"action", Type::String},
       {"payload", Type::String}, {"event_id", Type::String}, {"method", Type::String}};
@@ -372,7 +373,7 @@ json handle_request(Brain& brain, const ServeOptions& opts, const json& req,
     ctx.allow_write = opts.allow_write;
     ctx.args = is_analytics_operation(name)
                    ? analytics_args_from_params(arguments)
-                   : args_from_params(arguments, name == "chronicle_backfill");
+                   : args_from_params(arguments, name == "chronicle_backfill" || name == "memory_read");
     if (uses_ambient_source(name) && ctx.args.find("source_id") == ctx.args.end()) {
       if (const char* s = std::getenv("QBRAIN_SOURCE")) ctx.args["source_id"] = s;
     }
