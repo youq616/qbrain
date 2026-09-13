@@ -323,6 +323,11 @@ def run(args: argparse.Namespace, checks: list[dict] | None = None,
 
 
 def main() -> int:
+    # Windows redirected Python streams may default to cp1252. Configure only
+    # this process, preserving UTF-8 JSON/Chinese diagnostics under PowerShell.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--report", type=Path, default=None)
@@ -359,10 +364,10 @@ def main() -> int:
         print(f"N46F CJK recall FAILED: {failure}", file=sys.stderr)
     report["declared_package_source"] = args.source_commit
     text = json.dumps(report, ensure_ascii=False, indent=2)
-    print(text)
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(text + "\n", encoding="utf-8")
+    print(text)
     for c in report["checks"]:
         print(f"{c['status']} :: {c['name']} :: {c['detail']}")
     print(f"N46F CJK recall: {report['check_count']} checks, result={report['result']}")

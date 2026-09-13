@@ -1,5 +1,8 @@
 import copy
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -53,5 +56,20 @@ class CjkReportTests(unittest.TestCase):
         # Metadata field is generated from the actual interpreter OS, not CLI input.
         import inspect
         self.assertIn('native_windows=os.name == "nt"',inspect.getsource(suite.add_source_provenance))
+
+    def test_redirected_cp1252_streams_keep_unicode_and_report(self):
+        with tempfile.TemporaryDirectory() as d:
+            output=Path(d)/'report.json'
+            code = """import test_cjk_recall as suite, sys
+suite.run=lambda *args: dict(result='PASS', checks=[dict(name='unicode',status='PASS',detail='中文𠀀😀')], check_count=1, counts={'total':1,'pass':1,'fail':0}, quote='我偏好日志前缀')
+sys.argv=['test','--binary','not-executed','--report',sys.argv[1]]
+raise SystemExit(suite.main())
+"""
+            env=dict(os.environ,PYTHONIOENCODING='cp1252')
+            r=subprocess.run([sys.executable,'-c',code,str(output)],cwd=Path(__file__).resolve().parent,
+                             env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=15)
+            self.assertEqual(r.returncode,0,r.stderr.decode('utf-8',errors='replace'))
+            self.assertIn('中文𠀀😀',r.stdout.decode('utf-8'))
+            self.assertEqual(json.loads(output.read_text(encoding='utf-8'))['quote'],'我偏好日志前缀')
 
 if __name__=='__main__':unittest.main()
