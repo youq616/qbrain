@@ -1,0 +1,46 @@
+name: N46F WinHTTP option parameter observations
+on:
+  push:
+    branches: ['verification/n46f-server2022-pool']
+    paths: ['.github/workflows/n46f-option-diagnostic.yml']
+permissions:
+  contents: read
+jobs:
+  observe:
+    strategy:
+      matrix:
+        os: [windows-2022, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - name: Observe session option setup without any request or connection
+        shell: python
+        run: |
+          import ctypes as C, json, platform
+          from pathlib import Path
+          w = C.WinDLL('winhttp', use_last_error=True)
+          w.WinHttpOpen.argtypes = [C.c_wchar_p,C.c_uint32,C.c_wchar_p,C.c_wchar_p,C.c_uint32]
+          w.WinHttpOpen.restype = C.c_void_p
+          w.WinHttpSetOption.argtypes = [C.c_void_p,C.c_uint32,C.c_void_p,C.c_uint32]
+          w.WinHttpSetOption.restype = C.c_int
+          w.WinHttpCloseHandle.argtypes = [C.c_void_p]
+          w.WinHttpCloseHandle.restype = C.c_int
+          rows=[]
+          for name, buffered in [('null_zero',False),('bool_true',True)]:
+              h=w.WinHttpOpen('QbrainOptionDiagnostic',1,None,None,0x10000000)
+              if not h: raise RuntimeError('WinHttpOpen failed: '+str(C.get_last_error()))
+              value=C.c_int(1)
+              C.set_last_error(0)
+              # WINHTTP_OPTION_DISABLE_GLOBAL_POOLING, Windows SDK value 195.
+              ok=w.WinHttpSetOption(h,195,C.byref(value) if buffered else None,4 if buffered else 0)
+              code=0 if ok else C.get_last_error()
+              closed=w.WinHttpCloseHandle(h)
+              rows.append(dict(form=name,accepted=bool(ok),error=code,closed=bool(closed)))
+          result=dict(platform=platform.platform(),option=195,network_requests=0,observations=rows)
+          Path('option-observations.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(result))
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: n46f-option-${{ matrix.os }}
+          path: option-observations.json
+          retention-days: 14
