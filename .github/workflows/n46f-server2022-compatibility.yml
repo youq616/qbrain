@@ -1,0 +1,48 @@
+name: N46F Server 2022 HTTP compatibility
+on:
+  push:
+    branches: ['verification/n46f-server2022-pool']
+    paths: ['.github/workflows/n46f-server2022-compatibility.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  server2022:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 9a36f8cc153c8a80028bdf65f07a23604ced6668
+          persist-credentials: false
+      - name: Compile the pinned production transport and diagnostic controls
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          [Environment]::OSVersion.VersionString | Set-Content evidence/platform.txt
+          cmake -S . -B build/http -DQBRAIN_WITH_PG=OFF
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/http --config Release --target qbrain_http_probe qbrain_http_tests --parallel 2 2>&1 | Tee-Object evidence/build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake -S tests/http_lifecycle -B build/lifecycle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/lifecycle --config Release --parallel 2 2>&1 | Tee-Object evidence/lifecycle-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Native input, wire and fixed cancellation schedules
+        shell: pwsh
+        run: |
+          & build/http/Release/qbrain_http_tests.exe 2>&1 | Tee-Object evidence/input.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_http_transport.py --probe build/http/Release/qbrain_http_probe.exe --report evidence/http-transport.json 2>&1 | Tee-Object evidence/http-transport.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_http_lifecycle.py --probe build/lifecycle/Release/qbrain_http_lifecycle_current.exe --baseline build/lifecycle/Release/qbrain_http_lifecycle_legacy.exe --pooled build/lifecycle/Release/qbrain_http_lifecycle_pooled.exe --report evidence/http-lifecycle.json 2>&1 | Tee-Object evidence/http-lifecycle.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_http_lifecycle_report.py 2>&1 | Tee-Object evidence/lifecycle-report-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n46f-server2022-http-evidence
+          path: evidence/
+          retention-days: 14
