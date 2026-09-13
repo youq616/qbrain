@@ -1,0 +1,97 @@
+name: N46F resolver timer diagnostic
+on:
+  push:
+    branches: ['verification/n46f-server2022-pool']
+    paths: ['.github/workflows/n46f-resolver-diagnostic.yml']
+permissions:
+  contents: read
+jobs:
+  observe:
+    strategy:
+      matrix:
+        os: [windows-2022, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 9a36f8cc153c8a80028bdf65f07a23604ced6668
+          persist-credentials: false
+      - name: Build isolated experiment copies, not a product package
+        shell: python
+        run: |
+          import hashlib,json,os,subprocess
+          from pathlib import Path
+          root=Path.cwd()
+          out=Path(os.environ['RUNNER_TEMP'])/'qbrain-resolver-experiment'
+          out.mkdir()
+          source=(root/'src/qbrain/ai/http_client.cpp').read_text(encoding='utf-8')
+          old='WinHttpSetTimeouts(session.value, timeout_ms, timeout_ms, timeout_ms, timeout_ms)'
+          assert source.count(old)==1
+          (out/'finite.cpp').write_text(source,encoding='utf-8')
+          (out/'default.cpp').write_text(source.replace(old,'WinHttpSetTimeouts(session.value, 0, timeout_ms, timeout_ms, timeout_ms)'),encoding='utf-8')
+          probe=(root/'tests/http_lifecycle_probe.cpp').read_text(encoding='utf-8')
+          probe=probe.replace('#include <windows.h>','#include <windows.h>\n#include <tlhelp32.h>\nunsigned process_threads() { unsigned n=0; auto h=CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD,0); if(h==INVALID_HANDLE_VALUE) throw std::runtime_error("thread snapshot"); THREADENTRY32 e{}; e.dwSize=sizeof(e); if(Thread32First(h,&e)) do {if(e.th32OwnerProcessID==GetCurrentProcessId()) ++n;} while(Thread32Next(h,&e)); CloseHandle(h); return n; }')
+          probe=probe.replace('{{"timeout_count",timeout_count}', '{{"threads",process_threads()},{"timeout_count",timeout_count}')
+          (out/'probe.cpp').write_text(probe,encoding='utf-8')
+          cmake='cmake_minimum_required(VERSION 3.24)\nproject(resolver_diag LANGUAGES CXX)\nset(CMAKE_CXX_STANDARD 20)\nadd_compile_options(/utf-8 /EHsc)\n'
+          for variant in ('finite','default'):
+              cmake+=f'add_executable({variant} probe.cpp {variant}.cpp)\n'
+              cmake+=f'target_compile_definitions({variant} PRIVATE QBRAIN_HTTP_DIAGNOSTICS=1 QBRAIN_HTTP_TEST_GLOBAL_POOL=1 NOMINMAX)\n'
+              cmake+=f'target_include_directories({variant} PRIVATE "{root.as_posix()}/include" "{root.as_posix()}/third_party")\n'
+              cmake+=f'target_link_libraries({variant} PRIVATE winhttp)\n'
+          (out/'CMakeLists.txt').write_text(cmake,encoding='utf-8')
+          subprocess.run(['cmake','-S',str(out),'-B',str(out/'build')],check=True)
+          subprocess.run(['cmake','--build',str(out/'build'),'--config','Release','--parallel','2'],check=True)
+          (out/'source.json').write_text(json.dumps({'base':'9a36f8cc153c8a80028bdf65f07a23604ced6668','experiment_files':{n:hashlib.sha256((out/n).read_bytes()).hexdigest() for n in ('finite.cpp','default.cpp','probe.cpp','CMakeLists.txt')}},indent=2),encoding='utf-8')
+      - name: Observe a fixed schedule without retrying or issuing acceptance
+        shell: python
+        run: |
+          import json,os,subprocess,threading,platform
+          from pathlib import Path
+          from concurrent.futures import ThreadPoolExecutor
+          from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
+          root=Path(os.environ['RUNNER_TEMP'])/'qbrain-resolver-experiment'
+          stop=threading.Event()
+          class Fixture(BaseHTTPRequestHandler):
+              protocol_version='HTTP/1.1'
+              def log_message(self,*args):pass
+              def handle(self):
+                  try:super().handle()
+                  except OSError:self.close_connection=True
+              def do_POST(self):
+                  self.rfile.read(int(self.headers.get('Content-Length','0')))
+                  self.send_response(200);self.send_header('Transfer-Encoding','chunked');self.end_headers()
+                  stop.wait(1.5);self.close_connection=True
+          server=ThreadingHTTPServer(('127.0.0.1',0),Fixture);server.daemon_threads=True
+          threading.Thread(target=server.serve_forever,daemon=True).start()
+          report={'status':'INCOMPLETE_DIAGNOSTIC','platform':platform.platform(),'variants':{},'product_acceptance':False}
+          try:
+              for label,name in [('finite','finite'),('default','default'),('default_repeat','default')]:
+                  process=subprocess.Popen([str(root/f'build/Release/{name}.exe')],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8')
+                  reader=ThreadPoolExecutor(max_workers=1)
+                  rows=[];report['variants'][label]=rows
+                  try:
+                      for n in range(8):
+                          process.stdin.write(json.dumps({'base':f'http://127.0.0.1:{server.server_port}','count':32})+'\n');process.stdin.flush()
+                          row=json.loads(reader.submit(process.stdout.readline).result(timeout=15));rows.append(row)
+                          print(json.dumps({'variant':label,'round':n+1,**row}),flush=True)
+                      process.stdin.close();process.wait(timeout=5)
+                      assert process.returncode==0
+                  finally:
+                      if not process.stdin.closed:process.stdin.close()
+                      try:process.wait(timeout=5)
+                      except subprocess.TimeoutExpired:process.kill();process.wait(timeout=5)
+                      reader.shutdown(wait=True,cancel_futures=True)
+              report['status']='OBSERVED_NOT_ACCEPTANCE'
+          finally:
+              stop.set();server.shutdown();server.server_close()
+              (root/'observations.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: n46f-resolver-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/qbrain-resolver-experiment/observations.json
+            ${{ runner.temp }}/qbrain-resolver-experiment/source.json
+          retention-days: 14
