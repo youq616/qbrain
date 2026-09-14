@@ -1,0 +1,171 @@
+name: Publish exact reviewed N47B candidate
+on:
+  push:
+    branches: ['delivery/n47b-reviewed-7999d39b']
+    paths: ['.github/workflows/publish-reviewed-n47b.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deliver-n47b-7999d39b
+  cancel-in-progress: false
+jobs:
+  publish-approved-bytes:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47b-reviewed-7999d39b'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 7999d39b9e6a253d62557a6ccc8341598ccdebb6
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ffe16a4112836f9cd1ffaf42776900c784076a86
+          path: review
+          persist-credentials: false
+      - name: Revalidate reviewed source and publish the exact original CI ZIP
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          # Fixed-candidate administrative promotion, not a runtime change.
+          import hashlib, io, json, os, re, subprocess, sys, zipfile
+          from pathlib import Path
+          repo='youq616/qbrain'
+          source='7999d39b9e6a253d62557a6ccc8341598ccdebb6'
+          tree='cb00297d74efb890677f14a5dfb3e4976b9b29c9'
+          reviewed='ffe16a4112836f9cd1ffaf42776900c784076a86'
+          review_tree='a4b37c947c16e3194ba17ee92ec436feb2d8e43d'
+          merge='42f6dac5be3bf411dac802280b08c828a5a90fbb'
+          product_run=34798495285
+          tag='conflict-preview-7999d39b'
+          cap=64*1024*1024
+          root=Path(os.environ['RUNNER_TEMP'])/('n47b-reviewed-'+os.environ['GITHUB_RUN_ID'])
+          root.mkdir(exist_ok=False)
+          def sha(raw):return hashlib.sha256(raw).hexdigest()
+          def gh(*args):return subprocess.check_output(['gh',*args],stderr=subprocess.PIPE,timeout=120)
+          def api(path):return json.loads(gh('api',f'repos/{repo}/{path}'))
+          def git(path,ref):return subprocess.check_output(['git','-C',str(path),'rev-parse',ref],text=True).strip()
+          def unpack(raw):
+              assert len(raw)<cap
+              with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                  infos=z.infolist()
+                  assert len(infos)<128 and sum(i.file_size for i in infos)<cap
+                  assert len(infos)==len({i.orig_filename for i in infos})
+                  assert all(i.orig_filename==i.filename and not i.flag_bits&1 and not i.is_dir() for i in infos)
+                  return {i.filename:z.read(i) for i in infos}
+          def checkout(path,digest):
+              raw=Path('candidate',path).read_bytes()
+              assert digest in (sha(raw),sha(raw.replace(b'\r\n',b'\n').replace(b'\n',b'\r\n'))),path
+          assert git('candidate','HEAD')==source and git('candidate','HEAD^{tree}')==tree
+          assert git('review','HEAD')==reviewed and git('review','HEAD^{tree}')==review_tree
+          pr=api('pulls/17')
+          assert pr['merged'] is True and pr['merge_commit_sha']==merge and pr['head']['sha']==reviewed
+          audit=json.loads(Path('review/docs/nodes/n47b-evidence/SUMMARY.json').read_text(encoding='utf-8'))
+          assert audit['source_commit']==source and audit['source_tree']==tree and audit['scoped_outcome']=='PASS'
+          assert audit['review']['unresolved_p0_p1']==0 and audit['review']['independent_subagent_claimed'] is False
+          assert audit['readback_checks']==134
+          for rid in (product_run,34798495355):
+              r=api(f'actions/runs/{rid}')
+              assert r['head_sha']==source and r['status']=='completed' and r['conclusion']=='success'
+          jobs=api(f'actions/runs/{product_run}/jobs?per_page=100')['jobs']
+          for name in ('source','portable','windows','windows-http-2022'):
+              matches=[j for j in jobs if j['name']==name]
+              assert len(matches)==1 and matches[0]['conclusion']=='success',name
+          pins={
+              'package':(10331215426,'4d7269352b92fe30fe2903ba5133ccc6507c155daad39fae31a88ba2b045696f'),
+              'windows':(10331140782,'4e7863157588a8d06e5964637af34a476dc7193a942d409afe88ec733a73cd6b'),
+              'server2022':(10330825805,'423698deff7623d3adf8ec4360fc5ddbd54185e52e2b30228d6f0bdac7ff4f54')}
+          artifacts={}
+          for name,(ident,digest) in pins.items():
+              meta=api(f'actions/artifacts/{ident}')
+              assert not meta['expired'] and meta['workflow_run']['id']==product_run
+              assert meta['workflow_run']['head_sha']==source and meta['digest']=='sha256:'+digest
+              assert 0<meta['size_in_bytes']<cap
+              raw=gh('api',f'repos/{repo}/actions/artifacts/{ident}/zip')
+              assert len(raw)==meta['size_in_bytes'] and sha(raw)==digest
+              artifacts[name]=unpack(raw)
+          outer=artifacts['package']
+          assert set(outer)=={'qbrain-windows-x64-development.zip','SHA256SUMS.txt'}
+          raw=outer['qbrain-windows-x64-development.zip']
+          assert len(raw)==1924291 and sha(raw)=='ceb1ad45109a1cdf7a5f72a4982465613ac4119c479025f6e45b139f01014e0c'
+          assert outer['SHA256SUMS.txt'].decode('ascii').split()==[sha(raw),'qbrain-windows-x64-development.zip']
+          files=unpack(raw)
+          manifest=json.loads(files['MANIFEST.json']);validation=json.loads(files['verification/validation.json'])
+          exe=sha(files['qbrain.exe'])
+          assert len(files['qbrain.exe'])==3906560 and exe=='cbe57072f6a63706a9e46fe26bfeacb3c324f5fcc05e36da1f4eff01f7a500e4'
+          assert set(files)==set(manifest['files'])|{'MANIFEST.json','README-FIRST.txt'}
+          for name,m in manifest['files'].items():
+              assert type(m['bytes']) is int and m['bytes']==len(files[name]) and m['sha256']==sha(files[name])
+          for r in (manifest,validation):
+              assert r['result']=='PASS' and r['source_commit']==source and r['binary_sha256']==exe
+              assert r['registered_groups']==50 and r['signed'] is False and r['real_host_model_consumption_verified'] is False
+              assert r['postgres_memory_context_verified'] is False
+          for name in files:
+              if name.startswith('verification/') and name.endswith('.json'):
+                  assert files[name]==artifacts['windows'][name.split('/')[-1]]
+          sys.path.insert(0,str(Path('candidate/.ci').resolve()))
+          from validate_conflict_report import validate_unit,validate_process
+          from validate_fact_report import validate_unit_report,validate_report as validate_facts
+          from validate_cjk_report import validate_report as validate_cjk
+          from validate_http_lifecycle import validate_report as validate_lifecycle
+          from validate_native_log import verified_groups
+          verified_groups(Path('candidate/tests/test_main.cpp').read_text(encoding='utf-8'),artifacts['windows']['regression.log'].decode('utf-8-sig'),50)
+          for platform in ('windows','server2022'):
+              u=json.loads(artifacts[platform]['conflict-unit.json'])
+              checkout('tests/test_n47b.cpp',u['test_sha256']);checkout('.ci/test_conflict_unit.py',u['script_sha256'])
+              assert validate_unit(u,source_commit=source,binary_sha256=u['binary_sha256'],script_sha256=u['script_sha256'],test_sha256=u['test_sha256'])=={'scenarios':13,'assertions':346}
+              assert u['source_tree']==tree
+              h=json.loads(artifacts[platform]['http-lifecycle.json'])
+              validate_lifecycle(h,source_commit=source,probe_hashes={n:h['variants'][n]['sha256'] for n in ('legacy','per_call','current')})
+              wire=json.loads(artifacts[platform]['http-transport.json'])
+              assert wire['result']=='PASS' and wire['source_commit']==source and wire['check_count']==len(wire['checks'])==81
+          p=json.loads(files['verification/conflict-process.json'])
+          script=files['verification/test_conflict_process.py'];checkout('.ci/test_conflict_process.py',sha(script))
+          assert validate_process(p,source_commit=source,binary_sha256=exe,script_sha256=sha(script))=={'checks':38,'commands':75}
+          assert p['source_tree']==tree
+          f=json.loads(files['verification/fact-process.json'])
+          script=files['verification/test_fact_process.py'];checkout('.ci/test_fact_process.py',sha(script))
+          validate_facts(f,source_commit=source,binary_sha256=exe,script_sha256=sha(script))
+          u=json.loads(files['verification/fact-unit.json']);checkout('tests/test_n47a.cpp',u['test_sha256'])
+          names=re.findall(r'scenario\("([^"\r\n]+)"',Path('candidate/tests/test_n47a.cpp').read_text(encoding='utf-8'))
+          assert validate_unit_report(u,source_commit=source,binary_sha256=u['binary_sha256'],test_sha256=u['test_sha256'],expected_scenarios=names)=={'scenarios':15,'assertions':380}
+          c=json.loads(files['verification/cjk-recall.json'])
+          script=files['verification/test_cjk_recall.py'];checkout('.ci/test_cjk_recall.py',sha(script))
+          validate_cjk(c,source_commit=source,binary_sha256=exe,script_sha256=sha(script))
+          assert validation['conflict_scenarios']==13 and validation['conflict_assertions']==346 and validation['conflict_process_checks']==38
+          assert 'CONFLICT-INSPECTION.zh-CN.md' in files
+          provenance={'repository':repo,'source_commit':source,'source_tree':tree,'review_commit':reviewed,
+              'merge_commit':merge,'product_workflow_run_id':product_run,'delivery_workflow_run_id':int(os.environ['GITHUB_RUN_ID']),
+              'delivery_workflow_commit':os.environ['GITHUB_SHA'],'package_artifact_id':pins['package'][0],
+              'package_bytes':len(raw),'package_sha256':sha(raw),'binary_sha256':exe,'registered_groups':50,
+              'conflict_scenarios':13,'conflict_assertions':346,'conflict_process_checks':38,'conflict_commands':75,
+              'review_type':'Owner-authorized separate engineering self-review; not independent subagent',
+              'signed':False,'product_rebuilt':False,'product_repacked':False,'probe_binaries_separately_downloaded':False,
+              'scope':'Explicit paired conflict inspection; no inference, new schema, permissions or automatic resolution'}
+          out=root/'release';out.mkdir()
+          (out/'qbrain-windows-x64-conflicts.zip').write_bytes(raw)
+          (out/'SHA256SUMS.txt').write_text(sha(raw)+'  qbrain-windows-x64-conflicts.zip\n',encoding='ascii')
+          (out/'PROVENANCE.json').write_text(json.dumps(provenance,indent=2)+'\n',encoding='utf-8')
+          assets=['qbrain-windows-x64-conflicts.zip','SHA256SUMS.txt','PROVENANCE.json']
+          notes=('N47B unsigned development preview. Original tested CI bytes; no rebuild/repack. '
+              'fact conflicts and memory_read(view=conflicts) return both active evidence-backed sides of explicit contradiction assertions. '
+              'No inferred winner, semantic conflict detection or schema change. 50 native groups, 13 conflict scenarios/346 assertions, '
+              '38 CLI/MCP checks/75 expected exits passed. Same-source Server 2022 unit and HTTP checks passed. '
+              'Read CONFLICT-INSPECTION.zh-CN.md; empty truncated results are incomplete. '
+              'Review is a separate coordinating-agent engineering pass, not third-party. ZIP SHA256 '+sha(raw))
+          gh('release','create',tag,*(str(out/n) for n in assets),'--repo',repo,'--target',source,
+              '--draft','--prerelease','--latest=false','--title','Qbrain N47B paired conflict preview (7999d39b)','--notes',notes)
+          rb=root/'release-readback'
+          gh('release','download',tag,'--repo',repo,'--dir',str(rb))
+          assert {p.name for p in rb.iterdir()}==set(assets)
+          for name in assets:assert (out/name).read_bytes()==(rb/name).read_bytes()
+          gh('release','edit',tag,'--repo',repo,'--draft=false','--prerelease','--latest=false')
+          print(json.dumps({'result':'PUBLISHED','tag':tag,**provenance}))
