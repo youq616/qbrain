@@ -1,0 +1,87 @@
+name: N47B exact source object import
+on:
+  push:
+    branches: ['delivery/n47b-source-objects']
+    paths: ['.github/workflows/n47b-source-objects.yml', 'tools/transfer/n47b/**']
+permissions:
+  contents: write
+jobs:
+  objects:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: transfer
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: bdbbe97e441030ca74c3910171175f89768a6b81
+          path: product
+          persist-credentials: false
+      - name: Verify the patch and create only unreachable source blobs/tree
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import base64, gzip, hashlib, io, json, os, subprocess
+          from pathlib import Path
+          repo = 'youq616/qbrain'
+          root = Path(os.environ['GITHUB_WORKSPACE'])
+          product = root/'product'
+          parts = root/'transfer/tools/transfer/n47b'
+          expected = 'cb00297d74efb890677f14a5dfb3e4976b9b29c9'
+          def git(*args):
+              return subprocess.check_output(['git', *args], cwd=product, timeout=30).decode().strip()
+          def api(endpoint, payload):
+              result = subprocess.run(['gh','api','--method','POST',f'repos/{repo}/git/{endpoint}','--input','-'],
+                  input=json.dumps(payload).encode(),stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                  check=True,timeout=60)
+              return json.loads(result.stdout)
+          assert os.environ['GITHUB_REPOSITORY'] == repo
+          assert os.environ['GITHUB_REF'] == 'refs/heads/delivery/n47b-source-objects'
+          assert git('rev-parse','HEAD') == 'bdbbe97e441030ca74c3910171175f89768a6b81'
+          assert git('rev-parse','HEAD^{tree}') == '6514a5fb5dc7aa93d2053501d01383ab0adc6852'
+          assert git('status','--porcelain') == ''
+          chunks = sorted(parts.glob('part-*.b64'))
+          assert len(chunks) == 22
+          data = base64.b64decode(''.join(p.read_text(encoding='ascii') for p in chunks),validate=True)
+          assert hashlib.sha256(data).hexdigest() == '52b48e250277a45a2846aa850a5180bd8ae2967e7a3ca6002d45342dc30891dd'
+          with gzip.GzipFile(fileobj=io.BytesIO(data)) as stream:
+              patch = stream.read(1024*1024+1)
+          assert len(patch) == 81371
+          assert hashlib.sha256(patch).hexdigest() == '607425b0b66a31542c8b5d69ebfb37c87b76b27043f780e3fb9ff7da84bdfd70'
+          subprocess.run(['git','apply','--check','-'],input=patch,cwd=product,check=True,timeout=30)
+          subprocess.run(['git','apply','--index','-'],input=patch,cwd=product,check=True,timeout=30)
+          wanted = {
+              '.ci/package_n44_development.py','.ci/test_conflict_process.py','.ci/test_conflict_report.py',
+              '.ci/test_conflict_unit.py','.ci/test_validate_native_log.py','.ci/validate_conflict_report.py',
+              '.github/workflows/n42-validation.yml','.github/workflows/n44-validation.yml','CMakeLists.txt',
+              'docs/integration/CONFLICT-INSPECTION.zh-CN.md','include/qbrain/memory/fact_store.hpp',
+              'scripts/build-tests-cl.ps1','src/qbrain/cli/commands.cpp','src/qbrain/memory/fact_store.cpp',
+              'src/qbrain/ops/memory_ops.cpp','tests/test_main.cpp','tests/test_n47b.cpp'}
+          changed = git('diff','--cached','--name-only').splitlines()
+          assert len(changed) == 17 and set(changed) == wanted
+          assert git('write-tree') == expected
+          assert git('diff','--name-only') == ''
+          entries = []
+          for name in changed:
+              mode, oid, stage = git('ls-files','-s','--',name).split('\t')[0].split()
+              assert mode == '100644' and stage == '0'
+              body = (product/name).read_bytes()
+              assert hashlib.sha1(b'blob '+str(len(body)).encode()+b'\0'+body).hexdigest() == oid
+              blob = api('blobs', {'content':base64.b64encode(body).decode(),'encoding':'base64'})
+              assert blob['sha'] == oid
+              entries.append(dict(path=name,mode=mode,type='blob',sha=oid))
+          tree = api('trees',{'base_tree':'6514a5fb5dc7aa93d2053501d01383ab0adc6852','tree':entries})
+          assert tree['sha'] == expected
+          report = dict(result='SOURCE_OBJECTS_IMPORTED',tree=expected,files=entries,
+              product_branch_updated=False,product_code_executed=False,product_tests_run=False,
+              import_workflow_commit=os.environ['GITHUB_SHA'])
+          (root/'objects.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(report))
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qbrain-n47b-source-objects
+          path: objects.json
+          retention-days: 14
