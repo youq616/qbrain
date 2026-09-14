@@ -1,7 +1,9 @@
 # N47B — read-only, evidence-backed conflict inspection
 
 Baseline: b4fc453a22c20597f99e1d2dfa9713cfeb2704c4 (merged N47A).
-Status: approved for implementation after N47B-PLAN-AUDIT.md.
+Status: done for the scoped implementation after N47B-HARD-AUDIT.md.
+Tested/reviewed source: 7999d39b9e6a253d62557a6ccc8341598ccdebb6.
+Native evidence: 34798495285 and 34798495355; publication is tracked separately.
 Only youq616/qbrain, Windows-native C++20; no unrelated projects.
 
 The owner now explicitly requests that the coordinating agent perform a separate
