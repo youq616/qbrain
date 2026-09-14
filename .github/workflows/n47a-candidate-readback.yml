@@ -1,0 +1,67 @@
+name: N47A pinned candidate readback
+on:
+  push:
+    branches: ['verification/n47a-candidate-readback']
+    paths: ['tools/delivery/readback_n47a_candidate.py', 'tests/test_n47a_candidate_readback.py', '.github/workflows/n47a-candidate-readback.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  checker-tests:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Reject incomplete and inconsistent evidence
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -B -m unittest discover -s tests -p test_n47a_candidate_readback.py -v
+  readback:
+    needs: checker-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Fetch only immutable artifact IDs and verify external digests
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          from pathlib import Path
+          import hashlib, os, subprocess
+          pins = {
+              'source': (10327229128,'c9d8bd58d57c35b5689cea9daf4a4d7a3e53acc8d6494b8d10cdcada67b93f74'),
+              'windows': (10328096068,'7da43c3b3ccda87820760f2824763af78ca3ac94cc7c56edef8447e1a9463d86'),
+              'portable': (10327438297,'0d13bb0cfbcde47179dc8ce544949d0bd7c6672ab66134490910e71746553f2b'),
+              'server2022': (10327154281,'a5cdcb11155d4bcdeea302234e3f088782a0e33cf4d61ac7d91bd01da62b3c5e'),
+              'package': (10328305619,'1e63c74411baa955a265064dffe7675da189d6277e01ec70198a827dbc7c0816')
+          }
+          root = Path(os.environ['RUNNER_TEMP'])/'n47a-readback-artifacts'
+          root.mkdir()
+          for name, (artifact, expected) in pins.items():
+              target = root/(name+'.zip')
+              with target.open('xb') as stream:
+                  subprocess.run(['gh','api',f'repos/youq616/qbrain/actions/artifacts/{artifact}/zip'],
+                                 stdout=stream,check=True,timeout=120)
+              assert hashlib.sha256(target.read_bytes()).hexdigest() == expected, name
+      - name: Recheck full unit, process, source and native delivery evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          python -B tools/delivery/readback_n47a_candidate.py --artifacts-dir "$RUNNER_TEMP/n47a-readback-artifacts" --report evidence/readback.json | tee evidence/readback.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47a-candidate-readback
+          path: evidence/
+          retention-days: 14
