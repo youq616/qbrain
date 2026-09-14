@@ -362,3 +362,9 @@ add_executable(qbrain_recall_tests tests/test_n47c.cpp)
 target_compile_definitions(qbrain_recall_tests PRIVATE QBRAIN_RECALL_STANDALONE=1)
 target_link_libraries(qbrain_recall_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
 add_test(NAME qbrain_recall_unit COMMAND qbrain_recall_tests)
+
+# N47D uses the actual Hook composer and complete evidence retrieval code.
+add_executable(qbrain_hook_fact_tests tests/test_n47d.cpp)
+target_compile_definitions(qbrain_hook_fact_tests PRIVATE QBRAIN_HOOK_FACT_STANDALONE=1)
+target_link_libraries(qbrain_hook_fact_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
+add_test(NAME qbrain_hook_fact_unit COMMAND qbrain_hook_fact_tests)

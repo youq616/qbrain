@@ -5,7 +5,8 @@ param(
  [Parameter(Mandatory=$true)][ValidateSet('Claude','Codex')][string]$HostName,
  [Parameter(Mandatory=$true)][string]$ProjectPath,
  [string]$Binary='', [string]$BrainId='',
- [switch]$EnableCapture
+ [switch]$EnableCapture,
+ [switch]$EnableFactRecall
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
@@ -77,7 +78,11 @@ function Matching($o){
 if($Action -eq 'Status'){
  $o=if([IO.File]::Exists($ownerPath)){Parse (Raw $ownerPath)}else{$null}
  $installed=$null -ne $o -and (Has $o 'active') -and $o.active
- Json ([pscustomobject]@{installed=$installed;configuration_matches=($installed -and (Matching $o));recovery_required=[IO.File]::Exists($journal);host_consumption_confirmed=$false})
+ $factEnabled=$false
+ if($installed -and [IO.File]::Exists($cfgPath)){
+  try{$c=Parse (Raw $cfgPath);$factEnabled=(Has $c 'fact_recall') -and ($c.fact_recall -is [bool]) -and $c.fact_recall}catch{$factEnabled=$false}
+ }
+ Json ([pscustomobject]@{fact_recall_enabled=$factEnabled;installed=$installed;configuration_matches=($installed -and (Matching $o));recovery_required=[IO.File]::Exists($journal);host_consumption_confirmed=$false})
  return
 }
 [void][IO.Directory]::CreateDirectory($owned)
@@ -130,7 +135,7 @@ try {
   if(-not $BrainId){$BrainId='project-'+$id}
   if($BrainId -cnotmatch '^[a-z0-9][a-z0-9_-]{0,63}$'){throw 'Use a safe lowercase brain identifier.'}
   $bridgeSource=Join-Path $PSScriptRoot 'Invoke-QbrainJson.ps1'
-  $cfg=[pscustomobject]@{version=1;host=$hostKey;project_root=$project;brain_id=$BrainId;source_id='default';enabled=$true;capture=[bool]$EnableCapture;extraction='local';recall_bytes=4096;max_items=8}
+  $cfg=[pscustomobject]@{version=1;host=$hostKey;project_root=$project;brain_id=$BrainId;source_id='default';enabled=$true;capture=[bool]$EnableCapture;fact_recall=[bool]$EnableFactRecall;extraction='local';recall_bytes=4096;max_items=8}
   $entry=[pscustomobject]@{type='command';command=$exe;args=@('hook','--config',$cfgPath);timeout=10}
   if($hostKey -eq 'codex'){
    function Literal([string]$s){return "'"+$s.Replace("'","''")+"'"}
