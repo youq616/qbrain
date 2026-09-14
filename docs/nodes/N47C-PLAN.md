@@ -1,7 +1,9 @@
 # N47C — query-directed fact recall with explicit counter-evidence
 
 Baseline main: 309d71ab79e8bfb55f8b8161ec0126e80514e965.
-Status: approved after N47C-PLAN-AUDIT.md; implementation and outcome pending.
+Status: done for scoped implementation after N47C-HARD-AUDIT.md.
+Tested source: 1311bdd51b779e8da6b6420b62ea3f653edfa27f.
+Original native evidence: 34854466927 and 34854466971. Publication tracked separately.
 Only the Windows-native youq616/qbrain project. Owner authorizes a separate
 coordinator engineering review, not a fabricated external/subagent approval.
 
