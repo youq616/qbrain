@@ -54,6 +54,11 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
                                  number(c,"max_bytes",8192),get(c,"event_id")));
     }
     const auto action=get(c,"action");
+    if(action=="fact_promote") {
+      if(c.args.count("payload") || c.args.count("method") || c.args.count("manual"))
+        throw memory::Error("fact_unexpected_argument");
+      return output(memory::FactStore(*c.brain,*source).promote_event(get(c,"event_id")));
+    }
     if(action.rfind("fact_",0)==0) {
       if(c.args.count("event_id") || c.args.count("method") || c.args.count("manual"))
         throw memory::Error("fact_unexpected_argument");
@@ -95,8 +100,8 @@ void register_memory_ops(const SourceResolver& resolve) {
     R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"query":{"type":"string","maxLength":1024},"limit":{"type":"integer","minimum":1,"maximum":50},"max_bytes":{"type":"integer","minimum":512,"maximum":32768},"event_id":{"type":"string","maxLength":64},"view":{"type":"string","enum":["memories","facts","conflicts","recall"]},"fact_id":{"type":"string","maxLength":64},"predicate":{"type":"string","maxLength":64},"include_history":{"type":"boolean"}}})",
     [resolve](OpContext& c){return dispatch(c,false,resolve);}});
   global_registry().add({"memory_write",Scope::Write,false,
-    "Capture/extract/forget sessions or explicitly manage evidence-backed facts via fact_* actions and JSON payload. Facts preserve complete user quotes, not verified truth. Source/write gates apply; no automatic inference.",
-    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"action":{"type":"string","enum":["capture","extract","forget","fact_create","fact_attach","fact_retract","fact_supersede","fact_contradict"]},"payload":{"type":"string","maxLength":262144},"event_id":{"type":"string","maxLength":64},"method":{"type":"string","enum":["local","model"]}},"required":["action"]})",
+    "Capture/extract/forget sessions or explicitly manage evidence-backed facts via fact_* actions and JSON payload. fact_promote uses event_id to atomically promote local extracted user quotes with fixed memory.category labels. Facts preserve complete user quotes, not verified truth. Source/write gates apply; no model inference.",
+    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"action":{"type":"string","enum":["capture","extract","forget","fact_create","fact_attach","fact_retract","fact_supersede","fact_contradict","fact_promote"]},"payload":{"type":"string","maxLength":262144},"event_id":{"type":"string","maxLength":64},"method":{"type":"string","enum":["local","model"]}},"required":["action"]})",
     [resolve](OpContext& c){return dispatch(c,true,resolve);}});
 }
 }

@@ -150,6 +150,7 @@ void print_help() {
       "  dream [--apply] [--phase p] [--retention-hours N] [--json]\n"
       "  fact create|read|attach|retract|supersede|contradict [--source id] (writes read JSON stdin)\n"
       "  fact conflicts [--source id] [--id ID] [--predicate NAME] [--limit N] [--max-bytes N]\n"
+      "  fact promote --event ID [--source id]  (local extracted event; complete quotes, no model)\n"
       "  fact recall --query <literal> [--predicate KEY] [--limit N] [--max-bytes N] [--source id]\n"
       "  memory capture|extract|drain|read|status|forget [--source id]\n"
       "  session-capture [--automatic] [--session-id id] [--fragment-id id]\n"
@@ -408,10 +409,11 @@ int cmd_fact(const std::vector<std::string>& args) {
   try {
     if(args.empty()) throw memory::Error("fact_action_required");
     const auto& action=args[0];
+    const bool promoting=action=="promote";
     const bool conflicts=action=="conflicts";
     const bool recall=action=="recall";
     const bool reading=action=="read" || conflicts || recall;
-    if(!reading && action!="create" && action!="attach" && action!="retract" &&
+    if(!reading && !promoting && action!="create" && action!="attach" && action!="retract" &&
        action!="supersede" && action!="contradict") throw memory::Error("invalid_action");
     std::set<std::string> values={"--brain","--source"},flags;
     if(reading) {
@@ -419,6 +421,7 @@ int cmd_fact(const std::vector<std::string>& args) {
       values.insert(recall?"--query":"--id");
       if(!conflicts && !recall) flags.insert("--history");
     }
+    else if(promoting) values.insert("--event");
     else flags.insert("--stdin");
     std::set<std::string> seen;
     for(std::size_t i=1;i<args.size();++i) {
@@ -436,6 +439,8 @@ int cmd_fact(const std::vector<std::string>& args) {
         c.args["predicate"]=opt(args,"--predicate"); c.args["limit"]=opt(args,"--limit","10");
         c.args["max_bytes"]=opt(args,"--max-bytes","8192");
         if(!conflicts && !recall) c.args["include_history"]=flag(args,"--history")?"true":"false";
+      } else if(promoting) {
+        c.args["action"]="fact_promote";c.args["event_id"]=opt(args,"--event");
       } else { c.args["action"]="fact_"+action; c.args["payload"]=bounded_stdin(); }
       const auto result=ops::global_registry().call(reading?"memory_read":"memory_write",c);
       std::cout<<result.json<<"\n"; return result.ok?0:1;

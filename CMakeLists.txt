@@ -247,6 +247,8 @@ add_executable(qbrain_tests
   tests/test_n47a.cpp
   tests/test_n47b.cpp
   tests/test_n47c.cpp
+  tests/test_n47d.cpp
+  tests/test_n47e.cpp
   tests/test_n46f.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
@@ -368,3 +370,9 @@ add_executable(qbrain_hook_fact_tests tests/test_n47d.cpp)
 target_compile_definitions(qbrain_hook_fact_tests PRIVATE QBRAIN_HOOK_FACT_STANDALONE=1)
 target_link_libraries(qbrain_hook_fact_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
 add_test(NAME qbrain_hook_fact_unit COMMAND qbrain_hook_fact_tests)
+
+# N47E uses the real event/fact/Hook implementation.
+add_executable(qbrain_promotion_tests tests/test_n47e.cpp)
+target_compile_definitions(qbrain_promotion_tests PRIVATE QBRAIN_PROMOTION_STANDALONE=1)
+target_link_libraries(qbrain_promotion_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
+add_test(NAME qbrain_promotion_unit COMMAND qbrain_promotion_tests)
