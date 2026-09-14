@@ -1,0 +1,61 @@
+{
+  "review": "N47A independent subagent review (source-only, read-only)",
+  "date": "2026-09-14",
+  "task_file": {
+    "url": "https://raw.githubusercontent.com/youq616/qbrain/dc79f27d7dc4c4bd587494463bb3288992514a0c/docs/review/N47A-SUBAGENT-REVIEW.md",
+    "sha256": "152acc1c9d0d55204d84300fff12945727a718d7b65a6956bf69d68b09f354ce",
+    "hash_verified": true
+  },
+  "source_commit": "cccdacb61e63c29f8b9eaba1c38fbeed3e23e54b",
+  "source_tree": "a15a91f7172622e2c8021403d84e63bf36f59147",
+  "stage_baseline": "9ea592a041965ce5d4ca0d8720908d697b956157",
+  "stage_commits": ["e78ba23 (docs: approve scoped N47A)", "12807f2 (feat: evidence-backed fact versions)", "6bfc4a7 (docs: startup-race scope + review gate)", "cccdacb (fix: bounded SQLite startup contention)"],
+  "pr": "https://github.com/youq616/qbrain/pull/14",
+  "review_worktree": "C:/Users/Administrator/AppData/Local/Temp/2/QbrainN47A-Review-20260914-073332-17371/n47a-src (detached, verified HEAD=source_commit, HEAD^{tree}=source_tree, clean)",
+  "original_workspace_untouched": "main worktree and preserved N46F branch untouched; no reset/checkout/clean/push",
+  "reviewers": [
+    {
+      "id": "A",
+      "scope": "data integrity & permissions",
+      "mechanism": "ZCode Agent tool (real subagent, fresh independent context)",
+      "subagent_type": "general-purpose",
+      "invocation_receipt_agent_id": "agent_cf35a611-1d5c-4b2d-924a-66a6fd5043a9",
+      "session_id_self_reported": "unavailable (client does not expose it to the subagent)",
+      "tool_uses": 48,
+      "verdict": "PASS",
+      "unresolved_p0_p1": 0,
+      "findings": {"p3": 7},
+      "report_file": "review-A.md"
+    },
+    {
+      "id": "B",
+      "scope": "concurrency, tests & compatibility",
+      "mechanism": "ZCode Agent tool (real subagent, fresh independent context)",
+      "subagent_type": "general-purpose",
+      "invocation_receipt_agent_id": "agent_fb0d0024-f423-4f97-8820-7c303fd33899",
+      "session_id_self_reported": "unavailable (client does not expose it to the subagent)",
+      "tool_uses": 48,
+      "verdict": "PASS",
+      "unresolved_p0_p1": 0,
+      "findings": {"p3": 6},
+      "report_file": "review-B.md"
+    }
+  ],
+  "automation_status": {
+    "ran_locally": [
+      {"what": "subagent A: SQLite semantic experiments (cascade trigger, composite FK, FK=OFF) on Python sqlite3 3.50.4", "result": "as documented in review-A.md"},
+      {"what": "subagent A: DDL extraction + FK violation probe", "exit_code": "1 (expected probe failure)"},
+      {"what": "subagent B: python .ci/test_fact_report.py copy", "result": "Ran 12 tests OK", "exit_code": 0},
+      {"what": "subagent B: python .ci/test_validate_native_log.py copy", "result": "Ran 11 tests OK", "exit_code": 0},
+      {"what": "subagent B: AST verification of 118 subprocess commands", "result": "exact match with EXPECTED_COMMAND_COUNT"}
+    ],
+    "not_run": [
+      "all C++ tests (no MSVC/CMake on this machine) - static review only, not claimed as native validation",
+      "test_fact_process.py / test_fact_unit.py end-to-end (need built binary)",
+      "remote CI observation; PR #14 description"
+    ]
+  },
+  "unresolved_issues": [],
+  "unresolved_p3_observations_count": 13,
+  "overall": "Both independent subagents returned PASS with no P0/P1; 13 P3 observations recorded with file:line and fix suggestions. This is a source-level independent review; native compilation, CI, merge and release remain remote-side work."
+}

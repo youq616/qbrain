@@ -1,7 +1,11 @@
 # N47A — evidence-backed fact versions
 
-Status: approved for implementation after N47A-PLAN-AUDIT.md. Baseline main:
-9ea592a041965ce5d4ca0d8720908d697b956157. Windows-native Qbrain only.
+Status: done for this scoped storage/lifecycle stage after N47A-HARD-AUDIT.md.
+Independent source reviews A/B on cccdacb61e63c29f8b9eaba1c38fbeed3e23e54b
+and separate native runs 34788803379 / 34788803239 passed. Original review files
+were received and preserved on September 14, 2026; 13 nonblocking P3 observations
+remain tracked in issue #16. This is not all-N47 or whole-project completion.
+Baseline main: 9ea592a041965ce5d4ca0d8720908d697b956157. Windows-native Qbrain only.
 
 ## Concrete slice of N47
 

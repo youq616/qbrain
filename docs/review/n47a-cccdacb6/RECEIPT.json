@@ -1,0 +1,33 @@
+{
+  "receipt_date": "2026-09-14",
+  "receipt_kind": "Three original standalone conversation uploads; not a reconstructed ZIP",
+  "repository": "youq616/qbrain",
+  "reviewed_source_commit": "cccdacb61e63c29f8b9eaba1c38fbeed3e23e54b",
+  "reviewed_source_tree": "a15a91f7172622e2c8021403d84e63bf36f59147",
+  "files": {
+    "review-A.md": {"bytes":13966,"sha256":"d5e9610dc58dfa3d0c101e37a238cf23c9644128321c81bdd8d41236cfc296eb","git_blob_sha":"0e974f8f3a0afe5d771ad287db75200b9659cd60"},
+    "review-B.md": {"bytes":14205,"sha256":"02b87ac2a544dd7c01c3e6117dea0e15e4a85e6d7de99404e0e9cdf5db7d658d","git_blob_sha":"e066d3491de4dd0ae13fe7ec6a49e51da8adeda5"},
+    "summary.json": {"bytes":3465,"sha256":"e26d4ab1bf71ffffa921f93a40abd0611443d64acc8ff6c74d70ea33f2fa1562","git_blob_sha":"a2cfa8444c63d7f4fee911ae9e9dadb66c385732"}
+  },
+  "original_file_bytes_preserved": true,
+  "both_reports_read_in_full": true,
+  "verdicts": {"A":"PASS","B":"PASS"},
+  "reported_unresolved_p0_p1": 0,
+  "reported_nonblocking_p3": 13,
+  "review_mechanism_as_documented": "ZCode Agent tool, general-purpose independent contexts",
+  "reviewer_ids_from_parent_receipts": ["agent_cf35a611-1d5c-4b2d-924a-66a6fd5043a9","agent_fb0d0024-f423-4f97-8820-7c303fd33899"],
+  "client_identity_cryptographically_authenticated_here": false,
+  "separate_invocation_summary_received": false,
+  "parent_invocation_receipts_present_in_report_headers_and_summary": true,
+  "old_zip_digest_not_verified_or_claimed": true,
+  "receipt_sufficient_for_source_review_gate": true,
+  "new_local_review_or_zip_requested": false,
+  "native_execution_evidence_is_separate": true,
+  "native_product_run": 34788803379,
+  "n42_run": 34788803239,
+  "readback_run": 34793874790,
+  "additional_receipt_and_artifact_checks_this_turn": 57,
+  "follow_up_issue": 16,
+  "source_modified_after_review": false,
+  "whole_project_complete": false
+}
