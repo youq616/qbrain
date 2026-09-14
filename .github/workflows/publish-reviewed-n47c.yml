@@ -1,0 +1,155 @@
+name: Publish exact reviewed N47C candidate
+on:
+  push:
+    branches: ['delivery/n47c-reviewed-1311bdd5']
+    paths: ['.github/workflows/publish-reviewed-n47c.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deliver-n47c-1311bdd5
+  cancel-in-progress: false
+jobs:
+  publish-approved-bytes:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47c-reviewed-1311bdd5'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 1311bdd51b779e8da6b6420b62ea3f653edfa27f
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: c8e9da691b8966b9a15dbde26f9aa496f83b497b
+          path: review
+          persist-credentials: false
+      - name: Validate and publish exact source-bound recall package
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          # Fixed-candidate administrative promotion; does not build/run product code.
+          import hashlib, io, json, os, re, subprocess, sys, zipfile
+          from pathlib import Path
+          repo='youq616/qbrain';source='1311bdd51b779e8da6b6420b62ea3f653edfa27f'
+          tree='360cfd7a303ac2f3084cef66917378a22dae6272'
+          review='c8e9da691b8966b9a15dbde26f9aa496f83b497b';review_tree='c95e823134e2cc423af21cb25c11c61e66eb18a5'
+          merge='b63042c34b609937412610c5cc4d4b921ffabab2';run_id=34854466927
+          tag='recall-preview-1311bdd5';cap=64*1024*1024
+          root=Path(os.environ['RUNNER_TEMP'])/('n47c-delivery-'+os.environ['GITHUB_RUN_ID']);root.mkdir(exist_ok=False)
+          def sha(b):return hashlib.sha256(b).hexdigest()
+          def gh(*args):return subprocess.check_output(['gh',*args],stderr=subprocess.PIPE,timeout=120)
+          def api(path):return json.loads(gh('api',f'repos/{repo}/{path}'))
+          def git(path,ref):return subprocess.check_output(['git','-C',path,'rev-parse',ref],text=True).strip()
+          def unpack(raw):
+              assert len(raw)<cap
+              with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                  entries=z.infolist()
+                  assert 0<len(entries)<128 and sum(i.file_size for i in entries)<cap
+                  assert len(entries)==len({i.orig_filename for i in entries})
+                  assert all(i.orig_filename==i.filename and not i.flag_bits&1 and not i.is_dir() for i in entries)
+                  return {i.filename:z.read(i) for i in entries}
+          def checkout(path,digest):
+              b=Path('candidate',path).read_bytes()
+              assert digest in (sha(b),sha(b.replace(b'\r\n',b'\n').replace(b'\n',b'\r\n'))),path
+          assert git('candidate','HEAD')==source and git('candidate','HEAD^{tree}')==tree
+          assert git('review','HEAD')==review and git('review','HEAD^{tree}')==review_tree
+          pr=api('pulls/18');assert pr['merged'] is True and pr['merge_commit_sha']==merge and pr['head']['sha']==review
+          record=json.loads(Path('review/docs/nodes/n47c-evidence/SUMMARY.json').read_text(encoding='utf-8'))
+          assert record['source_commit']==source and record['source_tree']==tree and record['scoped_outcome']=='PASS'
+          assert record['review']['unresolved_p0_p1']==0 and record['review']['independent_subagent_claimed'] is False
+          assert record['readback_checks']==162
+          for rid in (run_id,34854466971):
+              r=api(f'actions/runs/{rid}');assert r['head_sha']==source and r['status']=='completed' and r['conclusion']=='success'
+          jobs=api(f'actions/runs/{run_id}/jobs?per_page=100')['jobs']
+          for name in ('source','portable','windows','windows-http-2022'):
+              matching=[j for j in jobs if j['name']==name];assert len(matching)==1 and matching[0]['conclusion']=='success'
+          pins={
+              'package':(10353536524,'5ac692a0dd83c5164f2e9bacde24a3bf69ab339c56bababbbd7ba5d6da20a9fe'),
+              'windows':(10353346561,'8fc3f86d152c6479c4d4329628bd9d97de36bb477f50e283f7ac2966bbd65327'),
+              'server2022':(10351824180,'852ee7debc5830700da6e011e2a02b105a27434ec18222e8e885ac2b47fe357d')}
+          archives={}
+          for name,(ident,digest) in pins.items():
+              meta=api(f'actions/artifacts/{ident}')
+              assert not meta['expired'] and meta['workflow_run']['id']==run_id and meta['workflow_run']['head_sha']==source
+              assert meta['digest']=='sha256:'+digest and 0<meta['size_in_bytes']<cap
+              raw=gh('api',f'repos/{repo}/actions/artifacts/{ident}/zip')
+              assert len(raw)==meta['size_in_bytes'] and sha(raw)==digest
+              archives[name]=unpack(raw)
+          outer=archives['package'];assert set(outer)=={'qbrain-windows-x64-development.zip','SHA256SUMS.txt'}
+          raw=outer['qbrain-windows-x64-development.zip']
+          assert len(raw)==1942131 and sha(raw)=='bc707db523de36b026ed302f4824afdbfd614bf8efbcc9a93a885f74d68fd3bc'
+          assert outer['SHA256SUMS.txt'].decode('ascii').split()==[sha(raw),'qbrain-windows-x64-development.zip']
+          files=unpack(raw);manifest=json.loads(files['MANIFEST.json']);validation=json.loads(files['verification/validation.json'])
+          exe=sha(files['qbrain.exe'])
+          assert len(files['qbrain.exe'])==3922944 and exe=='91f31494dec86ae1e298f0cd4aa5cbd95c727aa0fffd71bb87ce6d6d6be9601f'
+          assert set(files)==set(manifest['files'])|{'MANIFEST.json','README-FIRST.txt'}
+          for name,m in manifest['files'].items():
+              assert type(m['bytes']) is int and m['bytes']==len(files[name]) and m['sha256']==sha(files[name])
+          for r in (manifest,validation):
+              assert r['result']=='PASS' and r['source_commit']==source and r['binary_sha256']==exe and r['registered_groups']==51
+              assert r['signed'] is False and r['real_host_model_consumption_verified'] is False and r['postgres_memory_context_verified'] is False
+          for name in files:
+              if name.startswith('verification/') and name.endswith('.json'):
+                  assert files[name]==archives['windows'][name.split('/')[-1]]
+          sys.path.insert(0,str(Path('candidate/.ci').resolve()))
+          from validate_recall_report import validate_unit as ru,validate_process as rp
+          from validate_conflict_report import validate_unit as cu,validate_process as cp
+          from validate_fact_report import validate_unit_report as fu,validate_report as fp
+          from validate_cjk_report import validate_report as cj
+          from validate_http_lifecycle import validate_report as hl
+          from validate_native_log import verified_groups
+          verified_groups(Path('candidate/tests/test_main.cpp').read_text(encoding='utf-8'),archives['windows']['regression.log'].decode('utf-8-sig'),51)
+          for platform in ('windows','server2022'):
+              for name,cpp,validator,expected in [('recall','tests/test_n47c.cpp',ru,{'scenarios':15,'assertions':330}),('conflict','tests/test_n47b.cpp',cu,{'scenarios':13,'assertions':346})]:
+                  u=json.loads(archives[platform][name+'-unit.json']);checkout(cpp,u['test_sha256']);checkout('.ci/test_'+name+'_unit.py',u['script_sha256'])
+                  assert validator(u,source_commit=source,binary_sha256=u['binary_sha256'],script_sha256=u['script_sha256'],test_sha256=u['test_sha256'])==expected
+                  assert u['source_tree']==tree
+              h=json.loads(archives[platform]['http-lifecycle.json'])
+              hl(h,source_commit=source,probe_hashes={n:h['variants'][n]['sha256'] for n in ('legacy','per_call','current')})
+              h=json.loads(archives[platform]['http-transport.json'])
+              assert h['native_windows'] is True and h['result']=='PASS' and h['source_commit']==source and h['check_count']==len(h['checks'])==81
+          for name,validator,expected in [('recall',rp,{'checks':44,'commands':71}),('conflict',cp,{'checks':38,'commands':75}),('fact',fp,{'named_checks':34,'commands':118})]:
+              r=json.loads(files['verification/'+name+'-process.json']);script=files['verification/test_'+name+'_process.py']
+              checkout('.ci/test_'+name+'_process.py',sha(script))
+              assert validator(r,source_commit=source,binary_sha256=exe,script_sha256=sha(script))==expected
+              assert r['source_tree']==tree
+          u=json.loads(files['verification/fact-unit.json']);checkout('tests/test_n47a.cpp',u['test_sha256'])
+          names=re.findall(r'scenario\("([^"\r\n]+)"',Path('candidate/tests/test_n47a.cpp').read_text(encoding='utf-8'))
+          assert fu(u,source_commit=source,binary_sha256=u['binary_sha256'],test_sha256=u['test_sha256'],expected_scenarios=names)=={'scenarios':15,'assertions':380}
+          r=json.loads(files['verification/cjk-recall.json']);script=files['verification/test_cjk_recall.py']
+          checkout('.ci/test_cjk_recall.py',sha(script));cj(r,source_commit=source,binary_sha256=exe,script_sha256=sha(script))
+          assert validation['recall_scenarios']==15 and validation['recall_assertions']==330 and validation['recall_process_checks']==44
+          checkout('docs/integration/FACT-RECALL.zh-CN.md',sha(files['FACT-RECALL.zh-CN.md']))
+          provenance={'repository':repo,'source_commit':source,'source_tree':tree,'review_commit':review,'merge_commit':merge,
+              'product_workflow_run_id':run_id,'delivery_workflow_run_id':int(os.environ['GITHUB_RUN_ID']),
+              'delivery_workflow_commit':os.environ['GITHUB_SHA'],'package_artifact_id':pins['package'][0],
+              'package_bytes':len(raw),'package_sha256':sha(raw),'exe_bytes':len(files['qbrain.exe']),'exe_sha256':exe,
+              'native_registered_groups':51,'recall_unit_scenarios':15,'recall_unit_assertions':330,'recall_process_checks':44,'recall_commands':71,
+              'review_type':'Owner-authorized separate engineering self-review; not independent subagent or third party',
+              'signed':False,'rebuilt_or_repacked':False,'probe_binaries_separately_downloaded':False,
+              'automatic_hook_fact_injection':False,'scope':'Query-directed fact recall with complete valid direct counter-evidence; no inference/schema/permission change'}
+          out=root/'release';out.mkdir()
+          (out/'qbrain-windows-x64-recall.zip').write_bytes(raw)
+          (out/'SHA256SUMS.txt').write_text(sha(raw)+'  qbrain-windows-x64-recall.zip\n',encoding='ascii')
+          (out/'PROVENANCE.json').write_text(json.dumps(provenance,indent=2)+'\n',encoding='utf-8')
+          assets=['qbrain-windows-x64-recall.zip','SHA256SUMS.txt','PROVENANCE.json']
+          notes=('N47C unsigned development preview. Original tested CI package; no rebuild/repack. '
+                 'fact recall and memory_read(view=recall) match user-quote substrings and retain all valid direct explicit counterclaims, '
+                 'including nonmatching quotes, as complete groups. No semantic inference, truth winner or automatic Hook fact injection. '
+                 '51 native groups, recall15 scenarios/330 assertions and44 CLI/MCP checks/71 expected exits passed. '
+                 'Read FACT-RECALL.zh-CN.md. Review is a separate coordinating-agent engineering pass. ZIP SHA256 '+sha(raw))
+          gh('release','create',tag,*(str(out/n) for n in assets),'--repo',repo,'--target',source,
+             '--draft','--prerelease','--latest=false','--title','Qbrain N47C counter-evidence recall (1311bdd5)','--notes',notes)
+          rb=root/'readback';gh('release','download',tag,'--repo',repo,'--dir',str(rb))
+          assert {p.name for p in rb.iterdir()}==set(assets)
+          for name in assets:assert (out/name).read_bytes()==(rb/name).read_bytes()
+          gh('release','edit',tag,'--repo',repo,'--draft=false','--prerelease','--latest=false')
+          print(json.dumps({'result':'PUBLISHED','tag':tag,**provenance}))
