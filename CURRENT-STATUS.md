@@ -1,47 +1,56 @@
 # Qbrain 当前交付状态
 
-## N47A：代码、独立审核和原生验收已完成
+## 已合并并发布：N47B 成对冲突读取
 
-实际代码与两份独立审核对应提交：`cccdacb61e63c29f8b9eaba1c38fbeed3e23e54b`。
-源树：`a15a91f7172622e2c8021403d84e63bf36f59147`。
-[PR #14](https://github.com/youq616/qbrain/pull/14) 的实时状态表示是否已合并。
-本阶段的代码与原生测试保持不变，随后只补入审核原件和验收文档。
+产品合并提交：`42f6dac5be3bf411dac802280b08c828a5a90fbb`，
+[PR #17](https://github.com/youq616/qbrain/pull/17) 已合并。
+实际代码/原生测试/阶段复核源码：`7999d39b9e6a253d62557a6ccc8341598ccdebb6`。
+后续审核和交付文档没有改变该产品代码或测试包字节。
 
-实际新增 C++ FactStore、本地 fact CLI，以及既有 memory_read(view=facts) /
-memory_write(fact_*动作) 的显式创建、同原话证据附加、撤回、替代和矛盾关系。
-保留旧 facts 表；普通读取不初始化，首次有效显式写入先备份再建立独立可选模块。
-事实内容取自已提取完整用户原话，confidence=null，不推断真实性或改写否定。
-来源、到期、篡改、遗忘和版本规则保持；不会自动改变 Hook 召回或开启模型外发。
+[仓库预览 Release：conflict-preview-7999d39b](https://github.com/youq616/qbrain/releases/tag/conflict-preview-7999d39b)
+已发布。文件 `qbrain-windows-x64-conflicts.zip`，1,924,291 字节，SHA256：
+`ceb1ad45109a1cdf7a5f72a4982465613ac4119c479025f6e45b139f01014e0c`。
+完整解压并阅读 `CONFLICT-INSPECTION.zh-CN.md`。仍是未签名开发预览版。
+无需本机安装编译器；旧 N46E 固定哈希入口不接受这个新包，不应绕过校验。
 
-[独立审核 A](docs/review/n47a-cccdacb6/review-A.md) 与
-[独立审核 B](docs/review/n47a-cccdacb6/review-B.md) 原文已逐字节归档，均 PASS。
-13 项非阻塞 P3 保留在 [Issue #16](https://github.com/youq616/qbrain/issues/16)，
-不宣称全部修复。审核为源码审查与部分 Python/SQL 实验，原生验收是另外的 CI 证据。
-无需重新上传旧 ZIP、补调用文件或重复本地审核。
+N47B 新增 `fact conflicts` / `memory_read(view=conflicts)`，成对返回已明确声明的
+矛盾双方及完整原话、当前 revision、证据来源。只返回 active 且双方证据均有效的
+关系；不会自动认定矛盾、选择胜者、篡改原话或自动写入。
 
-[开发验证34788803379](https://github.com/youq616/qbrain/actions/runs/34788803379) 与
-[N42验证34788803239](https://github.com/youq616/qbrain/actions/runs/34788803239) 必需任务通过：
-49组原生回归、事实15场景/380断言、34项CLI/MCP/118次符合预期退出码的命令，
-以及既有CJK、队列、Embedding、记忆、Hook、双PowerShell及Server2022 HTTP。
-产品仍是未签名开发版。下载/发布状态以仓库 Release 为准，不用历史 dist 代替。
+一次查询中的双方共用同一个 SQLite 读快照：如果另一个连接在查询期间提交遗忘，
+当前查询仍可能返回原快照中的完整对，下次查询观察遗忘。预算不足时不返回半对；
+空数组且 truncated=true 不表示不存在冲突。未初始化时读取不建表或备份。
 
-[完整阶段验收](docs/nodes/N47A-HARD-AUDIT.md) ·
-[审核接收哈希](docs/review/n47a-cccdacb6/RECEIPT.json) ·
-[既有原生证据](docs/nodes/n47a-evidence/DELIVERY-CHECKPOINT.json)。
-旧检查点中的“原报告未收到”是当时状态，本次接收记录已取代该项阻塞。
+原生运行 34798495285 与 34798495355 必需任务通过：50 个 Windows 注册组，
+Server2025/Server2022/portable 各13个冲突场景与346断言，Windows/portable 各38项
+CLI/MCP检查与75次符合预期退出状态的命令。旧N47A、HTTP、队列、CJK、记忆、Hook
+和双PowerShell门槛保留；真实PG DSN明确跳过。
 
-## 已交付 N46F
+协调方重新编译原源码并执行Clang ASan/UBSan冲突专项（Linux），通过13/346单元及
+38/75进程检查；另有58项报告门槛及134项源码/原始日志/交付回读。阶段审核是所有者
+授权的单独工程自审，不是独立子代理或第三方审核。N47A原始子代理报告保持原样。
 
-中文 search、HTTP共享会话修复及 [cjk-preview-c665cb29](https://github.com/youq616/qbrain/releases/tag/cjk-preview-c665cb29)
-保留；旧包不含N47A。不要用固定旧464045e2摘要的N46E工具验证新包。
-[原N46F记录](docs/nodes/N46F-HARD-AUDIT.md) 不回写为新版本测试。
+发布运行34848310013先核对已合并审核头、原始测试任务与固定包/日志摘要，完整
+重验冲突及事实单测/进程报告，再上传新草稿、下载比对三项资产后公开。不重编译、
+不重打包、不覆盖旧Release、不启用通用未审核自动发布。
 
-## 未完成范围
+[阶段复核](docs/nodes/N47B-HARD-AUDIT.md) ·
+[测试摘要](docs/nodes/n47b-evidence/SUMMARY.json) ·
+[发布记录](docs/nodes/n47b-evidence/RELEASE.json)
 
-N47后续语义提取、自动冲突判断、衰减/排序、画像和自动事实召回仍需开发。
-真实 PostgreSQL 对等、完整应用权限审计、真实模型质量/费用、Codex 已登录宿主
-闭环与正式签名发行仍未完成。N47A完成不等于全部融合项目完成。
+## 已有基础
 
-每阶段完成后要求真实独立子代理审核；不将父代理自查或CI当作子代理。
-本地交接始终只给一个完整提示词，文件先进入仓库，指定固定下载、校验与用法；
-只委托确需本机的工作，不让本地并行重写仓库修复。
+N46F：中文连续字串搜索补充与WinHTTP会话可靠性。
+N47A：完整原话与证据绑定的事实存储、创建/追加证据/撤回/替代/显式矛盾关系。
+N47A首次明确事实写入会备份并初始化可选表；N47B没有新增数据库迁移。
+基础会话采集、原文记忆、来源隔离、遗忘、MCP、项目Hook和可撤销安装保持。
+
+## 尚未完成
+
+自动语义提取与冲突判断、自动事实召回、衰减/画像、真实模型质量/费用、PostgreSQL
+对等、完整ACL/DLP、真实Codex客户端闭环及正式签名发行仍未由本阶段完成。
+N47B完成不等于整个N47或整个融合项目完成；既有N47A的P3观察仍逐项跟踪。
+
+当前没有必须由本地Agent执行的新任务。不用重复导出、安装编译器或配置GitHub写
+权限。需要实际本机任务时只给一个完整提示词，文件先发布仓库并提供固定来源、
+摘要和用法，遵循LOCAL-AGENT-HANDOFF.md，不让本机并行重写相同代码。
