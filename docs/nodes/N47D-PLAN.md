@@ -1,6 +1,9 @@
 # N47D — explicit Hook fact recall and one serialized-output budget
 
-Baseline 984707be084591b2251701e29392c9a85e4c7c2f. Approved after N47D-PLAN-AUDIT.md.
+Baseline 984707be084591b2251701e29392c9a85e4c7c2f.
+Status: done for repository implementation after N47D-HARD-AUDIT.md.
+Tested source5275045c4790b802b620ba0af52ec6248cd587d5; native runs34862423429 and34862423691.
+Live signed-in client consumption is a separate pending task, not certified here.
 Only Windows-native youq616/qbrain. Separate owner-authorized engineering
 self-review; no external/subagent identity or bug-free guarantee is implied.
 
