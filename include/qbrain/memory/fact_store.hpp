@@ -22,7 +22,13 @@ class FactStore {
   // counterclaims. No transitive expansion, semantic inference or winner.
   Json recall(const std::string& query, const std::string& predicate = "",
               int limit = 10, int max_bytes = 8192);
+  // Internal integration entry: empty queries select recent active facts.
+  // Prompt callers must not pass empty terms as a substitute for an empty query.
+  Json recall_for_hook(const std::vector<std::string>& queries, int limit = 10,
+                       int max_bytes = 8192);
  private:
+  Json recall_queries(const std::vector<std::string>& queries, const std::string& predicate,
+                      int limit, int max_bytes);
   void validate() const;
   Brain& brain_;
   std::string source_;

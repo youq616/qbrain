@@ -470,16 +470,31 @@ Json FactStore::conflicts(const std::string& id, const std::string& pred, int li
 }
 
 Json FactStore::recall(const std::string& query, const std::string& pred, int limit, int budget) {
+  return recall_queries({query}, pred, limit, budget);
+}
+
+Json FactStore::recall_for_hook(const std::vector<std::string>& queries, int limit, int budget) {
+  return recall_queries(queries, "", limit, budget);
+}
+
+Json FactStore::recall_queries(const std::vector<std::string>& queries, const std::string& pred,
+                              int limit, int budget) {
   validate();
-  require(!query.empty() && query.size() <= 1024 && query.find('\0') == std::string::npos &&
-      util::valid_utf8(query) && query.find_first_not_of(" \t\r\n") != std::string::npos,
-      "fact_invalid_query");
-  require(!contains_sensitive_material(query), "sensitive_material_rejected");
+  require(queries.size() <= 8, "fact_invalid_query");
+  std::size_t query_bytes = 0;
+  for (const auto& query : queries) {
+    require(!query.empty() && query.size() <= 1024 && query.find('\0') == std::string::npos &&
+        util::valid_utf8(query) && query.find_first_not_of(" \t\r\n") != std::string::npos,
+        "fact_invalid_query");
+    require(!contains_sensitive_material(query), "sensitive_material_rejected");
+    query_bytes += query.size();
+  }
+  require(query_bytes <= 1024, "fact_invalid_query");
   if (!pred.empty()) predicate_check(pred);
   require(limit >= 1 && limit <= 50 && budget >= 512 && budget <= 32768, "invalid_read_budget");
   auto& db = brain_.db();
   Json out = {{"source_id",source_},{"view","recall"},{"items",Json::array()},
-      {"untrusted_data",true},{"match_mode","literal_substring"},
+      {"untrusted_data",true},{"match_mode",queries.empty()?"recent_active":(queries.size()==1?"literal_substring":"any_literal_term")},
       {"conflict_scope","direct_active_assertions"},{"neighbors_recursively_expanded",false},
       {"order","created_desc_id"},{"truncated",false},{"work_limited",false},
       {"candidate_limit",max_candidates},{"initialized",ready(db)}};
@@ -488,13 +503,19 @@ Json FactStore::recall(const std::string& query, const std::string& pred, int li
   // merely because 100 unrelated facts were written more recently.
   std::string sql = "SELECT fact_id FROM memory_facts WHERE source_id=? "
       "AND status='active' AND subject='user' "
-      "AND length(CAST(object AS BLOB)) BETWEEN 1 AND 4096 "
-      "AND instr(lower(object),lower(?))>0";
+      "AND length(CAST(object AS BLOB)) BETWEEN 1 AND 4096";
+  if (!queries.empty()) {
+    sql += " AND (";
+    for (std::size_t i=0;i<queries.size();++i)
+      sql += (i?" OR ":"") + std::string("instr(lower(object),lower(?))>0");
+    sql += ")";
+  }
   if (!pred.empty()) sql += " AND predicate=?";
   sql += " ORDER BY created_at DESC,fact_id COLLATE BINARY LIMIT 101";
   auto rows = db.prepare(sql);
-  rows.bind_text(1,source_); rows.bind_text(2,query);
-  if (!pred.empty()) rows.bind_text(3,pred);
+  int parameter=1; rows.bind_text(parameter++,source_);
+  for (const auto& query : queries) rows.bind_text(parameter++,query);
+  if (!pred.empty()) rows.bind_text(parameter,pred);
   const auto at = clock_now(); ReadWork work; int scanned = 0;
   // rows stays at SQLITE_ROW throughout nested loads, including counterclaims.
   // ReadWork is shared inside this call only. Never publish the current item
