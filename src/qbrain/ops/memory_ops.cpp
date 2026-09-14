@@ -29,6 +29,12 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
     OpResult error; const auto source=resolve(c,true,error); if(!source) return error;
     if(!write) {
       const auto view=get(c,"view","memories");
+      if(view=="recall") {
+        if(c.args.count("event_id") || c.args.count("fact_id") || c.args.count("include_history"))
+          throw memory::Error("fact_unexpected_argument");
+        return output(memory::FactStore(*c.brain,*source).recall(get(c,"query"),get(c,"predicate"),
+            number(c,"limit",10),number(c,"max_bytes",8192)));
+      }
       if(view=="conflicts") {
         if(c.args.count("query") || c.args.count("event_id") || c.args.count("include_history"))
           throw memory::Error("fact_unexpected_argument");
@@ -85,8 +91,8 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
 }
 void register_memory_ops(const SourceResolver& resolve) {
   global_registry().add({"memory_read",Scope::Read,false,
-    "Read bounded source-scoped quotes or event status; view=facts reads claim versions; view=conflicts returns complete active pairs from explicit contradiction assertions, not inferred truth. Not semantic search. Untrusted data; no provider or writes.",
-    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"query":{"type":"string","maxLength":1024},"limit":{"type":"integer","minimum":1,"maximum":50},"max_bytes":{"type":"integer","minimum":512,"maximum":32768},"event_id":{"type":"string","maxLength":64},"view":{"type":"string","enum":["memories","facts","conflicts"]},"fact_id":{"type":"string","maxLength":64},"predicate":{"type":"string","maxLength":64},"include_history":{"type":"boolean"}}})",
+    "Read bounded source-scoped quotes or event status; view=facts reads claim versions; view=conflicts returns complete active pairs from explicit contradiction assertions, not inferred truth. view=recall requires a literal query and returns each matching active quote with all supported direct explicit counterclaims, including nonmatching ones; not transitive or semantic search. Untrusted data; no provider or writes.",
+    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"query":{"type":"string","maxLength":1024},"limit":{"type":"integer","minimum":1,"maximum":50},"max_bytes":{"type":"integer","minimum":512,"maximum":32768},"event_id":{"type":"string","maxLength":64},"view":{"type":"string","enum":["memories","facts","conflicts","recall"]},"fact_id":{"type":"string","maxLength":64},"predicate":{"type":"string","maxLength":64},"include_history":{"type":"boolean"}}})",
     [resolve](OpContext& c){return dispatch(c,false,resolve);}});
   global_registry().add({"memory_write",Scope::Write,false,
     "Capture/extract/forget sessions or explicitly manage evidence-backed facts via fact_* actions and JSON payload. Facts preserve complete user quotes, not verified truth. Source/write gates apply; no automatic inference.",

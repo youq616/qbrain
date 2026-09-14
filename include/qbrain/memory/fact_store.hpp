@@ -18,6 +18,10 @@ class FactStore {
   // this neither infers conflict nor decides which claim is true.
   Json conflicts(const std::string& fact_id = "", const std::string& predicate = "",
                  int limit = 10, int max_bytes = 8192);
+  // Literal active-quote recall. Every item includes all valid direct explicit
+  // counterclaims. No transitive expansion, semantic inference or winner.
+  Json recall(const std::string& query, const std::string& predicate = "",
+              int limit = 10, int max_bytes = 8192);
  private:
   void validate() const;
   Brain& brain_;

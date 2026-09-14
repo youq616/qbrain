@@ -150,6 +150,7 @@ void print_help() {
       "  dream [--apply] [--phase p] [--retention-hours N] [--json]\n"
       "  fact create|read|attach|retract|supersede|contradict [--source id] (writes read JSON stdin)\n"
       "  fact conflicts [--source id] [--id ID] [--predicate NAME] [--limit N] [--max-bytes N]\n"
+      "  fact recall --query <literal> [--predicate KEY] [--limit N] [--max-bytes N] [--source id]\n"
       "  memory capture|extract|drain|read|status|forget [--source id]\n"
       "  session-capture [--automatic] [--session-id id] [--fragment-id id]\n"
       "  version\n"
@@ -408,11 +409,16 @@ int cmd_fact(const std::vector<std::string>& args) {
     if(args.empty()) throw memory::Error("fact_action_required");
     const auto& action=args[0];
     const bool conflicts=action=="conflicts";
-    const bool reading=action=="read" || conflicts;
+    const bool recall=action=="recall";
+    const bool reading=action=="read" || conflicts || recall;
     if(!reading && action!="create" && action!="attach" && action!="retract" &&
        action!="supersede" && action!="contradict") throw memory::Error("invalid_action");
     std::set<std::string> values={"--brain","--source"},flags;
-    if(reading) { values.insert({"--id","--predicate","--limit","--max-bytes"}); if(!conflicts) flags.insert("--history"); }
+    if(reading) {
+      values.insert({"--predicate","--limit","--max-bytes"});
+      values.insert(recall?"--query":"--id");
+      if(!conflicts && !recall) flags.insert("--history");
+    }
     else flags.insert("--stdin");
     std::set<std::string> seen;
     for(std::size_t i=1;i<args.size();++i) {
@@ -424,10 +430,12 @@ int cmd_fact(const std::vector<std::string>& args) {
     return with_brain(args,[&](Brain& b) {
       ops::OpContext c; c.brain=&b; c.args["source_id"]=opt(args,"--source","default");
       if(reading) {
-        c.args["view"]=conflicts?"conflicts":"facts"; c.args["fact_id"]=opt(args,"--id");
+        c.args["view"]=recall?"recall":(conflicts?"conflicts":"facts");
+        if(recall) c.args["query"]=opt(args,"--query");
+        else c.args["fact_id"]=opt(args,"--id");
         c.args["predicate"]=opt(args,"--predicate"); c.args["limit"]=opt(args,"--limit","10");
         c.args["max_bytes"]=opt(args,"--max-bytes","8192");
-        if(!conflicts) c.args["include_history"]=flag(args,"--history")?"true":"false";
+        if(!conflicts && !recall) c.args["include_history"]=flag(args,"--history")?"true":"false";
       } else { c.args["action"]="fact_"+action; c.args["payload"]=bounded_stdin(); }
       const auto result=ops::global_registry().call(reading?"memory_read":"memory_write",c);
       std::cout<<result.json<<"\n"; return result.ok?0:1;

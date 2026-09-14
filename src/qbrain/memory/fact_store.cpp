@@ -468,4 +468,89 @@ Json FactStore::conflicts(const std::string& id, const std::string& pred, int li
   }
   return out;
 }
+
+Json FactStore::recall(const std::string& query, const std::string& pred, int limit, int budget) {
+  validate();
+  require(!query.empty() && query.size() <= 1024 && query.find('\0') == std::string::npos &&
+      util::valid_utf8(query) && query.find_first_not_of(" \t\r\n") != std::string::npos,
+      "fact_invalid_query");
+  require(!contains_sensitive_material(query), "sensitive_material_rejected");
+  if (!pred.empty()) predicate_check(pred);
+  require(limit >= 1 && limit <= 50 && budget >= 512 && budget <= 32768, "invalid_read_budget");
+  auto& db = brain_.db();
+  Json out = {{"source_id",source_},{"view","recall"},{"items",Json::array()},
+      {"untrusted_data",true},{"match_mode","literal_substring"},
+      {"conflict_scope","direct_active_assertions"},{"neighbors_recursively_expanded",false},
+      {"order","created_desc_id"},{"truncated",false},{"work_limited",false},
+      {"candidate_limit",max_candidates},{"initialized",ready(db)}};
+  if (!out["initialized"].get<bool>()) return out;
+  // Filter BEFORE the candidate cap; older matching facts must not disappear
+  // merely because 100 unrelated facts were written more recently.
+  std::string sql = "SELECT fact_id FROM memory_facts WHERE source_id=? "
+      "AND status='active' AND subject='user' "
+      "AND length(CAST(object AS BLOB)) BETWEEN 1 AND 4096 "
+      "AND instr(lower(object),lower(?))>0";
+  if (!pred.empty()) sql += " AND predicate=?";
+  sql += " ORDER BY created_at DESC,fact_id COLLATE BINARY LIMIT 101";
+  auto rows = db.prepare(sql);
+  rows.bind_text(1,source_); rows.bind_text(2,query);
+  if (!pred.empty()) rows.bind_text(3,pred);
+  const auto at = clock_now(); ReadWork work; int scanned = 0;
+  // rows stays at SQLITE_ROW throughout nested loads, including counterclaims.
+  // ReadWork is shared inside this call only. Never publish the current item
+  // until all direct counter-evidence has been checked and fits the byte budget.
+  try {
+    while (rows.step()) {
+      if (++scanned > max_candidates) { out["truncated"] = true; break; }
+      const auto id = rows.column_text(0); identifier(id);
+      auto anchor = load(db,source_,id,at,&work);
+      if (anchor.is_null() || anchor["status"] != "active") continue;
+      Json item = {{"match_fact_id",id},{"facts",Json::array({std::move(anchor)})},
+          {"contradictions",Json::array()},{"conflict_state","no_live_recorded_conflict"}};
+      // The query selects only this anchor, not the counterclaims: a valid
+      // contradiction must remain visible even when its quote does not match.
+      auto edges = db.prepare(
+          "SELECT r.from_id,r.to_id,r.created_at FROM memory_fact_relations r "
+          "WHERE r.source_id=? AND r.relation='contradicts' AND (r.from_id=? OR r.to_id=?) "
+          "ORDER BY r.from_id COLLATE BINARY,r.to_id COLLATE BINARY LIMIT 33");
+      edges.bind_text(1,source_); edges.bind_text(2,id); edges.bind_text(3,id);
+      int n = 0;
+      while (edges.step()) {
+        require(++n <= max_relations, "fact_relation_limit");
+        const auto from = edges.column_text(0), to = edges.column_text(1);
+        identifier(from); identifier(to);
+        if (from >= to) continue; // invalid/noncanonical stored edge, not inferred evidence
+        const auto other_id = from == id ? to : from;
+        // Reject oversized/cross-predicate stored values before materializing
+        // them. The public write API is bounded, but a damaged DB may not be.
+        auto eligible = db.prepare("SELECT 1 FROM memory_facts WHERE source_id=? AND fact_id=? "
+            "AND status='active' AND subject='user' AND predicate=? "
+            "AND length(CAST(object AS BLOB)) BETWEEN 1 AND 4096");
+        eligible.bind_text(1,source_); eligible.bind_text(2,other_id);
+        eligible.bind_text(3,item["facts"][0]["predicate"].get_ref<const std::string&>());
+        if (!eligible.step()) continue;
+        auto other = load(db,source_,other_id,at,&work);
+        if (other.is_null() || other["status"] != "active") continue;
+        const auto& first = item["facts"][0];
+        if (other["subject"] != "user" || other["predicate"] != first["predicate"] ||
+            other["object"] == first["object"]) continue;
+        item["facts"].push_back(std::move(other));
+        item["contradictions"].push_back({{"from_id",from},{"to_id",to},
+            {"relation","contradicts"},{"resolution","unresolved"},{"created_at",edges.column_int(2)}});
+      }
+      if (!item["contradictions"].empty()) item["conflict_state"] = "recorded_conflict";
+      if (out["items"].size() >= static_cast<std::size_t>(limit)) {
+        out["truncated"] = true; break;
+      }
+      out["items"].push_back(std::move(item));
+      if (out.dump().size() > static_cast<std::size_t>(budget)) {
+        out["items"].erase(out["items"].end()-1); out["truncated"] = true; break;
+      }
+    }
+  } catch (const Error& error) {
+    if (std::string(error.what()) != "fact_read_work_limit") throw;
+    out["truncated"] = true; out["work_limited"] = true;
+  }
+  return out;
+}
 }  // namespace qbrain::memory
