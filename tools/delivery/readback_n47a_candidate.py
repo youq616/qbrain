@@ -65,7 +65,8 @@ def unzip(raw):
         names = set()
         result = {}
         for info in infos:
-            name = info.filename
+            name = info.orig_filename
+            require(name == info.filename, 'Archive name was normalized or truncated')
             require(name not in names, 'Duplicate archive member')
             names.add(name)
             parts = name.rstrip('/').split('/')

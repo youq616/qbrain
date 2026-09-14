@@ -132,10 +132,15 @@ class CandidateReadbackTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'Wrong artifact'):m.pinned(p,'source')
 
     def test_memory_only_archives_and_path_rejection(self):
-        for name in ['../outside','/absolute','a/../b','a\\b','x:stream']:
-            raw=io.BytesIO()
-            with zipfile.ZipFile(raw,'w') as z:z.writestr(name,b'x')
-            with self.subTest(name=name),self.assertRaises(ValueError):m.unzip(raw.getvalue())
+        for name in ['../outside','/absolute','a/../b','a\\b','x:stream','a\x00b']:
+            # ZipInfo normalizes Windows separators when constructing a fixture.
+            # Patch both serialized name fields, not the already-normalized object.
+            raw=io.BytesIO();encoded=name.encode('ascii');placeholder=b'Q'*len(encoded)
+            with zipfile.ZipFile(raw,'w') as z:z.writestr(placeholder.decode('ascii'),b'x')
+            data=raw.getvalue()
+            self.assertEqual(data.count(placeholder),2)
+            data=data.replace(placeholder,encoded)
+            with self.subTest(name=name),self.assertRaises(ValueError):m.unzip(data)
         raw=io.BytesIO()
         with zipfile.ZipFile(raw,'w') as z:
             entry=zipfile.ZipInfo('link');entry.create_system=3
