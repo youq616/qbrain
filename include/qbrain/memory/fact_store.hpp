@@ -14,6 +14,10 @@ class FactStore {
   Json contradict(const Json& payload);   // fact_id, other_id (explicit assertion)
   Json read(const std::string& fact_id = "", const std::string& predicate = "",
             bool include_history = false, int limit = 10, int max_bytes = 8192);
+  // Explicit, still-supported contradictions. Each returned pair is complete;
+  // this neither infers conflict nor decides which claim is true.
+  Json conflicts(const std::string& fact_id = "", const std::string& predicate = "",
+                 int limit = 10, int max_bytes = 8192);
  private:
   void validate() const;
   Brain& brain_;

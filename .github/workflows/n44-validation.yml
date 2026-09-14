@@ -1,7 +1,7 @@
 name: Native project memory and context validation
 on:
   push:
-    branches: ['optimization/n44-context-release','optimization/n46b-http-boundaries','optimization/n46c-exact-retrieval','optimization/n46d-embedding-contracts','optimization/n46f-cjk-recall','optimization/n47a-evidence-facts','main']
+    branches: ['optimization/n44-context-release','optimization/n46b-http-boundaries','optimization/n46c-exact-retrieval','optimization/n46d-embedding-contracts','optimization/n46f-cjk-recall','optimization/n47a-evidence-facts','optimization/n47b-conflict-reads','main']
     paths: ['src/**','include/**','tests/**','scripts/**','.ci/**','CMakeLists.txt','.github/workflows/n44-validation.yml']
   workflow_dispatch:
 permissions:
@@ -38,8 +38,9 @@ jobs:
           python3 .ci/test_http_lifecycle_report.py 2>&1 | tee evidence/lifecycle-report-gate.log
           python3 .ci/test_cjk_report.py 2>&1 | tee evidence/cjk-report-gate-tests.log
           python3 .ci/test_fact_report.py 2>&1 | tee evidence/fact-report-gate-tests.log
+          python3 .ci/test_conflict_report.py 2>&1 | tee evidence/conflict-report-gate-tests.log
           cmake -S . -B build/portable -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
-          cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_http_tests qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests --parallel 2 2>&1 | tee evidence/build.log
+          cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_http_tests qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests qbrain_conflict_tests --parallel 2 2>&1 | tee evidence/build.log
           python3 .ci/test_retrieval_benchmark.py --binary build/portable/qbrain_retrieval_tests --report evidence/retrieval-benchmark.json | tee evidence/retrieval.log
           cmake -S tests/n42 -B build/n42 -DQBRAIN_N42_SQLITE_ADAPTER_TEST=ON
           cmake --build build/n42 --parallel 2
@@ -47,6 +48,8 @@ jobs:
           python3 .ci/test_embedding_queue.py --binary build/portable/qbrain_embedding_queue_tests --report evidence/embedding-queue.json | tee evidence/embedding-queue.log
           python3 .ci/test_fact_unit.py --binary build/portable/qbrain_fact_tests --report evidence/fact-unit.json | tee evidence/fact-unit.log
           python3 .ci/test_fact_process.py --binary build/portable/qbrain --report evidence/fact-process.json | tee evidence/fact-process.log
+          python3 .ci/test_conflict_unit.py --binary build/portable/qbrain_conflict_tests --report evidence/conflict-unit.json | tee evidence/conflict-unit.log
+          python3 .ci/test_conflict_process.py --binary build/portable/qbrain --report evidence/conflict-process.json | tee evidence/conflict-process.log
           build/portable/qbrain_cjk_tests | tee evidence/cjk-unit.log
           python3 .ci/test_cjk_recall.py --binary build/portable/qbrain --report evidence/cjk-recall.json | tee evidence/cjk-recall.log
           build/portable/qbrain_embedding_tests | tee evidence/embedding-unit.log
@@ -83,7 +86,7 @@ jobs:
         run: |
           cmake -S . -B build/http -DQBRAIN_WITH_PG=OFF
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build/http --config Release --target qbrain_http_tests qbrain_http_probe qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests --parallel 2 2>&1 | Tee-Object evidence/http-build.log
+          cmake --build build/http --config Release --target qbrain_http_tests qbrain_http_probe qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests qbrain_conflict_tests --parallel 2 2>&1 | Tee-Object evidence/http-build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & build/http/Release/qbrain_http_tests.exe 2>&1 | Tee-Object evidence/http-input.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -124,6 +127,13 @@ jobs:
           python .ci/test_fact_unit.py --binary build/http/Release/qbrain_fact_tests.exe --report evidence/fact-unit.json --require-windows 2>&1 | Tee-Object evidence/fact-unit.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_fact_process.py --binary build/cl/qbrain.exe --report evidence/fact-process.json 2>&1 | Tee-Object evidence/fact-process.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Paired conflict inspection and source boundaries
+        shell: pwsh
+        run: |
+          python .ci/test_conflict_unit.py --binary build/http/Release/qbrain_conflict_tests.exe --report evidence/conflict-unit.json --require-windows 2>&1 | Tee-Object evidence/conflict-unit.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_conflict_process.py --binary build/cl/qbrain.exe --report evidence/conflict-process.json 2>&1 | Tee-Object evidence/conflict-process.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Real memory MCP hooks context and local-config process tests
         shell: pwsh
@@ -185,7 +195,7 @@ jobs:
           [Environment]::OSVersion.VersionString | Set-Content evidence/platform.txt
           cmake -S . -B build/http -DQBRAIN_WITH_PG=OFF
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build/http --config Release --target qbrain_http_probe qbrain_http_tests --parallel 2 2>&1 | Tee-Object evidence/build.log
+          cmake --build build/http --config Release --target qbrain_http_probe qbrain_http_tests qbrain_conflict_tests --parallel 2 2>&1 | Tee-Object evidence/build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake -S tests/http_lifecycle -B build/http-lifecycle
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -198,6 +208,8 @@ jobs:
           python .ci/test_http_lifecycle.py --probe build/http-lifecycle/Release/qbrain_http_lifecycle_current.exe --baseline build/http-lifecycle/Release/qbrain_http_lifecycle_legacy.exe --per-call build/http-lifecycle/Release/qbrain_http_lifecycle_per_call.exe --report evidence/http-lifecycle.json 2>&1 | Tee-Object evidence/http-lifecycle.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_http_lifecycle_report.py 2>&1 | Tee-Object evidence/report-gate.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_conflict_unit.py --binary build/http/Release/qbrain_conflict_tests.exe --report evidence/conflict-unit.json --require-windows 2>&1 | Tee-Object evidence/conflict-unit.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()

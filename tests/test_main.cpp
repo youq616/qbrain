@@ -34,6 +34,7 @@ void test_n46b();
 void test_n46c();
 void test_n46d();
 void test_n47a();
+void test_n47b();
 void test_n46f();
 void test_n42_foundation();
 void test_vector();
@@ -90,6 +91,7 @@ int main() {
       {"n46c_retrieval", test_n46c},
       {"n46d_embedding", test_n46d},
       {"n47a_facts", test_n47a},
+      {"n47b_conflicts", test_n47b},
       {"n46f_cjk", test_n46f},
       {"n42_foundation", test_n42_foundation},
       {"vector", test_vector},

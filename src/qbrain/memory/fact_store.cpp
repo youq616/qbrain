@@ -402,4 +402,70 @@ Json FactStore::read(const std::string& id, const std::string& pred, bool histor
   }
   return out;
 }
+
+Json FactStore::conflicts(const std::string& id, const std::string& pred, int limit, int budget) {
+  validate();
+  if (!id.empty()) identifier(id);
+  if (!pred.empty()) predicate_check(pred);
+  require(limit >= 1 && limit <= 50 && budget >= 512 && budget <= 32768, "invalid_read_budget");
+  auto& db = brain_.db();
+  Json out = {{"source_id",source_},{"view","conflicts"},{"items",Json::array()},
+      {"untrusted_data",true},{"semantics","explicit_contradictions_only"},
+      {"truncated",false},{"work_limited",false},{"candidate_limit",max_candidates},
+      {"initialized",ready(db)}};
+  if (!out["initialized"].get<bool>()) return out;
+  // The write API stores each symmetric assertion once, in canonical ID order.
+  // Filter endpoint metadata before loading quote text. No inferred edges and
+  // no traversal to another source, even if the stored relation is malformed.
+  std::string sql =
+      "SELECT r.from_id,r.to_id,r.created_at FROM memory_fact_relations r "
+      "JOIN memory_facts a ON a.fact_id=r.from_id AND a.source_id=r.source_id "
+      "JOIN memory_facts b ON b.fact_id=r.to_id AND b.source_id=r.source_id "
+      "WHERE r.source_id=? AND r.relation='contradicts' "
+      "AND r.from_id COLLATE BINARY < r.to_id COLLATE BINARY "
+      "AND a.status='active' AND b.status='active' "
+      "AND a.subject='user' AND b.subject='user' AND a.predicate=b.predicate "
+      "AND a.object<>b.object "
+      "AND length(CAST(a.object AS BLOB)) BETWEEN 1 AND 4096 "
+      "AND length(CAST(b.object AS BLOB)) BETWEEN 1 AND 4096";
+  if (!id.empty()) sql += " AND (r.from_id=? OR r.to_id=?)";
+  if (!pred.empty()) sql += " AND a.predicate=?";
+  sql += " ORDER BY r.from_id COLLATE BINARY,r.to_id COLLATE BINARY LIMIT 101";
+  auto rows = db.prepare(sql);
+  int parameter = 1; rows.bind_text(parameter++,source_);
+  if (!id.empty()) { rows.bind_text(parameter++,id); rows.bind_text(parameter++,id); }
+  if (!pred.empty()) rows.bind_text(parameter++,pred);
+  ReadWork work; const auto at = clock_now(); int scanned = 0;
+  // Keep this SELECT at SQLITE_ROW while both nested loads execute. WAL writers
+  // can commit, but neither endpoint switches to a newer snapshot mid-pair.
+  // All caches are call-local; the next invocation observes committed changes.
+  try {
+    while (rows.step()) {
+      if (++scanned > max_candidates) { out["truncated"] = true; break; }
+      const auto from = rows.column_text(0), to = rows.column_text(1);
+      identifier(from); identifier(to);
+      auto first = load(db,source_,from,at,&work);
+      if (first.is_null()) continue;
+      auto second = load(db,source_,to,at,&work);
+      if (second.is_null()) continue;
+      compatible(first,second);
+      if (first["status"]!="active" || second["status"]!="active") continue;
+      if (out["items"].size() >= static_cast<std::size_t>(limit)) {
+        out["truncated"] = true; break;
+      }
+      out["items"].push_back({{"from_id",from},{"to_id",to},{"relation","contradicts"},
+          {"resolution","unresolved"},{"created_at",rows.column_int(2)},
+          {"facts",Json::array({std::move(first),std::move(second)})}});
+      if (out.dump().size() > static_cast<std::size_t>(budget)) {
+        // Do not show only the convenient side or shorten its evidence. Stop
+        // after the first non-fitting complete pair; ordering is a stable prefix.
+        out["items"].erase(out["items"].end()-1); out["truncated"] = true; break;
+      }
+    }
+  } catch (const Error& error) {
+    if (std::string(error.what()) != "fact_read_work_limit") throw;
+    out["truncated"] = true; out["work_limited"] = true;
+  }
+  return out;
+}
 }  // namespace qbrain::memory
