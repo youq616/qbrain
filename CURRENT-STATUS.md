@@ -1,37 +1,47 @@
 # Qbrain 当前交付状态
 
-## 已验收：N46F 中文搜索与 HTTP 取消修复
+## N47A：代码、独立审核和原生验收已完成
 
-实际测试源码：`c665cb29cb44a6827670b8910b3d6adb568aa2c1`。
-[PR #12](https://github.com/youq616/qbrain/pull/12) 的 GitHub 状态决定是否已经合并；
-[验证运行](https://github.com/youq616/qbrain/actions/runs/34765651987) 的 Windows、
-Server 2022 HTTP、portable、source 和发布任务全部成功。
+实际代码与两份独立审核对应提交：`cccdacb61e63c29f8b9eaba1c38fbeed3e23e54b`。
+源树：`a15a91f7172622e2c8021403d84e63bf36f59147`。
+[PR #14](https://github.com/youq616/qbrain/pull/14) 的实时状态表示是否已合并。
+本阶段的代码与原生测试保持不变，随后只补入审核原件和验收文档。
 
-[下载仓库预览版](https://github.com/youq616/qbrain/releases/tag/cjk-preview-c665cb29)，
-选择 `qbrain-windows-x64-cjk.zip`。SHA256：
-`d47918eb402692af9c3e4e332bf1f3faf0a86a71f49917dbc549fcf505bc217d`。
-完整解压，阅读 `CJK-RECALL.zh-CN.md`。无需在本机编译。
-这是未签名开发版，不是整个项目完成或新的真实用户宿主验收。
+实际新增 C++ FactStore、本地 fact CLI，以及既有 memory_read(view=facts) /
+memory_write(fact_*动作) 的显式创建、同原话证据附加、撤回、替代和矛盾关系。
+保留旧 facts 表；普通读取不初始化，首次有效显式写入先备份再建立独立可选模块。
+事实内容取自已提取完整用户原话，confidence=null，不推断真实性或改写否定。
+来源、到期、篡改、遗忘和版本规则保持；不会自动改变 Hook 召回或开启模型外发。
 
-普通 search 已增加来源隔离的 CJK 连续字串补充；memory_read 仍是原文连续字串匹配，
-没有为了命中而放宽证据、来源或遗忘规则。HTTP 最终使用不可变共享会话，所有
-认证头、正文、连接、时限和回调仍逐请求隔离。之前不兼容 Server 2022 的池选项
-不在最终实现中。系统代理变更后需要重启进程。
+[独立审核 A](docs/review/n47a-cccdacb6/review-A.md) 与
+[独立审核 B](docs/review/n47a-cccdacb6/review-B.md) 原文已逐字节归档，均 PASS。
+13 项非阻塞 P3 保留在 [Issue #16](https://github.com/youq616/qbrain/issues/16)，
+不宣称全部修复。审核为源码审查与部分 Python/SQL 实验，原生验收是另外的 CI 证据。
+无需重新上传旧 ZIP、补调用文件或重复本地审核。
 
-48 个原生回归组、72 项 CJK 单测、36 项 CLI/MCP 中文专项通过；两套 Windows HTTP
-各 81 项，两个固定 current 进程各 256 次取消且显式关闭缓存。原记忆、Embedding、
-队列、Hook、上下文和双 PowerShell 门槛保留。下载证据通过 87 项复核。
+[开发验证34788803379](https://github.com/youq616/qbrain/actions/runs/34788803379) 与
+[N42验证34788803239](https://github.com/youq616/qbrain/actions/runs/34788803239) 必需任务通过：
+49组原生回归、事实15场景/380断言、34项CLI/MCP/118次符合预期退出码的命令，
+以及既有CJK、队列、Embedding、记忆、Hook、双PowerShell及Server2022 HTTP。
+产品仍是未签名开发版。下载/发布状态以仓库 Release 为准，不用历史 dist 代替。
 
-[工程复核](docs/nodes/N46F-HARD-AUDIT.md) ·
-[机器可读摘要](docs/nodes/n46f-evidence/SUMMARY.json)。
+[完整阶段验收](docs/nodes/N47A-HARD-AUDIT.md) ·
+[审核接收哈希](docs/review/n47a-cccdacb6/RECEIPT.json) ·
+[既有原生证据](docs/nodes/n47a-evidence/DELIVERY-CHECKPOINT.json)。
+旧检查点中的“原报告未收到”是当时状态，本次接收记录已取代该项阻塞。
 
-## 未完成：不要把规划当代码
+## 已交付 N46F
 
-N47 事实图、证据绑定的新存储 API 和冲突管理仍需实际实现，不是本轮交付。
+中文 search、HTTP共享会话修复及 [cjk-preview-c665cb29](https://github.com/youq616/qbrain/releases/tag/cjk-preview-c665cb29)
+保留；旧包不含N47A。不要用固定旧464045e2摘要的N46E工具验证新包。
+[原N46F记录](docs/nodes/N46F-HARD-AUDIT.md) 不回写为新版本测试。
+
+## 未完成范围
+
+N47后续语义提取、自动冲突判断、衰减/排序、画像和自动事实召回仍需开发。
 真实 PostgreSQL 对等、完整应用权限审计、真实模型质量/费用、Codex 已登录宿主
-闭环以及正式签名发布仍未完成。用户报告的 Claude/Server2022 验收是单独记录，
-不替代每个新版的实测，也不等于 Win11/Codex 全部验收。
+闭环与正式签名发行仍未完成。N47A完成不等于全部融合项目完成。
 
-本地不需要再次导出 N46F 原始源码、配置 GitHub 写权限或安装编译器。
-需要新本机验证时，只交接一个提示词；文件必须先发布仓库，按 LOCAL-AGENT-HANDOFF.md
-提供固定来源、哈希、使用方法和范围。不让本机并行重写仓库修复。
+每阶段完成后要求真实独立子代理审核；不将父代理自查或CI当作子代理。
+本地交接始终只给一个完整提示词，文件先进入仓库，指定固定下载、校验与用法；
+只委托确需本机的工作，不让本地并行重写仓库修复。

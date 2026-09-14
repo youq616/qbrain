@@ -1,5 +1,6 @@
 #include "qbrain/storage/database.hpp"
 #include "qbrain/storage/detail/cjk_literal.hpp"
+#include "qbrain/storage/detail/startup_busy.hpp"
 #include "qbrain/util/string_util.hpp"
 #include <stdexcept>
 #include <type_traits>
@@ -50,9 +51,18 @@ class SqliteBackend final : public IStorageBackend {
       }
       throw std::runtime_error("sqlite open: " + err + " path=" + path);
     }
-    exec("PRAGMA foreign_keys = ON;");
-    exec("PRAGMA journal_mode = WAL;");
-    exec("PRAGMA synchronous = NORMAL;");
+    // Another short-lived process may be closing/recovering this WAL. Wait
+    // only during connection setup; FactStore's transaction policy starts later.
+    try {
+      detail::StartupBusyWait startup(db_);
+      exec("PRAGMA foreign_keys = ON;");
+      exec("PRAGMA journal_mode = WAL;");
+      exec("PRAGMA synchronous = NORMAL;");
+    } catch (...) {
+      // The scoped callback is removed before closing its connection.
+      close();
+      throw;
+    }
   }
 
   void close() override {

@@ -198,7 +198,7 @@ qbrain_lib(files
   src/qbrain/files/image_meta.cpp
 )
 
-qbrain_lib(memory src/qbrain/memory/session_memory.cpp src/qbrain/integration/hook.cpp src/qbrain/context/context.cpp)
+qbrain_lib(memory src/qbrain/memory/fact_store.cpp src/qbrain/memory/session_memory.cpp src/qbrain/integration/hook.cpp src/qbrain/context/context.cpp)
 target_link_libraries(qbrain_memory PUBLIC qbrain_core qbrain_ai qbrain_util)
 
 qbrain_lib(ops
@@ -244,6 +244,7 @@ add_executable(qbrain_tests
   tests/test_n46b.cpp
   tests/test_n46c.cpp
   tests/test_n46d.cpp
+  tests/test_n47a.cpp
   tests/test_n46f.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
@@ -341,3 +342,9 @@ add_executable(qbrain_cjk_tests tests/test_n46f.cpp)
 target_compile_definitions(qbrain_cjk_tests PRIVATE QBRAIN_CJK_STANDALONE=1)
 target_link_libraries(qbrain_cjk_tests PRIVATE qbrain_memory qbrain_search qbrain_core qbrain_jobs qbrain_ai)
 add_test(NAME qbrain_cjk_unit COMMAND qbrain_cjk_tests)
+
+# N47A production evidence-backed facts; no provider or alternate storage implementation.
+add_executable(qbrain_fact_tests tests/test_n47a.cpp)
+target_compile_definitions(qbrain_fact_tests PRIVATE QBRAIN_FACT_STANDALONE=1)
+target_link_libraries(qbrain_fact_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
+add_test(NAME qbrain_fact_unit COMMAND qbrain_fact_tests)

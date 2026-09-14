@@ -1,0 +1,71 @@
+{
+  "repository": "youq616/qbrain",
+  "stage": "N47A startup contention repair",
+  "stage_complete": false,
+  "source_commit": "cccdacb61e63c29f8b9eaba1c38fbeed3e23e54b",
+  "source_tree": "a15a91f7172622e2c8021403d84e63bf36f59147",
+  "initial_failed_run": 34772721497,
+  "original_failure": "Windows fact process suite: one concurrent create exited 2 before FactStore entry. Original fixture did not retain stderr.",
+  "unchanged_source_local_reproduction": {
+    "fixed_rounds": 64,
+    "processes_per_round": 2,
+    "observed_error": "open brain failed: database is locked",
+    "controlled_temporary_startup_lock": "Original backend open rejected; preserved as regression evidence",
+    "exact_windows_pragma_identified": false
+  },
+  "repair": {
+    "startup_busy_deadline_ms": 2500,
+    "scope": "New SQLite connection startup PRAGMAs only",
+    "default_runtime_busy_timeout_unchanged": true,
+    "failed_startup_connection_closed": true,
+    "whole_operation_retry_added": false
+  },
+  "local_validation": {
+    "platform": "Linux; not Windows acceptance",
+    "production_build": "PASS",
+    "fact_scenarios": 15,
+    "fact_assertions": 380,
+    "process_checks": 34,
+    "process_commands": 118,
+    "process_exit_contracts_match": true,
+    "fixed_concurrent_create_rounds": 32,
+    "fact_report_tests": 12,
+    "existing_process_suite_counts": {"local_config":6,"memory_cycle":44,"mcp_boundaries":17,"hooks":69,"context_process":65,"embedding_search":11},
+    "all_existing_process_suite_exits_zero": true,
+    "reports_label_local_dirty_source_as_unattributed": true
+  },
+  "current_ci_run": 34788803379,
+  "ci_snapshot": {
+    "portable": "completed/success",
+    "server2022_http": "completed/success",
+    "source": "completed/success",
+    "full_windows": "in_progress when this checkpoint was written; not certified here",
+    "full_windows_job_id": 103809076152
+  },
+  "source_readback": {
+    "artifact_id": 10327229128,
+    "artifact_sha256": "c9d8bd58d57c35b5689cea9daf4a4d7a3e53acc8d6494b8d10cdcada67b93f74",
+    "files_matched_exactly": 702,
+    "reconstructed_tree_matches": true
+  },
+  "portable_report_readback": {
+    "artifact_id": 10327438297,
+    "artifact_sha256": "0d13bb0cfbcde47179dc8ce544949d0bd7c6672ab66134490910e71746553f2b",
+    "same_source_and_clean_tree": true,
+    "fact_scenarios": 15,
+    "fact_assertions": 380,
+    "process_checks": 34,
+    "process_commands": 118,
+    "expected_negative_exits_are_not_claimed_as_all_zero": true
+  },
+  "independent_subagent_review": "PENDING; repository reviewer request produced no actual review at last read",
+  "review_task_document_commit": "dc79f27d7dc4c4bd587494463bb3288992514a0c",
+  "review_task_document": "docs/review/N47A-SUBAGENT-REVIEW.md",
+  "review_task_sha256": "152acc1c9d0d55204d84300fff12945727a718d7b65a6956bf69d68b09f354ce",
+  "automatic_fact_publication": "disabled until genuine independent review",
+  "main_merged": false,
+  "new_product_release_published": false,
+  "user_brain_or_credentials_accessed": false,
+  "live_provider_calls": false,
+  "whole_project_complete": false
+}

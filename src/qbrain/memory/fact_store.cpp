@@ -1,0 +1,405 @@
+#include "qbrain/memory/fact_store.hpp"
+#include "qbrain/util/hash.hpp"
+#include "qbrain/util/utf8_display.hpp"
+#include <algorithm>
+#include <chrono>
+#include <limits>
+#include <random>
+#include <set>
+#include <unordered_map>
+
+namespace qbrain::memory {
+namespace {
+using DB = storage::Database;
+constexpr int max_evidence = 16, max_relations = 32, max_candidates = 100;
+int64_t clock_now() {
+  return std::chrono::duration_cast<std::chrono::seconds>(
+      std::chrono::system_clock::now().time_since_epoch()).count();
+}
+void require(bool condition, const char* code) { if (!condition) throw Error(code); }
+void keys(const Json& value, std::initializer_list<const char*> allowed) {
+  require(value.is_object(), "fact_invalid_payload");
+  for (auto it = value.begin(); it != value.end(); ++it) {
+    bool found = false;
+    for (const auto* name : allowed) if (it.key() == name) found = true;
+    require(found, "fact_unexpected_argument");
+  }
+}
+std::string field(const Json& value, const char* name) {
+  require(value.contains(name) && value[name].is_string(), "fact_invalid_field");
+  return value[name].get<std::string>();
+}
+void identifier(const std::string& id) {
+  require(id.size() == 64 && std::all_of(id.begin(), id.end(), [](unsigned char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+  }), "fact_invalid_id");
+}
+void predicate_check(const std::string& p) {
+  require(!p.empty() && p.size() <= 64 && p[0] >= 'a' && p[0] <= 'z' &&
+      std::all_of(p.begin(), p.end(), [](unsigned char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+               c == '_' || c == '.' || c == '-';
+      }), "fact_invalid_predicate");
+  require(!contains_sensitive_material(p), "sensitive_material_rejected");
+}
+int64_t revision(const Json& p) {
+  require(p.contains("expected_revision") && p["expected_revision"].is_number_integer() &&
+      p["expected_revision"] >= 1 && p["expected_revision"] < INT32_MAX, "fact_invalid_revision");
+  return p["expected_revision"].get<int64_t>();
+}
+struct Tx {
+  DB& db; bool done = false; int old_timeout = 0;
+  explicit Tx(DB& d) : db(d) {
+    { auto s = db.prepare("PRAGMA busy_timeout"); if (s.step()) old_timeout = int(s.column_int(0)); }
+    db.exec("PRAGMA busy_timeout=2500");
+    try { db.exec("BEGIN IMMEDIATE"); }
+    catch (...) { db.exec("PRAGMA busy_timeout=" + std::to_string(old_timeout)); throw; }
+  }
+  void commit() { db.exec("COMMIT"); done = true; }
+  ~Tx() {
+    if (!done) { try { db.exec("ROLLBACK"); } catch (...) {} }
+    try { db.exec("PRAGMA busy_timeout=" + std::to_string(old_timeout)); } catch (...) {}
+  }
+};
+bool exists(DB& db, const char* name, const char* type = "table") {
+  auto s = db.prepare("SELECT 1 FROM sqlite_master WHERE type=? AND name=?");
+  s.bind_text(1, type); s.bind_text(2, name); return s.step();
+}
+bool ready(DB& db) {
+  if (!exists(db, "memory_fact_module")) {
+    require(!exists(db, "memory_facts") && !exists(db, "memory_fact_evidence") &&
+        !exists(db, "memory_fact_relations"), "fact_schema_conflict");
+    return false;
+  }
+  { auto s = db.prepare("SELECT version FROM memory_fact_module");
+    require(s.step() && s.column_int(0) == 1 && !s.step(), "fact_schema_version_unsupported"); }
+  for (const auto* name : {"memory_facts", "memory_fact_evidence", "memory_fact_relations"})
+    require(exists(db, name), "fact_schema_incomplete");
+  require(exists(db, "memory_fact_last_evidence", "trigger"), "fact_schema_incomplete");
+  return true;
+}
+void initialize(DB& db) {
+  if (ready(db)) return;
+  const auto path = db.backend_file_path();
+  if (!path.empty()) {
+    std::random_device rng; std::string entropy;
+    for (int i = 0; i < 8; ++i) entropy += std::to_string(rng()) + ":";
+    require(db.backup_to(path + ".pre-facts-v1-" + util::sha256_hex(entropy) + ".bak"),
+            "fact_backup_failed");
+  }
+  Tx tx(db);
+  if (!ready(db)) {
+    db.exec(R"SQL(
+CREATE TABLE memory_fact_module(version INTEGER PRIMARY KEY CHECK(version=1));
+INSERT INTO memory_fact_module VALUES(1);
+CREATE TABLE memory_facts(
+ fact_id TEXT PRIMARY KEY, source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+ subject TEXT NOT NULL CHECK(subject='user'), predicate TEXT NOT NULL, object TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','superseded','retracted')),
+ revision INTEGER NOT NULL DEFAULT 1 CHECK(revision>=1 AND revision<=2147483647),
+ created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(fact_id,source_id));
+CREATE TABLE memory_fact_evidence(
+ fact_id TEXT NOT NULL, source_id TEXT NOT NULL,
+ item_id TEXT NOT NULL REFERENCES memory_items(item_id) ON DELETE CASCADE,
+ quote_hash TEXT NOT NULL, payload_hash TEXT NOT NULL, created_at INTEGER NOT NULL,
+ PRIMARY KEY(fact_id,item_id),
+ FOREIGN KEY(fact_id,source_id) REFERENCES memory_facts(fact_id,source_id) ON DELETE CASCADE);
+CREATE TABLE memory_fact_relations(
+ source_id TEXT NOT NULL, from_id TEXT NOT NULL, to_id TEXT NOT NULL,
+ relation TEXT NOT NULL CHECK(relation IN ('superseded_by','contradicts')),
+ created_at INTEGER NOT NULL, CHECK(from_id<>to_id),
+ PRIMARY KEY(from_id,to_id,relation),
+ FOREIGN KEY(from_id,source_id) REFERENCES memory_facts(fact_id,source_id) ON DELETE CASCADE,
+ FOREIGN KEY(to_id,source_id) REFERENCES memory_facts(fact_id,source_id) ON DELETE CASCADE);
+CREATE INDEX idx_memory_facts_source ON memory_facts(source_id,status,predicate,created_at,fact_id);
+CREATE INDEX idx_memory_fact_evidence_item ON memory_fact_evidence(item_id);
+CREATE INDEX idx_memory_fact_relations_to ON memory_fact_relations(to_id);
+CREATE TRIGGER memory_fact_last_evidence AFTER DELETE ON memory_fact_evidence
+BEGIN
+ UPDATE memory_facts SET revision=MIN(revision+1,2147483647),
+  updated_at=MAX(updated_at,CAST(strftime('%s','now') AS INTEGER))
+  WHERE fact_id=OLD.fact_id AND source_id=OLD.source_id
+  AND EXISTS(SELECT 1 FROM memory_fact_evidence WHERE fact_id=OLD.fact_id);
+ DELETE FROM memory_facts WHERE fact_id=OLD.fact_id AND source_id=OLD.source_id
+  AND NOT EXISTS(SELECT 1 FROM memory_fact_evidence WHERE fact_id=OLD.fact_id);
+END;
+)SQL");
+  }
+  tx.commit();
+}
+struct Evidence {
+  std::string item, event, quote, hash;
+  Json reference;
+};
+struct ReadWork {
+  int checks = 0;
+  std::size_t bytes = 0;
+  std::unordered_map<std::string,Evidence> cache;
+};
+Evidence evidence(DB& db, const std::string& source, const std::string& item, int64_t at, ReadWork* work = nullptr) {
+  if (work) {
+    if (auto it = work->cache.find(item); it != work->cache.end()) return it->second;
+    require(++work->checks <= 512, "fact_read_work_limit");
+  }
+  identifier(item);
+  if (!exists(db, "memory_module") || !exists(db, "memory_items") || !exists(db, "memory_events"))
+    throw Error("fact_evidence_unavailable");
+  { auto version = db.prepare("SELECT version FROM memory_module");
+    require(version.step() && version.column_int(0)==1 && !version.step(), "fact_evidence_unavailable"); }
+  auto s = db.prepare(
+      "SELECT m.event_id,m.category,m.quote,m.message_index,m.expires_at,e.status,e.payload_hash,"
+      "e.page_hash,e.expires_at,e.session_id,e.fragment_id,e.method,p.slug,p.body,p.content_hash,p.deleted_at "
+      "FROM memory_items m JOIN memory_events e ON e.event_id=m.event_id "
+      "JOIN pages p ON p.id=e.page_id AND p.source_id=e.source_id WHERE m.item_id=? AND e.source_id=? "
+      "AND length(CAST(m.quote AS BLOB))<=4096 AND length(CAST(p.body AS BLOB))<=262144");
+  s.bind_text(1, item); s.bind_text(2, source);
+  require(s.step(), "fact_evidence_unavailable");
+  const auto event = s.column_text(0), category = s.column_text(1), quote = s.column_text(2);
+  const auto index = s.column_int(3), expiry = s.column_int(4), event_expiry = s.column_int(8);
+  const auto hash = s.column_text(6), body = s.column_text(13);
+  if (work) { work->bytes += body.size(); require(work->bytes <= 8*1024*1024, "fact_read_work_limit"); }
+  require(s.column_text(5) == "extracted" && s.column_is_null(15) && expiry == event_expiry &&
+      expiry >= 0 && (!expiry || expiry > at) && s.column_text(14) == s.column_text(7) &&
+      !quote.empty() && quote.size() <= 4096 && util::valid_utf8(quote) &&
+      body.size() <= max_payload_bytes && util::sha256_hex(body) == hash,
+      "fact_evidence_unavailable");
+  require(!contains_sensitive_material(quote), "fact_evidence_unavailable");
+  require(event == util::sha256_hex(Json::array({"qbrain-memory-v1",source,
+      s.column_text(9),s.column_text(10),hash}).dump()), "fact_evidence_unavailable");
+  Json payload;
+  try {
+    payload = Json::parse(body, [](int depth, Json::parse_event_t, Json&) {
+      if (depth > 8) throw Error("fact_evidence_unavailable");
+      return true;
+    });
+    require(payload.is_object() && payload.contains("messages") && payload["messages"].is_array() &&
+        payload.contains("expires_at") && payload["expires_at"].is_number_integer() &&
+        payload["expires_at"] == event_expiry && index >= 0 &&
+        static_cast<std::size_t>(index) < payload["messages"].size(), "fact_evidence_unavailable");
+    const auto& message = payload["messages"][static_cast<std::size_t>(index)];
+    require(message.is_object() && message.value("role", "") == "user" &&
+        message.at("content") == quote, "fact_evidence_unavailable");
+  } catch (...) { throw Error("fact_evidence_unavailable"); }
+  const std::set<std::string> categories = {"preference","decision","commitment","event","lesson","fact"};
+  require(categories.count(category) && item == util::sha256_hex(event +
+      Json({{"message_index",index},{"category",category},{"quote",quote}}).dump()), "fact_evidence_unavailable");
+  Evidence result{item,event,quote,hash,{{"item_id",item},{"event_id",event},{"source_id",source},
+      {"session_id",s.column_text(9)},{"message_index",index},{"category",category},
+      {"expires_at",expiry},{"method",s.column_text(11)},{"evidence_slug",s.column_text(12)}}};
+  if (work) work->cache.emplace(item,result);
+  return result;
+}
+Json load(DB& db, const std::string& source, const std::string& id, int64_t at, ReadWork* work = nullptr) {
+  auto s = db.prepare("SELECT subject,predicate,object,status,revision,created_at,updated_at "
+                      "FROM memory_facts WHERE source_id=? AND fact_id=?");
+  s.bind_text(1,source); s.bind_text(2,id);
+  if (!s.step()) return nullptr;
+  Json out = {{"fact_id",id},{"source_id",source},{"subject",s.column_text(0)},
+      {"predicate",s.column_text(1)},{"object",s.column_text(2)},{"status",s.column_text(3)},
+      {"revision",s.column_int(4)},{"created_at",s.column_int(5)},{"updated_at",s.column_int(6)},
+      {"confidence",nullptr},{"truth_status","caller_attested_user_statement"},
+      {"untrusted_data",true},{"evidence",Json::array()}};
+  auto refs = db.prepare("SELECT item_id,quote_hash,payload_hash FROM memory_fact_evidence "
+                         "WHERE fact_id=? AND source_id=? ORDER BY item_id LIMIT 17");
+  refs.bind_text(1,id); refs.bind_text(2,source);
+  int count = 0;
+  while (refs.step()) {
+    require(++count <= max_evidence, "fact_evidence_limit");
+    try {
+      auto e = evidence(db,source,refs.column_text(0),at,work);
+      if (e.quote != out["object"].get_ref<const std::string&>() || util::sha256_hex(e.quote) != refs.column_text(1) ||
+          e.hash != refs.column_text(2)) continue;
+      out["evidence"].push_back(e.reference);
+    } catch (const Error& e) {
+      if (std::string(e.what()) != "fact_evidence_unavailable") throw;
+    }
+  }
+  if (out["evidence"].empty()) return nullptr; // Never publish orphaned or stale text.
+  out["evidence_count"] = out["evidence"].size();
+  return out;
+}
+Json need(DB& db, const std::string& source, const std::string& id, int64_t at) {
+  require(ready(db), "fact_not_found");
+  auto f = load(db,source,id,at); require(!f.is_null(), "fact_not_found"); return f;
+}
+void insert_evidence(DB& db, const std::string& source, const std::string& id, const Evidence& e, int64_t at) {
+  auto s = db.prepare("INSERT INTO memory_fact_evidence(fact_id,source_id,item_id,quote_hash,payload_hash,created_at) "
+                      "VALUES(?,?,?,?,?,?)");
+  s.bind_text(1,id); s.bind_text(2,source); s.bind_text(3,e.item);
+  s.bind_text(4,util::sha256_hex(e.quote)); s.bind_text(5,e.hash); s.bind_int(6,at); s.step_done();
+}
+void advance(DB& db, const std::string& source, const std::string& id, int64_t rev,
+             const std::string& status, int64_t at) {
+  require(rev > 0 && rev < INT32_MAX, "fact_invalid_revision");
+  auto s = db.prepare("UPDATE memory_facts SET status=?,revision=revision+1,updated_at=? "
+                      "WHERE source_id=? AND fact_id=? AND revision=?");
+  s.bind_text(1,status); s.bind_int(2,at); s.bind_text(3,source); s.bind_text(4,id); s.bind_int(5,rev);
+  s.step_done(); require(db.changes() == 1, "fact_revision_conflict");
+}
+bool has_relation(DB& db, const std::string& source, const std::string& a,
+                  const std::string& b, const std::string& kind) {
+  auto s = db.prepare("SELECT 1 FROM memory_fact_relations WHERE source_id=? AND from_id=? AND to_id=? AND relation=?");
+  s.bind_text(1,source); s.bind_text(2,a); s.bind_text(3,b); s.bind_text(4,kind); return s.step();
+}
+void link(DB& db, const std::string& source, const std::string& a,
+          const std::string& b, const std::string& kind, int64_t at) {
+  for (const auto& id : {a,b}) {
+    auto n = db.prepare("SELECT COUNT(*) FROM memory_fact_relations WHERE source_id=? AND (from_id=? OR to_id=?)");
+    n.bind_text(1,source); n.bind_text(2,id); n.bind_text(3,id);
+    require(n.step() && n.column_int(0) < max_relations, "fact_relation_limit");
+  }
+  auto s = db.prepare("INSERT INTO memory_fact_relations(source_id,from_id,to_id,relation,created_at) VALUES(?,?,?,?,?)");
+  s.bind_text(1,source); s.bind_text(2,a); s.bind_text(3,b); s.bind_text(4,kind); s.bind_int(5,at); s.step_done();
+}
+void compatible(const Json& a, const Json& b) {
+  require(a["fact_id"] != b["fact_id"] && a["source_id"] == b["source_id"] &&
+      a["subject"] == b["subject"] && a["predicate"] == b["predicate"] && a["object"] != b["object"],
+      "fact_incompatible_relation");
+}
+Json receipt(const Json& fact, bool duplicate = false) {
+  return {{"fact_id",fact["fact_id"]},{"source_id",fact["source_id"]},
+          {"status",fact["status"]},{"revision",fact["revision"]},{"duplicate",duplicate}};
+}
+}  // namespace
+
+FactStore::FactStore(Brain& brain, std::string source) : brain_(brain), source_(std::move(source)) { validate(); }
+void FactStore::validate() const {
+  require(brain_.db().backend_kind() == storage::BackendKind::sqlite, "fact_backend_unsupported");
+  const auto canonical = Brain::canonical_source_id(source_);
+  require(canonical && *canonical == source_ && brain_.source_exists(source_), "invalid_source");
+  auto s = brain_.db().prepare("PRAGMA foreign_keys");
+  require(s.step() && s.column_int(0) == 1, "fact_foreign_keys_required");
+}
+
+Json FactStore::create(const Json& p) {
+  validate();
+  keys(p,{"predicate","item_id","subject"});
+  const auto pred = field(p,"predicate"), item = field(p,"item_id");
+  predicate_check(pred); identifier(item);
+  if (p.contains("subject")) require(field(p,"subject") == "user", "fact_invalid_subject");
+  auto& db = brain_.db(); (void)evidence(db,source_,item,clock_now());
+  initialize(db); Tx tx(db); const auto at = clock_now();
+  const auto e = evidence(db,source_,item,at);
+  const auto id = util::sha256_hex(Json::array({"qbrain-fact-v1",source_,"user",pred,e.quote,item}).dump());
+  if (auto old = load(db,source_,id,at); !old.is_null()) {
+    tx.commit(); return receipt(old,true); // Explicit retraction/supersession never resets.
+  }
+  auto s = db.prepare("INSERT INTO memory_facts(fact_id,source_id,subject,predicate,object,created_at,updated_at) "
+                      "VALUES(?,?,'user',?,?,?,?)");
+  s.bind_text(1,id); s.bind_text(2,source_); s.bind_text(3,pred); s.bind_text(4,e.quote);
+  s.bind_int(5,at); s.bind_int(6,at); s.step_done();
+  insert_evidence(db,source_,id,e,at);
+  const auto out = receipt(need(db,source_,id,at)); tx.commit(); return out;
+}
+
+Json FactStore::attach(const Json& p) {
+  validate();
+  keys(p,{"fact_id","item_id"}); const auto id = field(p,"fact_id"), item = field(p,"item_id");
+  identifier(id); identifier(item); auto& db = brain_.db();
+  require(ready(db), "fact_not_found"); Tx tx(db); const auto at = clock_now();
+  auto f = need(db,source_,id,at); require(f["status"] != "retracted", "fact_state_conflict");
+  const auto e = evidence(db,source_,item,at);
+  require(e.quote == f["object"].get_ref<const std::string&>(), "fact_quote_mismatch");
+  { auto s = db.prepare("SELECT 1 FROM memory_fact_evidence WHERE fact_id=? AND item_id=?");
+    s.bind_text(1,id); s.bind_text(2,item);
+    if (s.step()) { tx.commit(); return receipt(f,true); } }
+  { auto s = db.prepare("SELECT COUNT(*) FROM memory_fact_evidence WHERE fact_id=?"); s.bind_text(1,id);
+    require(s.step() && s.column_int(0) < max_evidence, "fact_evidence_limit"); }
+  insert_evidence(db,source_,id,e,at);
+  advance(db,source_,id,f["revision"].get<int64_t>(),f["status"].get<std::string>(),at);
+  auto out = receipt(need(db,source_,id,at)); tx.commit(); return out;
+}
+
+Json FactStore::retract(const Json& p) {
+  validate();
+  keys(p,{"fact_id","expected_revision"}); const auto id = field(p,"fact_id");
+  identifier(id); const auto rev = revision(p); auto& db = brain_.db();
+  require(ready(db), "fact_not_found"); Tx tx(db); const auto at = clock_now(); auto f = need(db,source_,id,at);
+  require(f["revision"] == rev, "fact_revision_conflict");
+  if (f["status"] == "retracted") { tx.commit(); return receipt(f,true); }
+  advance(db,source_,id,rev,"retracted",at);
+  auto out = receipt(need(db,source_,id,at)); tx.commit(); return out;
+}
+
+Json FactStore::supersede(const Json& p) {
+  validate();
+  keys(p,{"fact_id","replacement_id","expected_revision"});
+  const auto id = field(p,"fact_id"), replacement = field(p,"replacement_id");
+  identifier(id); identifier(replacement); const auto rev = revision(p); auto& db = brain_.db();
+  require(ready(db), "fact_not_found"); Tx tx(db); const auto at = clock_now();
+  auto f = need(db,source_,id,at), next = need(db,source_,replacement,at); compatible(f,next);
+  require(f["revision"] == rev, "fact_revision_conflict");
+  require(f["status"] == "active" && next["status"] == "active", "fact_state_conflict");
+  link(db,source_,id,replacement,"superseded_by",at);
+  advance(db,source_,id,rev,"superseded",at);
+  auto out = receipt(need(db,source_,id,at)); out["replacement_id"] = replacement; tx.commit(); return out;
+}
+
+Json FactStore::contradict(const Json& p) {
+  validate();
+  keys(p,{"fact_id","other_id"}); auto a = field(p,"fact_id"), b = field(p,"other_id");
+  identifier(a); identifier(b); auto& db = brain_.db(); require(ready(db), "fact_not_found");
+  Tx tx(db); const auto at = clock_now(); auto first = need(db,source_,a,at), second = need(db,source_,b,at);
+  compatible(first,second);
+  require(first["status"] == "active" && second["status"] == "active", "fact_state_conflict");
+  if (b < a) std::swap(a,b); // One symmetric assertion, never an inferred contradiction.
+  const bool duplicate = has_relation(db,source_,a,b,"contradicts");
+  if (!duplicate) {
+    link(db,source_,a,b,"contradicts",at);
+    for (const auto& f : {first,second})
+      advance(db,source_,f["fact_id"].get<std::string>(),f["revision"].get<int64_t>(),"active",at);
+  }
+  tx.commit(); return {{"source_id",source_},{"from_id",a},{"to_id",b},
+                      {"relation","contradicts"},{"duplicate",duplicate},{"resolution","unresolved"}};
+}
+
+Json FactStore::read(const std::string& id, const std::string& pred, bool history, int limit, int budget) {
+  validate();
+  if (!id.empty()) identifier(id);
+  if (!pred.empty()) predicate_check(pred);
+  require(limit >= 1 && limit <= 50 && budget >= 512 && budget <= 32768, "invalid_read_budget");
+  auto& db = brain_.db();
+  Json out = {{"source_id",source_},{"items",Json::array()},{"untrusted_data",true},
+      {"truth_status","caller_attested_user_statement"},{"truncated",false},
+      {"candidate_limit",max_candidates},{"initialized",ready(db)}};
+  if (!out["initialized"].get<bool>()) return out;
+  std::string sql = "SELECT fact_id FROM memory_facts WHERE source_id=?";
+  if (!id.empty()) sql += " AND fact_id=?";
+  if (!pred.empty()) sql += " AND predicate=?";
+  if (!history) sql += " AND status='active'";
+  sql += " ORDER BY created_at DESC,fact_id LIMIT 101";
+  auto s = db.prepare(sql); int parameter = 1; s.bind_text(parameter++,source_);
+  if (!id.empty()) s.bind_text(parameter++,id);
+  if (!pred.empty()) s.bind_text(parameter++,pred);
+  const auto at = clock_now(); int scanned = 0; ReadWork work;
+  // Keep this SELECT alive so child evidence/edge reads share its SQLite snapshot.
+  try { while (s.step()) {
+    if (++scanned > max_candidates) { out["truncated"] = true; break; }
+    auto f = load(db,source_,s.column_text(0),at,&work); if (f.is_null()) continue;
+    f["relations"] = Json::array();
+    auto edges = db.prepare("SELECT from_id,to_id,relation FROM memory_fact_relations "
+        "WHERE source_id=? AND (from_id=? OR to_id=?) ORDER BY relation,from_id,to_id LIMIT 33");
+    edges.bind_text(1,source_); edges.bind_text(2,s.column_text(0)); edges.bind_text(3,s.column_text(0));
+    int n = 0;
+    while (edges.step()) {
+      require(++n <= max_relations, "fact_relation_limit");
+      const bool outgoing = edges.column_text(0) == s.column_text(0);
+      const auto other = edges.column_text(outgoing ? 1 : 0);
+      const auto target = load(db,source_,other,at,&work);
+      if (target.is_null()) continue;
+      f["relations"].push_back({{"relation",edges.column_text(2)},{"direction",outgoing?"outgoing":"incoming"},
+                                {"other_fact_id",other},{"other_status",target["status"]}});
+    }
+    if (out["items"].size() >= static_cast<std::size_t>(limit)) { out["truncated"] = true; break; }
+    out["items"].push_back(f);
+    if (out.dump().size() + 32 > static_cast<std::size_t>(budget)) {
+      out["items"].erase(out["items"].end()-1); out["truncated"] = true;
+    }
+  }
+  } catch (const Error& e) {
+    if (std::string(e.what()) != "fact_read_work_limit") throw;
+    out["truncated"] = true; out["work_limited"] = true;
+  }
+  return out;
+}
+}  // namespace qbrain::memory
