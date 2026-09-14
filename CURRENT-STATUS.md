@@ -1,66 +1,69 @@
 # Qbrain 当前交付状态
 
-## 已合并并发布：N47C 按查询召回事实与直接冲突证据
+## N47D：仓库开发、阶段审核、合并与预览发布已完成
 
-[PR #18](https://github.com/youq616/qbrain/pull/18) 已合并，产品合并提交
-`b63042c34b609937412610c5cc4d4b921ffabab2`。实际测试和阶段复核源码为
-`1311bdd51b779e8da6b6420b62ea3f653edfa27f`，源树
-`360cfd7a303ac2f3084cef66917378a22dae6272`。审核后只增加文档，没有改动产品、
-测试或交付包字节。当前状态/发布记录的后续文档提交不代表再次编译。
+[PR #19](https://github.com/youq616/qbrain/pull/19) 已合并，产品合并提交：
+`d7e29df4acfbf7d47e09efe02fed7297578e4362`。
+实际产品、原生测试和单独工程审核源码：`5275045c4790b802b620ba0af52ec6248cd587d5`，
+树 `7cd4ab256aa8dd885a95c00f8de712512933421a`。
+审核头649b7b4只增加/更新5个文档，合并与审核头零文件差异。后续交付说明不改变EXE。
 
-[仓库预览 Release：recall-preview-1311bdd5](https://github.com/youq616/qbrain/releases/tag/recall-preview-1311bdd5)
-已经公开。文件 `qbrain-windows-x64-recall.zip`，1,942,131 字节，SHA256：
-`bc707db523de36b026ed302f4824afdbfd614bf8efbcc9a93a885f74d68fd3bc`。
-完整解压，阅读 `FACT-RECALL.zh-CN.md`。仍是未签名开发版，不是全项目完成。
-运行预编译包无需编译器；旧N46E固定旧哈希入口不能加载新包，不能绕过校验。
+[仓库预览 Release：hook-fact-preview-5275045c](https://github.com/youq616/qbrain/releases/tag/hook-fact-preview-5275045c)
+已公开。选择 `qbrain-windows-x64-hook-facts.zip`，1960966字节，SHA256：
+`89918f2ed6964b4051d4542b7cd2358406423b6f3111db202e92e89e043086e8`。
+EXE SHA256：`cc544211b06dd4439cb79c69bf5baab190b831c97c9b87d911c8373bac8d7489`。
+完整解压阅读 `HOOK-FACT-RECALL.zh-CN.md`。未签名开发预览，不需本机编译器。
+旧N46E固定哈希工具不接受新包，不能绕过校验或用历史dist代替。
 
-## 本阶段实际能力
+## 实际新增能力与默认值
 
-`fact recall --query ...` 和既有 MCP `memory_read(view=recall,query=...)` 按完整
-查询子串匹配已提取用户原话事实。先筛选匹配再应用候选上限，不会仅因新写入100条
-无关事实而漏掉旧匹配。每个命中同时带回所有有效active的直接显式冲突证据，
-即使对方原话不包含查询词，也不能隐藏。完整原话、revision和来源一起返回。
+安装器新增 `-EnableFactRecall`，默认关闭、独立于 `-EnableCapture`。Status显示
+fact_recall_enabled，重装不传开关即关闭。旧项目配置没有fact_recall字段时保留原Hook。
+明确开启后，SessionStart提供近期有效事实，UserPromptSubmit按现有字面词提取召回。
+已有完整直接冲突组优先，普通记忆使用剩余同一个序列化Hook JSON预算与条数限制。
 
-这是直接关系，不递归展开整个图；如果对方也匹配，它仍作为独立命中返回自己的
-其他冲突证据。没有自动推断矛盾、选择赢家、生成置信度或改写原话。
-旧memories/facts/conflicts视图不变，MCP工具名称和写权限不变，无新数据库迁移。
+整组放不下不截原话、不只返回一侧。普通记忆排除同源现有事实的绑定项及完全相同
+原话，含退休事实，防止从另一条路径绕过反证/撤回。事实每次重新核验，不因会话
+去重隐藏revision/支持证据变化。一个SQLite读快照贯穿两条路径，读取结束后才采集。
 
-一次调用共用SQLite读快照和有界证据工作预算。对方在查询中被遗忘，当前调用可返回
-完整旧快照，下次读取观察遗忘。放不下完整命中组就截停并标记truncated，不给半组。
-空结果且truncated=true不等于不存在匹配；预算/候选数不是SQL扫描或延迟保证。
-**本轮没有启用Hook自动事实注入**；这是Agent可主动调用的接口，不是自动会话验收。
+没有新数据库迁移、自动事实创建、语义判断、真假赢家、新MCP名称或写权限。
+recall_bytes是每次完整Hook响应，不是会话Token总量。事实证据工作有共享限制，
+但没有SQL总扫描成本或硬实时承诺。空结果带truncated表示不完整。
+逐事件遗忘不删除其他独立未遗忘的同句记录；历史客户端上下文和备份也不被抹除。
 
-## 已核实验证与单独审核
+**开启会将数据提供给用户已授权客户端，客户端可能发送至其模型。** 没有额外Qbrain
+模型调用不表示客户端无外发。未改变外部提取/摘要许可、认证或全局客户端设置。
 
-开发运行34854466927与N42运行34854466971的必需任务全部通过。Windows准确注册
-51组；召回单元在Server2025、Server2022和portable各15场景/330断言；实际CLI/MCP
-在Windows和portable各44检查/71次符合预期退出的命令（66次exit0，5次预期exit1）。
-全部旧事实、冲突、HTTP、队列、CJK、记忆、Hook和双PowerShell门槛保留通过。
-真实PG DSN仍明确SKIP，不计为PG验收。
+## 已核实的原生与单独工程审核
 
-单独工程自审重新编译Clang17 ASan/UBSan覆盖SQLite C与应用C++，召回单元/进程通过；
-独立预期关系图与预算对照180检查/294命令在GCC和sanitizer均通过；两项故意破坏的
-临时副本准确触发失败断言。另有69项报告门槛与162项原始源码/日志/包回读。
-未发现本阶段未解决P0/P1，不保证不存在所有潜在问题。审核由协调代理按所有者授权
-单独进行，不冒称真实独立子代理或第三方；N47A原始子代理记录保持不变。
+开发34862423429与N42的34862423691必需任务通过：52个准确Windows注册组，新组合
+单元在Server2025/Server2022/portable各13场景229断言，Windows/portable新Hook事件
+夹具52项72命令；PowerShell5.1/7新开关安装各33项。全部旧事实/冲突/召回/HTTP/队列/
+CJK/记忆/Hook/上下文/双PowerShell门槛保持，真实PG DSN明确SKIP。
 
-发布运行34857464045完成：固定源码、审核头、已合并PR、原始CI任务与包/日志摘要
-核对，完整复验召回/冲突/事实报告后创建新草稿，下载逐字节比较三项资产再公开。
-没有重编译或重新打包、覆盖旧Release、开启通用未审核自动发布。
+单独自审还有Clang17 ASan/UBSan对SQLite C和C++实际单元/进程执行，组合对照126种
+配置、1178断言、176次命令在GCC和sanitizer均通过，两个故意破坏临时副本准确失败。
+82项报告门槛和187项原始源码/日志/包回读通过，745文件源树重建一致。没有发现本阶段
+P0/P1阻塞，不是绝对无缺陷保证、第三方审核或真正独立子代理审核。
 
-[阶段复核](docs/nodes/N47C-HARD-AUDIT.md) · [测试摘要](docs/nodes/n47c-evidence/SUMMARY.json) ·
-[发布记录](docs/nodes/n47c-evidence/RELEASE.json)
+发布34866105622成功：核对合并/审核头、固定源码/原始CI/完整单元与安装报告，上传
+新草稿后下载逐字节核对三项资产再公开。未重编译、未重新打包或覆盖旧Release。
+通用未审核自动发布仍未开启。
 
-## 已有基础与未完成范围
+[阶段复核](docs/nodes/N47D-HARD-AUDIT.md) · [测试摘要](docs/nodes/n47d-evidence/SUMMARY.json) ·
+[发布记录](docs/nodes/n47d-evidence/RELEASE.json)
 
-N46F中文搜索和HTTP修复、N47A证据绑定事实生命周期、N47B成对冲突查询均保留。
-基础会话采集/原文记忆/来源隔离/遗忘/MCP/项目Hook与可撤销安装不变。N47A首次
-明确事实写入的备份及可选表初始化语义仍然存在；本阶段没有额外迁移。
+## 本机还需完成的唯一新边界
 
-自动Hook事实召回及统一上下文预算、语义提取/冲突判断、衰减/画像、PG对等、真实
-模型质量/费用、完整ACL/DLP、实际Codex闭环和正式签名发行仍未由本阶段完成。
-N47C完成不等于整个N47或整个融合项目完成，既有P3继续逐项处理。
+**真实已登录客户端消费尚未验收。** 原生事件夹具和安装检查不等于客户端实际加载、
+模型确实使用了上下文；trace的host_consumption_confirmed仍保留false。
+只需按[固定本机任务](docs/integration/N47D-LOCAL-ACCEPTANCE.zh-CN.md)用现有Claude登录，
+三个隔离新会话验证两条冲突并列、遗忘后更新和另项目不串记忆，然后关闭/卸载。
+不安装编译器、不修改源码、不配GitHub写凭据、不重审或重做整套CI。Codex既有认证
+阻塞单独记录，不改认证、不用Claude结果冒充Codex通过。报告只交一个脱敏ZIP。
 
-目前没有必须交给本地Agent的新任务。不需要重复导出源码、安装编译器或配置GitHub
-写权限。有真正本机任务时，只交付一个完整提示词，文件先放仓库并提供固定来源、
-摘要和使用方法，遵循LOCAL-AGENT-HANDOFF.md。
+## 后续范围
+
+N46F检索/HTTP、N47A证据事实生命周期、N47B冲突查询、N47C主动召回能力均保留。
+自动语义提取/冲突判断、衰减画像、PG对等、真实模型质量费用、完整ACL/DLP、实际
+Codex闭环与正式签名仍需后续开发/验收。仓库N47D完成不等于整个项目已完成。
