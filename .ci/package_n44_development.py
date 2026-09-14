@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 from validate_native_log import verified_groups
+from validate_conflict_report import validate_process as validate_conflicts, validate_unit as validate_conflict_unit
 from validate_fact_report import validate_report as validate_facts, validate_unit_report
 from validate_cjk_report import validate_report
 from validate_http_lifecycle import validate_report as validate_lifecycle
@@ -15,8 +16,8 @@ import zipfile
 
 root=Path.cwd();e=root/'evidence'
 def read(name): return (e/name).read_text(encoding='utf-8-sig')
-# N47A requires all 49 named groups; retain the historical validator default.
-expected=verified_groups((root/'tests/test_main.cpp').read_text(encoding='utf-8'),read('regression.log'),expected_count=49)
+# N47B requires all 50 named groups; retain the historical validator default.
+expected=verified_groups((root/'tests/test_main.cpp').read_text(encoding='utf-8'),read('regression.log'),expected_count=50)
 with (e/'evidence-gate-tests.log').open('wb') as log:
     subprocess.run([sys.executable,'.ci/test_validate_native_log.py'],stdout=log,stderr=subprocess.STDOUT,check=True)
 for file,text in [('memory_cycle.log','44 checks passed'),('mcp_boundaries.log','17 checks passed'),('hooks.log','69 passed'),('context_process.log','65 passed'),('transport51.log','8 checks passed'),('transport7.log','8 checks passed')]:
@@ -66,6 +67,17 @@ for mode in ('automatic','generic'):
         assert any(s.startswith(f'{mode}: QB-QUEUE-{code}:') for s in queue_report['scenarios'])
 
 binary=root/'build/cl/qbrain.exe';digest=hashlib.sha256(binary.read_bytes()).hexdigest()
+conflict_unit=json.loads(read('conflict-unit.json'))
+validate_conflict_unit(conflict_unit,source_commit=commit,
+    binary_sha256=hashlib.sha256((root/'build/http/Release/qbrain_conflict_tests.exe').read_bytes()).hexdigest(),
+    script_sha256=hashlib.sha256((root/'.ci/test_conflict_unit.py').read_bytes()).hexdigest(),
+    test_sha256=hashlib.sha256((root/'tests/test_n47b.cpp').read_bytes()).hexdigest())
+conflict_process=json.loads(read('conflict-process.json'))
+validate_conflicts(conflict_process,source_commit=commit,binary_sha256=digest,
+    script_sha256=hashlib.sha256((root/'.ci/test_conflict_process.py').read_bytes()).hexdigest())
+with (e/'conflict-report-gate-tests.log').open('wb') as log:
+    subprocess.run([sys.executable,'.ci/test_conflict_report.py'],stdout=log,stderr=subprocess.STDOUT,check=True)
+
 fact_report=json.loads(read('fact-process.json'))
 validate_facts(fact_report, source_commit=commit, binary_sha256=digest,
                script_sha256=hashlib.sha256((root/'.ci/test_fact_process.py').read_bytes()).hexdigest())
@@ -99,8 +111,9 @@ with tempfile.TemporaryDirectory(prefix='qbrain-package-smoke-') as t:
     env.update(HOME=t,LOCALAPPDATA=t,USERPROFILE=t,PATH=os.environ['SystemRoot']+'\\System32')
     subprocess.run([str(exe),'init','--brain','package-smoke','--no-default'],cwd=home,env=env,capture_output=True,check=True,timeout=15)
     assert hashlib.sha256(exe.read_bytes()).hexdigest()==digest
+report.update(conflict_scenarios=conflict_unit['scenario_count'],conflict_assertions=conflict_unit['checks'],conflict_process_checks=conflict_process['check_count'])
 (e/'validation.json').write_text(json.dumps(report,indent=2)+'\n')
-files={'EVIDENCE-FACTS.zh-CN.md':root/'docs/integration/EVIDENCE-FACTS.zh-CN.md','verification/test_fact_process.py':root/'.ci/test_fact_process.py','verification/fact-process.json':e/'fact-process.json','verification/fact-unit.json':e/'fact-unit.json','verification/http-lifecycle.json':e/'http-lifecycle.json','CJK-RECALL.zh-CN.md':root/'docs/integration/CJK-RECALL.zh-CN.md','verification/test_cjk_recall.py':root/'.ci/test_cjk_recall.py','verification/cjk-recall.json':e/'cjk-recall.json','verification/embedding-queue.json':e/'embedding-queue.json','EMBEDDING-QUEUE.md':root/'docs/integration/EMBEDDING-QUEUE.md','verification/embedding-transport.json':e/'embedding-transport.json','EMBEDDING-CONTRACTS.md':root/'docs/integration/EMBEDDING-CONTRACTS.md','verification/retrieval-benchmark.json':e/'retrieval-benchmark.json','HTTP-TRANSPORT.md':root/'docs/integration/HTTP-TRANSPORT.md','qbrain.exe':binary,'LICENSE':root/'LICENSE','THIRD-PARTY-NOTICES.md':root/'THIRD-PARTY-NOTICES.md','WINDOWS-MEMORY.md':root/'docs/integration/WINDOWS-MEMORY.md','QUICKSTART.zh-CN.md':root/'docs/integration/QUICKSTART.zh-CN.md','scripts/Install-QbrainMemory.ps1':root/'scripts/Install-QbrainMemory.ps1','scripts/Invoke-QbrainJson.ps1':root/'scripts/Invoke-QbrainJson.ps1','verification/validation.json':e/'validation.json','verification/benchmark.json':e/'benchmark.json','verification/http-transport.json':e/'http-transport.json'}
+files={'CONFLICT-INSPECTION.zh-CN.md':root/'docs/integration/CONFLICT-INSPECTION.zh-CN.md','verification/test_conflict_process.py':root/'.ci/test_conflict_process.py','verification/conflict-process.json':e/'conflict-process.json','verification/conflict-unit.json':e/'conflict-unit.json','EVIDENCE-FACTS.zh-CN.md':root/'docs/integration/EVIDENCE-FACTS.zh-CN.md','verification/test_fact_process.py':root/'.ci/test_fact_process.py','verification/fact-process.json':e/'fact-process.json','verification/fact-unit.json':e/'fact-unit.json','verification/http-lifecycle.json':e/'http-lifecycle.json','CJK-RECALL.zh-CN.md':root/'docs/integration/CJK-RECALL.zh-CN.md','verification/test_cjk_recall.py':root/'.ci/test_cjk_recall.py','verification/cjk-recall.json':e/'cjk-recall.json','verification/embedding-queue.json':e/'embedding-queue.json','EMBEDDING-QUEUE.md':root/'docs/integration/EMBEDDING-QUEUE.md','verification/embedding-transport.json':e/'embedding-transport.json','EMBEDDING-CONTRACTS.md':root/'docs/integration/EMBEDDING-CONTRACTS.md','verification/retrieval-benchmark.json':e/'retrieval-benchmark.json','HTTP-TRANSPORT.md':root/'docs/integration/HTTP-TRANSPORT.md','qbrain.exe':binary,'LICENSE':root/'LICENSE','THIRD-PARTY-NOTICES.md':root/'THIRD-PARTY-NOTICES.md','WINDOWS-MEMORY.md':root/'docs/integration/WINDOWS-MEMORY.md','QUICKSTART.zh-CN.md':root/'docs/integration/QUICKSTART.zh-CN.md','scripts/Install-QbrainMemory.ps1':root/'scripts/Install-QbrainMemory.ps1','scripts/Invoke-QbrainJson.ps1':root/'scripts/Invoke-QbrainJson.ps1','verification/validation.json':e/'validation.json','verification/benchmark.json':e/'benchmark.json','verification/http-transport.json':e/'http-transport.json'}
 manifest={**report,'files':{n:{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for n,p in files.items()}}
 out=root/'package';out.mkdir(exist_ok=True);archive=out/'qbrain-windows-x64-development.zip'
 with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:

@@ -31,30 +31,31 @@ class NativeEvidenceTests(unittest.TestCase):
     def test_n46b_exact_registry(self):
         source = (Path(__file__).resolve().parents[1] / 'tests/test_main.cpp').read_text(encoding='utf-8')
         names = re.findall(r'\{"([^"\r\n]+)",\s*test_\w+\}', source)
-        self.assertEqual(len(names), 49)
+        self.assertEqual(len(names), 50)
         self.assertIn('n46b_http', names)
         self.assertIn('n46c_retrieval', names)
         self.assertIn('n46d_embedding', names)
         self.assertIn('n46f_cjk', names)
         self.assertIn('n47a_facts', names)
+        self.assertIn('n47b_conflicts', names)
         log = ''.join('[PASS] ' + name + '\n' for name in names)
-        self.assertEqual(verified_groups(source, log, 49), names)
+        self.assertEqual(verified_groups(source, log, 50), names)
         with self.assertRaises(ValueError):
-            verified_groups(source, log)  # Old default of 44 must not certify 49.
+            verified_groups(source, log)  # Old default of 44 must not certify 50.
 
     def test_n46b_cannot_reuse_old_log(self):
         source = (Path(__file__).resolve().parents[1] / 'tests/test_main.cpp').read_text(encoding='utf-8')
         names = re.findall(r'\{"([^"\r\n]+)",\s*test_\w+\}', source)
         log = ''.join('[PASS] ' + name + '\n' for name in names if name != 'n46b_http')
         with self.assertRaises(ValueError):
-            verified_groups(source, log, 49)
+            verified_groups(source, log, 50)
 
     def test_n46c_cannot_reuse_45_group_log(self):
         source = (Path(__file__).resolve().parents[1] / 'tests/test_main.cpp').read_text(encoding='utf-8')
         names = re.findall(r'\{"([^"\r\n]+)",\s*test_\w+\}', source)
         log = ''.join('[PASS] ' + name + '\n' for name in names if name != 'n46c_retrieval')
         with self.assertRaises(ValueError):
-            verified_groups(source, log, 49)
+            verified_groups(source, log, 50)
         with self.assertRaises(ValueError):
             verified_groups(source, log, 45)
 
@@ -63,7 +64,7 @@ class NativeEvidenceTests(unittest.TestCase):
         names = re.findall(r'\{"([^"\r\n]+)",\s*test_\w+\}', source)
         log = ''.join('[PASS] ' + name + '\n' for name in names if name != 'n46d_embedding')
         with self.assertRaises(ValueError):
-            verified_groups(source, log, 49)
+            verified_groups(source, log, 50)
         with self.assertRaises(ValueError):
             verified_groups(source, log, 46)
 
@@ -73,7 +74,7 @@ class NativeEvidenceTests(unittest.TestCase):
         names = re.findall(r'\{"([^"\r\n]+)",\s*test_\w+\}', source)
         log = ''.join('[PASS] ' + name + '\n' for name in names if name != 'n46f_cjk')
         with self.assertRaises(ValueError):
-            verified_groups(source, log, 49)
+            verified_groups(source, log, 50)
         with self.assertRaises(ValueError):
             verified_groups(source, log, 47)
 
@@ -83,9 +84,18 @@ class NativeEvidenceTests(unittest.TestCase):
         names = re.findall(r'\{"([^"\r\n]+)",\s*test_\w+\}', source)
         log = ''.join('[PASS] ' + name + '\n' for name in names if name != 'n47a_facts')
         with self.assertRaises(ValueError):
-            verified_groups(source, log, 49)
+            verified_groups(source, log, 50)
         with self.assertRaises(ValueError):
             verified_groups(source, log, 48)
+
+    def test_n47b_cannot_reuse_49_group_log(self):
+        source = (Path(__file__).resolve().parents[1] / 'tests/test_main.cpp').read_text(encoding='utf-8')
+        names = re.findall(r'\{"([^"\r\n]+)",\s*test_\w+\}', source)
+        log = ''.join('[PASS] ' + name + '\n' for name in names if name != 'n47b_conflicts')
+        with self.assertRaises(ValueError):
+            verified_groups(source, log, 50)
+        with self.assertRaises(ValueError):
+            verified_groups(source, log, 49)
 
 if __name__ == '__main__':
     unittest.main()
