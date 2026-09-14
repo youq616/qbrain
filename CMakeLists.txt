@@ -246,6 +246,7 @@ add_executable(qbrain_tests
   tests/test_n46d.cpp
   tests/test_n47a.cpp
   tests/test_n47b.cpp
+  tests/test_n47c.cpp
   tests/test_n46f.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
@@ -355,3 +356,9 @@ add_executable(qbrain_conflict_tests tests/test_n47b.cpp)
 target_compile_definitions(qbrain_conflict_tests PRIVATE QBRAIN_CONFLICT_STANDALONE=1)
 target_link_libraries(qbrain_conflict_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
 add_test(NAME qbrain_conflict_unit COMMAND qbrain_conflict_tests)
+
+# N47C shares the same production dependency closure as fact/conflict tests.
+add_executable(qbrain_recall_tests tests/test_n47c.cpp)
+target_compile_definitions(qbrain_recall_tests PRIVATE QBRAIN_RECALL_STANDALONE=1)
+target_link_libraries(qbrain_recall_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
+add_test(NAME qbrain_recall_unit COMMAND qbrain_recall_tests)
