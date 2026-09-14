@@ -1,0 +1,144 @@
+name: Publish exact reviewed N47A candidate
+on:
+  push:
+    branches: ['delivery/n47a-reviewed-cccdacb6']
+    paths: ['.github/workflows/publish-reviewed-n47a.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deliver-n47a-cccdacb6
+  cancel-in-progress: false
+jobs:
+  publish-approved-bytes:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47a-reviewed-cccdacb6'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: cccdacb61e63c29f8b9eaba1c38fbeed3e23e54b
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 8115e1b7ebb9e8e72a4a4356b860e6a855fc54d2
+          path: review
+          persist-credentials: false
+      - name: Verify merged reviewed source and publish original CI ZIP without rebuilding
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          # Administrative, single-candidate delivery; not a new product implementation.
+          # General fact auto-publishing remains disabled in the product workflow.
+          import hashlib, importlib.util, io, json, os, re, subprocess, sys, zipfile
+          from pathlib import Path
+          repo='youq616/qbrain'
+          source='cccdacb61e63c29f8b9eaba1c38fbeed3e23e54b'
+          tree='a15a91f7172622e2c8021403d84e63bf36f59147'
+          receipt_commit='8115e1b7ebb9e8e72a4a4356b860e6a855fc54d2'
+          merge='b4fc453a22c20597f99e1d2dfa9713cfeb2704c4'
+          product_run=34788803379
+          tag='fact-preview-cccdacb6'
+          root=Path(os.environ['RUNNER_TEMP'])/('n47a-reviewed-'+os.environ['GITHUB_RUN_ID'])
+          root.mkdir(exist_ok=False)
+          def sha(raw): return hashlib.sha256(raw).hexdigest()
+          def gh(*args):
+              return subprocess.check_output(['gh',*args],stderr=subprocess.PIPE,timeout=120)
+          def api(path): return json.loads(gh('api',f'repos/{repo}/{path}'))
+          def git(path,ref):
+              return subprocess.check_output(['git','-C',str(path),'rev-parse',ref],text=True).strip()
+          assert git('candidate','HEAD')==source and git('candidate','HEAD^{tree}')==tree
+          assert git('review','HEAD')==receipt_commit
+          pr=api('pulls/14')
+          assert pr['merged'] is True and pr['merge_commit_sha']==merge and pr['head']['sha']==receipt_commit
+          run=api(f'actions/runs/{product_run}')
+          assert run['head_sha']==source and run['status']=='completed' and run['conclusion']=='success'
+          jobs=api(f'actions/runs/{product_run}/jobs?per_page=100')['jobs']
+          for name in ('source','portable','windows','windows-http-2022'):
+              match=[j for j in jobs if j['name']==name]
+              assert len(match)==1 and match[0]['conclusion']=='success', name
+          review_root=Path('review/docs/review/n47a-cccdacb6')
+          hashes={'review-A.md':'d5e9610dc58dfa3d0c101e37a238cf23c9644128321c81bdd8d41236cfc296eb',
+                  'review-B.md':'02b87ac2a544dd7c01c3e6117dea0e15e4a85e6d7de99404e0e9cdf5db7d658d',
+                  'summary.json':'e26d4ab1bf71ffffa921f93a40abd0611443d64acc8ff6c74d70ea33f2fa1562'}
+          for name,digest in hashes.items(): assert sha((review_root/name).read_bytes())==digest
+          reviews=json.loads((review_root/'summary.json').read_text(encoding='utf-8'))
+          assert reviews['source_commit']==source and reviews['source_tree']==tree
+          assert len(reviews['reviewers'])==2 and {r['id'] for r in reviews['reviewers']}=={'A','B'}
+          assert all(r['verdict']=='PASS' and r['unresolved_p0_p1']==0 for r in reviews['reviewers'])
+          assert reviews['unresolved_p3_observations_count']==13
+          pins={'package':(10328305619,'1e63c74411baa955a265064dffe7675da189d6277e01ec70198a827dbc7c0816'),
+                'windows':(10328096068,'7da43c3b3ccda87820760f2824763af78ca3ac94cc7c56edef8447e1a9463d86')}
+          retrieved={}
+          for name,(ident,digest) in pins.items():
+              meta=api(f'actions/artifacts/{ident}')
+              assert not meta['expired'] and meta['workflow_run']['id']==product_run
+              assert meta['workflow_run']['head_sha']==source and meta['digest']=='sha256:'+digest
+              assert 0<meta['size_in_bytes']<64*1024*1024
+              raw=gh('api',f'repos/{repo}/actions/artifacts/{ident}/zip')
+              assert len(raw)==meta['size_in_bytes'] and sha(raw)==digest
+              with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                  assert len(z.infolist())<128 and sum(i.file_size for i in z.infolist())<64*1024*1024
+                  assert len(z.namelist())==len(set(z.namelist()))
+                  retrieved[name]={n:z.read(n) for n in z.namelist()}
+          outer=retrieved['package']
+          assert set(outer)=={'qbrain-windows-x64-development.zip','SHA256SUMS.txt'}
+          raw=outer['qbrain-windows-x64-development.zip']
+          assert len(raw)==1909496 and sha(raw)=='1944813712c96e4096058b75b3b7fc18f6a521cf72851413e4a26135f714eee1'
+          assert outer['SHA256SUMS.txt'].decode('ascii').split()==[sha(raw),'qbrain-windows-x64-development.zip']
+          spec=importlib.util.spec_from_file_location('publisher',Path('candidate/tools/delivery/publish_fact_preview.py'))
+          publisher=importlib.util.module_from_spec(spec); spec.loader.exec_module(publisher)
+          provenance=publisher.verify_product(raw,source)
+          files=publisher.unpack(raw)
+          for name in files:
+              if name.startswith('verification/') and name.endswith('.json'):
+                  assert files[name]==retrieved['windows'][name.split('/')[-1]]
+          from validate_fact_report import validate_unit_report
+          unit=json.loads(files['verification/fact-unit.json'])
+          cpp=Path('candidate/tests/test_n47a.cpp').read_bytes()
+          variants=(cpp,cpp.replace(b'\r\n',b'\n').replace(b'\n',b'\r\n'))
+          assert unit['test_sha256'] in [sha(x) for x in variants]
+          names=re.findall(r'scenario\("([^"\r\n]+)"',cpp.decode('utf-8'))
+          unit_summary=validate_unit_report(unit,source_commit=source,
+              binary_sha256=json.loads(retrieved['windows']['fact-unit.json'])['binary_sha256'],
+              test_sha256=unit['test_sha256'],expected_scenarios=names)
+          assert unit_summary=={'scenarios':15,'assertions':380}
+          assert sha(files['qbrain.exe'])=='dead42f5b28d4f296b0b77975e9dbe150f5ac848aac8c6795e2addc7ede53854'
+          provenance.update(repository=repo,workflow_run_id=product_run,
+              delivery_workflow_run_id=int(os.environ['GITHUB_RUN_ID']),
+              delivery_workflow_commit=os.environ['GITHUB_SHA'],
+              artifact_id=pins['package'][0],merge_commit=merge,
+              review_documents_commit=receipt_commit,review_file_sha256=hashes,
+              independent_source_reviews='A PASS / B PASS; original uploaded reports archived',
+              nonblocking_p3_observations=13,fact_unit_revalidated=unit_summary,
+              probe_binary_separately_downloaded=False,product_rebuilt=False,
+              administrative_workflow_independently_reviewed=False,
+              scope='Explicit complete-quote fact lifecycle; not automatic inference or entire N47')
+          out=root/'release';out.mkdir()
+          product=out/'qbrain-windows-x64-facts.zip';product.write_bytes(raw)
+          (out/'SHA256SUMS.txt').write_text(sha(raw)+'  '+product.name+'\n',encoding='ascii')
+          (out/'PROVENANCE.json').write_text(json.dumps(provenance,indent=2)+'\n',encoding='utf-8')
+          notes=('N47A unsigned development preview. Original CI package; not rebuilt or repacked. '
+                 'Independent source reviews A/B PASS are archived at docs/review/n47a-cccdacb6/; '
+                 '49 native groups and source-matched fact/HTTP/queue/Hook/PowerShell gates passed. '
+                 '13 nonblocking observations remain. First explicit fact write backs up the database '
+                 'and initializes an optional SQLite module. Complete user quotes, confidence=null; '
+                 'no semantic inference, new provider consent or automatic fact recall. '
+                 'Read EVIDENCE-FACTS.zh-CN.md. Product SHA '+source+'. ZIP SHA256 '+sha(raw)+'.')
+          asset_names=['qbrain-windows-x64-facts.zip','SHA256SUMS.txt','PROVENANCE.json']
+          gh('release','create',tag,*(str(out/n) for n in asset_names),'--repo',repo,
+              '--target',source,'--draft','--prerelease','--latest=false',
+              '--title','Qbrain N47A evidence-backed facts (cccdacb6)','--notes',notes)
+          rb=root/'release-readback'
+          gh('release','download',tag,'--repo',repo,'--dir',str(rb))
+          assert {p.name for p in rb.iterdir()}==set(asset_names)
+          for name in asset_names: assert (out/name).read_bytes()==(rb/name).read_bytes()
+          gh('release','edit',tag,'--repo',repo,'--draft=false','--prerelease','--latest=false')
+          print(json.dumps({'result':'PUBLISHED','tag':tag,**provenance}))
