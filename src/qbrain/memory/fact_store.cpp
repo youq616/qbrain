@@ -273,6 +273,25 @@ void FactStore::validate() const {
 
 
 namespace {
+// Promotion may add a CURRENT independent support to a still-active assertion
+// whose original supports have all genuinely expired. Historical validation is
+// eligibility only: it is never returned as live evidence, does not change old
+// expiry, and never repairs tampered/deleted/partially invalid backing records.
+Json promotion_target(DB& db,const std::string& source,const std::string& id,int64_t at) {
+  auto live=load(db,source,id,at);
+  if(!live.is_null())return live;
+  const auto historical=load(db,source,id,0);
+  require(!historical.is_null() && historical["status"]=="active","fact_not_found");
+  auto count=db.prepare("SELECT COUNT(*) FROM memory_fact_evidence WHERE source_id=? AND fact_id=?");
+  count.bind_text(1,source);count.bind_text(2,id);
+  require(count.step() && count.column_int(0)>=1 && count.column_int(0)<=max_evidence &&
+      historical["evidence_count"]==count.column_int(0),"fact_not_found");
+  for(const auto& support:historical["evidence"]) {
+    const auto expiry=support["expires_at"].get<int64_t>();
+    require(expiry>0 && expiry<=at,"fact_not_found");
+  }
+  return historical;
+}
 std::vector<Evidence> promotion_evidence(DB& db,const std::string& source,
                                         const std::string& id,int64_t at) {
   if(!exists(db,"memory_module") || !exists(db,"memory_events") || !exists(db,"memory_items"))
@@ -346,7 +365,7 @@ Json FactStore::promote_event(const std::string& event_id) {
       prior.bind_text(1,source_);prior.bind_text(2,pred);prior.bind_text(3,e.quote);prior.bind_text(4,e.item);
       if(prior.step()) {
         const auto id=prior.column_text(0);identifier(id);
-        auto f=need(db,source_,id,at);
+        auto f=promotion_target(db,source_,id,at);
         auto attached=db.prepare("SELECT 1 FROM memory_fact_evidence WHERE source_id=? AND fact_id=? AND item_id=?");
         attached.bind_text(1,source_);attached.bind_text(2,id);attached.bind_text(3,e.item);
         if(attached.step())outcome="duplicate";

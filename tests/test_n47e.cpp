@@ -139,6 +139,47 @@ void integrity(){
   b->db().exec("ROLLBACK");check(scalar(*b,"SELECT COUNT(*) FROM facts WHERE entity_slug='caller'")==0,"caller controls rollback");
  });
 }
+void renewal(){
+ scenario("new support renews only historically intact expired active facts",[]{
+  const auto until=std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count()+4;
+  auto b=fresh(),tampered=fresh(),retired=fresh(),deleted=fresh(),limited=fresh();
+  memory::FactStore s(*b,"alpha"),t(*tampered,"alpha"),v(*retired,"alpha"),d(*deleted,"alpha"),cap(*limited,"alpha");
+  const std::string quote="I prefer a fresh independent support, not revived expired evidence.";
+  auto old=seed(*b,"old",{quote},"alpha",until);auto first=s.promote_event(old)["items"][0];
+  auto bad=seed(*tampered,"old",{quote},"alpha",until);t.promote_event(bad);
+  t.promote_event(seed(*tampered,"second-intact",{quote},"alpha",until));
+  auto veto=seed(*retired,"old",{quote},"alpha",until);auto retired_fact=v.promote_event(veto)["items"][0];
+  v.retract({{"fact_id",retired_fact["fact_id"]},{"expected_revision",1}});
+  auto gone=seed(*deleted,"old",{quote},"alpha",until);d.promote_event(gone);
+  for(int n=0;n<16;++n)cap.promote_event(seed(*limited,"old-"+std::to_string(n),{quote},"alpha",until));
+  std::this_thread::sleep_until(std::chrono::system_clock::time_point(std::chrono::seconds(until+1)));
+  check(facts(s).empty(),"expired prior support is not live before renewal");
+  auto incoming=seed(*b,"new",{quote});auto result=s.promote_event(incoming);
+  check(result["counts"]["attached"]==1 && result["items"][0]["fact_id"]==first["fact_id"] && result["items"][0]["revision"]==2,
+        "fresh support renews same active fact without duplicate or status reset");
+  auto current=facts(s);check(current.size()==1 && current[0]["evidence_count"]==1 && current[0]["evidence"][0]["event_id"]==incoming,
+        "only fresh evidence is returned after renewal");
+  check(scalar(*b,"SELECT MIN(expires_at) FROM memory_items WHERE expires_at>0")==until &&
+        scalar(*b,"SELECT COUNT(*) FROM memory_fact_evidence")==2,"old expiry and original support are preserved");
+  denied([&]{s.promote_event(old);},"fact_event_unavailable");
+  check(s.promote_event(incoming)["counts"]["duplicate"]==1 && facts(s)[0]["revision"]==2,"renewed event replay remains idempotent");
+  memory::forget(*b,"alpha",incoming);check(facts(s).empty(),"forgetting fresh support does not expose expired original");
+  check(s.promote_event(seed(*b,"later",{quote}))["counts"]["attached"]==1,"later fresh support may renew still-active intact history");
+  { auto damaged=tampered->db().prepare("UPDATE memory_items SET quote='forged original' WHERE event_id=?");
+    damaged.bind_text(1,bad);damaged.step_done(); }
+  auto fresh_bad=seed(*tampered,"fresh",{quote});denied([&]{t.promote_event(fresh_bad);},"fact_not_found");
+  check(scalar(*tampered,"SELECT COUNT(*) FROM memory_fact_evidence")==2 && scalar(*tampered,"SELECT MAX(revision) FROM memory_facts")==2,
+        "renewal does not repair corrupted history or partially commit");
+  check(v.promote_event(seed(*retired,"fresh",{quote}))["counts"]["skipped_retired"]==1 &&
+        scalar(*retired,"SELECT COUNT(*) FROM memory_facts WHERE status='retracted'")==1,"retirement veto wins over expired-history renewal");
+  deleted->db().exec("UPDATE pages SET deleted_at='gone'");
+  auto fresh_deleted=seed(*deleted,"fresh",{quote});denied([&]{d.promote_event(fresh_deleted);},"fact_not_found");
+  check(scalar(*deleted,"SELECT COUNT(*) FROM memory_fact_evidence")==1,"deleted backing page is not revived");
+  check(cap.promote_event(seed(*limited,"fresh",{quote}))["counts"]["skipped_limit"]==1 &&
+        scalar(*limited,"SELECT COUNT(*) FROM memory_facts")==1 && scalar(*limited,"SELECT COUNT(*) FROM memory_fact_evidence")==16,
+        "expired full support set cannot evade the evidence cap");
+ });
+}
 void concurrent(){
  scenario("independent connections promote one event exactly once",[]{
   namespace fs=std::filesystem;auto dir=fs::temp_directory_path()/("qbrain-promote-"+util::sha256_hex(std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())).substr(0,16));fs::create_directory(dir);
@@ -175,7 +216,7 @@ void concurrent(){
  });
 }
 }
-void test_n47e(){checks=0;scenarios=J::array();basic();integrity();concurrent();std::cout<<"N47E local fact promotion: "<<scenarios.size()<<" scenarios, "<<checks<<" checks passed\n";}
+void test_n47e(){checks=0;scenarios=J::array();basic();integrity();renewal();concurrent();std::cout<<"N47E local fact promotion: "<<scenarios.size()<<" scenarios, "<<checks<<" checks passed\n";}
 #ifdef QBRAIN_PROMOTION_STANDALONE
 int main(int argc,char** argv){try{test_n47e();if(argc==3&&std::string(argv[1])=="--report"){std::ofstream f(argv[2],std::ios::binary);f<<J({{"result","PASS"},{"scenarios",scenarios},{"scenario_count",scenarios.size()},{"checks",checks}}).dump(2)<<'\n';if(!f)throw std::runtime_error("report write failed");}else if(argc!=1)throw std::runtime_error("arguments");return 0;}catch(const std::exception& e){std::cerr<<"[FAIL] N47E: "<<e.what()<<'\n';return 1;}}
 #endif

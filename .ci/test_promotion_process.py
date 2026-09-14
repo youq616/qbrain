@@ -10,20 +10,21 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 from test_hook_fact_process import provenance
 
 CORE_CASES=('empty_event_no_schema','complete_batch','whole_quote_no_truth_inference','replay_no_revision_drift',
  'mcp_write_default_denied','mcp_allowed_replay','mcp_source_denied','mcp_payload_rejected','mcp_unknown_field_rejected',
  'mcp_strict_event_type','six_tools_unchanged','equal_event_attached','forget_retains_other_support','retired_repeat_skipped',
  'missing_id_rejected','invalid_id_rejected','wrong_source_rejected','irrelevant_cli_flag_rejected','tampered_batch_atomic',
- 'local_only','prior_recall_compatible','no_inferred_relations','no_model_jobs')
+ 'local_only','expired_target_renewal','renewal_preserves_old_expiry','renewal_replay_idempotent','prior_recall_compatible','no_inferred_relations','no_model_jobs')
 HOOK_CASES=('default_no_capture_or_promotion','promotion_needs_capture','capture_only_no_facts','strict_boolean',
  'promotion_needs_local','brain_writeback_off_inert','automatic_current_event_promoted','no_current_quote_in_prior_recall','no_implicit_fact_recall',
  'following_start_recalls_fact','replayed_hook_is_duplicate','assistant_not_promoted','secret_not_captured',
  'failure_distinct_from_capture','failure_no_partial_fact','explicit_retry_after_failure','disabled_no_new_facts',
  'source_isolation','trace_contains_no_quote','no_model_consumption_claim','no_jobs')
 EXPECTED_CHECKS=frozenset(['core:'+c for c in CORE_CASES]+[h+':'+c for h in ('claude','codex') for c in HOOK_CASES])
-EXPECTED_COMMAND_COUNT=68  # Replaced after fixed-schedule execution; not inferred from submitted reports.
+EXPECTED_COMMAND_COUNT=77  # Replaced after fixed-schedule execution; not inferred from submitted reports.
 def enc(v):return json.dumps(v,ensure_ascii=False,separators=(',',':')).encode('utf-8')
 
 def run(binary,checks,commands):
@@ -53,8 +54,8 @@ def run(binary,checks,commands):
             invoke(['init','--brain',brain]);sql(brain,"INSERT INTO sources(id,name) VALUES('alpha','alpha'),('beta','beta')")
             sql(brain,"INSERT INTO config(key,value) VALUES('memory.writeback','all'),('mcp.allowed_sources','alpha')")
         def cli(brain,args,p=None,expected=0):return json.loads(invoke([*args,'--brain',brain],p,expected))
-        def seed(brain,tag,quotes):
-            event=cli(brain,['memory','capture','--source','alpha','--manual'],dict(session_id='promotion-core',fragment_id=tag,messages=[dict(role=role,content=q) for role,q in quotes]))['event_id']
+        def seed(brain,tag,quotes,expires=0):
+            event=cli(brain,['memory','capture','--source','alpha','--manual'],dict(session_id='promotion-core',fragment_id=tag,expires_at=expires,messages=[dict(role=role,content=q) for role,q in quotes]))['event_id']
             cli(brain,['memory','extract','--source','alpha','--event',event]);return event
         def promote(brain,event,expected=0,source='alpha'):return cli(brain,['fact','promote','--source',source,'--event',event],expected=expected)
         brain='promote-core';init(brain)
@@ -97,6 +98,16 @@ def run(binary,checks,commands):
         sql(brain,"UPDATE memory_events SET method='model' WHERE event_id=?",(third,));check(promote(brain,third,1)['error']['code']=='fact_local_extraction_required','core:local_only')
         check(cli(brain,['fact','recall','--source','alpha','--query','命令行'])['items']==[],'core:prior_recall_compatible')
         check(sql(brain,'SELECT COUNT(*) FROM memory_fact_relations')==0,'core:no_inferred_relations');check(sql(brain,'SELECT COUNT(*) FROM jobs')==0,'core:no_model_jobs')
+        until=int(time.time())+2;renew_quote='I prefer renewable current support without reviving expired support.'
+        old=seed(brain,'renew-old',[('user',renew_quote)],until);old_fact=promote(brain,old)['items'][0]
+        time.sleep(max(0,until+1-time.time()))
+        current=seed(brain,'renew-fresh',[('user',renew_quote)]);renewed=promote(brain,current)
+        now_fact=cli(brain,['fact','read','--source','alpha','--id',old_fact['fact_id']])['items'][0]
+        check(renewed['counts']['attached']==1 and renewed['items'][0]['fact_id']==old_fact['fact_id'] and now_fact['revision']==2 and
+              now_fact['evidence_count']==1 and now_fact['evidence'][0]['event_id']==current,'core:expired_target_renewal')
+        expired=promote(brain,old,1)
+        check(expired['error']['code']=='fact_event_unavailable' and sql(brain,'SELECT expires_at FROM memory_events WHERE event_id=?',(old,))==until,'core:renewal_preserves_old_expiry')
+        check(promote(brain,current)['counts']['duplicate']==1 and sql(brain,'SELECT revision FROM memory_facts WHERE fact_id=?',(old_fact['fact_id'],))==2,'core:renewal_replay_idempotent')
         for host in ('claude','codex'):
             brain='promote-'+host;init(brain);settings=root/host;settings.mkdir();cfgpath=settings/'config.json'
             cfg=dict(version=1,host=host,project_root=str(project),brain_id=brain,source_id='alpha',enabled=True,capture=False,extraction='local',recall_bytes=8192,max_items=8)

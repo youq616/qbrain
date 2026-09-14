@@ -13,8 +13,8 @@ class PromotionReportTests(unittest.TestCase):
                     binary_sha256='binary',script_sha256='script',real_host_consumption_verified=False)
     def process_fixture(self):
         r=self.common();r.update(checks=[dict(name=n,status='PASS') for n in sorted(process.EXPECTED_CHECKS)],
-            check_count=65,counts={'total':65,'pass':65,'fail':0},
-            commands=[dict(exit_code=0,expected_exit=0) for _ in range(68)])
+            check_count=68,counts={'total':68,'pass':68,'fail':0},
+            commands=[dict(exit_code=0,expected_exit=0) for _ in range(77)])
         return r
     def unit_fixture(self):
         r=self.common();r.update(test_sha256='test',exit_code=0,scenario_count=len(UNIT_SCENARIOS),checks=27*len(UNIT_SCENARIOS),
@@ -22,8 +22,13 @@ class PromotionReportTests(unittest.TestCase):
     def vp(self,r):return validate_process(r,source_commit='source',binary_sha256='binary',script_sha256='script')
     def vu(self,r):return validate_unit(r,source_commit='source',binary_sha256='binary',script_sha256='script',test_sha256='test')
     def test_complete(self):
-        self.assertEqual(self.vp(self.process_fixture()),{'checks':65,'commands':68})
+        self.assertEqual(self.vp(self.process_fixture()),{'checks':68,'commands':77})
         self.assertEqual(self.vu(self.unit_fixture()),{'scenarios':len(UNIT_SCENARIOS),'assertions':27*len(UNIT_SCENARIOS)})
+    def test_old_promotion_schedule_is_rejected(self):
+        r=self.process_fixture();r['checks']=[x for x in r['checks'] if 'renewal' not in x['name']]
+        r['check_count']=len(r['checks'])
+        r['counts']={'total':len(r['checks']),'pass':len(r['checks']),'fail':0};r['commands']=r['commands'][:68]
+        with self.assertRaises(ValueError):self.vp(r)
     def test_source_platform_and_binary(self):
         for field,value in [('source_commit','wrong'),('tracked_tree_clean',False),('native_windows',False),
                             ('script_sha256','wrong'),('binary_sha256','wrong'),('result','FAIL'),('error','failed')]:

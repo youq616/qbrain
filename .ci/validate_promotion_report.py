@@ -1,14 +1,14 @@
 """N47E complete process/unit evidence gates. No inference from a PASS label alone."""
 from test_promotion_process import EXPECTED_CHECKS, EXPECTED_COMMAND_COUNT
 
-UNIT_SCENARIOS = ('local no-match events do not initialize fact schema', 'all local categories preserve full original quotes and negation', 'same-event replay and equal messages are idempotent', 'independent equal events attach without merging manual predicates', 'retired equal quotes veto automatic promotion across predicates', 'superseded statements stay retired when repeated', 'support cap is explicit and never creates overflow facts', 'strict IDs local method and source boundaries', 'all evidence preflight rejects invalid batches before initialization', 'fact and evidence batch rollback is atomic on injected failure', 'failed first batch may leave prepared schema but no fact writes', 'support forgetting retains remaining evidence and removes final copies', 'wall-clock expiry blocks promotion and recall', 'maximum batch has bounded receipts and no implicit relations', 'caller transactions are never committed or rolled back by promotion', 'independent connections promote one event exactly once', 'promoted facts feed existing context without changing legacy tables')
+UNIT_SCENARIOS = ('local no-match events do not initialize fact schema', 'all local categories preserve full original quotes and negation', 'same-event replay and equal messages are idempotent', 'independent equal events attach without merging manual predicates', 'retired equal quotes veto automatic promotion across predicates', 'superseded statements stay retired when repeated', 'support cap is explicit and never creates overflow facts', 'strict IDs local method and source boundaries', 'all evidence preflight rejects invalid batches before initialization', 'fact and evidence batch rollback is atomic on injected failure', 'failed first batch may leave prepared schema but no fact writes', 'support forgetting retains remaining evidence and removes final copies', 'wall-clock expiry blocks promotion and recall', 'maximum batch has bounded receipts and no implicit relations', 'caller transactions are never committed or rolled back by promotion', 'new support renews only historically intact expired active facts', 'independent connections promote one event exactly once', 'promoted facts feed existing context without changing legacy tables')
 
 
 def require(ok,message):
     if not ok:raise ValueError(message)
 
 def identity(r,source_commit,binary_sha256,script_sha256,native):
-    require(isinstance(r,dict) and r.get('result')=='PASS','recall test failed')
+    require(isinstance(r,dict) and r.get('result')=='PASS','promotion test failed')
     require(r.get('source_commit')==source_commit and r.get('tracked_tree_clean') is True,'wrong/dirty source')
     require(r.get('binary_sha256')==binary_sha256 and r.get('script_sha256')==script_sha256,'wrong binary/script')
     if native:require(r.get('native_windows') is True,'Windows execution required')
@@ -44,7 +44,7 @@ def validate_unit_payload(r):
     require(tuple(x.get('name') for x in rows)==UNIT_SCENARIOS,'wrong scenario set/order')
     require(type(r.get('scenario_count')) is int and r['scenario_count']==len(UNIT_SCENARIOS),'wrong scenario count')
     require(all(x.get('status')=='PASS' and type(x.get('assertions')) is int and x['assertions']>0 for x in rows),'failed scenario')
-    require(type(r.get('checks')) is int and r['checks']>=188 and sum(x['assertions'] for x in rows)==r['checks'],'wrong assertion totals')
+    require(type(r.get('checks')) is int and r['checks']>=237 and sum(x['assertions'] for x in rows)==r['checks'],'wrong assertion totals')
     return {'scenarios':len(rows),'assertions':r['checks']}
 
 
