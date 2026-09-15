@@ -6,10 +6,12 @@ param(
  [Parameter(Mandatory=$true)][string]$ProjectPath,
  [string]$Binary='', [string]$BrainId='',
  [switch]$EnableCapture,
- [switch]$EnableFactRecall
+ [switch]$EnableFactRecall,
+ [switch]$EnableFactPromotion
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
+if($Action -eq 'Install' -and $EnableFactPromotion -and -not $EnableCapture){throw 'Fact promotion requires explicit -EnableCapture.'}
 if([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT){throw 'Native Windows is required.'}
 $utf8=New-Object Text.UTF8Encoding($false,$true)
 function Safe([string]$p){
@@ -78,11 +80,14 @@ function Matching($o){
 if($Action -eq 'Status'){
  $o=if([IO.File]::Exists($ownerPath)){Parse (Raw $ownerPath)}else{$null}
  $installed=$null -ne $o -and (Has $o 'active') -and $o.active
- $factEnabled=$false
+ $factEnabled=$false;$promotionEnabled=$false
  if($installed -and [IO.File]::Exists($cfgPath)){
-  try{$c=Parse (Raw $cfgPath);$factEnabled=(Has $c 'fact_recall') -and ($c.fact_recall -is [bool]) -and $c.fact_recall}catch{$factEnabled=$false}
+  try{
+   $c=Parse (Raw $cfgPath);$factEnabled=(Has $c 'fact_recall') -and ($c.fact_recall -is [bool]) -and $c.fact_recall
+   $promotionEnabled=(Has $c 'fact_promotion') -and ($c.fact_promotion -is [bool]) -and $c.fact_promotion -and (Has $c 'capture') -and ($c.capture -is [bool]) -and $c.capture -and (Has $c 'extraction') -and ($c.extraction -ceq 'local') -and (Has $c 'enabled') -and ($c.enabled -is [bool]) -and $c.enabled
+  }catch{$factEnabled=$false;$promotionEnabled=$false}
  }
- Json ([pscustomobject]@{fact_recall_enabled=$factEnabled;installed=$installed;configuration_matches=($installed -and (Matching $o));recovery_required=[IO.File]::Exists($journal);host_consumption_confirmed=$false})
+ Json ([pscustomobject]@{fact_promotion_enabled=$promotionEnabled;fact_recall_enabled=$factEnabled;installed=$installed;configuration_matches=($installed -and (Matching $o));recovery_required=[IO.File]::Exists($journal);host_consumption_confirmed=$false})
  return
 }
 [void][IO.Directory]::CreateDirectory($owned)
@@ -135,7 +140,7 @@ try {
   if(-not $BrainId){$BrainId='project-'+$id}
   if($BrainId -cnotmatch '^[a-z0-9][a-z0-9_-]{0,63}$'){throw 'Use a safe lowercase brain identifier.'}
   $bridgeSource=Join-Path $PSScriptRoot 'Invoke-QbrainJson.ps1'
-  $cfg=[pscustomobject]@{version=1;host=$hostKey;project_root=$project;brain_id=$BrainId;source_id='default';enabled=$true;capture=[bool]$EnableCapture;fact_recall=[bool]$EnableFactRecall;extraction='local';recall_bytes=4096;max_items=8}
+  $cfg=[pscustomobject]@{version=1;host=$hostKey;project_root=$project;brain_id=$BrainId;source_id='default';enabled=$true;capture=[bool]$EnableCapture;fact_recall=[bool]$EnableFactRecall;fact_promotion=[bool]$EnableFactPromotion;extraction='local';recall_bytes=4096;max_items=8}
   $entry=[pscustomobject]@{type='command';command=$exe;args=@('hook','--config',$cfgPath);timeout=10}
   if($hostKey -eq 'codex'){
    function Literal([string]$s){return "'"+$s.Replace("'","''")+"'"}

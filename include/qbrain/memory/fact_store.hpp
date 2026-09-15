@@ -7,6 +7,9 @@ namespace qbrain::memory {
 class FactStore {
  public:
   FactStore(Brain& brain, std::string source);
+  // Explicit local extraction -> complete user-quote facts. Batch fact/evidence
+  // writes are atomic; optional schema preparation is a separate operation.
+  Json promote_event(const std::string& event_id);
   Json create(const Json& payload);       // predicate, item_id; subject is user
   Json attach(const Json& payload);       // fact_id, item_id (exact same quote)
   Json retract(const Json& payload);      // fact_id, expected_revision

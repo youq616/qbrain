@@ -1,7 +1,7 @@
 name: Native project memory and context validation
 on:
   push:
-    branches: ['optimization/n44-context-release','optimization/n46b-http-boundaries','optimization/n46c-exact-retrieval','optimization/n46d-embedding-contracts','optimization/n46f-cjk-recall','optimization/n47a-evidence-facts','optimization/n47b-conflict-reads','optimization/n47c-conflict-aware-recall','optimization/n47d-opt-in-hook-recall','main']
+    branches: ['optimization/n44-context-release','optimization/n46b-http-boundaries','optimization/n46c-exact-retrieval','optimization/n46d-embedding-contracts','optimization/n46f-cjk-recall','optimization/n47a-evidence-facts','optimization/n47b-conflict-reads','optimization/n47c-conflict-aware-recall','optimization/n47d-opt-in-hook-recall','optimization/n47e-local-fact-promotion','main']
     paths: ['src/**','include/**','tests/**','scripts/**','.ci/**','CMakeLists.txt','.github/workflows/n44-validation.yml']
   workflow_dispatch:
 permissions:
@@ -38,11 +38,12 @@ jobs:
           python3 .ci/test_http_lifecycle_report.py 2>&1 | tee evidence/lifecycle-report-gate.log
           python3 .ci/test_cjk_report.py 2>&1 | tee evidence/cjk-report-gate-tests.log
           python3 .ci/test_hook_fact_report.py 2>&1 | tee evidence/hook-fact-report-gate-tests.log
+          python3 .ci/test_promotion_report.py 2>&1 | tee evidence/promotion-report-gate-tests.log
           python3 .ci/test_fact_report.py 2>&1 | tee evidence/fact-report-gate-tests.log
           python3 .ci/test_recall_report.py 2>&1 | tee evidence/recall-report-gate-tests.log
           python3 .ci/test_conflict_report.py 2>&1 | tee evidence/conflict-report-gate-tests.log
           cmake -S . -B build/portable -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
-          cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_http_tests qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests --parallel 2 2>&1 | tee evidence/build.log
+          cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_http_tests qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests qbrain_promotion_tests --parallel 2 2>&1 | tee evidence/build.log
           python3 .ci/test_retrieval_benchmark.py --binary build/portable/qbrain_retrieval_tests --report evidence/retrieval-benchmark.json | tee evidence/retrieval.log
           cmake -S tests/n42 -B build/n42 -DQBRAIN_N42_SQLITE_ADAPTER_TEST=ON
           cmake --build build/n42 --parallel 2
@@ -52,6 +53,8 @@ jobs:
           python3 .ci/test_fact_process.py --binary build/portable/qbrain --report evidence/fact-process.json | tee evidence/fact-process.log
           python3 .ci/test_hook_fact_unit.py --binary build/portable/qbrain_hook_fact_tests --report evidence/hook-fact-unit.json | tee evidence/hook-fact-unit.log
           python3 .ci/test_hook_fact_process.py --binary build/portable/qbrain --report evidence/hook-fact-process.json | tee evidence/hook-fact-process.log
+          python3 .ci/test_promotion_unit.py --binary build/portable/qbrain_promotion_tests --report evidence/promotion-unit.json | tee evidence/promotion-unit.log
+          python3 .ci/test_promotion_process.py --binary build/portable/qbrain --report evidence/promotion-process.json | tee evidence/promotion-process.log
           python3 .ci/test_recall_unit.py --binary build/portable/qbrain_recall_tests --report evidence/recall-unit.json | tee evidence/recall-unit.log
           python3 .ci/test_recall_process.py --binary build/portable/qbrain --report evidence/recall-process.json | tee evidence/recall-process.log
           python3 .ci/test_conflict_unit.py --binary build/portable/qbrain_conflict_tests --report evidence/conflict-unit.json | tee evidence/conflict-unit.log
@@ -92,7 +95,7 @@ jobs:
         run: |
           cmake -S . -B build/http -DQBRAIN_WITH_PG=OFF
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build/http --config Release --target qbrain_http_tests qbrain_http_probe qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests --parallel 2 2>&1 | Tee-Object evidence/http-build.log
+          cmake --build build/http --config Release --target qbrain_http_tests qbrain_http_probe qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests qbrain_promotion_tests --parallel 2 2>&1 | Tee-Object evidence/http-build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & build/http/Release/qbrain_http_tests.exe 2>&1 | Tee-Object evidence/http-input.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -133,6 +136,17 @@ jobs:
           python .ci/test_fact_unit.py --binary build/http/Release/qbrain_fact_tests.exe --report evidence/fact-unit.json --require-windows 2>&1 | Tee-Object evidence/fact-unit.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_fact_process.py --binary build/cl/qbrain.exe --report evidence/fact-process.json 2>&1 | Tee-Object evidence/fact-process.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Opt-in local event-to-fact promotion and installer consent
+        shell: pwsh
+        run: |
+          python .ci/test_promotion_unit.py --binary build/http/Release/qbrain_promotion_tests.exe --report evidence/promotion-unit.json --require-windows 2>&1 | Tee-Object evidence/promotion-unit.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_promotion_process.py --binary build/cl/qbrain.exe --report evidence/promotion-process.json 2>&1 | Tee-Object evidence/promotion-process.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          powershell -NoProfile -ExecutionPolicy Bypass -File .ci/test_promotion_install.ps1 -Binary build/cl/qbrain.exe -Report evidence/promotion-install51.json 2>&1 | Tee-Object evidence/promotion-install51.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File .ci/test_promotion_install.ps1 -Binary build/cl/qbrain.exe -Report evidence/promotion-install7.json 2>&1 | Tee-Object evidence/promotion-install7.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Opt-in Hook fact recall and unified context budget
         shell: pwsh
@@ -219,7 +233,7 @@ jobs:
           [Environment]::OSVersion.VersionString | Set-Content evidence/platform.txt
           cmake -S . -B build/http -DQBRAIN_WITH_PG=OFF
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build/http --config Release --target qbrain_http_probe qbrain_http_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests --parallel 2 2>&1 | Tee-Object evidence/build.log
+          cmake --build build/http --config Release --target qbrain_http_probe qbrain_http_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests qbrain_promotion_tests --parallel 2 2>&1 | Tee-Object evidence/build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake -S tests/http_lifecycle -B build/http-lifecycle
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -234,6 +248,8 @@ jobs:
           python .ci/test_http_lifecycle_report.py 2>&1 | Tee-Object evidence/report-gate.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_hook_fact_unit.py --binary build/http/Release/qbrain_hook_fact_tests.exe --report evidence/hook-fact-unit.json --require-windows 2>&1 | Tee-Object evidence/hook-fact-unit.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_promotion_unit.py --binary build/http/Release/qbrain_promotion_tests.exe --report evidence/promotion-unit.json --require-windows 2>&1 | Tee-Object evidence/promotion-unit.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_recall_unit.py --binary build/http/Release/qbrain_recall_tests.exe --report evidence/recall-unit.json --require-windows 2>&1 | Tee-Object evidence/recall-unit.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

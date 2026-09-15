@@ -271,6 +271,131 @@ void FactStore::validate() const {
   require(s.step() && s.column_int(0) == 1, "fact_foreign_keys_required");
 }
 
+
+namespace {
+// Promotion may add a CURRENT independent support to a still-active assertion
+// whose original supports have all genuinely expired. Historical validation is
+// eligibility only: it is never returned as live evidence, does not change old
+// expiry, and never repairs tampered/deleted/partially invalid backing records.
+Json promotion_target(DB& db,const std::string& source,const std::string& id,int64_t at) {
+  auto live=load(db,source,id,at);
+  if(!live.is_null())return live;
+  const auto historical=load(db,source,id,0);
+  require(!historical.is_null() && historical["status"]=="active","fact_not_found");
+  auto count=db.prepare("SELECT COUNT(*) FROM memory_fact_evidence WHERE source_id=? AND fact_id=?");
+  count.bind_text(1,source);count.bind_text(2,id);
+  require(count.step() && count.column_int(0)>=1 && count.column_int(0)<=max_evidence &&
+      historical["evidence_count"]==count.column_int(0),"fact_not_found");
+  for(const auto& support:historical["evidence"]) {
+    const auto expiry=support["expires_at"].get<int64_t>();
+    require(expiry>0 && expiry<=at,"fact_not_found");
+  }
+  return historical;
+}
+std::vector<Evidence> promotion_evidence(DB& db,const std::string& source,
+                                        const std::string& id,int64_t at) {
+  if(!exists(db,"memory_module") || !exists(db,"memory_events") || !exists(db,"memory_items"))
+    throw Error("fact_event_unavailable");
+  auto state=db.prepare("SELECT e.status,e.method,e.expires_at,e.payload_hash,e.page_hash,"
+      "e.session_id,e.fragment_id,p.body,p.content_hash,p.deleted_at "
+      "FROM memory_events e JOIN pages p ON p.id=e.page_id AND p.source_id=e.source_id "
+      "WHERE e.source_id=? AND e.event_id=? AND length(CAST(p.body AS BLOB))<=262144");
+  state.bind_text(1,source);state.bind_text(2,id);
+  require(state.step(),"fact_event_unavailable");
+  const auto status=state.column_text(0),body=state.column_text(7),hash=state.column_text(3);
+  const auto expiry=state.column_int(2);
+  require(state.column_text(1)=="explicit-markers-v1","fact_local_extraction_required");
+  require((status=="extracted"||status=="no_matches") && state.column_is_null(9) &&
+      expiry>=0 && (!expiry||expiry>at) && hash==util::sha256_hex(body) &&
+      state.column_text(4)==state.column_text(8) &&
+      id==util::sha256_hex(Json::array({"qbrain-memory-v1",source,state.column_text(5),
+                                     state.column_text(6),hash}).dump()),"fact_event_unavailable");
+  // Validate the bounded payload even when it contains no extracted items.
+  try {
+    auto p=Json::parse(body,[](int depth,Json::parse_event_t,Json&){
+      if(depth>8)throw Error("fact_event_unavailable");return true;});
+    require(p.is_object() && p.contains("messages") && p["messages"].is_array() &&
+        p.contains("expires_at") && p["expires_at"].is_number_integer() && p["expires_at"]==expiry,
+        "fact_event_unavailable");
+  } catch(...) {throw Error("fact_event_unavailable");}
+  auto items=db.prepare("SELECT item_id FROM memory_items WHERE event_id=? ORDER BY message_index,item_id LIMIT 33");
+  items.bind_text(1,id);std::vector<Evidence> result;ReadWork work;
+  while(items.step()) {
+    require(result.size()<32,"fact_promotion_item_limit");
+    result.push_back(evidence(db,source,items.column_text(0),at,&work));
+  }
+  require((status=="no_matches")==result.empty(),"fact_event_unavailable");
+  return result;
+}
+}
+
+Json FactStore::promote_event(const std::string& event_id) {
+  validate();identifier(event_id);auto& db=brain_.db();
+  require(sqlite3_get_autocommit(db.handle())!=0,"fact_transaction_active");
+  auto preflight=promotion_evidence(db,source_,event_id,clock_now());
+  Json out={{"source_id",source_},{"event_id",event_id},{"method","local_category_promotion"},
+      {"model_inference",false},{"items",Json::array()},
+      {"counts",{{"total",0},{"created",0},{"attached",0},{"duplicate",0},
+                  {"skipped_retired",0},{"skipped_limit",0}}}};
+  if(preflight.empty())return out; // Valid no-match event never initializes facts.
+  // Same preparatory semantics as create: a backup/schema may remain if the
+  // subsequent fact batch rolls back. No evidence mutation occurs outside tx.
+  initialize(db);Tx tx(db);require(ready(db),"fact_schema_incomplete");
+  const auto at=clock_now();const auto pending=promotion_evidence(db,source_,event_id,at);
+  for(const auto& e:pending) {
+    const auto pred="memory."+e.reference.at("category").get<std::string>();predicate_check(pred);
+    Json row={{"item_id",e.item},{"predicate",pred}};std::string outcome;
+    // Any explicitly retired equal quote is a conservative automatic-write veto.
+    // Manual create/attach semantics and other predicates remain unchanged.
+    auto retired=db.prepare("SELECT fact_id,revision,status FROM memory_facts "
+        "WHERE source_id=? AND object=? AND status IN ('retracted','superseded') "
+        "ORDER BY created_at,fact_id LIMIT 1");
+    retired.bind_text(1,source_);retired.bind_text(2,e.quote);
+    if(retired.step()) {
+      identifier(retired.column_text(0));
+      row["fact_id"]=retired.column_text(0);row["revision"]=retired.column_int(1);
+      row["status"]=retired.column_text(2);outcome="skipped_retired";
+    } else {
+      // Prefer an existing attachment to keep replay idempotent even if another
+      // same-quote fact was explicitly inserted later with an earlier timestamp.
+      auto prior=db.prepare("SELECT f.fact_id FROM memory_facts f WHERE f.source_id=? "
+          "AND f.subject='user' AND f.predicate=? AND f.object=? AND f.status='active' "
+          "ORDER BY EXISTS(SELECT 1 FROM memory_fact_evidence e WHERE e.fact_id=f.fact_id "
+          "AND e.source_id=f.source_id AND e.item_id=?) DESC,f.created_at,f.fact_id LIMIT 1");
+      prior.bind_text(1,source_);prior.bind_text(2,pred);prior.bind_text(3,e.quote);prior.bind_text(4,e.item);
+      if(prior.step()) {
+        const auto id=prior.column_text(0);identifier(id);
+        auto f=promotion_target(db,source_,id,at);
+        auto attached=db.prepare("SELECT 1 FROM memory_fact_evidence WHERE source_id=? AND fact_id=? AND item_id=?");
+        attached.bind_text(1,source_);attached.bind_text(2,id);attached.bind_text(3,e.item);
+        if(attached.step())outcome="duplicate";
+        else {
+          auto count=db.prepare("SELECT COUNT(*) FROM memory_fact_evidence WHERE source_id=? AND fact_id=?");
+          count.bind_text(1,source_);count.bind_text(2,id);require(count.step(),"fact_not_found");
+          if(count.column_int(0)>=max_evidence)outcome="skipped_limit";
+          else {
+            insert_evidence(db,source_,id,e,at);
+            advance(db,source_,id,f["revision"].get<int64_t>(),"active",at);
+            f=need(db,source_,id,at);outcome="attached";
+          }
+        }
+        row.update(receipt(f));
+      } else {
+        const auto id=util::sha256_hex(Json::array({"qbrain-fact-v1",source_,"user",pred,e.quote,e.item}).dump());
+        auto s=db.prepare("INSERT INTO memory_facts(fact_id,source_id,subject,predicate,object,created_at,updated_at) "
+                          "VALUES(?,?,'user',?,?,?,?)");
+        s.bind_text(1,id);s.bind_text(2,source_);s.bind_text(3,pred);s.bind_text(4,e.quote);
+        s.bind_int(5,at);s.bind_int(6,at);s.step_done();insert_evidence(db,source_,id,e,at);
+        row.update(receipt(need(db,source_,id,at)));outcome="created";
+      }
+    }
+    row.erase("duplicate");row["outcome"]=outcome;out["items"].push_back(std::move(row));
+    out["counts"][outcome]=out["counts"][outcome].get<int>()+1;
+    out["counts"]["total"]=out["counts"]["total"].get<int>()+1;
+  }
+  require(out.dump().size()<=32768,"fact_promotion_output_limit");tx.commit();return out;
+}
+
 Json FactStore::create(const Json& p) {
   validate();
   keys(p,{"predicate","item_id","subject"});

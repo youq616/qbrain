@@ -185,6 +185,10 @@ int run_hook(const std::vector<std::string>& args) {
     const auto mode=cfg.value("extraction",std::string("local"));if(mode!="local"&&mode!="deferred")throw std::runtime_error("method");
     int budget=num(cfg,"recall_bytes",4096,512,8192),limit=num(cfg,"max_items",8,1,16);
     const bool fact_recall=boolean(cfg,"fact_recall",false);
+    const bool fact_promotion=boolean(cfg,"fact_promotion",false);
+    if(fact_promotion && (!boolean(cfg,"capture",false)||mode!="local"))
+      throw std::runtime_error("fact_promotion_requires_local_capture");
+    if(fact_promotion){trace["fact_promotion_enabled"]=true;trace["fact_promotion_status"]="not_run";}
     if(!fs::is_regular_file(util::brain_db_path(brain)))throw std::runtime_error("uninitialized");
     Lock guard(path.parent_path()/"runtime.lock");trace_path=path.parent_path()/"last-trace.json";
     trace["host"]=host;trace["event"]=kind;
@@ -234,6 +238,17 @@ int run_hook(const std::vector<std::string>& args) {
         if(mode=="local"&&captured.contains("event_id")&&kind=="UserPromptSubmit") {
           const auto extracted=memory::extract(b,source,captured["event_id"].get<std::string>(),"local");
           trace["extraction_status"]=extracted.value("status",std::string("skipped"));
+          if(fact_promotion && (extracted.value("status",std::string())=="extracted" ||
+                                extracted.value("status",std::string())=="no_matches")) {
+            try {
+              const auto promoted=memory::FactStore(b,source).promote_event(captured["event_id"].get<std::string>());
+              trace["fact_promotion_status"]="completed";trace["fact_promotion_counts"]=promoted["counts"];
+            } catch(...) {
+              // Preserve prior capture/extraction success without claiming the
+              // fact batch succeeded. No raw quote/storage exception in trace.
+              trace["fact_promotion_status"]="failed";
+            }
+          }
         }
       }
     }

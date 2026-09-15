@@ -88,6 +88,7 @@ $defaultTestSources = @(
   "tests\test_n47b.cpp",
   "tests\test_n47c.cpp",
   "tests\test_n47d.cpp",
+  "tests\test_n47e.cpp",
   "tests\test_n46f.cpp",
   "tests\test_rrf.cpp",
   "tests\test_vector.cpp",
