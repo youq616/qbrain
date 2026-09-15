@@ -1,0 +1,141 @@
+{
+  "repository": "youq616/qbrain",
+  "stage": "N47D live client intake",
+  "date": "2026-09-15",
+  "scope_verdict": "ACCEPTED_FOR_REPORTED_CLAUDE_SERVER2022_N47D_SCOPE",
+  "archive": {
+    "bytes": 18070,
+    "sha256": "ce25c2459a47ee49c55f1ad5f6e2938e77f9bb14f1f06711851c09af022e93d9",
+    "member_count": 16,
+    "crc_checked": true
+  },
+  "product": {
+    "source_commit": "5275045c4790b802b620ba0af52ec6248cd587d5",
+    "release_tag": "hook-fact-preview-5275045c",
+    "zip_bytes": 1960966,
+    "zip_sha256": "89918f2ed6964b4051d4542b7cd2358406423b6f3111db202e92e89e043086e8",
+    "exe_sha256": "cc544211b06dd4439cb79c69bf5baab190b831c97c9b87d911c8373bac8d7489",
+    "manifest_files_verified": 38,
+    "task_file_sha256": "23588265e97b88b2517575e2e212bd50391cb130e7eed5165eb25771898600e7"
+  },
+  "reported_client": "Claude Code 2.1.270 (non-interactive -p, logged in)",
+  "reported_os": "Microsoft Windows Server 2022 Datacenter 10.0.20348 (recorded as Server 2022, not Win11)",
+  "reported_check_counts": {
+    "total": 24,
+    "PASS": 23,
+    "FAIL": 0,
+    "SKIP": 0,
+    "BLOCKED": 1,
+    "NOT_RUN": 0
+  },
+  "coordinator_cross_checks": [
+    "reported source bound to N47D, not N47E",
+    "unique check IDs",
+    "machine counts match all check records",
+    "result identity and success A1",
+    "answer matches transcript-derived summary A1",
+    "result identity and success A2",
+    "answer matches transcript-derived summary A2",
+    "result identity and success B1",
+    "answer matches transcript-derived summary B1",
+    "three distinct client sessions",
+    "A1 both synthetic markers and unresolved",
+    "A2 only surviving marker",
+    "B1 no markers in supplied final result",
+    "client-derived Hook addition summary A1",
+    "marker flags in Hook summary A1",
+    "no-live literal presence flag A1",
+    "client-derived Hook addition summary A2",
+    "marker flags in Hook summary A2",
+    "no-live literal presence flag A2",
+    "B1 supplied Hook summaries empty",
+    "actual forget receipt",
+    "post-forget exact enum and zero relation array",
+    "post-forget memory read A empty and B retained",
+    "switch off and both uninstall receipts",
+    "trace not rewritten to certify consumption",
+    "manual seed explicit conflict and paired recall"
+  ],
+  "coordinator_cross_check_count": 26,
+  "source_report_files_modified": false,
+  "original_archive_republished": false,
+  "raw_client_transcripts_in_upload": false,
+  "full_hook_json_in_upload": false,
+  "client_result_json_and_transcript_derived_summaries_read": true,
+  "new_client_sessions_executed_here": 0,
+  "codex": "BLOCKED_PRIOR_401_NOT_RETESTED",
+  "n47e_live_consumption_inherited": false,
+  "marker_presence_flags_are_not_enum_checks": true,
+  "notes": [
+    "A2 contains_recorded_conflict=true does not establish a recorded-conflict enum; no_live_recorded_conflict contains that substring. The post-forget CLI JSON has the exact no_live_recorded_conflict value and an empty contradictions array.",
+    "The supplied markdown groups and observation count are not arithmetically reliable; summary.json has 24 unique checks and exact 23 PASS / 1 BLOCKED counts. Original reports are not rewritten.",
+    "No-tool use, absence of markers in the full unavailable client transcript, and unchanged real user directories are local-reported observations, not new remote filesystem verification.",
+    "Only derived receipt and hashes are placed in public repository; original client usage metadata and local paths remain in the conversation attachment."
+  ],
+  "members": {
+    "logs\\agent-a1.json": {
+      "bytes": 1946,
+      "sha256": "1cb81e1747fde839e982f5c99154449a7b9d876de6b98dbca323ac85ab410995"
+    },
+    "logs\\agent-a1.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs\\agent-a2.json": {
+      "bytes": 2046,
+      "sha256": "b94ad952e8130c5621a08ec1e56260dea542e45c5376891e004bdf858666609a"
+    },
+    "logs\\agent-a2.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs\\agent-b1.json": {
+      "bytes": 1807,
+      "sha256": "f5db8d31434913999a8696863bf9813571e1d7d2da06f61c1c8d4851fdb500ce"
+    },
+    "logs\\agent-b1.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs\\forget-a-event.log": {
+      "bytes": 2308,
+      "sha256": "bef691e20da6e1ab7d7f936483c5d0bdf6a9684ea0f7d622179117073822b283"
+    },
+    "logs\\hook-evidence-sanitized.json": {
+      "bytes": 5401,
+      "sha256": "b89e1f1ec12e0e2a04dc3074607219ea8c38f37fb7a299f66652a74be244cbd1"
+    },
+    "logs\\install-status.log": {
+      "bytes": 788,
+      "sha256": "26b479263c8b903f9c91cf61d9d23a9e90e661c40539602cc0f85053d3ec396b"
+    },
+    "logs\\reinstall-uninstall.log": {
+      "bytes": 1130,
+      "sha256": "00bb0264df78ab9f7d65a37fe7a305127495e54f6ff965fc60b3d56a10a93776"
+    },
+    "reports\\MARKERS.txt": {
+      "bytes": 56,
+      "sha256": "8f8d1566b0f3e8e2a6d2387d5ee60420d5c492cc03eaa2c532cc21ea833b3ae6"
+    },
+    "reports\\seed-facts.ps1": {
+      "bytes": 3522,
+      "sha256": "ef8692d8cb604899267143f8eb10f1706d0df841a7ae675b7d017bc7b34794c2"
+    },
+    "reports\\seed-log.json": {
+      "bytes": 26453,
+      "sha256": "45cdecd2355d27e7b431a569e4200aee0c0ee17f442cb9e877a66ade0ea905d8"
+    },
+    "report.md": {
+      "bytes": 6525,
+      "sha256": "1959480d2fa14c026d5f82f0fe50ecfd739dfe07510744e281057527831ef3bd"
+    },
+    "summary.json": {
+      "bytes": 4891,
+      "sha256": "a28fe1651ff75e24f5915b44f24ef3e662c53678f4bc2225908c3edba19c0fe8"
+    },
+    "issues.md": {
+      "bytes": 2443,
+      "sha256": "ba6261b4d5536b90ab0882d8acf48763c03af8f74deb818082c07ad6755ded59"
+    }
+  }
+}
