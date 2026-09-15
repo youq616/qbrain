@@ -1,0 +1,175 @@
+name: Publish exact reviewed N47E candidate
+on:
+  push:
+    branches: ['delivery/n47e-reviewed-c6c76a2f']
+    paths: ['.github/workflows/publish-reviewed-n47e.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deliver-n47e-c6c76a2f
+  cancel-in-progress: false
+jobs:
+  publish-approved-bytes:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47e-reviewed-c6c76a2f'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: c6c76a2f3fd2dd0b07326ef6e19c1a59283402e8
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: e1857c495b0d605cda69668bd1c1bb5579b74038
+          path: review
+          persist-credentials: false
+      - name: Revalidate and publish the original reviewed package
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          # Fixed, reviewed candidate promotion. No product code is built or executed.
+          import hashlib, io, json, os, re, stat, subprocess, sys, zipfile
+          from pathlib import Path
+          repo='youq616/qbrain'
+          source='c6c76a2f3fd2dd0b07326ef6e19c1a59283402e8';tree='07f00ef07fc1cb79642472b63052221c84bb2db1'
+          review='e1857c495b0d605cda69668bd1c1bb5579b74038';review_tree='81de4b00480b6b3b94e9686740eda921cb96c41f'
+          merge='3499f19b8191fbbe38d9c05a133901395821192b';run_id=34906704753
+          tag='promotion-preview-c6c76a2f';cap=64*1024*1024
+          root=Path(os.environ['RUNNER_TEMP'])/('n47e-reviewed-'+os.environ['GITHUB_RUN_ID']);root.mkdir(exist_ok=False)
+          def sha(raw):return hashlib.sha256(raw).hexdigest()
+          def gh(*args):return subprocess.check_output(['gh',*args],stderr=subprocess.PIPE,timeout=120)
+          def api(path):return json.loads(gh('api',f'repos/{repo}/{path}'))
+          def git(path,ref):return subprocess.check_output(['git','-C',path,'rev-parse',ref],text=True).strip()
+          def unpack(raw):
+              assert len(raw)<cap
+              with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                  rows=z.infolist()
+                  assert 0<len(rows)<256 and sum(r.file_size for r in rows)<cap
+                  assert len(rows)==len({r.orig_filename for r in rows})
+                  for r in rows:
+                      assert r.orig_filename==r.filename and not r.flag_bits&1 and not r.is_dir()
+                      assert not r.filename.startswith('/') and '\\' not in r.filename and ':' not in r.filename
+                      assert all(p not in ('','.','..') for p in r.filename.split('/'))
+                      assert stat.S_IFMT(r.external_attr>>16) in (0,stat.S_IFREG)
+                  return {r.filename:z.read(r) for r in rows}
+          def checkout(path,digest):
+              raw=Path('candidate',path).read_bytes()
+              assert digest in (sha(raw),sha(raw.replace(b'\r\n',b'\n').replace(b'\n',b'\r\n'))),path
+          assert git('candidate','HEAD')==source and git('candidate','HEAD^{tree}')==tree
+          assert git('review','HEAD')==review and git('review','HEAD^{tree}')==review_tree
+          pr=api('pulls/20')
+          assert pr['merged'] is True and pr['merge_commit_sha']==merge and pr['head']['sha']==review
+          audit=json.loads(Path('review/docs/nodes/n47e-evidence/SUMMARY.json').read_text(encoding='utf-8'))
+          assert audit['source_commit']==source and audit['source_tree']==tree and audit['scoped_outcome']=='PASS'
+          assert audit['review']['unresolved_scoped_p0_p1']==0 and audit['review']['independent_subagent_claimed'] is False
+          assert audit['readback_checks']==216
+          for rid in (run_id,34906704707):
+              r=api(f'actions/runs/{rid}');assert r['head_sha']==source and r['status']=='completed' and r['conclusion']=='success'
+          jobs=api(f'actions/runs/{run_id}/jobs?per_page=100')['jobs']
+          for name in ('source','portable','windows','windows-http-2022'):
+              found=[j for j in jobs if j['name']==name];assert len(found)==1 and found[0]['conclusion']=='success'
+          pins={
+              'package':(10372929628,'f78a46a7c77b609ba9ebf772a1d4a5af3b145c72b94e2169cddeac42feb8f67c'),
+              'windows':(10373377967,'22f101b1422fdd9656bdddf8d79ec22bdbf7a5faed9ea04ecfca77d5b11d89f7'),
+              'server2022':(10373400550,'453972fd8010831da0c70d0c5831ef25aa8fdfe3aff98d4e727b8e5d642ab598')}
+          archives={}
+          for name,(ident,digest) in pins.items():
+              meta=api(f'actions/artifacts/{ident}')
+              assert not meta['expired'] and meta['workflow_run']['id']==run_id and meta['workflow_run']['head_sha']==source
+              assert meta['digest']=='sha256:'+digest and 0<meta['size_in_bytes']<cap
+              raw=gh('api',f'repos/{repo}/actions/artifacts/{ident}/zip')
+              assert len(raw)==meta['size_in_bytes'] and sha(raw)==digest
+              archives[name]=unpack(raw)
+          outer=archives['package'];assert set(outer)=={'qbrain-windows-x64-development.zip','SHA256SUMS.txt'}
+          raw=outer['qbrain-windows-x64-development.zip']
+          assert len(raw)==1986872 and sha(raw)=='50395502dbcf65d142fd36a0f511dc8b764971bcfd5854d466e8d2e38e04ae73'
+          assert outer['SHA256SUMS.txt'].decode('ascii').split()==[sha(raw),'qbrain-windows-x64-development.zip']
+          files=unpack(raw);manifest=json.loads(files['MANIFEST.json']);validation=json.loads(files['verification/validation.json'])
+          exe=sha(files['qbrain.exe'])
+          assert len(files['qbrain.exe'])==3965952 and exe=='f9ed4d157f46e5ee25fc1f92449a805b1c9a51bdf65faf9a42b443c9266e2c29'
+          assert set(files)==set(manifest['files'])|{'MANIFEST.json','README-FIRST.txt'}
+          for name,m in manifest['files'].items():
+              assert type(m['bytes']) is int and m['bytes']==len(files[name]) and m['sha256']==sha(files[name])
+          for r in (manifest,validation):
+              assert r['result']=='PASS' and r['source_commit']==source and r['binary_sha256']==exe and r['registered_groups']==53
+              assert r['signed'] is False and r['real_host_model_consumption_verified'] is False and r['postgres_memory_context_verified'] is False
+          for name in files:
+              if name.startswith('verification/') and name.endswith('.json'):
+                  assert files[name]==archives['windows'][name.split('/')[-1]]
+          sys.path.insert(0,str(Path('candidate/.ci').resolve()))
+          from validate_promotion_report import validate_unit as pu,validate_process as pp,validate_install as pi
+          from validate_hook_fact_report import validate_unit as hu,validate_process as hp,validate_install as hi
+          from validate_recall_report import validate_unit as ru,validate_process as rp
+          from validate_conflict_report import validate_unit as cu,validate_process as cp
+          from validate_fact_report import validate_unit_report as fu,validate_report as fp
+          from validate_cjk_report import validate_report as cj
+          from validate_http_lifecycle import validate_report as hl
+          from validate_native_log import verified_groups
+          verified_groups(Path('candidate/tests/test_main.cpp').read_text(encoding='utf-8'),archives['windows']['regression.log'].decode('utf-8-sig'),53)
+          for platform in ('windows','server2022'):
+              for name,cpp,validator,expected in [('promotion','tests/test_n47e.cpp',pu,{'scenarios':18,'assertions':237}),('hook-fact','tests/test_n47d.cpp',hu,{'scenarios':13,'assertions':229}),('recall','tests/test_n47c.cpp',ru,{'scenarios':15,'assertions':330}),('conflict','tests/test_n47b.cpp',cu,{'scenarios':13,'assertions':346})]:
+                  u=json.loads(archives[platform][name+'-unit.json'])
+                  checkout(cpp,u['test_sha256']);checkout('.ci/test_'+name.replace('-','_')+'_unit.py',u['script_sha256'])
+                  assert validator(u,source_commit=source,binary_sha256=u['binary_sha256'],script_sha256=u['script_sha256'],test_sha256=u['test_sha256'])==expected
+                  assert u['source_tree']==tree
+              h=json.loads(archives[platform]['http-lifecycle.json'])
+              hl(h,source_commit=source,probe_hashes={n:h['variants'][n]['sha256'] for n in ('legacy','per_call','current')})
+              h=json.loads(archives[platform]['http-transport.json'])
+              assert h['native_windows'] is True and h['result']=='PASS' and h['source_commit']==source and h['check_count']==len(h['checks'])==81
+          for name,validator,expected in [('promotion',pp,{'checks':68,'commands':77}),('hook-fact',hp,{'checks':52,'commands':72}),('recall',rp,{'checks':44,'commands':71}),('conflict',cp,{'checks':38,'commands':75}),('fact',fp,{'named_checks':34,'commands':118})]:
+              r=json.loads(files['verification/'+name+'-process.json']);script=files['verification/test_'+name.replace('-','_')+'_process.py']
+              checkout('.ci/test_'+name.replace('-','_')+'_process.py',sha(script))
+              assert validator(r,source_commit=source,binary_sha256=exe,script_sha256=sha(script))==expected
+              assert r['source_tree']==tree
+          for name,validator in [('promotion',pi),('hook-fact',hi)]:
+              for major in (5,7):
+                  suffix='51' if major==5 else '7';r=json.loads(archives['windows'][name+'-install'+suffix+'.json'])
+                  checkout('.ci/test_'+name.replace('-','_')+'_install.ps1',r['script_sha256'])
+                  checkout('scripts/Install-QbrainMemory.ps1',r['installer_sha256'])
+                  assert validator(r,source_commit=source,binary_sha256=exe,script_sha256=r['script_sha256'],installer_sha256=r['installer_sha256'],shell_major=major)=={'checks':33,'shell_major':major}
+          u=json.loads(files['verification/fact-unit.json']);checkout('tests/test_n47a.cpp',u['test_sha256'])
+          names=re.findall(r'scenario\("([^"\r\n]+)"',Path('candidate/tests/test_n47a.cpp').read_text(encoding='utf-8'))
+          assert fu(u,source_commit=source,binary_sha256=u['binary_sha256'],test_sha256=u['test_sha256'],expected_scenarios=names)=={'scenarios':15,'assertions':380}
+          r=json.loads(files['verification/cjk-recall.json']);script=files['verification/test_cjk_recall.py']
+          checkout('.ci/test_cjk_recall.py',sha(script));cj(r,source_commit=source,binary_sha256=exe,script_sha256=sha(script))
+          for name in ('scripts/Install-QbrainMemory.ps1','scripts/Invoke-QbrainJson.ps1'):checkout(name,sha(files[name]))
+          for name in ('LOCAL-FACT-PROMOTION.zh-CN.md','HOOK-FACT-RECALL.zh-CN.md'):checkout('docs/integration/'+name,sha(files[name]))
+          assert validation['promotion_scenarios']==18 and validation['promotion_assertions']==237 and validation['promotion_process_checks']==68
+          local_task=Path('review/docs/integration/N47E-LOCAL-ACCEPTANCE.zh-CN.md').read_bytes()
+          assert hashlib.sha1(b'blob '+str(len(local_task)).encode()+b'\0'+local_task).hexdigest()=='63cf41f342a3ca2c20d19639ff2cb3bc695c6dec'
+          provenance={'repository':repo,'source_commit':source,'source_tree':tree,'review_commit':review,'merge_commit':merge,
+              'product_workflow_run_id':run_id,'delivery_workflow_run_id':int(os.environ['GITHUB_RUN_ID']),
+              'delivery_workflow_commit':os.environ['GITHUB_SHA'],'package_artifact_id':pins['package'][0],
+              'package_bytes':len(raw),'package_sha256':sha(raw),'exe_bytes':len(files['qbrain.exe']),'exe_sha256':exe,
+              'native_registered_groups':53,'promotion_scenarios':18,'promotion_assertions':237,'promotion_process_checks':68,'promotion_commands':77,'promotion_install_checks_each_shell':33,
+              'local_task_source':review,'local_task_path':'docs/integration/N47E-LOCAL-ACCEPTANCE.zh-CN.md','local_task_sha256':sha(local_task),
+              'review_type':'Owner-authorized separate engineering self-review; not independent subagent or third party',
+              'signed':False,'rebuilt_or_repacked':False,'probe_executables_separately_downloaded':False,
+              'real_authenticated_client_consumption_verified':False,
+              'scope':'Explicitly enabled local complete-quote promotion with safe expired-support renewal; no semantic inference or extra provider permission'}
+          out=root/'release';out.mkdir()
+          (out/'qbrain-windows-x64-promotion.zip').write_bytes(raw)
+          (out/'SHA256SUMS.txt').write_text(sha(raw)+'  qbrain-windows-x64-promotion.zip\n',encoding='ascii')
+          (out/'PROVENANCE.json').write_text(json.dumps(provenance,indent=2)+'\n',encoding='utf-8')
+          assets=['qbrain-windows-x64-promotion.zip','SHA256SUMS.txt','PROVENANCE.json']
+          notes=('N47E unsigned development preview. Exact tested CI package, no rebuild/repack. '
+                 'EnableFactPromotion is default-off and requires EnableCapture; fact recall remains a separate opt-in. '
+                 'Complete locally extracted user quotes become source-backed facts, without semantic truth inference. '
+                 'Safe renewal adds fresh valid evidence without resetting old expiry or reviving retired claims. '
+                 '53 native groups, promotion18 scenarios/237 assertions,68 process checks/77 expected exits,33 installer checks per shell passed. '
+                 'Authenticated client consumption is not certified by fixtures. Read LOCAL-FACT-PROMOTION.zh-CN.md. ZIP SHA256 '+sha(raw))
+          gh('release','create',tag,*(str(out/n) for n in assets),'--repo',repo,'--target',source,
+             '--draft','--prerelease','--latest=false','--title','Qbrain N47E local fact promotion (c6c76a2f)','--notes',notes)
+          rb=root/'readback';gh('release','download',tag,'--repo',repo,'--dir',str(rb))
+          assert {p.name for p in rb.iterdir()}==set(assets)
+          for name in assets:assert (out/name).read_bytes()==(rb/name).read_bytes()
+          gh('release','edit',tag,'--repo',repo,'--draft=false','--prerelease','--latest=false')
+          print(json.dumps({'result':'PUBLISHED','tag':tag,**provenance}))
