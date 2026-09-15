@@ -1,7 +1,11 @@
 # N47E — explicitly enabled local event-to-fact promotion
 
 Baseline: dfca4b6a7b01730431df92974fe5a6251c999953 (N47D already shipped).
-Status: approved after N47E-PLAN-AUDIT.md; implementation/outcome pending.
+Status: done for the scoped repository implementation after N47E-HARD-AUDIT.md.
+Tested/reviewed source: c6c76a2f3fd2dd0b07326ef6e19c1a59283402e8.
+Native evidence: 34906704753 and 34906704707; publication is recorded separately.
+Includes the narrow expired-support renewal repair in N47E-RENEWAL-REPAIR-PLAN.md;
+old aa34e59b results do not certify the repaired candidate or its delivery bytes.
 Scope: Windows-native youq616/qbrain only. Owner authorizes separate coordinating
 agent engineering review, not an invented external/subagent review.
 
