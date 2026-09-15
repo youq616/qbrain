@@ -1,80 +1,87 @@
 # Qbrain
 
-Windows 原生 C++20 / PowerShell Agent 记忆与知识库，默认 SQLite + FTS5。
-不要求 Docker、WSL 或 Python 服务。由 Lordakee/qbrain 的 MIT 代码继续开发；
-gbrain / OpenViking 是设计参考，不代表完整功能等价。
+Windows 原生 C++20 / PowerShell Agent 记忆与知识库，默认SQLite + FTS5。
+不要求Docker、WSL或Python服务。由Lordakee/qbrain的MIT代码继续开发；
+gbrain / OpenViking是设计参考，不代表完整功能等价。
 
-## 当前开发预览：N47D
+## 当前开发预览：N47E
 
-[仓库 Release：hook-fact-preview-5275045c](https://github.com/youq616/qbrain/releases/tag/hook-fact-preview-5275045c)
-选择 `qbrain-windows-x64-hook-facts.zip`，完整解压。SHA256：
-`89918f2ed6964b4051d4542b7cd2358406423b6f3111db202e92e89e043086e8`。
-这是未签名开发预览，原CI测试字节、没有重新打包。不是全项目完成的正式发行。
-实际源码 `5275045c4790b802b620ba0af52ec6248cd587d5`；
-[PR #19](https://github.com/youq616/qbrain/pull/19)已合并。
+[仓库 Release：promotion-preview-c6c76a2f](https://github.com/youq616/qbrain/releases/tag/promotion-preview-c6c76a2f)
+选择 `qbrain-windows-x64-promotion.zip`，完整解压。SHA256：
+`50395502dbcf65d142fd36a0f511dc8b764971bcfd5854d466e8d2e38e04ae73`。
+原CI测试字节，未重新打包、未签名；不是全项目完成的正式发行。
+实际源码`c6c76a2f3fd2dd0b07326ef6e19c1a59283402e8`；
+[PR #20](https://github.com/youq616/qbrain/pull/20)已合并。
 以MANIFEST、完整源码SHA和外部摘要识别版本，不用历史dist或旧固定哈希工具替代。
 
-[当前状态](CURRENT-STATUS.md) · [阶段复核](docs/nodes/N47D-HARD-AUDIT.md) ·
-[测试摘要](docs/nodes/n47d-evidence/SUMMARY.json) · [发布记录](docs/nodes/n47d-evidence/RELEASE.json)
+[当前状态](CURRENT-STATUS.md) · [阶段复核](docs/nodes/N47E-HARD-AUDIT.md) ·
+[测试摘要](docs/nodes/n47e-evidence/SUMMARY.json) · [发布记录](docs/nodes/n47e-evidence/RELEASE.json)
 
-## 新增：显式开启 Hook 事实召回
+## 新增：本地提取事件自动整理为证据事实
 
-安装器 `-EnableFactRecall` 单独开启该项目的事实Hook，默认关闭，独立于本地采集。
-开启后，新会话可带入近期active事实；用户提交问题时按现有字面词规则召回匹配事实。
-每个事实及有效直接冲突对方完整输出，事实组优先，普通记忆用同一个JSON响应预算的
-剩余空间。放不下不会拆成半组，同源事实绑定项或完全相同原话不能从普通记忆绕回。
+`-EnableFactPromotion`独立默认关闭，要求`-EnableCapture`。开启后，当前用户事件
+成功local提取的完整原话自动成为证据绑定事实，不需要再逐条手工fact create。
+整理使用固定memory.<category>标签、confidence=null，保留原话中的否定和上下文，
+不推断真假、不生成新的语义矛盾、不调用额外模型。事实召回仍需独立开关。
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-QbrainMemory.ps1 -HostName Claude -ProjectPath "D:\Projects\MyProject" -Binary ".\qbrain.exe" -EnableFactRecall
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-QbrainMemory.ps1 -HostName Claude -ProjectPath "D:\Projects\MyProject" -Binary ".\qbrain.exe" -EnableCapture -EnableFactPromotion -EnableFactRecall
 ```
 
-仅需要普通记忆则不传这个开关；需要该项目本地采集时另加 `-EnableCapture`。
-事实开关不自动创建事实、判断真假、扩展MCP写授权或开启Qbrain外部提取/摘要。
-`Status`显示开关状态，重装不传开关即关闭；卸载继续保留脑库与备份。
-[详细语义和安装](docs/integration/HOOK-FACT-RECALL.zh-CN.md)。
+仅需原记忆采集，不传promotion/recall开关。仅需事实召回，可以单独启用
+`-EnableFactRecall`而不采集；promotion不能在未授权采集时自动开启。Status报告
+有效值，重装不传开关即关闭。卸载保留脑库/备份，不因关闭就撤销已存在的事实。
+[本地整理语义](docs/integration/LOCAL-FACT-PROMOTION.zh-CN.md) ·
+[Hook事实与统一预算](docs/integration/HOOK-FACT-RECALL.zh-CN.md)。
 
-**Hook上下文交给用户已授权客户端，客户端可能发送至其模型。** 没有额外Qbrain
-模型请求不表示没有客户端外发。不修改登录、全局Agent设置或绕过信任要求。
+也可主动调用`fact promote --event ID`或既有MCP memory_write的fact_promote动作，
+来源和写授权照旧。每批最多32条原始证据；相同独立原话追加支持，重放不增版本。
+退休同句事实阻止自动复活，16条物理支持上限不会产生新的溢出事实。
 
-## 证据、预算与遗忘边界
+所有旧支持过期后，新的有效独立原话只能在旧支持全部完整且已过期时续接仍active
+事实。旧过期时间不重置，旧支持不重新出现在live结果中；退休或部分损坏的历史仍
+拒绝。事实/证据批次原子；既有备份及可选schema准备是单独步骤，失败后可能保留。
 
-事实与普通记忆共享一个SQLite读快照，采集在读取后执行；事实每次重新核验，避免
-会话去重掩盖revision或支持证据变化。不把事实原话或查询词写进trace/去重状态。
-recall_bytes限制每次完整序列化Hook JSON，不是整段会话Token预算；空+truncated表示
-结果不完整。默认开关关闭时保留原Hook行为。数量预算不等于SQL扫描或硬实时保证。
+## 证据、预算与隐私边界
 
-逐事件forget不全局删除所有同句独立记录；另一个未遗忘副本可能仍作普通记忆返回。
-撤回事实尚存在时，其绑定项/完全相同原话仍被普通通道过滤。客户端旧上下文和备份
-不是安全擦除目标。原文哈希是本地一致性检查，不是数字签名或完整多用户权限体系。
+N47D的事实与普通记忆共用SQLite快照及完整Hook JSON响应预算；事实和直接显式
+反证不能拆半组。recall_bytes不是会话Token总预算，候选上限不是SQL耗时保证。
+事实每次重验，过期/删除/篡改/来源校验持续有效，不把原话写入trace或去重状态。
+
+**Hook上下文交给已授权客户端，客户端可能发送至其模型。** 没有额外Qbrain模型调用
+不等于没有客户端外发。不改认证/全局Agent配置，不绕过信任或安全软件。
+逐事件forget不安全擦除备份、WAL、客户端旧上下文或其他独立未遗忘的同句事件。
+原文哈希是本地一致性检查，不是数字签名或完整多用户权限体系。
 
 ## 已有能力
 
-N47A提供有完整原文证据的事实创建、附加支持、撤回、替代和显式矛盾关系；首次
-明确事实写入先备份并初始化独立可选表，不替换历史facts。N47D没有新迁移。
-N47B成对查看冲突；N47C按查询召回并保留直接反证，无自动语义推断或真假赢家。
-[事实](docs/integration/EVIDENCE-FACTS.zh-CN.md) ·
-[冲突](docs/integration/CONFLICT-INSPECTION.zh-CN.md) ·
+N47A事实创建/附加支持/撤回/替代/显式矛盾，首次明确事实写入先备份并初始化独立
+可选表，不替换历史facts。N47B成对冲突查看；N47C查询召回保留直接反证；N47D显式
+Hook接入与统一输出预算保持。N47E无新迁移、MCP名称或模型许可。
+[事实](docs/integration/EVIDENCE-FACTS.zh-CN.md) · [冲突](docs/integration/CONFLICT-INSPECTION.zh-CN.md) ·
 [主动召回](docs/integration/FACT-RECALL.zh-CN.md)。
 
-原会话归档/记忆、来源隔离、采集开关、重试去重、遗忘联动、项目Hook与可撤销安装；
-L0/L1摘录、单独许可的可选摘要、L2分页、缓存失效、六工具MCP；CJK连续子串搜索，
-精确有界向量候选、Embedding模型标签隔离、批量队列和过期结果拒绝保持。
+会话归档/记忆、来源隔离、采集开关、重试去重、遗忘联动、项目Hook与可撤销安装，
+L0/L1摘录、单独许可的可选摘要、L2分页、缓存失效、六工具MCP，CJK连续子串搜索、
+精确有界向量候选、Embedding模型标签隔离、批量队列和过期结果拒绝全部保持。
 HTTP共享不可变会话与逐请求状态保持，系统代理设置改变后需重启进程。
 
 ## 验证与尚未验收部分
 
-原生34862423429/34862423691必需任务通过：Windows52注册组；新组合单元在两Windows
-版本和portable各13场景229断言；真实EXE事件夹具52项72命令；PS5.1/7事实开关安装
-各33项。旧事实/冲突/召回/HTTP/队列/CJK/记忆/Hook/双PowerShell门槛保留；真实PG DSN
-仍明确跳过。187项原始源码/日志/交付回读，Linux Clang ASan/UBSan与独立组合对照、
-故意破坏副本和82项报告门槛补查通过。阶段是单独工程自审，不是第三方/子代理审核。
+原生34906704753/34906704707必需任务通过：Windows53组，新整理单元两Windows版本
+及portable各18场景237断言，实际EXE CLI/MCP/Hook夹具68项77命令，PS5.1/7安装各33项。
+旧事实/冲突/召回/Hook/HTTP/队列/CJK/记忆和双PowerShell门槛保持；真实PG DSN明确SKIP。
 
-**事件夹具不是真实已登录Claude/Codex会话。** 新版实际模型消费、遗忘后新会话和项目
-隔离需按[本机任务](docs/integration/N47D-LOCAL-ACCEPTANCE.zh-CN.md)完成三个隔离会话。
-不需要编译器、GitHub写凭据或重复源码审核；现有Codex认证问题不由本轮修复。
+单独工程复核包括Clang17 ASan/UBSan实际单元与进程、47事件/218命令独立状态oracle、
+两个准确失败的故障副本、96项报告门槛、216项原始源码/日志/包回读。未发现本阶段
+未解决P0/P1，不是绝对无缺陷保证、第三方/子代理审核或Windows sanitizer认证。
 
-自动语义提取/冲突判断、衰减画像、PG对等、完整ACL/DLP、真实模型质量费用、正式签名
-与整个融合项目完成均未声明。不存在已知本阶段P0/P1不等于软件绝无潜在问题。
+**合成事件夹具不等于真实已登录客户端。** 按[唯一新本机任务](docs/integration/N47E-LOCAL-ACCEPTANCE.zh-CN.md)
+用至多三次隔离Claude新会话验证真实自动采集→提取→整理→新会话召回及项目隔离。
+不需编译器、GitHub写凭据或重复源码审核；Codex既有401仍单独阻塞，不改其认证。
+
+通用语义提取/冲突判断、衰减画像、PG对等、完整ACL/DLP、真实模型质量费用、正式
+签名与整个融合项目完成仍未声明。默认本地运行不表示启用外部模型后资料仍不外发。
 
 ## 从源码构建、数据与交接
 
@@ -83,16 +90,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-cl.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-tests-cl.ps1 -SkipProductionBuild
 ```
 
-源码构建需要MSVC；只有同轮生产构建成功且源码未变才跳过重复构建。运行预编译包
-不要求编译器，Python是CI/验收依赖而非产品服务。升级前备份已有脑库，完整解压同包，
-默认数据为 `%LOCALAPPDATA%\Qbrain\`；不上传真实聊天、数据库或密钥。
-[完整安装说明](docs/integration/QUICKSTART.zh-CN.md) · [接入细则](docs/integration/WINDOWS-MEMORY.md)。
-本机任务只给一个完整提示词，文件先放仓库并提供固定地址、摘要及用法，遵循
-[交接规则](LOCAL-AGENT-HANDOFF.md)，不让本机并行重写同一代码。
+源码构建需要MSVC；仅同轮生产构建成功且源码未变时跳过重复构建。运行预编译包
+不要求编译器，Python是CI/验收依赖而非产品服务。升级前备份脑库，完整解压同包，
+默认数据为`%LOCALAPPDATA%\Qbrain\`；不上传真实聊天、数据库或密钥。
+[完整安装](docs/integration/QUICKSTART.zh-CN.md) · [接入细则](docs/integration/WINDOWS-MEMORY.md)。
+本机任务只给一个完整提示词，文件先放仓库并提供固定地址/摘要/用法，遵循
+[交接规则](LOCAL-AGENT-HANDOFF.md)，不让本机并行重写相同代码。
 
 ## 历史与许可
 
-[N47C](docs/nodes/N47C-HARD-AUDIT.md) · [N47B](docs/nodes/N47B-HARD-AUDIT.md) ·
-[N47A](docs/nodes/N47A-HARD-AUDIT.md) · [N46F](docs/nodes/N46F-HARD-AUDIT.md)。
-[Issue #2](https://github.com/youq616/qbrain/issues/2)保持总路线跟踪；历史失败记录保留。
+[N47D](docs/nodes/N47D-HARD-AUDIT.md) · [N47C](docs/nodes/N47C-HARD-AUDIT.md) ·
+[N47B](docs/nodes/N47B-HARD-AUDIT.md) · [N47A](docs/nodes/N47A-HARD-AUDIT.md) ·
+[N46F](docs/nodes/N46F-HARD-AUDIT.md)。
+[Issue #2](https://github.com/youq616/qbrain/issues/2)继续跟踪总路线，历史失败保留。
 MIT；保留[LICENSE](LICENSE)及[第三方许可](THIRD-PARTY-NOTICES.md)。
