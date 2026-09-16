@@ -1,0 +1,34 @@
+{
+  "checks": 67,
+  "result": "PASS",
+  "scenario_count": 5,
+  "scenarios": [
+    {
+      "assertions": 14,
+      "name": "commit veto rolls back archive and restore receipts",
+      "status": "PASS"
+    },
+    {
+      "assertions": 14,
+      "name": "late statement ABORT leaves no partial batch",
+      "status": "PASS"
+    },
+    {
+      "assertions": 14,
+      "name": "late statement FAIL leaves no partial batch",
+      "status": "PASS"
+    },
+    {
+      "assertions": 14,
+      "name": "late statement ROLLBACK leaves no partial batch",
+      "status": "PASS"
+    },
+    {
+      "assertions": 11,
+      "name": "blocked COMMIT rolls back batch before caller regains control",
+      "status": "PASS"
+    }
+  ],
+  "scope": "Additional Linux transaction probes, not new Windows or live-host acceptance",
+  "source_commit": "b1292b54543b9f54cd5e2b71f4ae4bf5f6247385"
+}

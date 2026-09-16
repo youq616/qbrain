@@ -19,16 +19,37 @@ int number(const OpContext& c,const std::string& key,int def) {
   if(parsed.ec!=std::errc{} || parsed.ptr!=v.data()+v.size()) throw memory::Error("invalid_integer");
   return n;
 }
+Json batch_payload(const std::string& raw) {
+  if(raw.empty() || raw.size()>8192)throw memory::Error("fact_batch_payload_limit");
+  std::vector<std::set<std::string>> objects;
+  return Json::parse(raw,[&](int depth,Json::parse_event_t event,Json& value) {
+    if(depth>8)throw memory::Error("fact_invalid_payload");
+    if(event==Json::parse_event_t::object_start)objects.emplace_back();
+    if(event==Json::parse_event_t::key) {
+      if(objects.empty() || !objects.back().insert(value.get<std::string>()).second)
+        throw memory::Error("fact_batch_duplicate_key");
+    }
+    if(event==Json::parse_event_t::object_end)objects.pop_back();
+    return true;
+  });
+}
 OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
   try {
     const std::set<std::string> allowed=write?
       std::set<std::string>{"source_id","action","payload","event_id","method","manual"}:
-      std::set<std::string>{"source_id","view","query","limit","max_bytes","event_id","fact_id","predicate","include_history","stale_after_days"};
+      std::set<std::string>{"source_id","view","query","limit","max_bytes","event_id","fact_id","predicate","include_history","stale_after_days","payload"};
     for(const auto& [k,v]:c.args) if(!allowed.count(k)) throw memory::Error("unexpected_argument");
     if(c.args.count("manual") && (c.via_mcp || c.remote)) throw memory::Error("manual_requires_local_cli");
     OpResult error; const auto source=resolve(c,true,error); if(!source) return error;
     if(!write) {
       const auto view=get(c,"view","memories");
+      if(view=="lifecycle_batch") {
+        for(const auto& [key,value]:c.args)
+          if(key!="source_id" && key!="view" && key!="payload")
+            throw memory::Error("fact_unexpected_argument");
+        return output(memory::FactStore(*c.brain,*source).lifecycle_batch(batch_payload(get(c,"payload")),false));
+      }
+      if(c.args.count("payload"))throw memory::Error("fact_unexpected_argument");
       if(view=="lifecycle") {
         if(c.args.count("query") || c.args.count("event_id") || c.args.count("include_history"))
           throw memory::Error("fact_unexpected_argument");
@@ -69,6 +90,8 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
     if(action.rfind("fact_",0)==0) {
       if(c.args.count("event_id") || c.args.count("method") || c.args.count("manual"))
         throw memory::Error("fact_unexpected_argument");
+      if(action=="fact_lifecycle_batch")
+        return output(memory::FactStore(*c.brain,*source).lifecycle_batch(batch_payload(get(c,"payload")),true));
       const auto raw=get(c,"payload");
       if(raw.empty() || raw.size()>16384) throw memory::Error("fact_invalid_payload");
       const auto payload=Json::parse(raw,[](int depth,Json::parse_event_t,Json&){
@@ -105,12 +128,12 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
 }
 void register_memory_ops(const SourceResolver& resolve) {
   global_registry().add({"memory_read",Scope::Read,false,
-    "Read bounded source-scoped quotes or event status; view=facts reads claim versions; view=conflicts returns complete active pairs from explicit contradiction assertions, not inferred truth. view=recall requires a literal query and returns each matching active quote with all supported direct explicit counterclaims, including nonmatching ones; not transitive or semantic search. view=lifecycle reports advisory support age and archive policy, never usage or truth. Archive suppresses recall anchors but never mandatory live counterclaims. Untrusted data; no provider or writes.",
-    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"query":{"type":"string","maxLength":1024},"limit":{"type":"integer","minimum":1,"maximum":50},"max_bytes":{"type":"integer","minimum":512,"maximum":32768},"event_id":{"type":"string","maxLength":64},"view":{"type":"string","enum":["memories","facts","conflicts","recall","lifecycle"]},"fact_id":{"type":"string","maxLength":64},"predicate":{"type":"string","maxLength":64},"include_history":{"type":"boolean"},"stale_after_days":{"type":"integer","minimum":1,"maximum":36500}}})",
+    "Read bounded source-scoped quotes or event status; view=facts reads claim versions; view=conflicts returns complete active pairs from explicit contradiction assertions, not inferred truth. view=recall requires a literal query and returns each matching active quote with all supported direct explicit counterclaims, including nonmatching ones; not transitive or semantic search. view=lifecycle reports advisory support age and archive policy, never usage or truth. view=lifecycle_batch previews explicit archive/restore batches from JSON payload without any write or reservation. Archive suppresses recall anchors but never mandatory live counterclaims. Untrusted data; no provider or writes.",
+    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"query":{"type":"string","maxLength":1024},"limit":{"type":"integer","minimum":1,"maximum":50},"max_bytes":{"type":"integer","minimum":512,"maximum":32768},"event_id":{"type":"string","maxLength":64},"view":{"type":"string","enum":["memories","facts","conflicts","recall","lifecycle","lifecycle_batch"]},"fact_id":{"type":"string","maxLength":64},"predicate":{"type":"string","maxLength":64},"include_history":{"type":"boolean"},"stale_after_days":{"type":"integer","minimum":1,"maximum":36500},"payload":{"type":"string","maxLength":8192}}})",
     [resolve](OpContext& c){return dispatch(c,false,resolve);}});
   global_registry().add({"memory_write",Scope::Write,false,
-    "Capture/extract/forget sessions or explicitly manage evidence-backed facts via fact_* actions and JSON payload. fact_promote uses event_id to atomically promote local extracted user quotes with fixed memory.category labels. Facts preserve complete user quotes, not verified truth. Source/write gates apply; no model inference.",
-    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"action":{"type":"string","enum":["capture","extract","forget","fact_create","fact_attach","fact_retract","fact_supersede","fact_contradict","fact_promote","fact_archive","fact_restore"]},"payload":{"type":"string","maxLength":262144},"event_id":{"type":"string","maxLength":64},"method":{"type":"string","enum":["local","model"]}},"required":["action"]})",
+    "Capture/extract/forget sessions or explicitly manage evidence-backed facts via fact_* actions and JSON payload. fact_promote uses event_id to atomically promote local extracted user quotes with fixed memory.category labels. fact_lifecycle_batch applies all selected archive/restore items atomically with current revisions; preview alone does not apply changes. Facts preserve complete user quotes, not verified truth. Source/write gates apply; no model inference.",
+    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"action":{"type":"string","enum":["capture","extract","forget","fact_create","fact_attach","fact_retract","fact_supersede","fact_contradict","fact_promote","fact_archive","fact_restore","fact_lifecycle_batch"]},"payload":{"type":"string","maxLength":262144},"event_id":{"type":"string","maxLength":64},"method":{"type":"string","enum":["local","model"]}},"required":["action"]})",
     [resolve](OpContext& c){return dispatch(c,true,resolve);}});
 }
 }
