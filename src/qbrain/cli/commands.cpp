@@ -151,6 +151,7 @@ void print_help() {
       "  fact create|read|attach|retract|supersede|contradict [--source id] (writes read JSON stdin)\n"
       "  fact archive|restore [--source id] (JSON stdin: fact_id, expected_revision)\n"
       "  fact batch-preview|batch-apply [--source id] (JSON stdin: operation, items)\n"
+      "  fact candidates --operation archive|restore [--after-id ID] [--predicate KEY] [--stale-after-days N] [--limit N] [--max-bytes N]\n"
       "  fact lifecycle [--id ID] [--predicate KEY] [--stale-after-days N] [--limit N] [--max-bytes N]\n"
       "  fact conflicts [--source id] [--id ID] [--predicate NAME] [--limit N] [--max-bytes N]\n"
       "  fact promote --event ID [--source id]  (local extracted event; complete quotes, no model)\n"
@@ -416,19 +417,21 @@ int cmd_fact(const std::vector<std::string>& args) {
     const bool conflicts=action=="conflicts";
     const bool recall=action=="recall";
     const bool lifecycle=action=="lifecycle";
+    const bool candidates=action=="candidates";
     const bool batch_preview=action=="batch-preview";
     const bool batch_apply=action=="batch-apply";
     const bool batch=batch_preview || batch_apply;
-    const bool reading=action=="read" || conflicts || recall || lifecycle || batch_preview;
+    const bool reading=action=="read" || conflicts || recall || lifecycle || candidates || batch_preview;
     if(!reading && !promoting && !batch_apply && action!="create" && action!="attach" && action!="retract" &&
        action!="supersede" && action!="contradict" && action!="archive" && action!="restore") throw memory::Error("invalid_action");
     std::set<std::string> values={"--brain","--source"},flags;
     if(batch) flags.insert("--stdin");
     else if(reading) {
       values.insert({"--predicate","--limit","--max-bytes"});
-      values.insert(recall?"--query":"--id");
-      if(lifecycle) values.insert("--stale-after-days");
-      if(!conflicts && !recall && !lifecycle) flags.insert("--history");
+      if(candidates)values.insert({"--operation","--after-id"});
+      else values.insert(recall?"--query":"--id");
+      if(lifecycle || candidates) values.insert("--stale-after-days");
+      if(!conflicts && !recall && !lifecycle && !candidates) flags.insert("--history");
     }
     else if(promoting) values.insert("--event");
     else flags.insert("--stdin");
@@ -446,13 +449,14 @@ int cmd_fact(const std::vector<std::string>& args) {
         if(batch_preview)c.args["view"]="lifecycle_batch";
         else c.args["action"]="fact_lifecycle_batch";
       } else if(reading) {
-        c.args["view"]=lifecycle?"lifecycle":(recall?"recall":(conflicts?"conflicts":"facts"));
-        if(recall) c.args["query"]=opt(args,"--query");
+        c.args["view"]=candidates?"lifecycle_candidates":lifecycle?"lifecycle":(recall?"recall":(conflicts?"conflicts":"facts"));
+        if(candidates) {c.args["operation"]=opt(args,"--operation");c.args["after_id"]=opt(args,"--after-id");}
+        else if(recall) c.args["query"]=opt(args,"--query");
         else c.args["fact_id"]=opt(args,"--id");
         c.args["predicate"]=opt(args,"--predicate"); c.args["limit"]=opt(args,"--limit","10");
         c.args["max_bytes"]=opt(args,"--max-bytes","8192");
-        if(lifecycle) c.args["stale_after_days"]=opt(args,"--stale-after-days","180");
-        if(!conflicts && !recall && !lifecycle) c.args["include_history"]=flag(args,"--history")?"true":"false";
+        if(lifecycle || candidates) c.args["stale_after_days"]=opt(args,"--stale-after-days","180");
+        if(!conflicts && !recall && !lifecycle && !candidates) c.args["include_history"]=flag(args,"--history")?"true":"false";
       } else if(promoting) {
         c.args["action"]="fact_promote";c.args["event_id"]=opt(args,"--event");
       } else { c.args["action"]="fact_"+action; c.args["payload"]=bounded_stdin(); }

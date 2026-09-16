@@ -277,6 +277,27 @@ Json load(DB& db, const std::string& source, const std::string& id, int64_t at, 
   out["evidence_count"] = out["evidence"].size();
   return out;
 }
+// Shared strict N47F age semantics; this is support creation age, not usage,
+// confirmation, truth or an automatic maintenance policy.
+Json support_age(DB& db, const Json& fact, int64_t at, int days) {
+  int64_t newest=0;bool anomaly=false,unknown=false;
+  for(const auto& support:fact["evidence"]) {
+    auto time=db.prepare("SELECT created_at,typeof(created_at) FROM memory_items WHERE item_id=?");
+    time.bind_text(1,support["item_id"].get_ref<const std::string&>());
+    require(time.step(),"fact_evidence_unavailable");
+    const auto value=time.column_int(0);
+    if(time.column_text(1)!="integer" || time.column_is_null(0) || value<=0)unknown=true;
+    else if(value>at)anomaly=true;
+    else newest=std::max(newest,value);
+  }
+  Json age=nullptr,created=nullptr;std::string state="unknown";
+  if(anomaly)state="clock_anomaly";
+  else if(!unknown && newest>0) {
+    age=at-newest;created=newest;
+    state=at-newest>=int64_t(days)*86400?"stale":"fresh";
+  }
+  return {{"age_state",state},{"age_seconds",age},{"latest_valid_support_created_at",created}};
+}
 Json need(DB& db, const std::string& source, const std::string& id, int64_t at) {
   require(ready(db), "fact_not_found");
   auto f = load(db,source,id,at); require(!f.is_null(), "fact_not_found"); return f;
@@ -898,24 +919,8 @@ Json FactStore::lifecycle(const std::string& id,const std::string& pred,
       if(++scanned>max_candidates){out["truncated"]=true;break;}
       const auto fact_id=rows.column_text(0);identifier(fact_id);
       auto f=load(db,source_,fact_id,at,&work);if(f.is_null())continue;
-      int64_t newest=0;bool anomaly=false,unknown=false;
-      for(const auto& support:f["evidence"]) {
-        auto time=db.prepare("SELECT created_at,typeof(created_at) FROM memory_items WHERE item_id=?");
-        time.bind_text(1,support["item_id"].get_ref<const std::string&>());
-        require(time.step(),"fact_evidence_unavailable");
-        const auto value=time.column_int(0);
-        if(time.column_text(1)!="integer" || time.column_is_null(0) || value<=0)unknown=true;
-        else if(value>at)anomaly=true;
-        else newest=std::max(newest,value);
-      }
-      Json age=nullptr,created=nullptr;std::string state="unknown";
-      if(anomaly)state="clock_anomaly";
-      else if(!unknown && newest>0) {
-        age=at-newest;created=newest;
-        state=at-newest>=int64_t(days)*86400?"stale":"fresh";
-      }
-      f["lifecycle"]={{"archived",module && is_archived(db,source_,fact_id)},
-          {"age_state",state},{"age_seconds",age},{"latest_valid_support_created_at",created}};
+      f["lifecycle"]=support_age(db,f,at,days);
+      f["lifecycle"]["archived"]=module && is_archived(db,source_,fact_id);
       if(out["items"].size()>=static_cast<std::size_t>(limit)) {out["truncated"]=true;break;}
       out["items"].push_back(std::move(f));
       if(out.dump().size()>static_cast<std::size_t>(budget)) {
@@ -926,6 +931,84 @@ Json FactStore::lifecycle(const std::string& id,const std::string& pred,
     if(std::string(e.what())!="fact_read_work_limit")throw;
     out["truncated"]=true;out["work_limited"]=true;
   }
+  return out;
+}
+
+Json FactStore::lifecycle_candidates(const std::string& operation,const std::string& pred,
+                                      int days,const std::string& after,int limit,int budget) {
+  validate();
+  require(operation=="archive" || operation=="restore","fact_batch_invalid_operation");
+  if(!pred.empty())predicate_check(pred);if(!after.empty())identifier(after);
+  require(days>=1 && days<=36500,"fact_invalid_stale_days");
+  require(limit>=1 && limit<=32 && budget>=512 && budget<=32768,"invalid_read_budget");
+  auto& db=brain_.db();ReadSnapshot snapshot(db);
+  const bool initialized=ready(db),module=archive_ready(db);const auto at=clock_now();
+  Json out={{"view","lifecycle_candidates"},{"source_id",source_},{"operation",operation},
+      {"predicate",pred},{"stale_after_days",days},{"initialized",initialized},
+      {"archive_initialized",module},{"age_is_advisory",true},{"evaluated_at",at},
+      {"items",Json::array()},{"batch_payload",nullptr},{"scanned",0},
+      {"next_after_id",nullptr},{"has_more",false},{"stop_reason","end"},
+      {"progressed",false},{"untrusted_data",true}};
+  // Reserve the largest continuation envelope before accepting a whole item.
+  // This conservative allowance is metadata, not truncation of user evidence.
+  auto fits=[&] {
+    auto bound=out;bound["next_after_id"]=std::string(64,'f');
+    bound["has_more"]=false;bound["stop_reason"]="evidence_budget";
+    bound["scanned"]=100;bound["progressed"]=false;
+    return bound.dump().size()<=static_cast<std::size_t>(budget);
+  };
+  require(fits(),"invalid_read_budget");
+  if(!initialized || (operation=="restore" && !module))return out;
+  std::string sql="SELECT f.fact_id FROM memory_facts f WHERE f.source_id=? "
+      "AND f.status='active' AND f.subject='user' "
+      "AND typeof(f.revision)='integer' AND f.revision>=1 AND f.revision<2147483647 "
+      "AND length(CAST(f.object AS BLOB)) BETWEEN 1 AND 4096";
+  if(!pred.empty())sql+=" AND f.predicate=?";
+  if(!after.empty())sql+=" AND f.fact_id COLLATE BINARY>?";
+  if(module)sql+=std::string(" AND ")+(operation=="archive"?"NOT ":"")+
+      "EXISTS(SELECT 1 FROM memory_fact_archive a WHERE a.source_id=f.source_id AND a.fact_id=f.fact_id)";
+  sql+=" ORDER BY f.fact_id COLLATE BINARY LIMIT 101";
+  auto rows=db.prepare(sql);int parameter=1;rows.bind_text(parameter++,source_);
+  if(!pred.empty())rows.bind_text(parameter++,pred);if(!after.empty())rows.bind_text(parameter++,after);
+  ReadWork work;std::string consumed=after;int scanned=0;
+  auto stop=[&](const char* reason) {
+    out["has_more"]=true;out["next_after_id"]=consumed;out["stop_reason"]=reason;
+  };
+  try {
+    while(rows.step()) {
+      if(scanned>=max_candidates){stop("scan_limit");break;}
+      if(out["items"].size()>=static_cast<std::size_t>(limit)){stop("result_limit");break;}
+      const auto id=rows.column_text(0);identifier(id);
+      auto fact=load(db,source_,id,at,&work);
+      if(!fact.is_null()) {
+        predicate_check(fact["predicate"].get_ref<const std::string&>());
+        const bool archived=module && is_archived(db,source_,id);
+        auto age=support_age(db,fact,at,days);
+        if((operation=="archive" && !archived && age["age_state"]=="stale") ||
+           (operation=="restore" && archived)) {
+          Json item={{"fact_id",id},{"expected_revision",fact["revision"]},
+              {"predicate",fact["predicate"]},{"archived",archived},{"age",std::move(age)}};
+          const bool first=out["items"].empty();
+          if(first)out["batch_payload"]={{"operation",operation},{"items",Json::array()}};
+          out["items"].push_back(std::move(item));
+          out["batch_payload"]["items"].push_back({{"fact_id",id},{"expected_revision",fact["revision"]}});
+          if(!fits()) {
+            out["items"].erase(out["items"].end()-1);
+            out["batch_payload"]["items"].erase(out["batch_payload"]["items"].end()-1);
+            if(first)out["batch_payload"]=nullptr;
+            stop("output_budget");break; // Current row is not consumed.
+          }
+        }
+      }
+      ++scanned;consumed=id;
+    }
+  } catch(const Error& e) {
+    if(std::string(e.what())!="fact_read_work_limit")throw;
+    stop("evidence_budget"); // Retry the unfinished row with a fresh per-call work budget.
+  }
+  out["scanned"]=scanned;out["progressed"]=consumed!=after;
+  require(out["batch_payload"].is_null() || out["batch_payload"].dump().size()<=8192,"fact_batch_payload_limit");
+  require(out.dump().size()<=static_cast<std::size_t>(budget),"fact_batch_output_limit");
   return out;
 }
 }  // namespace qbrain::memory
