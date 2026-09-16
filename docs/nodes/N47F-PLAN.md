@@ -1,7 +1,10 @@
 # N47F — explicit archival and read-only lifecycle inspection
 
 Baseline main: 81a61e02dfb8fde6bb99e8ad38e09fc3e4145e4f.
-Status: draft until N47F-PLAN-AUDIT.md approves implementation. Windows Qbrain only.
+Status: done for the scoped implementation after N47F-HARD-AUDIT.md.
+Tested source: cafb48667177002ae6ea0f1976eea2f388826024.
+Required native evidence:35076641849/35076641751; sanitizer35077139073.
+Publication is recorded separately. Windows Qbrain only.
 
 Earlier conversational N47F descriptions were not implemented. They also mixed
 fact status with recall policy and proposed semantic consolidation without an
@@ -20,8 +23,8 @@ archive backs up an on-disk database before additive schema preparation. Archive
 and restore keep object/evidence/status unchanged and advance the fact revision.
 A stale revision, unavailable evidence or non-active fact rejects the operation.
 No restore revives retracted/superseded/forgotten/expired assertions. Initial
-restore of an unarchived fact is a read-only idempotent no-op, without migration.
-Existing archives are idempotent only at the current expected revision.
+restore of an unarchived fact is a data/schema-write-free idempotent no-op, without
+migration. Existing archives are idempotent only at the current expected revision.
 
 Archive suppresses that fact as a recall anchor (CLI recall and opted-in Hook).
 A still-valid archived direct contradiction MUST remain counter-evidence for an
