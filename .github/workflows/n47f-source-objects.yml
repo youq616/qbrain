@@ -1,0 +1,76 @@
+name: N47F fixed source objects
+on:
+  push:
+    branches: ['delivery/n47f-source-objects']
+    paths: ['.github/workflows/n47f-source-objects.yml']
+permissions:
+  contents: read
+jobs:
+  source-objects:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47f-source-objects'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: transport
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 516ac9635fa414e726832534377c10eab0571e07
+          path: candidate
+          persist-credentials: false
+      - name: Validate fixed old/new identities and upload blobs without moving refs
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          import base64,hashlib,json,lzma,os,re,subprocess
+          from pathlib import Path
+          repo='youq616/qbrain';base='516ac9635fa414e726832534377c10eab0571e07'
+          base_tree='a92f0579a6982335931b05f012812cbba031b4d1'
+          candidate=Path('candidate').resolve();root=Path(os.environ['RUNNER_TEMP'])/'n47f-source'
+          root.mkdir(exist_ok=False)
+          def git(*args):return subprocess.check_output(['git','-C',str(candidate),*args],stderr=subprocess.PIPE,timeout=30).decode().strip()
+          encoded=''.join(Path(f'transport/transfer/n47f.{n}').read_text(encoding='ascii').strip() for n in range(5))
+          assert len(encoded)==29712
+          packed=base64.b64decode(encoded,validate=True)
+          assert len(packed)==22284 and hashlib.sha256(packed).hexdigest()=='f48d3157538e035e57074d2a277e1aef7f17a77dd582687ff8f897d720c7b806'
+          decoder=lzma.LZMADecompressor(memlimit=256*1024*1024)
+          raw=decoder.decompress(packed,max_length=512*1024)
+          assert decoder.eof and not decoder.unused_data and len(raw)==93175
+          document=json.loads(raw.decode('utf-8'))
+          assert document['base']==base and git('rev-parse','HEAD')==base and git('rev-parse','HEAD^{tree}')==base_tree
+          expected={'.ci/package_n44_development.py','.ci/test_lifecycle_process.py','.ci/test_lifecycle_report.py','.ci/test_lifecycle_unit.py','.ci/test_validate_native_log.py','.ci/validate_fact_lifecycle_report.py','.github/workflows/n42-validation.yml','.github/workflows/n44-validation.yml','CMakeLists.txt','docs/integration/FACT-LIFECYCLE.zh-CN.md','include/qbrain/memory/fact_store.hpp','scripts/build-tests-cl.ps1','src/qbrain/cli/commands.cpp','src/qbrain/memory/fact_store.cpp','src/qbrain/ops/memory_ops.cpp','tests/test_main.cpp','tests/test_n47f.cpp'}
+          entries=document['files'];assert len(entries)==17 and {e['path'] for e in entries}==expected
+          for entry in entries:
+              assert re.fullmatch('[0-9a-f]{40}',entry['sha'])
+              if entry['old_sha'] is None:
+                  r=subprocess.run(['git','-C',str(candidate),'cat-file','-e','HEAD:'+entry['path']],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
+                  assert r.returncode!=0
+              else:assert git('rev-parse','HEAD:'+entry['path'])==entry['old_sha']
+          patch=root/'changes.patch';patch.write_text(document['patch'],encoding='utf-8',newline='')
+          subprocess.run(['git','-C',str(candidate),'apply','--index',str(patch)],check=True,timeout=30)
+          assert set(git('diff','--cached','--name-only').splitlines())==expected
+          uploaded=[]
+          for entry in entries:
+              path=entry['path'];data=(candidate/path).read_bytes()
+              digest=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+              assert digest==entry['sha'] and git('rev-parse',':'+path)==digest
+              request=root/'request.json';request.write_text(json.dumps({'content':data.decode('utf-8'),'encoding':'utf-8'}),encoding='utf-8')
+              result=json.loads(subprocess.check_output(['gh','api','--method','POST',f'repos/{repo}/git/blobs','--input',str(request)],stderr=subprocess.PIPE,timeout=60))
+              assert result['sha']==digest
+              uploaded.append({'path':path,'mode':'100644','type':'blob','sha':digest})
+          result={'result':'SOURCE_OBJECTS_UPLOADED','base_commit':base,'base_tree':base_tree,'candidate_tree':git('write-tree'),'files':uploaded,'product_commit_created':False,'product_branch_updated':False,'windows_tests_run_here':False,'patch_sha256':hashlib.sha256(patch.read_bytes()).hexdigest()}
+          evidence=Path('evidence');evidence.mkdir()
+          (evidence/'source-objects.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(result))
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: n47f-source-objects
+          path: evidence/source-objects.json
+          retention-days: 14
