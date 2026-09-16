@@ -74,6 +74,17 @@ void run(){
   for(auto at:{std::int64_t(-1),std::int64_t(0),std::int64_t(253402300800000LL)})rejects([&]{hook_trace_record(base(),"claude","Stop",std::string(64,'a'),at,true);});
   check(hook_trace_record(base(),"claude","Stop",std::string(64,'a'),253402300799999LL,true)["completed_at_unix_ms"]==253402300799999LL,"exact time ceiling");
  });
+ scenario("forgotten capture replay retains failure or deferred completion",[]{
+  J in={{"phase","extract"},{"capture_status","forgotten"},{"fact_promotion_enabled",true},{"fact_promotion_status","not_run"}};
+  auto failed=hook_trace_record(in,"claude","UserPromptSubmit",std::string(64,'a'),1,false);
+  check(failed["status"]=="failed"&&failed["phase"]=="extract"&&failed["capture_status"]=="forgotten","forgotten capture does not discard failed extraction checkpoint");
+  check(!failed.contains("extraction_status")&&failed["fact_promotion_status"]=="not_run","failure does not claim extraction or promotion completed");
+  in["phase"]="complete";in.erase("fact_promotion_enabled");in.erase("fact_promotion_status");
+  auto deferred=hook_trace_record(in,"codex","UserPromptSubmit",std::string(64,'b'),1,true);
+  check(deferred["status"]=="processed"&&deferred["capture_status"]=="forgotten","deferred duplicate processing does not claim archive creation");
+  auto bad=base();bad["extraction_status"]="forgotten";rejects([&]{record(bad);});
+  for(auto text:{"forgotten: raw exception","FORGOTTEN"}){bad=base();bad["capture_status"]=text;rejects([&]{record(bad);});}
+ });
  scenario("maximum complete projection is deterministic and within byte cap",[]{
   auto in=base();in["fact_group_count"]=16;in["recall_count"]=16;in["output_bytes"]=8192;
   for(auto key:{"context_truncated","fact_recall_enabled","fact_promotion_enabled"})in[key]=true;

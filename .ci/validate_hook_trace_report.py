@@ -9,6 +9,7 @@ UNIT_SCENARIOS=(
  'only finite capture extraction and promotion states persist',
  'promotion totals match and only enumerated counters are copied',
  'pseudonymous session key and clock values are validated',
+ 'forgotten capture replay retains failure or deferred completion',
  'maximum complete projection is deterministic and within byte cap')
 
 def require(ok,message):
@@ -37,7 +38,7 @@ def validate_unit_payload(r):
     require(tuple(s.get('name') for s in rows)==UNIT_SCENARIOS,'wrong scenario names/order')
     require(type(r.get('scenario_count')) is int and r['scenario_count']==len(UNIT_SCENARIOS),'wrong scenario count')
     require(all(s.get('status')=='PASS' and type(s.get('assertions')) is int and s['assertions']>0 for s in rows),'failed scenario')
-    require(type(r.get('checks')) is int and r['checks']==163 and sum(s['assertions'] for s in rows)==r['checks'],'incorrect assertion total')
+    require(type(r.get('checks')) is int and r['checks']==169 and sum(s['assertions'] for s in rows)==r['checks'],'incorrect assertion total')
     return {'scenarios':len(rows),'assertions':r['checks']}
 def validate_unit(r,*,source_commit,binary_sha256,script_sha256,test_sha256,native=True):
     identity(r,source_commit,binary_sha256,script_sha256,native)

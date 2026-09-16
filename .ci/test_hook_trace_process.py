@@ -17,11 +17,14 @@ CASES=('automatic_pipeline_recorded','last_matches_event','no_original_text','pr
        'failure_has_no_input','recovery_after_failure','state_failure_preserves_context','state_failure_phase',
        'slot_failure_preserves_context','slot_failure_other_file_succeeds','latest_failure_preserves_context',
        'latest_failure_event_file_succeeds','both_diagnostics_nonblocking','fixed_retention','all_slots_bounded',
-       'corrupt_brain_failure_recorded','session_key_not_raw','no_consumption_claim','host_slots_isolated')
+       'corrupt_brain_failure_recorded','session_key_not_raw','no_consumption_claim','host_slots_isolated',
+       'forgotten_event_seed','forgotten_replay_recorded','forgotten_replay_absent',
+       'forgotten_deferred_recorded','forgotten_replay_private')
 EXPECTED_CHECKS=frozenset(h+':'+c for h in ('claude','codex') for c in CASES)
 CALLS=('init','writeback','submit','stop','end','start','secret','malformed','disabled','outside','unknown',
        'oversize','recover','state-failure','slot-failure','last-failure','both-failure','precompact',
-       'refresh-start','refresh-submit',*(f'repeat-end-{i}' for i in range(12)),'open-failure')
+       'refresh-start','refresh-submit',*(f'repeat-end-{i}' for i in range(12)),'open-failure',
+       'forget-seed','forget-lookup','forget-event','forgotten-replay','forgotten-empty','forgotten-facts','forgotten-deferred')
 COMMAND_SCHEDULE=tuple(h+':'+c for h in ('claude','codex') for c in CALLS)
 EXPECTED_COMMAND_COUNT=len(COMMAND_SCHEDULE)
 
@@ -118,6 +121,31 @@ def run(binary,checks,commands):
             ck(out=={} and load(target)['status']=='failed' and load(target)['phase']=='open','corrupt_brain_failure_recorded')
             expected_key=sha((host+'\n'+brain+'\ndefault\n'+session).encode())
             ck(first['session_key']==expected_key and session not in json.dumps(files(),default=str),'session_key_not_raw')
+            # Real forget and replay, not a fabricated trace or a direct SQL tombstone.
+            config(capture=True,fact_promotion=True,extraction='local')
+            forgotten_quote='I prefer N47J-'+host+'-FORGOTTEN-MARKER as an isolated test prefix.'
+            hook('forget-seed',prompt=forgotten_quote,turn_id='forget-seed')
+            prior=slot().read_bytes()
+            found=json.loads(invoke('forget-lookup',['memory','read','--brain',brain,'--source','default','--query',forgotten_quote]))
+            ck(len(found['items'])==1 and found['items'][0]['quote']==forgotten_quote and
+               json.loads(prior)['fact_promotion_status']=='completed','forgotten_event_seed')
+            invoke('forget-event',['memory','forget','--brain',brain,'--source','default','--event',found['items'][0]['event_id']])
+            hook('forgotten-replay',prompt=forgotten_quote,turn_id='forget-seed')
+            replay=load(slot())
+            ck(slot().read_bytes()!=prior and slot().read_bytes()==(owned/'last-trace.json').read_bytes() and
+               replay['status']=='failed' and replay['phase']=='extract' and replay['capture_status']=='forgotten' and
+               'extraction_status' not in replay and replay['fact_promotion_status']=='not_run','forgotten_replay_recorded')
+            absent=json.loads(invoke('forgotten-empty',['memory','read','--brain',brain,'--source','default','--query',forgotten_quote]))
+            facts=json.loads(invoke('forgotten-facts',['fact','read','--brain',brain,'--source','default']))
+            ck(absent['items']==[] and forgotten_quote not in json.dumps(facts),'forgotten_replay_absent')
+            config(fact_promotion=False,extraction='deferred')
+            hook('forgotten-deferred',prompt=forgotten_quote,turn_id='forget-seed')
+            deferred=load(slot())
+            ck(deferred['status']=='processed' and deferred['phase']=='complete' and deferred['capture_status']=='forgotten' and
+               'extraction_status' not in deferred and 'fact_promotion_status' not in deferred and
+               slot().read_bytes()==(owned/'last-trace.json').read_bytes(),'forgotten_deferred_recorded')
+            ck(all(forgotten_quote not in json.dumps(t) and session not in json.dumps(t) for t in (replay,deferred)) and
+               set(p.name for p in owned.glob(f'trace-{host}-*.json'))==expected,'forgotten_replay_private')
             ck(all(load(owned/n)['host_consumption_confirmed'] is False for n in expected),'no_consumption_claim')
             ck(all(files().get(n)==value for n,value in other_before.items()),'host_slots_isolated')
 

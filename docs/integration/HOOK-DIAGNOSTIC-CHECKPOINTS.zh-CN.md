@@ -29,6 +29,12 @@ state中的哪个阶段异常。promotion本身是独立的`fact_promotion_statu
 不是额外网络抓包计数。`host_consumption_confirmed`始终false，不能手动改为true。
 这些文件能定位程序阶段，不能单独证明真实客户端或模型确实消费了上下文。
 
+同一输入事件已被明确遗忘后再重放，`capture_status=forgotten`表示命中遗忘标记，
+不是重新归档。local提取会拒绝该事件，因此记录`status=failed`、`phase=extract`，
+没有成功的extraction_status；deferred模式不做提取，可记录processed/complete，
+但capture_status仍为forgotten。两种情况都不会复活记忆或事实。不要只看整体status
+而忽略具体操作的状态。
+
 ## 容量、失败和隐私边界
 
 每个文件最多4096 UTF-8字节，只有允许的枚举、整数、布尔和化名标识。记录不保存

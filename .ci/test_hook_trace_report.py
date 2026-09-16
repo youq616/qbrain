@@ -53,8 +53,8 @@ class HookTraceReportTests(unittest.TestCase):
     def unit(self):
         return dict(result='PASS',source_commit='source',tracked_tree_clean=True,native_windows=True,
             binary_sha256='binary',script_sha256='script',test_sha256='test',exit_code=0,
-            scenarios=[dict(name=n,status='PASS',assertions=23 if i==0 else 20) for i,n in enumerate(UNIT_SCENARIOS)],
-            scenario_count=len(UNIT_SCENARIOS),checks=163)
+            scenarios=[dict(name=n,status='PASS',assertions=6 if n=='forgotten capture replay retains failure or deferred completion' else (23 if i==0 else 20)) for i,n in enumerate(UNIT_SCENARIOS)],
+            scenario_count=len(UNIT_SCENARIOS),checks=169)
     def validate_unit(self,r):return validate_unit(r,source_commit='source',binary_sha256='binary',script_sha256='script',test_sha256='test')
     def test_unit_complete(self):self.validate_unit(self.unit())
     def test_unit_order_missing_and_duplicate(self):
@@ -67,6 +67,13 @@ class HookTraceReportTests(unittest.TestCase):
         r['scenario_count']=len(r['scenarios'])
         r['checks']=sum(s['assertions'] for s in r['scenarios'])
         with self.assertRaises(ValueError):self.validate_unit(r)
+    def test_forgotten_case_cannot_be_dropped_with_adjusted_totals(self):
+        r=self.unit();r['scenarios']=[s for s in r['scenarios'] if s['name']!='forgotten capture replay retains failure or deferred completion']
+        r['scenario_count']=len(r['scenarios']);r['checks']=sum(s['assertions'] for s in r['scenarios'])
+        with self.assertRaises(ValueError):self.validate_unit(r)
+    def test_forgotten_process_commands_cannot_be_omitted(self):
+        r=self.fixture();r['commands']=[c for c in r['commands'] if ':forget' not in c['name']]
+        with self.assertRaises(ValueError):self.validate(r)
     def test_unit_count_and_bool(self):
         for edit in [lambda r:r.update(checks=True),lambda r:r.update(checks=1),lambda r:r['scenarios'][0].update(assertions=True),lambda r:r['scenarios'][0].update(assertions=0),lambda r:r['scenarios'][0].update(status='FAIL')]:
             r=self.unit();edit(r)

@@ -56,7 +56,10 @@ inline nlohmann::json hook_trace_record(const nlohmann::json& input,
     trace_require(input[name].is_string() && trace_choice(input[name].get_ref<const std::string&>(),allowed));
     out[name]=input[name];
   };
-  state("capture_status",{"archived","extracting","extracted","no_matches","failed","skipped"});
+  // Replaying an explicitly forgotten event returns its tombstone from capture.
+  // Local extraction rejects it; retaining this enum allows the failure trace
+  // to replace the previous success without re-creating evidence.
+  state("capture_status",{"archived","extracting","extracted","no_matches","failed","skipped","forgotten"});
   state("extraction_status",{"archived","extracting","extracted","no_matches","failed","skipped"});
   state("fact_promotion_status",{"not_run","completed","failed"});
   if(input.contains("fact_promotion_counts")) {
