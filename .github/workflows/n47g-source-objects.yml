@@ -1,0 +1,89 @@
+name: N47G fixed source-object transfer
+on:
+  push:
+    branches: ['delivery/n47g-source-objects']
+    paths: ['.github/workflows/n47g-source-objects.yml']
+permissions:
+  contents: read
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: transport
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 48207fcd6efdccd08634340d7ed2a4d606c777ec
+          path: candidate
+          persist-credentials: false
+      - name: Validate fixed edits before uploading immutable file objects
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import base64,hashlib,json,lzma,subprocess,os
+          from pathlib import Path
+          root=Path('candidate').resolve()
+          def git(*args):
+              return subprocess.check_output(['git','-C',str(root),*args],stderr=subprocess.PIPE,timeout=30)
+          encoded=''.join(Path(f'transport/transfer/n47g.{i}').read_text(encoding='ascii').strip() for i in range(4))
+          assert len(encoded)==27448
+          packed=base64.b64decode(encoded,validate=True)
+          assert len(packed)==20584 and hashlib.sha256(packed).hexdigest()=='ab8d98e8a14c64f34f81ba46d99e41b811867f552fa8832646210942b03b2994'
+          decoder=lzma.LZMADecompressor(memlimit=256*1024*1024)
+          raw=decoder.decompress(packed,max_length=131072)
+          assert decoder.eof and not decoder.unused_data and len(raw)==73496
+          data=json.loads(raw)
+          assert data['base']=='48207fcd6efdccd08634340d7ed2a4d606c777ec'
+          assert git('rev-parse','HEAD').decode().strip()==data['base']
+          assert git('rev-parse','HEAD^{tree}').decode().strip()==data['base_tree']=='b70e88009a07995194ee24cea3b068c89ea9bde2'
+          allowed={'.ci/package_n44_development.py','.ci/test_lifecycle_batch_process.py','.ci/test_lifecycle_batch_report.py','.ci/test_lifecycle_batch_unit.py','.ci/test_validate_native_log.py','.ci/validate_lifecycle_batch_report.py','.github/workflows/n42-validation.yml','.github/workflows/n44-validation.yml','CMakeLists.txt','docs/integration/BATCH-LIFECYCLE.zh-CN.md','include/qbrain/memory/fact_store.hpp','scripts/build-tests-cl.ps1','src/qbrain/cli/commands.cpp','src/qbrain/mcp/server.cpp','src/qbrain/memory/fact_store.cpp','src/qbrain/ops/memory_ops.cpp','tests/test_main.cpp','tests/test_n47g.cpp'}
+          assert len(data['files'])==18 and {e['path'] for e in data['files']}==allowed
+          prepared=[]
+          for entry in data['files']:
+              path=entry['path']
+              if entry['old_sha'] is None:
+                  result=subprocess.run(['git','-C',str(root),'cat-file','-e','HEAD:'+path],capture_output=True,timeout=30)
+                  assert result.returncode!=0
+                  text=''
+              else:
+                  assert git('rev-parse','HEAD:'+path).decode().strip()==entry['old_sha']
+                  text=git('show','HEAD:'+path).decode('utf-8')
+              last=0
+              for edit in entry['edits']:
+                  assert type(edit['start']) is int and type(edit['delete']) is int
+                  assert last<=edit['start'] and edit['delete']>=0 and edit['start']+edit['delete']<=len(text)
+                  last=edit['start']+edit['delete']
+              for edit in reversed(entry['edits']):
+                  text=text[:edit['start']]+edit['insert']+text[edit['start']+edit['delete']:]
+              content=text.encode('utf-8')
+              digest=hashlib.sha1(b'blob '+str(len(content)).encode()+b'\0'+content).hexdigest()
+              assert digest==entry['sha']
+              prepared.append((path,content,digest))
+          for path,content,digest in prepared:
+              target=root/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(content)
+          subprocess.run(['git','-C',str(root),'add','--',*sorted(allowed)],check=True,timeout=30)
+          assert set(git('diff','--cached','--name-only').decode().splitlines())==allowed
+          temp=Path(os.environ['RUNNER_TEMP'])/'n47g-object-request.json'
+          rows=[]
+          for path,content,digest in prepared:
+              assert git('rev-parse',':'+path).decode().strip()==digest
+              temp.write_text(json.dumps({'encoding':'utf-8','content':content.decode('utf-8')}),encoding='utf-8')
+              response=json.loads(subprocess.check_output(['gh','api','--method','POST','repos/youq616/qbrain/git/blobs','--input',str(temp)],stderr=subprocess.PIPE,timeout=60))
+              assert response['sha']==digest
+              rows.append({'path':path,'mode':'100644','type':'blob','sha':digest})
+          report={'result':'SOURCE_OBJECTS_UPLOADED','base':data['base'],'tree':git('write-tree').decode().strip(),'files':rows,'product_ref_changed':False,'product_tests_run':False}
+          Path('evidence').mkdir()
+          Path('evidence/source-objects.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(report))
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: qbrain-n47g-source-objects
+          path: evidence/source-objects.json
+          retention-days: 14
