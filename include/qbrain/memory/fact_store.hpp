@@ -18,6 +18,11 @@ class FactStore {
   Json lifecycle_batch(const Json& payload, bool apply = false);
   Json lifecycle(const std::string& fact_id = "", const std::string& predicate = "",
                  int stale_after_days = 180, int limit = 10, int max_bytes = 8192);
+  // Read-only discovery for explicit N47G batches. after_id is a seek key, not
+  // a lease or authorization. Each page is a fresh snapshot, metadata only.
+  Json lifecycle_candidates(const std::string& operation, const std::string& predicate = "",
+                            int stale_after_days = 180, const std::string& after_id = "",
+                            int limit = 10, int max_bytes = 8192);
   Json promote_event(const std::string& event_id);
   Json create(const Json& payload);       // predicate, item_id; subject is user
   Json attach(const Json& payload);       // fact_id, item_id (exact same quote)

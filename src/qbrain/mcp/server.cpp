@@ -249,7 +249,7 @@ const std::unordered_map<std::string, ArgumentType>* typed_argument_schema(
       {"event_id", Type::String}, {"limit", Type::UnsignedInteger},
       {"max_bytes", Type::UnsignedInteger}, {"view", Type::String},
       {"fact_id", Type::String}, {"predicate", Type::String}, {"include_history", Type::Boolean},
-      {"stale_after_days", Type::UnsignedInteger}};
+      {"stale_after_days", Type::UnsignedInteger}, {"operation", Type::String}, {"after_id", Type::String}};
   static const std::unordered_map<std::string, Type> memory_write = {
       {"source_id", Type::String}, {"action", Type::String},
       {"payload", Type::String}, {"event_id", Type::String}, {"method", Type::String}};

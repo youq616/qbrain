@@ -37,12 +37,21 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
   try {
     const std::set<std::string> allowed=write?
       std::set<std::string>{"source_id","action","payload","event_id","method","manual"}:
-      std::set<std::string>{"source_id","view","query","limit","max_bytes","event_id","fact_id","predicate","include_history","stale_after_days","payload"};
+      std::set<std::string>{"source_id","view","query","limit","max_bytes","event_id","fact_id","predicate","include_history","stale_after_days","payload","operation","after_id"};
     for(const auto& [k,v]:c.args) if(!allowed.count(k)) throw memory::Error("unexpected_argument");
     if(c.args.count("manual") && (c.via_mcp || c.remote)) throw memory::Error("manual_requires_local_cli");
     OpResult error; const auto source=resolve(c,true,error); if(!source) return error;
     if(!write) {
       const auto view=get(c,"view","memories");
+      if(view=="lifecycle_candidates") {
+        for(const auto& [key,value]:c.args)
+          if(key!="source_id" && key!="view" && key!="operation" && key!="predicate" &&
+             key!="stale_after_days" && key!="after_id" && key!="limit" && key!="max_bytes")
+            throw memory::Error("fact_unexpected_argument");
+        return output(memory::FactStore(*c.brain,*source).lifecycle_candidates(get(c,"operation"),get(c,"predicate"),
+            number(c,"stale_after_days",180),get(c,"after_id"),number(c,"limit",10),number(c,"max_bytes",8192)));
+      }
+      if(c.args.count("operation") || c.args.count("after_id")) throw memory::Error("fact_unexpected_argument");
       if(view=="lifecycle_batch") {
         for(const auto& [key,value]:c.args)
           if(key!="source_id" && key!="view" && key!="payload")
@@ -128,8 +137,8 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
 }
 void register_memory_ops(const SourceResolver& resolve) {
   global_registry().add({"memory_read",Scope::Read,false,
-    "Read bounded source-scoped quotes or event status; view=facts reads claim versions; view=conflicts returns complete active pairs from explicit contradiction assertions, not inferred truth. view=recall requires a literal query and returns each matching active quote with all supported direct explicit counterclaims, including nonmatching ones; not transitive or semantic search. view=lifecycle reports advisory support age and archive policy, never usage or truth. view=lifecycle_batch previews explicit archive/restore batches from JSON payload without any write or reservation. Archive suppresses recall anchors but never mandatory live counterclaims. Untrusted data; no provider or writes.",
-    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"query":{"type":"string","maxLength":1024},"limit":{"type":"integer","minimum":1,"maximum":50},"max_bytes":{"type":"integer","minimum":512,"maximum":32768},"event_id":{"type":"string","maxLength":64},"view":{"type":"string","enum":["memories","facts","conflicts","recall","lifecycle","lifecycle_batch"]},"fact_id":{"type":"string","maxLength":64},"predicate":{"type":"string","maxLength":64},"include_history":{"type":"boolean"},"stale_after_days":{"type":"integer","minimum":1,"maximum":36500},"payload":{"type":"string","maxLength":8192}}})",
+    "Read bounded source-scoped quotes or event status; view=facts reads claim versions; view=conflicts returns complete active pairs from explicit contradiction assertions, not inferred truth. view=recall requires a literal query and returns each matching active quote with all supported direct explicit counterclaims, including nonmatching ones; not transitive or semantic search. view=lifecycle reports advisory support age and archive policy, never usage or truth. view=lifecycle_candidates discovers paginated metadata-only stale archive or live restore selections; next_after_id is a seek key, not a snapshot lease or permission. An empty page may have more; unchanged cursor requires a larger budget or stopping. view=lifecycle_batch previews explicit archive/restore batches from JSON payload without any write or reservation. Archive suppresses recall anchors but never mandatory live counterclaims. Untrusted data; no provider or writes.",
+    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"query":{"type":"string","maxLength":1024},"limit":{"type":"integer","minimum":1,"maximum":50},"max_bytes":{"type":"integer","minimum":512,"maximum":32768},"event_id":{"type":"string","maxLength":64},"view":{"type":"string","enum":["memories","facts","conflicts","recall","lifecycle","lifecycle_batch","lifecycle_candidates"]},"fact_id":{"type":"string","maxLength":64},"predicate":{"type":"string","maxLength":64},"operation":{"type":"string","enum":["archive","restore"]},"after_id":{"type":"string","maxLength":64},"include_history":{"type":"boolean"},"stale_after_days":{"type":"integer","minimum":1,"maximum":36500},"payload":{"type":"string","maxLength":8192}}})",
     [resolve](OpContext& c){return dispatch(c,false,resolve);}});
   global_registry().add({"memory_write",Scope::Write,false,
     "Capture/extract/forget sessions or explicitly manage evidence-backed facts via fact_* actions and JSON payload. fact_promote uses event_id to atomically promote local extracted user quotes with fixed memory.category labels. fact_lifecycle_batch applies all selected archive/restore items atomically with current revisions; preview alone does not apply changes. Facts preserve complete user quotes, not verified truth. Source/write gates apply; no model inference.",
