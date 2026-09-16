@@ -1,0 +1,51 @@
+name: N47F snapshot repair objects
+on:
+  push:
+    branches: ['delivery/n47f-source-objects']
+    paths: ['.github/workflows/n47f-snapshot-fix-object.yml']
+permissions:
+  contents: read
+jobs:
+  objects:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: transport
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ed111c43e6b07bf3839eaaeee6c82c4f020ee95e
+          path: candidate
+          persist-credentials: false
+      - shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import hashlib,json,os,subprocess
+          from pathlib import Path
+          base='ed111c43e6b07bf3839eaaeee6c82c4f020ee95e'
+          p=Path('transport/transfer/n47f-snapshot.patch').resolve()
+          assert hashlib.sha256(p.read_bytes()).hexdigest()=='3a0c924b7216f82cc3eb919ebba3d12561a1536e95b35ac6cbd96f7dc0109414'
+          def git(*args):return subprocess.check_output(['git','-C','candidate',*args],timeout=30).decode().strip()
+          assert git('rev-parse','HEAD')==base
+          pins={
+              'src/qbrain/memory/fact_store.cpp':('4d9de00a7f018c0722e8983303f2ce003e2159f2','5c2a98b6673508a0912e86a1d3516bb7169cc677'),
+              'tests/test_n47f.cpp':('d6f3e1895fe9479e58edb8b99dbf4558ab13d284','76bcaf11a3b89faf036bfc8be52d1d40c09e3007')}
+          for path,(old,new) in pins.items():assert git('rev-parse','HEAD:'+path)==old
+          subprocess.run(['git','-C','candidate','apply','--index',str(p)],check=True,timeout=30)
+          assert set(git('diff','--cached','--name-only').splitlines())==set(pins)
+          entries=[]
+          for path,(old,new) in pins.items():
+              raw=Path('candidate',path).read_bytes()
+              digest=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+              assert digest==new and git('rev-parse',':'+path)==new
+              request=Path(os.environ['RUNNER_TEMP'])/'blob.json'
+              request.write_text(json.dumps({'content':raw.decode('utf-8'),'encoding':'utf-8'}),encoding='utf-8')
+              result=json.loads(subprocess.check_output(['gh','api','--method','POST','repos/youq616/qbrain/git/blobs','--input',str(request)],timeout=60))
+              assert result['sha']==new
+              entries.append({'path':path,'mode':'100644','type':'blob','sha':new})
+          print(json.dumps({'result':'OBJECTS_UPLOADED','base':base,'tree':git('write-tree'),'files':entries,'product_ref_moved':False}))
