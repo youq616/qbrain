@@ -1,0 +1,56 @@
+name: N47F fixed timestamp source transfer
+on:
+  push:
+    branches: ['delivery/n47f-time-objects']
+    paths: ['.github/workflows/n47f-time-objects.yml']
+permissions:
+  contents: read
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: transport
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: f5530b58f1cf6382a706810d9825b1a18c22f43a
+          path: candidate
+          persist-credentials: false
+      - name: Verify fixed patch and create immutable source objects only
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import hashlib,json,lzma,subprocess
+          from pathlib import Path
+          root=Path('candidate').resolve()
+          packed=Path('transport/transfer/n47f-time.xz').read_bytes()
+          assert len(packed)==3052 and hashlib.sha256(packed).hexdigest()=='181ad5a322156ee1e6ae93bd96dbc7ab6c27589af48a288f722e03756145aec6'
+          d=lzma.LZMADecompressor(memlimit=128*1024*1024)
+          raw=d.decompress(packed,max_length=65536)
+          assert d.eof and not d.unused_data and len(raw)==9515
+          data=json.loads(raw)
+          def git(*args):return subprocess.check_output(['git','-C',str(root),*args],timeout=30).decode().strip()
+          assert data['base']=='f5530b58f1cf6382a706810d9825b1a18c22f43a' and git('rev-parse','HEAD')==data['base']
+          assert git('rev-parse','HEAD^{tree}')==data['base_tree']=='6e46bb31a77376593a15648553fe649e2f72859d'
+          allowed={'.ci/test_lifecycle_report.py','.ci/validate_fact_lifecycle_report.py','src/qbrain/memory/fact_store.cpp','tests/test_n47f.cpp'}
+          assert len(data['files'])==4 and {e['path'] for e in data['files']}==allowed
+          for e in data['files']:assert git('rev-parse','HEAD:'+e['path'])==e['old_sha']
+          patch=Path('verified.patch').resolve();patch.write_text(data['patch'],encoding='utf-8',newline='')
+          subprocess.run(['git','-C',str(root),'apply','--index',str(patch)],check=True,timeout=30)
+          assert set(git('diff','--cached','--name-only').splitlines())==allowed
+          rows=[]
+          for e in data['files']:
+              content=(root/e['path']).read_bytes()
+              digest=hashlib.sha1(b'blob '+str(len(content)).encode()+b'\0'+content).hexdigest()
+              assert digest==e['sha']==git('rev-parse',':'+e['path'])
+              request=Path('request.json');request.write_text(json.dumps({'encoding':'utf-8','content':content.decode('utf-8')}),encoding='utf-8')
+              response=json.loads(subprocess.check_output(['gh','api','--method','POST','repos/youq616/qbrain/git/blobs','--input',str(request)],timeout=60))
+              assert response['sha']==digest
+              rows.append({'path':e['path'],'mode':'100644','type':'blob','sha':digest})
+          print(json.dumps({'result':'SOURCE_OBJECTS_UPLOADED','base':data['base'],'tree':git('write-tree'),'files':rows,'product_ref_changed':False,'product_tests_run':False}))
