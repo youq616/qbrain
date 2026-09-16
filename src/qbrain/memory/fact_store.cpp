@@ -127,14 +127,15 @@ END;
   }
   tx.commit();
 }
-// Read transactions also pin optional schema detection. A concurrent first
-// archive must not be checked before one snapshot and selected after another.
+// Keep a read statement at SQLITE_ROW to pin schema detection and later reads
+// in one implicit SQLite snapshot. Do not issue BEGIN/ROLLBACK: existing read
+// APIs support authorizers that deny transaction-control SQL. Finalizing this
+// statement releases only its own read, never the caller's transaction.
 struct ReadSnapshot {
-  DB& db; bool owner;
-  explicit ReadSnapshot(DB& d) : db(d), owner(sqlite3_get_autocommit(d.handle()) != 0) {
-    if (owner) db.exec("BEGIN");
+  DB::Statement pin;
+  explicit ReadSnapshot(DB& db) : pin(db.prepare("SELECT COUNT(*) FROM sqlite_master")) {
+    require(pin.step(), "fact_snapshot_unavailable");
   }
-  ~ReadSnapshot() { if (owner) { try { db.exec("ROLLBACK"); } catch (...) {} } }
   ReadSnapshot(const ReadSnapshot&) = delete;
   ReadSnapshot& operator=(const ReadSnapshot&) = delete;
 };

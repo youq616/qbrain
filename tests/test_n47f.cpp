@@ -147,7 +147,7 @@ void boundaries(){
   auto b=fresh();memory::FactStore s(*b,"alpha");auto f=seed(*b,"one");s.archive(payload(f.id,1));
   int before=sqlite3_total_changes(b->db().handle());
   sqlite3_set_authorizer(b->db().handle(),[](void*,int a,const char*,const char*,const char*,const char*){
-    return a==SQLITE_INSERT || a==SQLITE_UPDATE || a==SQLITE_DELETE || a==SQLITE_CREATE_TABLE?SQLITE_DENY:SQLITE_OK;
+    return a==SQLITE_INSERT || a==SQLITE_UPDATE || a==SQLITE_DELETE || a==SQLITE_CREATE_TABLE || a==SQLITE_TRANSACTION?SQLITE_DENY:SQLITE_OK;
   },nullptr);
   auto r=s.lifecycle("","",180,50,512);check(r.dump().size()<=512 && r["truncated"]==true && r["items"].empty(),"no partial oversized fact");
   (void)s.lifecycle();(void)s.recall_for_hook({});
