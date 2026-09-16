@@ -1,5 +1,7 @@
 #include "qbrain/integration/hook.hpp"
 #include "qbrain/integration/detail/fact_context.hpp"
+#include "qbrain/integration/detail/hook_trace.hpp"
+#include <chrono>
 #include "qbrain/memory/fact_store.hpp"
 #include "qbrain/util/string_util.hpp"
 #include "qbrain/util/utf8_display.hpp"
@@ -60,6 +62,27 @@ void save(const fs::path& p,const J& j) {
   fs::rename(tmp,p);
 #endif
 }
+// Constructed after Lock: destroyed first, including failure unwinding. Each
+// file replacement is independent; diagnostic I/O must never suppress output.
+struct TraceCheckpoint {
+  fs::path directory;
+  const std::string& host;
+  const std::string& event;
+  const std::string& session_key;
+  J& trace;
+  const J& output;
+  bool processed=false;
+  ~TraceCheckpoint() noexcept {
+    try {
+      trace["output_bytes"]=output.dump().size();
+      const auto at=std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::system_clock::now().time_since_epoch()).count();
+      const auto record=detail::hook_trace_record(trace,host,event,session_key,at,processed);
+      try {save(directory/detail::hook_trace_filename(host,event),record);}catch(...){}
+      try {save(directory/"last-trace.json",record);}catch(...){}
+    }catch(...){} // Projection/time/allocation failure is not host failure.
+  }
+};
 std::string str(const J& j,const char* k,std::size_t n,bool empty=false) {
   if(!j.contains(k)||!j[k].is_string())throw std::runtime_error("field");
   auto s=j[k].get<std::string>();if(s.size()>n||(!empty&&s.empty())||s.find('\0')!=std::string::npos)throw std::runtime_error("field");return s;
@@ -156,8 +179,8 @@ nlohmann::json compose_fact_context(Brain& b,const std::string& source,const std
 }  // namespace detail
 
 int run_hook(const std::vector<std::string>& args) {
-  J output=J::object();fs::path trace_path;
-  J trace={{"format_version",1},{"provider_calls",0},{"host_consumption_confirmed",false},{"recall_count",0},{"status","ignored"}};
+  J output=J::object();
+  J trace={{"recall_count",0},{"phase","open"}};
   try {
     if(args.size()!=2||args[0]!="--config")throw std::runtime_error("arguments");
     auto path=util::utf8_to_path(args[1]);if(!path.is_absolute())throw std::runtime_error("config");
@@ -193,18 +216,19 @@ int run_hook(const std::vector<std::string>& args) {
       throw std::runtime_error("fact_promotion_requires_local_capture");
     if(fact_promotion){trace["fact_promotion_enabled"]=true;trace["fact_promotion_status"]="not_run";}
     if(!fs::is_regular_file(util::brain_db_path(brain)))throw std::runtime_error("uninitialized");
-    Lock guard(path.parent_path()/"runtime.lock");trace_path=path.parent_path()/"last-trace.json";
-    trace["host"]=host;trace["event"]=kind;
+    Lock guard(path.parent_path()/"runtime.lock");
+    const auto key=util::sha256_hex(host+"\n"+brain+"\n"+source+"\n"+session);
+    TraceCheckpoint checkpoint{path.parent_path(),host,kind,key,trace,output};
     Brain b(brain);b.open();
     const auto state_path=path.parent_path()/"recall-state.json";
     J state={{"version",1},{"sessions",J::object()}};
     if(fs::exists(state_path))try{state=load(state_path);}catch(...){state={{"version",1},{"sessions",J::object()}};}
     if(!state.is_object()||!state.contains("sessions")||!state["sessions"].is_object())state={{"version",1},{"sessions",J::object()}};
-    const auto key=util::sha256_hex(host+"\n"+brain+"\n"+source+"\n"+session);
     if(kind=="SessionStart"||kind=="PreCompact"||kind=="SessionEnd")state["sessions"].erase(key);
     std::set<std::string> seen;
     if(state["sessions"].contains(key)&&state["sessions"][key].is_array())
       for(const auto& id:state["sessions"][key])if(id.is_string()&&id.get_ref<const std::string&>().size()==64)seen.insert(id.get<std::string>());
+    trace["phase"]="recall";
     std::string prompt;if(kind=="UserPromptSubmit")prompt=str(event,"prompt",131072,true);
     const bool secret=memory::contains_sensitive_material(prompt);
     if(fact_recall&&(kind=="SessionStart"||(kind=="UserPromptSubmit"&&!secret))) {
@@ -236,14 +260,17 @@ int run_hook(const std::vector<std::string>& args) {
         auto identity=event.contains("turn_id")?str(event,"turn_id",128):util::sha256_hex(content);
         J payload={{"session_id",session},{"fragment_id",util::sha256_hex(host+"\n"+kind+"\n"+identity)},
           {"messages",J::array({{{"role",kind=="UserPromptSubmit"?"user":"assistant"},{"content",content}}})}};
+        trace["phase"]="capture";
         const auto captured=memory::capture(b,source,payload,false);
         trace["capture_status"]=captured.value("status",std::string("skipped"));
         if(mode=="local"&&captured.contains("event_id")&&kind=="UserPromptSubmit") {
+          trace["phase"]="extract";
           const auto extracted=memory::extract(b,source,captured["event_id"].get<std::string>(),"local");
           trace["extraction_status"]=extracted.value("status",std::string("skipped"));
           if(fact_promotion && (extracted.value("status",std::string())=="extracted" ||
                                 extracted.value("status",std::string())=="no_matches")) {
             try {
+              trace["phase"]="promote";
               const auto promoted=memory::FactStore(b,source).promote_event(captured["event_id"].get<std::string>());
               trace["fact_promotion_status"]="completed";trace["fact_promotion_counts"]=promoted["counts"];
             } catch(...) {
@@ -258,8 +285,8 @@ int run_hook(const std::vector<std::string>& args) {
     while(seen.size()>64)seen.erase(seen.begin());
     if(kind!="PreCompact"&&kind!="SessionEnd")state["sessions"][key]=seen;
     while(state["sessions"].size()>32)state["sessions"].erase(state["sessions"].begin());
-    save(state_path,state);trace["status"]="processed";
-    trace["output_bytes"]=output.dump().size();save(trace_path,trace);
+    trace["phase"]="state";save(state_path,state);
+    trace["phase"]="complete";checkpoint.processed=true;
   }catch(...){/* Nonblocking integration failure, never a host workflow decision. */}
   std::cout<<output.dump()<<"\n";return 0;
 }
