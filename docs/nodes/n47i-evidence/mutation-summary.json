@@ -1,0 +1,48 @@
+{
+  "result": "PASS",
+  "candidate_unchanged": true,
+  "mutations": [
+    {
+      "mutation": "no_duplicate_rejection",
+      "detected": true,
+      "oracle_exit": 1,
+      "mismatches": 3630,
+      "mismatch_categories": [
+        "generated_duplicate",
+        "handwritten_boundaries",
+        "nested_duplicate",
+        "unicode_duplicate"
+      ],
+      "first_mismatch": {
+        "index": 1,
+        "label": "generated_duplicate",
+        "sha256": "830f7bfcd272e439265800886267db2a16ae3f50f87b05cfff3d98cb7058768c",
+        "expected": false,
+        "actual": {
+          "accepted": true
+        }
+      },
+      "probe_sha256": "ece3c02066627dec5f62ec070caff9409e4ad041b952186745264857f89f5afb"
+    },
+    {
+      "mutation": "no_raw_nul_rejection",
+      "detected": true,
+      "oracle_exit": 1,
+      "mismatches": 1,
+      "mismatch_categories": [
+        "handwritten_boundaries"
+      ],
+      "first_mismatch": {
+        "index": 7697,
+        "label": "handwritten_boundaries",
+        "sha256": "68e9e86b6926cc2b37df96b5e61bb8cabdab276272bb73f6767e420c3ead0663",
+        "expected": false,
+        "actual": {
+          "accepted": true
+        }
+      },
+      "probe_sha256": "e6cfec08bfe6b4607af24071f861ce2a1586d4cccf3c79d840ffa0cc46550746"
+    }
+  ],
+  "scope": "Two deliberate broken temporary parser copies; no product modification"
+}

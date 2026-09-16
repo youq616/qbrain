@@ -1,7 +1,9 @@
 # N47I — unambiguous bounded public JSON inputs
 
 Baseline main: f4a07e71df831843989996d8d537e036364591bc.
-Status: approved after N47I-PLAN-AUDIT.md; implementation/outcome pending.
+Status: done for scoped implementation after N47I-HARD-AUDIT.md.
+Tested source093088165315b8bc874bfd9ac934efbd4d101f87. Native runs35134498540
+and35134498732 passed. Fixed versioned publication is recorded separately.
 Scope: Windows-native youq616/qbrain only. Separate owner-authorized engineering
 self-review, not an invented external reviewer or independent subagent.
 

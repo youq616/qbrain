@@ -1,0 +1,13 @@
+{
+  "result": "PASS",
+  "cases": 48,
+  "expected_accepted": 33,
+  "expected_rejected": 15,
+  "process_exit": 0,
+  "stderr_bytes": 0,
+  "input_sha256": "6387511fc33056f443324e0fe4f1e4cf5b7f050dba5575a42709c59ec4063c84",
+  "binary_sha256": "5e140819d5e389dec6a8d199adc94a922d15b174686d676a0c95b19a1d83965e",
+  "script_sha256": "a8af1fa3b2392de5b346ae8d0555a556e378e5cfdb2085ab33f65de43d890f0e",
+  "failures": [],
+  "scope": "Finite wide-object/deep-input and process recovery probes, not a memory/latency guarantee"
+}

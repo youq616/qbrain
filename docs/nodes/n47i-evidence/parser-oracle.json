@@ -1,0 +1,25 @@
+{
+  "result": "PASS",
+  "seed": 4712026,
+  "cases": 7781,
+  "oracle_accept": 4028,
+  "oracle_reject": 3753,
+  "categories": {
+    "generated_unique": 1800,
+    "generated_duplicate": 1800,
+    "nested_duplicate": 1800,
+    "siblings_not_duplicates": 1800,
+    "depth_boundary": 492,
+    "handwritten_boundaries": 30,
+    "byte_boundary": 3,
+    "unicode_key": 28,
+    "unicode_duplicate": 28
+  },
+  "input_sha256": "1a689fb16d0ea11888f40a8ec871a26e4e4a015d452b08125a57dbd3513f5a95",
+  "binary_sha256": "5e140819d5e389dec6a8d199adc94a922d15b174686d676a0c95b19a1d83965e",
+  "script_sha256": "7233110827e13b940c0e30185efc93834a4b7ab5723ee3f63dab1177ae1c4e2d",
+  "process_exit": 0,
+  "stderr_bytes": 0,
+  "mismatches": [],
+  "scope": "Generated raw JSON against independent Python object-pairs/Unicode/depth/number oracle; Linux parser probe, not live client or all-input correctness proof"
+}
