@@ -1,0 +1,36 @@
+--- a/src/qbrain/memory/fact_store.cpp
++++ b/src/qbrain/memory/fact_store.cpp
+@@ -127,14 +127,15 @@
+   }
+   tx.commit();
+ }
+-// Read transactions also pin optional schema detection. A concurrent first
+-// archive must not be checked before one snapshot and selected after another.
++// Keep a read statement at SQLITE_ROW to pin schema detection and later reads
++// in one implicit SQLite snapshot. Do not issue BEGIN/ROLLBACK: existing read
++// APIs support authorizers that deny transaction-control SQL. Finalizing this
++// statement releases only its own read, never the caller's transaction.
+ struct ReadSnapshot {
+-  DB& db; bool owner;
+-  explicit ReadSnapshot(DB& d) : db(d), owner(sqlite3_get_autocommit(d.handle()) != 0) {
+-    if (owner) db.exec("BEGIN");
+-  }
+-  ~ReadSnapshot() { if (owner) { try { db.exec("ROLLBACK"); } catch (...) {} } }
++  DB::Statement pin;
++  explicit ReadSnapshot(DB& db) : pin(db.prepare("SELECT COUNT(*) FROM sqlite_master")) {
++    require(pin.step(), "fact_snapshot_unavailable");
++  }
+   ReadSnapshot(const ReadSnapshot&) = delete;
+   ReadSnapshot& operator=(const ReadSnapshot&) = delete;
+ };
+--- a/tests/test_n47f.cpp
++++ b/tests/test_n47f.cpp
+@@ -147,7 +147,7 @@
+   auto b=fresh();memory::FactStore s(*b,"alpha");auto f=seed(*b,"one");s.archive(payload(f.id,1));
+   int before=sqlite3_total_changes(b->db().handle());
+   sqlite3_set_authorizer(b->db().handle(),[](void*,int a,const char*,const char*,const char*,const char*){
+-    return a==SQLITE_INSERT || a==SQLITE_UPDATE || a==SQLITE_DELETE || a==SQLITE_CREATE_TABLE?SQLITE_DENY:SQLITE_OK;
++    return a==SQLITE_INSERT || a==SQLITE_UPDATE || a==SQLITE_DELETE || a==SQLITE_CREATE_TABLE || a==SQLITE_TRANSACTION?SQLITE_DENY:SQLITE_OK;
+   },nullptr);
+   auto r=s.lifecycle("","",180,50,512);check(r.dump().size()<=512 && r["truncated"]==true && r["items"].empty(),"no partial oversized fact");
+   (void)s.lifecycle();(void)s.recall_for_hook({});
