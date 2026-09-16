@@ -1,0 +1,70 @@
+name: N47J fixed diagnostic source transfer
+on:
+  push:
+    branches: ['delivery/n47j-trace-source-objects']
+    paths: ['.github/workflows/n47j-trace-source-objects.yml']
+permissions:
+  contents: read
+jobs:
+  transfer:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47j-trace-source-objects'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: transport
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ad708f00046f5d2c259a86a06ed1c32491a7492a
+          path: candidate
+          persist-credentials: false
+      - name: Verify complete fixed patch and create immutable source objects only
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          import hashlib,json,lzma,os,subprocess
+          from pathlib import Path
+          root=Path('candidate').resolve()
+          packed=b''.join(Path(f'transport/transfer/n47j.{i}').read_bytes() for i in range(2))
+          assert len(packed)==19712 and hashlib.sha256(packed).hexdigest()=='258648692643503df418e3cf4913f4f17ae979c38c73b3645d78701d40f5f31b'
+          decoder=lzma.LZMADecompressor(memlimit=256*1024*1024)
+          raw=decoder.decompress(packed,max_length=262144)
+          assert decoder.eof and not decoder.unused_data and len(raw)==93227
+          data=json.loads(raw)
+          def git(*args):return subprocess.check_output(['git','-C',str(root),*args],stderr=subprocess.PIPE,timeout=30).decode().strip()
+          assert data['base']=='ad708f00046f5d2c259a86a06ed1c32491a7492a' and git('rev-parse','HEAD')==data['base']
+          assert data['base_tree']=='8c6aa29de70a2f01c34364a1af92f7c03d186204' and git('rev-parse','HEAD^{tree}')==data['base_tree']
+          allowed={'.ci/package_n44_development.py','.ci/test_hook_trace_process.py','.ci/test_hook_trace_report.py','.ci/test_hook_trace_unit.py','.ci/test_validate_native_log.py','.ci/validate_hook_trace_report.py','.github/workflows/n42-validation.yml','.github/workflows/n44-validation.yml','CMakeLists.txt','docs/integration/HOOK-DIAGNOSTIC-CHECKPOINTS.zh-CN.md','include/qbrain/integration/detail/hook_trace.hpp','scripts/build-tests-cl.ps1','src/qbrain/integration/hook.cpp','tests/test_main.cpp','tests/test_n47j.cpp'}
+          assert len(data['files'])==15 and {e['path'] for e in data['files']}==allowed
+          for e in data['files']:
+              if e['old_sha'] is None:
+                  result=subprocess.run(['git','-C',str(root),'cat-file','-e','HEAD:'+e['path']],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
+                  assert result.returncode!=0
+              else:assert git('rev-parse','HEAD:'+e['path'])==e['old_sha']
+          temp=Path(os.environ['RUNNER_TEMP'])/'n47j-fixed-source';temp.mkdir()
+          patch=temp/'verified.patch';patch.write_text(data['patch'],encoding='utf-8',newline='')
+          subprocess.run(['git','-C',str(root),'apply','--index',str(patch)],check=True,timeout=30)
+          assert set(git('diff','--cached','--name-only').splitlines())==allowed
+          rows=[]
+          for e in data['files']:
+              content=(root/e['path']).read_bytes()
+              digest=hashlib.sha1(b'blob '+str(len(content)).encode()+b'\0'+content).hexdigest()
+              assert digest==e['sha']==git('rev-parse',':'+e['path'])
+              request=temp/'request.json';request.write_text(json.dumps({'encoding':'utf-8','content':content.decode('utf-8')}),encoding='utf-8')
+              response=json.loads(subprocess.check_output(['gh','api','--method','POST','repos/youq616/qbrain/git/blobs','--input',str(request)],stderr=subprocess.PIPE,timeout=60))
+              assert response['sha']==digest
+              rows.append({'path':e['path'],'mode':'100644','type':'blob','sha':digest})
+          result={'result':'SOURCE_OBJECTS_UPLOADED','base':data['base'],'tree':git('write-tree'),'files':rows,'product_ref_changed':False,'product_tests_run':False}
+          evidence=Path('evidence');evidence.mkdir();(evidence/'source-objects.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(result))
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: n47j-source-objects
+          path: evidence/source-objects.json
+          retention-days: 14
