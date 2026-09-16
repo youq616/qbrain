@@ -1,0 +1,65 @@
+name: N47F fixed sanitizer review
+on:
+  push:
+    branches: ['verification/n47f-sanitizer-cafb4866']
+    paths: ['.github/workflows/n47f-sanitizer-review.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sanitized:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: cafb48667177002ae6ea0f1976eea2f388826024
+          persist-credentials: false
+      - name: Compile exact candidate with instrumented C and C++
+        shell: bash
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD | tee evidence/source.txt
+          test "$(git rev-parse HEAD)" = cafb48667177002ae6ea0f1976eea2f388826024
+          test "$(git rev-parse 'HEAD^{tree}')" = f0111dbec7b3158dc495b3a6394332c23f557212
+          clang --version | tee evidence/compiler.txt
+          ulimit -a > evidence/runtime-limits.txt
+          cmake -S . -B build/sanitized -G Ninja -DQBRAIN_WITH_PG=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined' 2>&1 | tee evidence/configure.log
+          cmake --build build/sanitized --target qbrain qbrain_lifecycle_tests qbrain_recall_tests --parallel 2 2>&1 | tee evidence/build.log
+      - name: Actual lifecycle and prior read-only recall regression
+        shell: bash
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          python -B .ci/test_lifecycle_unit.py --binary build/sanitized/qbrain_lifecycle_tests --report evidence/lifecycle-unit.json 2>&1 | tee evidence/lifecycle-unit.log
+          build/sanitized/qbrain_recall_tests 2>&1 | tee evidence/prior-recall-unit.log
+          python -B .ci/test_lifecycle_process.py --binary build/sanitized/qbrain --report evidence/lifecycle-process.json 2>&1 | tee evidence/lifecycle-process.log
+          python -B .ci/test_lifecycle_report.py 2>&1 | tee evidence/lifecycle-report-tests.log
+          python -B - <<'PY'
+          import hashlib,json,sys
+          from pathlib import Path
+          sys.path.insert(0,'.ci')
+          from validate_fact_lifecycle_report import validate_unit,validate_process
+          sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          source='cafb48667177002ae6ea0f1976eea2f388826024'
+          unit=json.loads(Path('evidence/lifecycle-unit.json').read_text(encoding='utf-8'))
+          process=json.loads(Path('evidence/lifecycle-process.json').read_text(encoding='utf-8'))
+          u=validate_unit(unit,source_commit=source,binary_sha256=sha('build/sanitized/qbrain_lifecycle_tests'),script_sha256=sha('.ci/test_lifecycle_unit.py'),test_sha256=sha('tests/test_n47f.cpp'),native=False)
+          p=validate_process(process,source_commit=source,binary_sha256=sha('build/sanitized/qbrain'),script_sha256=sha('.ci/test_lifecycle_process.py'),native=False)
+          assert u=={'scenarios':17,'assertions':180} and p=={'checks':36,'commands':58}
+          assert unit['native_windows'] is False and process['native_windows'] is False
+          Path('evidence/sanitizer-summary.json').write_text(json.dumps({'result':'PASS','source_commit':source,'unit':u,'process':p,'asan':True,'ubsan':True,'platform':'Linux GitHub runner','live_client_verified':False},indent=2)+'\n',encoding='utf-8')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47f-sanitizer-evidence
+          path: evidence/
+          retention-days: 14
