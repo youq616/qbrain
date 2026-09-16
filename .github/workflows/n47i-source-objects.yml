@@ -1,0 +1,78 @@
+name: N47I fixed source-object transfer
+on:
+  push:
+    branches: ['delivery/n47i-source-objects']
+    paths: ['.github/workflows/n47i-source-objects.yml']
+permissions:
+  contents: read
+jobs:
+  transfer:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47i-source-objects'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: transport
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 29910b1ed2b76e93d38dc70b91577a1b0b863da2
+          path: candidate
+          persist-credentials: false
+      - name: Verify fixed patch and upload immutable file objects only
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          import base64,hashlib,json,lzma,os,re,subprocess
+          from pathlib import Path
+          repo='youq616/qbrain';base='29910b1ed2b76e93d38dc70b91577a1b0b863da2'
+          tree='dddbe25467a4d63419a67e14884748f8cbabba94'
+          root=Path('candidate').resolve()
+          temp=Path(os.environ['RUNNER_TEMP'])/'n47i-fixed-objects';temp.mkdir(exist_ok=False)
+          def require(ok,message):
+              if not ok:raise RuntimeError(message)
+          def git(*args):return subprocess.check_output(['git','-C',str(root),*args],stderr=subprocess.PIPE,timeout=30).decode().strip()
+          encoded=''.join(Path(f'transport/transfer/n47i.{i}').read_text(encoding='ascii').strip() for i in range(4))
+          require(len(encoded)==27712,'transport length')
+          packed=base64.b64decode(encoded,validate=True)
+          require(len(packed)==20784 and hashlib.sha256(packed).hexdigest()=='94c0483cb46582200d62fb69e84cddec0545bae5225ac0b673a5a911bdad0435','transport digest')
+          decoder=lzma.LZMADecompressor(memlimit=256*1024*1024)
+          raw=decoder.decompress(packed,max_length=256*1024)
+          require(decoder.eof and not decoder.unused_data and len(raw)==97340,'decompressed bounds')
+          data=json.loads(raw.decode('utf-8'))
+          require(data['base']==base and data['base_tree']==tree and git('rev-parse','HEAD')==base and git('rev-parse','HEAD^{tree}')==tree,'base identity')
+          allowed={'.ci/package_n44_development.py','.ci/test_strict_json_process.py','.ci/test_strict_json_report.py','.ci/test_strict_json_unit.py','.ci/test_validate_native_log.py','.ci/validate_strict_json_report.py','.github/workflows/n42-validation.yml','.github/workflows/n44-validation.yml','CMakeLists.txt','docs/integration/STRICT-JSON-INPUTS.zh-CN.md','include/qbrain/util/strict_json.hpp','scripts/build-tests-cl.ps1','src/qbrain/integration/hook.cpp','src/qbrain/mcp/server.cpp','src/qbrain/ops/memory_ops.cpp','tests/test_main.cpp','tests/test_n47i.cpp'}
+          require(len(data['files'])==17 and {f['path'] for f in data['files']}==allowed,'path set')
+          for entry in data['files']:
+              require(re.fullmatch('[0-9a-f]{40}',entry['sha']) is not None,'new blob identity')
+              if entry['old_sha'] is None:
+                  result=subprocess.run(['git','-C',str(root),'cat-file','-e','HEAD:'+entry['path']],capture_output=True,timeout=30)
+                  require(result.returncode!=0,'new path exists')
+              else:require(git('rev-parse','HEAD:'+entry['path'])==entry['old_sha'],'old blob identity')
+          patch=data['patch'].encode('utf-8')
+          require(hashlib.sha256(patch).hexdigest()=='d2bac7e372a785404d79a08a3f07af3aa01fcab35f8753feeddcdf399d39deae','patch digest')
+          path=temp/'source.patch';path.write_bytes(patch)
+          subprocess.run(['git','-C',str(root),'apply','--index',str(path)],check=True,timeout=30)
+          require(set(git('diff','--cached','--name-only').splitlines())==allowed,'patched paths')
+          entries=[]
+          for entry in data['files']:
+              raw=(root/entry['path']).read_bytes()
+              digest=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+              require(digest==entry['sha']==git('rev-parse',':'+entry['path']),'new blob bytes')
+              request=temp/'request.json';request.write_text(json.dumps({'encoding':'utf-8','content':raw.decode('utf-8')}),encoding='utf-8')
+              response=json.loads(subprocess.check_output(['gh','api','--method','POST',f'repos/{repo}/git/blobs','--input',str(request)],stderr=subprocess.PIPE,timeout=60))
+              require(response['sha']==digest,'uploaded blob identity')
+              entries.append({'path':entry['path'],'mode':'100644','type':'blob','sha':digest})
+          result={'result':'SOURCE_OBJECTS_UPLOADED','base':base,'base_tree':tree,'candidate_tree':git('write-tree'),'files':entries,'product_commit_created':False,'product_ref_changed':False,'product_code_executed':False}
+          out=Path('evidence');out.mkdir();(out/'source-objects.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(result))
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: n47i-source-objects
+          path: evidence/source-objects.json
+          retention-days: 14
