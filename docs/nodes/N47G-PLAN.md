@@ -1,8 +1,10 @@
 # N47G — explicit atomic lifecycle batches and read-only preview
 
 Baseline: a81df391448b278797c21a246a2253bb77fe046f, merged N47F.
-Status: approved for implementation after N47G-PLAN-AUDIT.md. Windows-native
-Qbrain only. Separate owner-authorized engineering review, not a third-party.
+Status: done for the scoped implementation after N47G-HARD-AUDIT.md.
+Tested/reviewed source b1292b54543b9f54cd5e2b71f4ae4bf5f6247385.
+Native evidence35093371931 and35093372100; versioned publication is separate.
+Windows-native Qbrain only. Owner-authorized engineering self-review, not a third party.
 
 ## User-visible slice
 
@@ -37,7 +39,7 @@ only after successful commit. Preserve input order; duplicate IDs are rejected.
 
 Use one shared ReadWork per validation pass (512 evidence checks / 8MiB transcript
 work), no stale evidence cache across passes. Apply needs at most two passes;
-preview needs one. Bound metadata response to 32768 bytes and check before commit.
+preview needs one. Bound metadata response to32768 bytes and check before commit.
 Schema preparation and policy application remain separate transactions: an empty
 new module/backup can remain on later conflict, but never partial policy changes.
 SQLite backup cost is not bounded by this batch size. Eligibility is measured at
@@ -57,7 +59,7 @@ fact archive/restore entry points retain behavior. PG remains unsupported here.
 Actual C++ production-class cases: successful archive/restore and current-revision
 idempotence, preview under write/transaction-denying authorizer, no migration or
 backup in preview, invalid last member with no partial changes, empty/33-entry/
-duplicate/foreign/retired/expired/tampered/revision limits, 32-entry boundary,
+duplicate/foreign/retired/expired/tampered/revision limits,32-entry boundary,
 SQL-trigger failure after an earlier member write, atomic restore failure,
 whole-batch work limit, inherited counterclaims/Hook filtering/forget/promotion,
 caller transaction preservation/rejection, disk first-use backup, and two real
@@ -68,7 +70,7 @@ update a revised selection. Count/schema/evidence identity must remain accurate.
 Actual CLI/MCP cases: JSON stdin, raw duplicate-key rejection, strict route fields,
 read-only preview under default permissions, default denied apply, source denial,
 allowed application, invalid final item rollback, unchanged six-tool list and
-old ordinary memory. Add group 55, standalone batch unit and actual process suite,
+old ordinary memory. Add group55, standalone batch unit and actual process suite,
 strict source/EXE/script report validators and negative validator tests; keep all
 N47A-F, HTTP, queue, CJK, installer, Windows/portable and Server2022 gates.
 
@@ -78,6 +80,6 @@ package identity. No inherited old-package PASS or native claims from Linux.
 Rollback is source-only; no new data schema beyond N47F. Release only reviewed,
 exact tested candidate bytes, not a general unreviewed automatic publisher.
 
-References consulted September 16, 2026:
+References consulted September16,2026:
 https://www.sqlite.org/lang_transaction.html
 https://www.sqlite.org/isolation.html
