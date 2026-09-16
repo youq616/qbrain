@@ -203,12 +203,23 @@ void real_connections(){
    check(int(ea.empty())+int(eb.empty())==1 && (ea=="fact_revision_conflict" || eb=="fact_revision_conflict"),"single restore winner with stale loser");
    check(rev(sa,f)==3 && scalar(a,"SELECT COUNT(*) FROM memory_fact_archive")==0,"restore no lost update");
    check(scalar(a,"SELECT MAX(version) FROM schema_version")==version,"legacy migration version unchanged");
-   bool backup=false;for(const auto& entry:std::filesystem::directory_iterator(dir)){
-    if(entry.path().filename().string().find(".pre-lifecycle-v1-")==std::string::npos)continue;backup=true;
-    sqlite3* db=nullptr;check(sqlite3_open_v2(util::path_to_utf8(entry.path()).c_str(),&db,SQLITE_OPEN_READONLY,nullptr)==SQLITE_OK,"backup readable");
-    sqlite3_stmt* stmt=nullptr;sqlite3_prepare_v2(db,"SELECT count(*) FROM sqlite_master WHERE name='memory_fact_archive'",-1,&stmt,nullptr);
-    check(sqlite3_step(stmt)==SQLITE_ROW && sqlite3_column_int(stmt,0)==0,"backup precedes new table");sqlite3_finalize(stmt);sqlite3_close(db);
-   }check(backup,"on-disk backup exists");
+   int backups=0;bool all_open=true,all_before=true,all_closed=true;
+   for(const auto& entry:std::filesystem::directory_iterator(dir)){
+    if(entry.path().filename().string().find(".pre-lifecycle-v1-")==std::string::npos)continue;++backups;
+    sqlite3* db=nullptr;sqlite3_stmt* stmt=nullptr;
+    const bool opened=sqlite3_open_v2(util::path_to_utf8(entry.path()).c_str(),&db,SQLITE_OPEN_READONLY,nullptr)==SQLITE_OK;
+    all_open=all_open&&opened;
+    const bool prepared=opened && sqlite3_prepare_v2(db,"SELECT count(*) FROM sqlite_master WHERE name='memory_fact_archive'",-1,&stmt,nullptr)==SQLITE_OK;
+    const bool prior=prepared && sqlite3_step(stmt)==SQLITE_ROW && sqlite3_column_int(stmt,0)==0;
+    all_before=all_before&&prior;
+    const int finalized=sqlite3_finalize(stmt),closed=sqlite3_close(db);
+    all_closed=all_closed&&finalized==SQLITE_OK&&closed==SQLITE_OK;
+   }
+   // Scheduling may yield one or two backups. Inspect every file but count the
+   // same five invariants, not one assertion pair per timing-dependent file.
+   check(backups>=1,"on-disk backup exists");check(backups<=2,"only racing writers created backups");
+   check(all_open,"all backups readable");check(all_before,"every backup precedes new table");
+   check(all_closed,"all backup readers finalized and closed");
   }std::filesystem::remove_all(dir);
  });
  scenario("first archive committed mid read preserves coherent snapshot",[]{
