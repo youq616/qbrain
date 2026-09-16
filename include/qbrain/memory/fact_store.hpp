@@ -9,6 +9,12 @@ class FactStore {
   FactStore(Brain& brain, std::string source);
   // Explicit local extraction -> complete user-quote facts. Batch fact/evidence
   // writes are atomic; optional schema preparation is a separate operation.
+  // Explicit recall policy, not fact retirement or deletion. Writes require
+  // the current fact revision; restore never revives unsupported/retired facts.
+  Json archive(const Json& payload);
+  Json restore(const Json& payload);
+  Json lifecycle(const std::string& fact_id = "", const std::string& predicate = "",
+                 int stale_after_days = 180, int limit = 10, int max_bytes = 8192);
   Json promote_event(const std::string& event_id);
   Json create(const Json& payload);       // predicate, item_id; subject is user
   Json attach(const Json& payload);       // fact_id, item_id (exact same quote)
@@ -30,6 +36,7 @@ class FactStore {
   Json recall_for_hook(const std::vector<std::string>& queries, int limit = 10,
                        int max_bytes = 8192);
  private:
+  Json set_archived(const Json& payload, bool archived);
   Json recall_queries(const std::vector<std::string>& queries, const std::string& predicate,
                       int limit, int max_bytes);
   void validate() const;

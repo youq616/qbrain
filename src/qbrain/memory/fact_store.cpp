@@ -127,6 +127,63 @@ END;
   }
   tx.commit();
 }
+// Read transactions also pin optional schema detection. A concurrent first
+// archive must not be checked before one snapshot and selected after another.
+struct ReadSnapshot {
+  DB& db; bool owner;
+  explicit ReadSnapshot(DB& d) : db(d), owner(sqlite3_get_autocommit(d.handle()) != 0) {
+    if (owner) db.exec("BEGIN");
+  }
+  ~ReadSnapshot() { if (owner) { try { db.exec("ROLLBACK"); } catch (...) {} } }
+  ReadSnapshot(const ReadSnapshot&) = delete;
+  ReadSnapshot& operator=(const ReadSnapshot&) = delete;
+};
+bool archive_ready(DB& db) {
+  if (!exists(db,"memory_fact_lifecycle_module")) {
+    require(!exists(db,"memory_fact_archive"),"fact_lifecycle_schema_conflict");
+    return false;
+  }
+  auto version=db.prepare("SELECT version FROM memory_fact_lifecycle_module");
+  require(version.step() && version.column_int(0)==1 && !version.step(),
+          "fact_lifecycle_version_unsupported");
+  require(exists(db,"memory_fact_archive"),"fact_lifecycle_schema_incomplete");
+  // Validate the required columns even when there are no archived rows.
+  auto columns=db.prepare("SELECT fact_id,source_id,archived_at FROM memory_fact_archive LIMIT 0");
+  columns.step();
+  return true;
+}
+void initialize_archive(DB& db) {
+  {
+  ReadSnapshot snapshot(db);
+  if (archive_ready(db)) return;
+  require(ready(db),"fact_not_found");
+  const auto path=db.backend_file_path();
+  if (!path.empty()) {
+    std::random_device rng; std::string entropy;
+    for (int n=0;n<8;++n) entropy+=std::to_string(rng())+":";
+    require(db.backup_to(path+".pre-lifecycle-v1-"+util::sha256_hex(entropy)+".bak"),
+            "fact_lifecycle_backup_failed");
+  }
+  } // Release the pinned pre-migration backup snapshot before taking a writer lock.
+  Tx tx(db);
+  if (!archive_ready(db)) db.exec(R"SQL(
+CREATE TABLE memory_fact_lifecycle_module(version INTEGER PRIMARY KEY CHECK(version=1));
+INSERT INTO memory_fact_lifecycle_module VALUES(1);
+CREATE TABLE memory_fact_archive(
+ fact_id TEXT PRIMARY KEY, source_id TEXT NOT NULL,
+ archived_at INTEGER NOT NULL CHECK(archived_at>=0),
+ FOREIGN KEY(fact_id,source_id) REFERENCES memory_facts(fact_id,source_id) ON DELETE CASCADE);
+CREATE INDEX idx_memory_fact_archive_source ON memory_fact_archive(source_id,fact_id);
+)SQL");
+  tx.commit();
+}
+bool is_archived(DB& db,const std::string& source,const std::string& id) {
+  auto row=db.prepare("SELECT archived_at FROM memory_fact_archive WHERE source_id=? AND fact_id=?");
+  row.bind_text(1,source);row.bind_text(2,id);
+  if (!row.step()) return false;
+  require(!row.column_is_null(0) && row.column_int(0)>=0,"fact_lifecycle_invalid_metadata");
+  return true;
+}
 struct Evidence {
   std::string item, event, quote, hash;
   Json reference;
@@ -618,6 +675,8 @@ Json FactStore::recall_queries(const std::vector<std::string>& queries, const st
   if (!pred.empty()) predicate_check(pred);
   require(limit >= 1 && limit <= 50 && budget >= 512 && budget <= 32768, "invalid_read_budget");
   auto& db = brain_.db();
+  ReadSnapshot snapshot(db);
+  const bool has_archive = archive_ready(db);
   Json out = {{"source_id",source_},{"view","recall"},{"items",Json::array()},
       {"untrusted_data",true},{"match_mode",queries.empty()?"recent_active":(queries.size()==1?"literal_substring":"any_literal_term")},
       {"conflict_scope","direct_active_assertions"},{"neighbors_recursively_expanded",false},
@@ -629,6 +688,8 @@ Json FactStore::recall_queries(const std::vector<std::string>& queries, const st
   std::string sql = "SELECT fact_id FROM memory_facts WHERE source_id=? "
       "AND status='active' AND subject='user' "
       "AND length(CAST(object AS BLOB)) BETWEEN 1 AND 4096";
+  if (has_archive) sql += " AND NOT EXISTS(SELECT 1 FROM memory_fact_archive ar "
+      "WHERE ar.fact_id=memory_facts.fact_id AND ar.source_id=memory_facts.source_id)";
   if (!queries.empty()) {
     sql += " AND (";
     for (std::size_t i=0;i<queries.size();++i)
@@ -696,6 +757,100 @@ Json FactStore::recall_queries(const std::vector<std::string>& queries, const st
   } catch (const Error& error) {
     if (std::string(error.what()) != "fact_read_work_limit") throw;
     out["truncated"] = true; out["work_limited"] = true;
+  }
+  return out;
+}
+
+Json FactStore::archive(const Json& p) { return set_archived(p,true); }
+Json FactStore::restore(const Json& p) { return set_archived(p,false); }
+Json FactStore::set_archived(const Json& p,bool desired) {
+  validate(); keys(p,{"fact_id","expected_revision"});
+  const auto id=field(p,"fact_id");identifier(id);const auto expected=revision(p);
+  auto& db=brain_.db();
+  require(sqlite3_get_autocommit(db.handle())!=0,"fact_transaction_active");
+  // Reject invalid operations before any backup or lazy schema change.
+  { ReadSnapshot snapshot(db);
+    const auto f=need(db,source_,id,clock_now());
+    require(f["status"]=="active","fact_state_conflict");
+    require(f["revision"]==expected,"fact_revision_conflict");
+    (void)archive_ready(db);
+  }
+  if (desired) initialize_archive(db);
+  Tx tx(db);
+  const auto at=clock_now();auto f=need(db,source_,id,at);
+  require(f["status"]=="active","fact_state_conflict");
+  require(f["revision"]==expected,"fact_revision_conflict");
+  const bool initialized=archive_ready(db);
+  const bool current=initialized && is_archived(db,source_,id);
+  if (current==desired) {
+    tx.commit();auto out=receipt(f,true);out["archived"]=desired;return out;
+  }
+  if (desired) {
+    auto insert=db.prepare("INSERT INTO memory_fact_archive(fact_id,source_id,archived_at) VALUES(?,?,?)");
+    insert.bind_text(1,id);insert.bind_text(2,source_);insert.bind_int(3,at);insert.step_done();
+  } else {
+    auto erase=db.prepare("DELETE FROM memory_fact_archive WHERE source_id=? AND fact_id=?");
+    erase.bind_text(1,source_);erase.bind_text(2,id);erase.step_done();
+    require(db.changes()==1,"fact_revision_conflict");
+  }
+  advance(db,source_,id,expected,"active",at);
+  tx.commit();f["revision"]=expected+1;
+  auto out=receipt(f);out["archived"]=desired;return out;
+}
+
+Json FactStore::lifecycle(const std::string& id,const std::string& pred,
+                          int days,int limit,int budget) {
+  validate();if(!id.empty())identifier(id);if(!pred.empty())predicate_check(pred);
+  require(days>=1 && days<=36500,"fact_invalid_stale_days");
+  require(limit>=1 && limit<=50 && budget>=512 && budget<=32768,"invalid_read_budget");
+  auto& db=brain_.db();ReadSnapshot snapshot(db);
+  const bool module=archive_ready(db);const auto at=clock_now();
+  Json out={{"view","lifecycle"},{"source_id",source_},{"initialized",ready(db)},
+      {"archive_initialized",module},{"age_basis","newest_valid_support_created_at"},
+      {"stale_after_days",days},{"evaluated_at",at},{"age_is_advisory",true},
+      {"usage_measured",false},{"truncated",false},{"work_limited",false},
+      {"items",Json::array()},{"untrusted_data",true}};
+  if(!out["initialized"].get<bool>())return out;
+  std::string sql="SELECT fact_id FROM memory_facts WHERE source_id=? AND status='active' "
+      "AND subject='user' AND length(CAST(object AS BLOB)) BETWEEN 1 AND 4096";
+  if(!id.empty())sql+=" AND fact_id=?";
+  if(!pred.empty())sql+=" AND predicate=?";
+  sql+=" ORDER BY created_at DESC,fact_id COLLATE BINARY LIMIT 101";
+  auto rows=db.prepare(sql);int i=1;rows.bind_text(i++,source_);
+  if(!id.empty())rows.bind_text(i++,id);if(!pred.empty())rows.bind_text(i++,pred);
+  ReadWork work;int scanned=0;
+  try {
+    while(rows.step()) {
+      if(++scanned>max_candidates){out["truncated"]=true;break;}
+      const auto fact_id=rows.column_text(0);identifier(fact_id);
+      auto f=load(db,source_,fact_id,at,&work);if(f.is_null())continue;
+      int64_t newest=0;bool anomaly=false,unknown=false;
+      for(const auto& support:f["evidence"]) {
+        auto time=db.prepare("SELECT created_at FROM memory_items WHERE item_id=?");
+        time.bind_text(1,support["item_id"].get_ref<const std::string&>());
+        require(time.step(),"fact_evidence_unavailable");
+        const auto value=time.column_int(0);
+        if(time.column_is_null(0) || value<=0)unknown=true;
+        else if(value>at)anomaly=true;
+        else newest=std::max(newest,value);
+      }
+      Json age=nullptr,created=nullptr;std::string state="unknown";
+      if(anomaly)state="clock_anomaly";
+      else if(!unknown && newest>0) {
+        age=at-newest;created=newest;
+        state=at-newest>=int64_t(days)*86400?"stale":"fresh";
+      }
+      f["lifecycle"]={{"archived",module && is_archived(db,source_,fact_id)},
+          {"age_state",state},{"age_seconds",age},{"latest_valid_support_created_at",created}};
+      if(out["items"].size()>=static_cast<std::size_t>(limit)) {out["truncated"]=true;break;}
+      out["items"].push_back(std::move(f));
+      if(out.dump().size()>static_cast<std::size_t>(budget)) {
+        out["items"].erase(out["items"].end()-1);out["truncated"]=true;break;
+      }
+    }
+  } catch(const Error& e) {
+    if(std::string(e.what())!="fact_read_work_limit")throw;
+    out["truncated"]=true;out["work_limited"]=true;
   }
   return out;
 }
