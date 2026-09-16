@@ -1,6 +1,7 @@
 #include "qbrain/memory/fact_store.hpp"
 #include "qbrain/ops/memory_ops.hpp"
 #include "qbrain/memory/session_memory.hpp"
+#include "qbrain/util/strict_json.hpp"
 #include <charconv>
 #include <set>
 
@@ -19,19 +20,19 @@ int number(const OpContext& c,const std::string& key,int def) {
   if(parsed.ec!=std::errc{} || parsed.ptr!=v.data()+v.size()) throw memory::Error("invalid_integer");
   return n;
 }
+Json public_payload(const std::string& raw,std::size_t bytes,const char* duplicate,
+                    const char* depth_error,const char* size_error) {
+  try { return util::parse_unique_json(raw,bytes,8); }
+  catch(const util::JsonInputError& e) {
+    if(e.failure()==util::JsonInputFailure::duplicate_key)throw memory::Error(duplicate);
+    if(e.failure()==util::JsonInputFailure::depth_limit)throw memory::Error(depth_error);
+    if(e.failure()==util::JsonInputFailure::byte_limit)throw memory::Error(size_error);
+    throw memory::Error("invalid_json");
+  }
+}
 Json batch_payload(const std::string& raw) {
   if(raw.empty() || raw.size()>8192)throw memory::Error("fact_batch_payload_limit");
-  std::vector<std::set<std::string>> objects;
-  return Json::parse(raw,[&](int depth,Json::parse_event_t event,Json& value) {
-    if(depth>8)throw memory::Error("fact_invalid_payload");
-    if(event==Json::parse_event_t::object_start)objects.emplace_back();
-    if(event==Json::parse_event_t::key) {
-      if(objects.empty() || !objects.back().insert(value.get<std::string>()).second)
-        throw memory::Error("fact_batch_duplicate_key");
-    }
-    if(event==Json::parse_event_t::object_end)objects.pop_back();
-    return true;
-  });
+  return public_payload(raw,8192,"fact_batch_duplicate_key","fact_invalid_payload","fact_batch_payload_limit");
 }
 OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
   try {
@@ -103,8 +104,7 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
         return output(memory::FactStore(*c.brain,*source).lifecycle_batch(batch_payload(get(c,"payload")),true));
       const auto raw=get(c,"payload");
       if(raw.empty() || raw.size()>16384) throw memory::Error("fact_invalid_payload");
-      const auto payload=Json::parse(raw,[](int depth,Json::parse_event_t,Json&){
-        if(depth>8) throw memory::Error("fact_invalid_payload"); return true;});
+      const auto payload=public_payload(raw,16384,"fact_duplicate_key","fact_invalid_payload","fact_invalid_payload");
       memory::FactStore store(*c.brain,*source);
       if(action=="fact_archive") return output(store.archive(payload));
       if(action=="fact_restore") return output(store.restore(payload));
@@ -122,7 +122,7 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
       if(payload.size()>memory::max_payload_bytes) throw memory::Error("payload_too_large");
       const auto manual=get(c,"manual","false");
       if(manual!="true" && manual!="false") throw memory::Error("invalid_boolean");
-      result=memory::capture(*c.brain,*source,Json::parse(payload),manual=="true");
+      result=memory::capture(*c.brain,*source,public_payload(payload,memory::max_payload_bytes,"memory_duplicate_key","invalid_payload","payload_too_large"),manual=="true");
     } else {
       if(c.args.count("payload") || c.args.count("manual")) throw memory::Error("unexpected_argument");
       if(action=="extract") result=memory::extract(*c.brain,*source,get(c,"event_id"),get(c,"method","local"));

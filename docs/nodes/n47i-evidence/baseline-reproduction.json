@@ -1,0 +1,10 @@
+{
+  "source_tree": "5d17b1f68344d1c6370d4a113fddf5def1dc0e63",
+  "source": "80fe1b9d31de6cc41d06be6db0e1035c1a747eb7 (same runtime as main f4a07e71)",
+  "binary_sha256": "81c8034bee00532427711ebc6d581e71d06031b4712c0c55ae8f5e084bf982ba",
+  "memory_duplicate_accepted": true,
+  "fact_duplicate_accepted": true,
+  "mcp_duplicate_id_selected": 2,
+  "memory_events": 1,
+  "scope": "synthetic reproduction of ambiguity; not an authentication bypass"
+}

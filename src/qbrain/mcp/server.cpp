@@ -2,6 +2,7 @@
 #include "qbrain/mcp/jsonrpc.hpp"
 #include "qbrain/ops/registry.hpp"
 #include "qbrain/util/log.hpp"
+#include "qbrain/util/strict_json.hpp"
 #include <nlohmann/json.hpp>
 #include <cstdlib>
 #include <iostream>
@@ -402,7 +403,8 @@ std::string handle_rpc_body(Brain& brain, const ServeOptions& opts,
                             const std::string* capability_override) {
   json req;
   try {
-    req = json::parse(request_json);
+    // Reject ambiguous envelopes before source/capability or tool dispatch.
+    req = util::parse_unique_json(request_json,16 * 1024 * 1024,32);
   } catch (const std::exception&) {
     return make_error(nullptr, -32700, "parse error").dump();
   }

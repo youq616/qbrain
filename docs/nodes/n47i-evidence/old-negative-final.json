@@ -1,0 +1,41 @@
+{
+  "result": "FAIL",
+  "checks": [
+    {
+      "name": "execution_interrupted",
+      "status": "FAIL"
+    }
+  ],
+  "commands": [
+    {
+      "args": [
+        "init"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0
+    },
+    {
+      "args": [
+        "memory",
+        "capture"
+      ],
+      "expected_exit": 1,
+      "exit_code": 0,
+      "stderr_excerpt": ""
+    }
+  ],
+  "native_windows": false,
+  "real_host_consumption_verified": false,
+  "binary_sha256": "81c8034bee00532427711ebc6d581e71d06031b4712c0c55ae8f5e084bf982ba",
+  "script_sha256": "138f7914d21187b618b2a65ba38e786a2aadf29df59a20d74752cd33be240f1c",
+  "error_type": "AssertionError",
+  "error": "Unexpected command exit 2",
+  "check_count": 1,
+  "counts": {
+    "total": 1,
+    "pass": 0,
+    "fail": 1
+  },
+  "source_commit": null,
+  "tracked_tree_clean": false
+}

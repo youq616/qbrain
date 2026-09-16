@@ -1,0 +1,254 @@
+{
+  "repository": "youq616/qbrain",
+  "node": "N47I",
+  "scoped_result": "PASS",
+  "source_commit": "093088165315b8bc874bfd9ac934efbd4d101f87",
+  "source_tree": "b80eeb785a9981bf761ebd3732483285d46146d6",
+  "baseline_main": "f4a07e71df831843989996d8d537e036364591bc",
+  "source_files": 827,
+  "review_type": "Owner-authorized separate ChatGPT engineering self-review",
+  "independent_subagent_or_third_party_claimed": false,
+  "unresolved_scoped_p0_p1": 0,
+  "development_run": 35134498540,
+  "n42_run": 35134498732,
+  "required_jobs": "completed/success",
+  "generic_publishing": "skipped, not evidence of a release",
+  "native_groups": 57,
+  "new_unit": {
+    "scenarios": 11,
+    "assertions": 95,
+    "platforms": [
+      "Server2025",
+      "Server2022",
+      "portable",
+      "Linux ASan+UBSan"
+    ]
+  },
+  "new_process": {
+    "checks": 54,
+    "commands": 39,
+    "expected_exit_0": 23,
+    "expected_exit_1": 16,
+    "platforms": [
+      "Windows",
+      "portable",
+      "Linux ASan+UBSan"
+    ]
+  },
+  "previous_units": {
+    "candidates": [
+      17,
+      647
+    ],
+    "batch": [
+      15,
+      259
+    ],
+    "lifecycle": [
+      17,
+      180
+    ],
+    "promotion": [
+      18,
+      237
+    ],
+    "hook": [
+      13,
+      229
+    ],
+    "recall": [
+      15,
+      330
+    ],
+    "conflict": [
+      13,
+      346
+    ],
+    "facts": [
+      15,
+      380
+    ]
+  },
+  "http_each_windows": {
+    "wire": 81,
+    "fixed_current_processes": 2,
+    "cancellations_each": 256,
+    "shutdown_checked": true
+  },
+  "real_pg_dsn": "SKIP-PG",
+  "artifact_pins": {
+    "source": {
+      "id": 10462142164,
+      "bytes": 11355736,
+      "sha256": "fb2a315e98cead8ad081ba97fa0d9abf63c2618d046917fc51cdc87ad901b757"
+    },
+    "portable": {
+      "id": 10462797783,
+      "bytes": 58365,
+      "sha256": "d2b4c584424509c48140acc2cf25fe17843ebca677abaed47174b26abdbf5376"
+    },
+    "sanitizer": {
+      "id": 10462373785,
+      "bytes": 13886,
+      "sha256": "d245842636a63c412eaf0ee8fd023342094de627deec2d31f3ad653ea0959899"
+    },
+    "server2022": {
+      "id": 10462484159,
+      "bytes": 17282,
+      "sha256": "600a2726c8e509e3615111f97d989aded96cdab5f774ed576348bc373ffd459e"
+    },
+    "windows": {
+      "id": 10463335796,
+      "bytes": 105516,
+      "sha256": "b2ae12ddccd252a519c647f40a8c071348b7a8aa51edc477311616708ceda896"
+    },
+    "package": {
+      "id": 10463480427,
+      "bytes": 2049541,
+      "sha256": "f39eec3534f4531ad8f4c9ca17bc64da2c44ea24085485ae1e1c7f1f5bb1c551"
+    }
+  },
+  "readback": {
+    "checks": 379,
+    "report_sha256": "09163796191cef17df7a5b22010dc46426365658176b1ad289123e15bf3bab9b",
+    "exact_source_tree_rebuilt": true,
+    "original_reports_equal_package": true,
+    "probe_binaries_separately_downloaded": false,
+    "readback_executed_product": false
+  },
+  "package": {
+    "bytes": 2055158,
+    "sha256": "7f99a7e8781047e2dd5a9f482b522842cb6c79170e81c313084917cd657ba598"
+  },
+  "executable": {
+    "bytes": 4027904,
+    "sha256": "5576c4ecbcf6a512f914cd23c0dc1ebc6a05b1ce7bd5da31fcffe0d5fa573a92",
+    "embedded_certificate": false
+  },
+  "signed": false,
+  "rebuilt_or_repacked_for_delivery": false,
+  "local_execution": {
+    "platform": "Linux",
+    "compiler": "GCC14.2",
+    "production_build": "PASS",
+    "new_unit": [
+      11,
+      95
+    ],
+    "new_process": [
+      54,
+      39
+    ],
+    "new_and_retained_process_suites": 16,
+    "all_process_suites_exit_zero": true,
+    "report_and_registry_suites": 12,
+    "report_and_registry_tests": 157,
+    "complete_aggregate_build": "FAILED",
+    "complete_aggregate_executed": false,
+    "complete_aggregate_reason": "Historical unchanged tests/test_n19.cpp and tests/test_n20.cpp require _putenv_s/gmtime_s",
+    "tests_or_shim_changed_to_hide_failure": false,
+    "archive_only_process_source_commit": null
+  },
+  "independent_oracle": {
+    "seed": 4712026,
+    "cases": 7781,
+    "accepted": 4028,
+    "rejected": 3753,
+    "mismatches": 0,
+    "process_exit": 0,
+    "stderr_bytes": 0
+  },
+  "wide_deep_recovery": {
+    "cases": 48,
+    "accepted": 33,
+    "rejected": 15,
+    "mismatches": 0,
+    "process_exit": 0,
+    "maximum_deliberately_excessive_array_depth": 200000,
+    "not_latency_or_memory_guarantee": true
+  },
+  "mutation_probes": {
+    "candidate_unchanged": true,
+    "duplicate_check_removed": {
+      "oracle_exit": 1,
+      "mismatches": 3630
+    },
+    "raw_nul_check_removed": {
+      "oracle_exit": 1,
+      "mismatches": 1
+    }
+  },
+  "baseline_real_reproduction": {
+    "memory_duplicate_accepted": true,
+    "fact_duplicate_accepted": true,
+    "duplicate_mcp_id_selected": 2,
+    "claimed_authentication_bypass": false
+  },
+  "final_process_script_against_baseline": {
+    "exit": 1,
+    "first_duplicate_capture_actual_exit": 0,
+    "required_exit": 1,
+    "report": "old-negative-final.json"
+  },
+  "supplemental_file_sha256": {
+    "PROBE-REPRODUCTION.md": "447695a11c513e21625aa9d8b65c44f86d06cc0af04127833def4394101f217f",
+    "baseline-reproduction.json": "71f422176672b8dd7a5fea4b334048da636a86881025c1e77f75bddea1751fea",
+    "mutation-summary.json": "47b10f6530fa0b14e663bc613bdee118225cb11e059e47aabd9a408da9915a37",
+    "old-negative-final.json": "b07ce9693118e5134989555ecf1450b6861c7b3369d3aedfe6a7a50991423fcc",
+    "parser-oracle.json": "1e628ec0512434886d6f98ee5bc684cf61636c0d8e037887bf6438747f27f3f9",
+    "parser-stress.json": "161a05e58bc0124ae1db34320f9ff68bca32545207d8113b546ed83bd658a8b0",
+    "parser_oracle.py": "7233110827e13b940c0e30185efc93834a4b7ab5723ee3f63dab1177ae1c4e2d",
+    "parser_stress.py": "a8af1fa3b2392de5b346ae8d0555a556e378e5cfdb2085ab33f65de43d890f0e"
+  },
+  "local_raw_evidence_hashes": {
+    "parser-oracle.json": {
+      "bytes": 889,
+      "sha256": "1e628ec0512434886d6f98ee5bc684cf61636c0d8e037887bf6438747f27f3f9"
+    },
+    "parser_oracle.py": {
+      "bytes": 5875,
+      "sha256": "7233110827e13b940c0e30185efc93834a4b7ab5723ee3f63dab1177ae1c4e2d"
+    },
+    "mutations/summary.json": {
+      "bytes": 1365,
+      "sha256": "47b10f6530fa0b14e663bc613bdee118225cb11e059e47aabd9a408da9915a37"
+    },
+    "old-negative-final.json": {
+      "bytes": 843,
+      "sha256": "b07ce9693118e5134989555ecf1450b6861c7b3369d3aedfe6a7a50991423fcc"
+    },
+    "baseline-reproduction.json": {
+      "bytes": 447,
+      "sha256": "71f422176672b8dd7a5fea4b334048da636a86881025c1e77f75bddea1751fea"
+    },
+    "full-results.json": {
+      "bytes": 71,
+      "sha256": "c72736886879636fc0c17853d81f0081367b2358ca23c9153cbeac41a3475f02"
+    },
+    "outcome-gates.json": {
+      "bytes": 1229,
+      "sha256": "ae9b5368943622092b1dd003508c4d20d8223a91d667c9abfb49914eab907418"
+    },
+    "regression/results.json": {
+      "bytes": 1097,
+      "sha256": "0633fbc7752e76b003bc96598ecdae2bc4998efa112cc83137ee383dbaa0b790"
+    },
+    "regression/test_strict_json_process.py.json": {
+      "bytes": 9864,
+      "sha256": "b58b48ab25f2f9af7303f2230043f8175ca8152203241ab1809193a7e7073e5e"
+    },
+    "full-build.log": {
+      "bytes": 5842,
+      "sha256": "6e38f28c19e5cf86385a63e88747bac649ba5129450e2ca8970cdc10e1d77f9f"
+    }
+  },
+  "new_schema": false,
+  "new_mcp_tools": false,
+  "provider_permission_changed": false,
+  "stored_transcript_or_configuration_parser_replaced": false,
+  "new_authenticated_client_acceptance": false,
+  "local_agent_task_required": false,
+  "whole_project_complete": false,
+  "planned_release_tag": "strict-json-preview-09308816",
+  "release_status": "not established by this outcome record"
+}
