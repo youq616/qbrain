@@ -1,7 +1,9 @@
 # N47H — bounded, paginated lifecycle candidate discovery
 
 Baseline main: 612ccf22688bde71656e1ea5f771bd5afbd12ed5.
-Status: approved for implementation after N47H-PLAN-AUDIT.md.
+Status: done for scoped implementation after N47H-HARD-AUDIT.md.
+Tested source80fe1b9d31de6cc41d06be6db0e1035c1a747eb7; native35111907426/35111907432.
+Versioned publication is recorded separately; this plan does not certify a release.
 Windows-native youq616/qbrain only; separate owner-authorized engineering review.
 
 N47G applies explicitly selected batches but does not discover selections in a

@@ -1,0 +1,29 @@
+{
+  "assertions": 12107,
+  "pages": 695,
+  "platform": "Linux GCC14.2 supplemental review",
+  "result": "PASS",
+  "scenario_count": 3,
+  "scenarios": [
+    {
+      "assertions": 9961,
+      "name": "mixed-state pages match reference model under varied counts and byte budgets",
+      "status": "PASS"
+    },
+    {
+      "assertions": 6,
+      "name": "non-fitting envelope never advances past a selected row",
+      "status": "PASS"
+    },
+    {
+      "assertions": 1808,
+      "name": "explicit page-by-page apply does not skip keys removed by own policy changes",
+      "status": "PASS"
+    }
+  ],
+  "seeded_claims": 288,
+  "setup_assertions": 332,
+  "source_attribution": "Fixed source used for linkage; independently tree-verified, not runtime Git",
+  "source_commit": "80fe1b9d31de6cc41d06be6db0e1035c1a747eb7",
+  "traversals": 46
+}
