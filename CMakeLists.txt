@@ -249,6 +249,7 @@ add_executable(qbrain_tests
   tests/test_n47c.cpp
   tests/test_n47d.cpp
   tests/test_n47e.cpp
+  tests/test_n47f.cpp
   tests/test_n46f.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
@@ -376,3 +377,8 @@ add_executable(qbrain_promotion_tests tests/test_n47e.cpp)
 target_compile_definitions(qbrain_promotion_tests PRIVATE QBRAIN_PROMOTION_STANDALONE=1)
 target_link_libraries(qbrain_promotion_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
 add_test(NAME qbrain_promotion_unit COMMAND qbrain_promotion_tests)
+
+add_executable(qbrain_lifecycle_tests tests/test_n47f.cpp)
+target_compile_definitions(qbrain_lifecycle_tests PRIVATE QBRAIN_LIFECYCLE_STANDALONE=1)
+target_link_libraries(qbrain_lifecycle_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
+add_test(NAME qbrain_lifecycle_unit COMMAND qbrain_lifecycle_tests)

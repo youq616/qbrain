@@ -1,0 +1,73 @@
+{
+  "repository": "youq616/qbrain",
+  "node": "N47F",
+  "acceptance_status": "PENDING_NEW_NATIVE_EVIDENCE",
+  "source_commit": "cafb48667177002ae6ea0f1976eea2f388826024",
+  "source_tree": "f0111dbec7b3158dc495b3a6394332c23f557212",
+  "baseline_main": "81a61e02dfb8fde6bb99e8ad38e09fc3e4145e4f",
+  "review": "Owner-authorized separate ChatGPT engineering review; not independent subagent or third party",
+  "new_review_finding": {
+    "severity": "P2",
+    "problem": "SQLite non-INTEGER support timestamp coerced to valid integer age",
+    "original_candidate": "f585eed02e62a8a333ef5fcd8263019c618ecc2f",
+    "reproduced_storage_types": ["text", "real", "blob"],
+    "fixed_in_source_commit": "cafb48667177002ae6ea0f1976eea2f388826024",
+    "new_named_regression_required": true
+  },
+  "previous_read_only_regression": {
+    "failed_run": 35058294020,
+    "fixed_in": "f585eed02e62a8a333ef5fcd8263019c618ecc2f",
+    "original_authorizer_assertion_retained": true,
+    "previous_native_passes_are_not_new_candidate_acceptance": [35059423059, 35059423055]
+  },
+  "local_execution": {
+    "platform": "Linux",
+    "compiler": "Clang 17",
+    "ubsan_c_and_cpp": true,
+    "ubsan_halt_on_error": true,
+    "lifecycle_unit": {"scenarios": 17, "assertions": 180, "result": "PASS"},
+    "lifecycle_process": {"checks": 36, "commands": 58, "expected_exit_0": 52, "expected_exit_1": 6, "result": "PASS"},
+    "process_suites": ["local_config", "memory_cycle", "mcp_boundaries", "hooks", "context_process", "embedding_search", "fact_process", "conflict_process", "recall_process", "hook_fact_process", "promotion_process", "lifecycle_process"],
+    "all_process_suite_exits_zero": true,
+    "previous_units": {"facts": [15, 380], "conflicts": [13, 346], "recall": [15, 330], "hook": [13, 229], "promotion": [18, 237]},
+    "oracle": {"sources": 2, "facts_each": 8, "state_assertions": 1180, "commands": 217, "result": "PASS", "unique_user_scenarios_claimed": false},
+    "mutations": [
+      {"name": "coerce_noninteger_time", "exit_code": 1, "failure": "noninteger support time is unknown", "initial_matcher_typo_preserved": true},
+      {"name": "hide_archived_counterclaim", "exit_code": 1, "failure": "archived counterclaim retained"}
+    ],
+    "mutations_changed_candidate": false,
+    "gate_test_counts": {"cjk": 10, "conflict": 10, "fact": 12, "hook": 12, "http_lifecycle": 14, "lifecycle": 14, "promotion": 13, "recall": 10, "registry": 16},
+    "gate_tests_total": 111,
+    "all_gate_suites_passed": true,
+    "asan_compilation": "PASS",
+    "asan_execution": "BLOCKED_BEFORE_MAIN_SHADOW_ADDRESS_RESERVATION",
+    "address_space_hard_limit_bytes": 4398046511104,
+    "archive_only_report_source_commit": null,
+    "four_changed_blob_identities_verified_separately": true
+  },
+  "new_runs": {
+    "native_development": 35076641849,
+    "n42": 35076641751,
+    "separate_linux_asan_ubsan": 35077139073,
+    "last_observed_status": "queued; do not treat as completed"
+  },
+  "log_hashes": {
+    "ubsan-fixed-unit.json": "61f684437ac4e41267fce67acde46b9a0be7b48f695ed128ed693b03c8f8b610",
+    "recheck-lifecycle_process.json": "3a1610ead11daa1344fdc0c161a4b74dbeac22aef05874926ce2cbd87ab5929b",
+    "recheck-process-summary.json": "3e5d5c72f7e6c6da1ec8c5d4cfaef082c27900a60f8e2d811f917a0c961f9794",
+    "outcome-gates-counted.json": "12dbefbd1802e646c59f1fc7c87cd461f1fa1a4f6f535a5c8bb09049c25ca06a",
+    "oracle.json": "de7a4d89cdd88c7342819622a980df9dee8bf9b816eeb41c6583e3b23ef9d64f",
+    "mutation-summary.json": "e5ea3dba09ed396ece2b1a95415da70678e6d86bf0de1176ce228a389fa97537",
+    "san-unit.log": "6773ed4b7241167dedca11a1965e636e318967d97c657fadff042f9e56f749fc",
+    "timestamp-diagnostic.json": "9df472fca3672e274f52d664d5672098f5f54cf8c4d2b48a0924dfc6de9a72d0",
+    "mutation-matcher-correction.json": "cccfaf62ba6f3d5cc0b6f3f13de7b3b1bdefe43ef42c4e6f5c0ab89d7c5bfa54",
+    "ubsan-timestamp-build.log": "235da2b95e26b3160ed56511595e6c4c13b326ef24548d56f5cb8d4159e72cfe"
+  },
+  "new_native_package_certified": false,
+  "main_merged": false,
+  "new_release_published": false,
+  "live_user_host_test_performed_here": false,
+  "automatic_semantic_merge_or_aging_implemented": false,
+  "local_agent_task_required": false,
+  "whole_project_complete": false
+}

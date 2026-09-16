@@ -149,6 +149,8 @@ void print_help() {
       "  worker [--once]                     claim/complete minion jobs + inbox\n"
       "  dream [--apply] [--phase p] [--retention-hours N] [--json]\n"
       "  fact create|read|attach|retract|supersede|contradict [--source id] (writes read JSON stdin)\n"
+      "  fact archive|restore [--source id] (JSON stdin: fact_id, expected_revision)\n"
+      "  fact lifecycle [--id ID] [--predicate KEY] [--stale-after-days N] [--limit N] [--max-bytes N]\n"
       "  fact conflicts [--source id] [--id ID] [--predicate NAME] [--limit N] [--max-bytes N]\n"
       "  fact promote --event ID [--source id]  (local extracted event; complete quotes, no model)\n"
       "  fact recall --query <literal> [--predicate KEY] [--limit N] [--max-bytes N] [--source id]\n"
@@ -412,14 +414,16 @@ int cmd_fact(const std::vector<std::string>& args) {
     const bool promoting=action=="promote";
     const bool conflicts=action=="conflicts";
     const bool recall=action=="recall";
-    const bool reading=action=="read" || conflicts || recall;
+    const bool lifecycle=action=="lifecycle";
+    const bool reading=action=="read" || conflicts || recall || lifecycle;
     if(!reading && !promoting && action!="create" && action!="attach" && action!="retract" &&
-       action!="supersede" && action!="contradict") throw memory::Error("invalid_action");
+       action!="supersede" && action!="contradict" && action!="archive" && action!="restore") throw memory::Error("invalid_action");
     std::set<std::string> values={"--brain","--source"},flags;
     if(reading) {
       values.insert({"--predicate","--limit","--max-bytes"});
       values.insert(recall?"--query":"--id");
-      if(!conflicts && !recall) flags.insert("--history");
+      if(lifecycle) values.insert("--stale-after-days");
+      if(!conflicts && !recall && !lifecycle) flags.insert("--history");
     }
     else if(promoting) values.insert("--event");
     else flags.insert("--stdin");
@@ -433,12 +437,13 @@ int cmd_fact(const std::vector<std::string>& args) {
     return with_brain(args,[&](Brain& b) {
       ops::OpContext c; c.brain=&b; c.args["source_id"]=opt(args,"--source","default");
       if(reading) {
-        c.args["view"]=recall?"recall":(conflicts?"conflicts":"facts");
+        c.args["view"]=lifecycle?"lifecycle":(recall?"recall":(conflicts?"conflicts":"facts"));
         if(recall) c.args["query"]=opt(args,"--query");
         else c.args["fact_id"]=opt(args,"--id");
         c.args["predicate"]=opt(args,"--predicate"); c.args["limit"]=opt(args,"--limit","10");
         c.args["max_bytes"]=opt(args,"--max-bytes","8192");
-        if(!conflicts && !recall) c.args["include_history"]=flag(args,"--history")?"true":"false";
+        if(lifecycle) c.args["stale_after_days"]=opt(args,"--stale-after-days","180");
+        if(!conflicts && !recall && !lifecycle) c.args["include_history"]=flag(args,"--history")?"true":"false";
       } else if(promoting) {
         c.args["action"]="fact_promote";c.args["event_id"]=opt(args,"--event");
       } else { c.args["action"]="fact_"+action; c.args["payload"]=bounded_stdin(); }
