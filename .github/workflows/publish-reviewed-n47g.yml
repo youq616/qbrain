@@ -1,0 +1,137 @@
+name: Publish exact reviewed N47G candidate
+on:
+  push:
+    branches: ['delivery/n47g-reviewed-b1292b54']
+    paths: ['.github/workflows/publish-reviewed-n47g.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deliver-n47g-b1292b54
+  cancel-in-progress: false
+jobs:
+  publish-approved-bytes:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47g-reviewed-b1292b54'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: b1292b54543b9f54cd5e2b71f4ae4bf5f6247385
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 5bd5a3a2c8a0e5c4b5e072b3d32ab29371533da7
+          path: review
+          persist-credentials: false
+      - name: Validate fixed candidate and publish exact package
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          # Fixed administrative promotion, not product execution or general auto-publishing.
+          import hashlib,importlib,io,json,os,re,subprocess,sys,zipfile
+          from pathlib import Path
+          repo='youq616/qbrain';source='b1292b54543b9f54cd5e2b71f4ae4bf5f6247385'
+          tree='572dce7081140b7869821e9e2f98b7f1429d6328'
+          review='5bd5a3a2c8a0e5c4b5e072b3d32ab29371533da7';review_tree='72f160109bcb22244b73c7ead2e240ce6b1d175a'
+          merge='9a7ecbbf61fc2c086a657527cfb27521d9dc84fe';run=35093371931;tag='batch-preview-b1292b54'
+          cap=64*1024*1024
+          root=Path(os.environ['RUNNER_TEMP'])/('n47g-delivery-'+os.environ['GITHUB_RUN_ID']);root.mkdir(exist_ok=False)
+          def require(ok,message):
+              if not ok:raise RuntimeError(message)
+          def sha(b):return hashlib.sha256(b).hexdigest()
+          def gh(*args):return subprocess.check_output(['gh',*args],stderr=subprocess.PIPE,timeout=120)
+          def api(path):return json.loads(gh('api',f'repos/{repo}/{path}'))
+          def git(path,ref):return subprocess.check_output(['git','-C',path,'rev-parse',ref],text=True).strip()
+          def unpack(raw):
+              require(len(raw)<cap,'archive compressed cap')
+              with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                  rows=z.infolist();require(0<len(rows)<128 and sum(r.file_size for r in rows)<cap,'archive bounds')
+                  require(len(rows)==len({r.orig_filename for r in rows}),'duplicate archive entries')
+                  require(all(r.orig_filename==r.filename and not r.flag_bits&1 and not r.is_dir() for r in rows),'invalid entry')
+                  return {r.filename:z.read(r) for r in rows}
+          def checkout(path,digest):
+              b=Path('candidate',path).read_bytes()
+              require(digest in (sha(b),sha(b.replace(b'\r\n',b'\n').replace(b'\n',b'\r\n'))),'source checkout '+path)
+          require(git('candidate','HEAD')==source and git('candidate','HEAD^{tree}')==tree,'wrong candidate')
+          require(git('review','HEAD')==review and git('review','HEAD^{tree}')==review_tree,'wrong review')
+          p=api('pulls/23');require(p['merged'] is True and p['head']['sha']==review and p['merge_commit_sha']==merge,'PR not reviewed merge')
+          audit=json.loads(Path('review/docs/nodes/n47g-evidence/SUMMARY.json').read_text(encoding='utf-8'))
+          require(audit['source_commit']==source and audit['source_tree']==tree and audit['scoped_result']=='PASS' and audit['unresolved_scoped_p0_p1']==0,'review gate')
+          require(audit['readback']['checks']==234 and audit['local_review']['additional_transaction_probe']['result']=='PASS','outcome evidence missing')
+          for rid in (run,35093372100):
+              r=api(f'actions/runs/{rid}');require(r['head_sha']==source and r['status']=='completed' and r['conclusion']=='success','original run failure')
+          jobs=api(f'actions/runs/{run}/jobs?per_page=100')['jobs']
+          for name in ('source','portable','windows','windows-http-2022','batch-sanitized'):
+              matches=[j for j in jobs if j['name']==name];require(len(matches)==1 and matches[0]['conclusion']=='success','job '+name)
+          pins={'package':(10444789976,'80b22a37a00db8ba8abde3df8b9af058c4d228a68496173877057b098b4e7678'),'windows':(10446090608,'19244bf2fcc283988c93b9bfa5859bcfb460306eb475b46f1aebcc087599be23'),'server2022':(10445736421,'f97a4703d46207986b7e7b94474beb7cbf90412909c4649ed01afeb6f03406dc'),'sanitizer':(10445217630,'b5a4d7cd638e4aed20288978c093d1264fe86a58be176f7d2c42ccda0d1318d0')}
+          a={}
+          for name,(ident,digest) in pins.items():
+              m=api(f'actions/artifacts/{ident}');require(not m['expired'] and m['workflow_run']['id']==run and m['workflow_run']['head_sha']==source,'artifact identity')
+              require(m['digest']=='sha256:'+digest and 0<m['size_in_bytes']<cap,'artifact metadata')
+              raw=gh('api',f'repos/{repo}/actions/artifacts/{ident}/zip');require(len(raw)==m['size_in_bytes'] and sha(raw)==digest,'artifact bytes')
+              a[name]=unpack(raw)
+          require(set(a['package'])=={'qbrain-windows-x64-development.zip','SHA256SUMS.txt'},'outer inventory')
+          raw=a['package']['qbrain-windows-x64-development.zip'];digest=sha(raw)
+          require(len(raw)==2025933 and digest=='85e0f15f907c2bf4ac39c6356d231637251209a902eb7fe6a50476161ae10603','original package bytes')
+          require(a['package']['SHA256SUMS.txt'].decode('ascii').split()==[digest,'qbrain-windows-x64-development.zip'],'outer checksum')
+          f=unpack(raw);m=json.loads(f['MANIFEST.json']);v=json.loads(f['verification/validation.json']);exe=sha(f['qbrain.exe'])
+          require(len(f['qbrain.exe'])==4007424 and exe=='4b236684116664ad31609cd7d7342d13f8e01a2875541cd1049caabfb68ab6c0','exe bytes')
+          require(set(f)==set(m['files'])|{'MANIFEST.json','README-FIRST.txt'},'product inventory')
+          for name,entry in m['files'].items():require(type(entry['bytes']) is int and entry['bytes']==len(f[name]) and entry['sha256']==sha(f[name]),'member '+name)
+          for report in (m,v):
+              require(report['result']=='PASS' and report['source_commit']==source and report['binary_sha256']==exe and report['registered_groups']==55,'manifest result')
+              require(report['signed'] is False and report['real_host_model_consumption_verified'] is False and report['postgres_memory_context_verified'] is False,'scope claims')
+          for name in f:
+              if name.startswith('verification/') and name.endswith('.json'):require(f[name]==a['windows'][name.split('/')[-1]],'native report bytes '+name)
+          sys.path.insert(0,str(Path('candidate/.ci').resolve()))
+          from validate_native_log import verified_groups
+          from validate_http_lifecycle import validate_report as http_lifecycle
+          from validate_fact_report import validate_unit_report as fact_unit,validate_report as fact_process
+          from validate_cjk_report import validate_report as cjk
+          verified_groups(Path('candidate/tests/test_main.cpp').read_text(encoding='utf-8'),a['windows']['regression.log'].decode('utf-8-sig'),55)
+          mapping=[('batch','validate_lifecycle_batch_report','lifecycle_batch','n47g',15,259,40,54),('fact-lifecycle','validate_fact_lifecycle_report','lifecycle','n47f',17,180,36,58),('promotion','validate_promotion_report','promotion','n47e',18,237,68,77),('hook-fact','validate_hook_fact_report','hook_fact','n47d',13,229,52,72),('recall','validate_recall_report','recall','n47c',15,330,44,71),('conflict','validate_conflict_report','conflict','n47b',13,346,38,75)]
+          for platform in ('windows','server2022','sanitizer'):
+              native=platform!='sanitizer';logs=a[platform]
+              require('batch-unit.json' in logs,'missing mandatory batch unit')
+              if platform!='server2022':require('batch-process.json' in logs,'missing mandatory batch process')
+              for prefix,module,script,test,scenarios,assertions,pcs,cmds in mapping:
+                  mod=importlib.import_module(module)
+                  if prefix+'-unit.json' in logs:
+                      u=json.loads(logs[prefix+'-unit.json']);checkout('tests/test_'+test+'.cpp',u['test_sha256']);checkout('.ci/test_'+script+'_unit.py',u['script_sha256'])
+                      require(mod.validate_unit(u,source_commit=source,binary_sha256=u['binary_sha256'],script_sha256=u['script_sha256'],test_sha256=u['test_sha256'],native=native)=={'scenarios':scenarios,'assertions':assertions},'unit '+prefix)
+                      require(u['source_tree']==tree and u['native_windows']==native,'unit platform/tree')
+                  if prefix+'-process.json' in logs:
+                      p=json.loads(logs[prefix+'-process.json']);checkout('.ci/test_'+script+'_process.py',p['script_sha256'])
+                      require(mod.validate_process(p,source_commit=source,binary_sha256=exe if native else p['binary_sha256'],script_sha256=p['script_sha256'],native=native)=={'checks':pcs,'commands':cmds},'process '+prefix)
+                      require(p['source_tree']==tree and p['native_windows']==native,'process platform/tree')
+              if native:
+                  h=json.loads(logs['http-lifecycle.json']);http_lifecycle(h,source_commit=source,probe_hashes={n:h['variants'][n]['sha256'] for n in ('legacy','per_call','current')})
+                  h=json.loads(logs['http-transport.json']);require(h['result']=='PASS' and h['source_commit']==source and h['native_windows'] is True and h['check_count']==len(h['checks'])==81,'wire results')
+          u=json.loads(f['verification/fact-unit.json']);checkout('tests/test_n47a.cpp',u['test_sha256']);names=re.findall(r'scenario\("([^"\r\n]+)"',Path('candidate/tests/test_n47a.cpp').read_text(encoding='utf-8'))
+          require(fact_unit(u,source_commit=source,binary_sha256=u['binary_sha256'],test_sha256=u['test_sha256'],expected_scenarios=names)=={'scenarios':15,'assertions':380},'old fact unit')
+          p=json.loads(f['verification/fact-process.json']);checkout('.ci/test_fact_process.py',p['script_sha256']);fact_process(p,source_commit=source,binary_sha256=exe,script_sha256=p['script_sha256'])
+          p=json.loads(f['verification/cjk-recall.json']);checkout('.ci/test_cjk_recall.py',p['script_sha256']);cjk(p,source_commit=source,binary_sha256=exe,script_sha256=p['script_sha256'])
+          for prefix,module,script in [('promotion','validate_promotion_report','test_promotion_install.ps1'),('hook-fact','validate_hook_fact_report','test_hook_fact_install.ps1')]:
+              for suffix,major in [('51',5),('7',7)]:
+                  r=json.loads(f['verification/'+prefix+'-install'+suffix+'.json']);checkout('.ci/'+script,r['script_sha256']);checkout('scripts/Install-QbrainMemory.ps1',r['installer_sha256'])
+                  importlib.import_module(module).validate_install(r,source_commit=source,binary_sha256=exe,script_sha256=r['script_sha256'],installer_sha256=r['installer_sha256'],shell_major=major)
+          checkout('docs/integration/BATCH-LIFECYCLE.zh-CN.md',sha(f['BATCH-LIFECYCLE.zh-CN.md']))
+          provenance={'repository':repo,'source_commit':source,'source_tree':tree,'review_commit':review,'merge_commit':merge,'product_run':run,'delivery_run':int(os.environ['GITHUB_RUN_ID']),'delivery_commit':os.environ['GITHUB_SHA'],'package_sha256':digest,'package_bytes':len(raw),'exe_sha256':exe,'exe_bytes':len(f['qbrain.exe']),'native_groups':55,'batch_unit':[15,259],'batch_process':[40,54],'additional_review_probe':[5,67],'signed':False,'rebuilt_or_repacked':False,'probe_binaries_separately_downloaded':False,'review_type':'Owner-authorized separate engineering self-review; not independent subagent','new_live_host_test':False}
+          out=root/'release';out.mkdir();(out/'qbrain-windows-x64-batch.zip').write_bytes(raw)
+          (out/'SHA256SUMS.txt').write_text(digest+'  qbrain-windows-x64-batch.zip\n',encoding='ascii')
+          (out/'PROVENANCE.json').write_text(json.dumps(provenance,indent=2)+'\n',encoding='utf-8')
+          assets=['qbrain-windows-x64-batch.zip','SHA256SUMS.txt','PROVENANCE.json']
+          notes='N47G unsigned development preview. Original CI package; no rebuild/repack. Explicit read-only batch preview and atomic archive/restore of up to32 same-source facts with current revisions and valid evidence. Preview is not a lease. No partial policy commits, new schema, automatic aging or semantic merge.55 native groups,15 batch scenarios/259 assertions,40 process checks/54 expected exits and ASan+UBSan passed. Extra review5 scenarios/67 commit-failure assertions passed. Read BATCH-LIFECYCLE.zh-CN.md. ZIP SHA256 '+digest
+          gh('release','create',tag,*(str(out/n) for n in assets),'--repo',repo,'--target',source,'--draft','--prerelease','--latest=false','--title','Qbrain N47G atomic lifecycle batches (b1292b54)','--notes',notes)
+          rb=root/'readback';gh('release','download',tag,'--repo',repo,'--dir',str(rb));require({p.name for p in rb.iterdir()}==set(assets),'release inventory')
+          for name in assets:require((out/name).read_bytes()==(rb/name).read_bytes(),'release readback '+name)
+          gh('release','edit',tag,'--repo',repo,'--draft=false','--prerelease','--latest=false')
+          print(json.dumps({'result':'PUBLISHED','tag':tag,**provenance}))
