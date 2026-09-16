@@ -6,6 +6,7 @@
 #include "qbrain/core/brain.hpp"
 #include "qbrain/memory/session_memory.hpp"
 #include "qbrain/util/hash.hpp"
+#include "qbrain/util/strict_json.hpp"
 #include "qbrain/util/paths.hpp"
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -165,7 +166,9 @@ int run_hook(const std::vector<std::string>& args) {
     if(!boolean(cfg,"enabled",false)){std::cout<<"{}\n";return 0;}
     const auto host=str(cfg,"host",16);if(host!="claude"&&host!="codex")throw std::runtime_error("host");
     const auto root=fs::canonical(util::utf8_to_path(str(cfg,"project_root",4096)));
-    const auto event=J::parse(bounded(std::cin,memory::max_payload_bytes));
+    // Validate before opening a brain, taking runtime locks or writing capture.
+    const auto event=util::parse_unique_json(bounded(std::cin,memory::max_payload_bytes),
+                                             memory::max_payload_bytes,32);
     if(!event.is_object())throw std::runtime_error("event");
     const auto cwd=fs::canonical(util::utf8_to_path(str(event,"cwd",4096)));
     // Compare filesystem identities, not case-folded strings. This supports

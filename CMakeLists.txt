@@ -252,6 +252,7 @@ add_executable(qbrain_tests
   tests/test_n47f.cpp
   tests/test_n47g.cpp
   tests/test_n47h.cpp
+  tests/test_n47i.cpp
   tests/test_n46f.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
@@ -396,3 +397,9 @@ add_executable(qbrain_lifecycle_candidate_tests tests/test_n47h.cpp)
 target_compile_definitions(qbrain_lifecycle_candidate_tests PRIVATE QBRAIN_CANDIDATE_STANDALONE=1)
 target_link_libraries(qbrain_lifecycle_candidate_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
 add_test(NAME qbrain_lifecycle_candidate_unit COMMAND qbrain_lifecycle_candidate_tests)
+
+# N47I: unambiguous bounded raw JSON at public mutation/transport boundaries.
+add_executable(qbrain_strict_json_tests tests/test_n47i.cpp)
+target_compile_definitions(qbrain_strict_json_tests PRIVATE QBRAIN_STRICT_JSON_STANDALONE=1)
+target_link_libraries(qbrain_strict_json_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
+add_test(NAME qbrain_strict_json_unit COMMAND qbrain_strict_json_tests)
