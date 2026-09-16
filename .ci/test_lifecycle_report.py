@@ -56,6 +56,12 @@ class LifecycleReportTests(unittest.TestCase):
         for edit in [lambda r:r['scenarios'].pop(),lambda r:r['scenarios'].reverse(),lambda r:r['scenarios'].__setitem__(-1,copy.deepcopy(r['scenarios'][0]))]:
             r=self.unit();edit(r)
             with self.assertRaises(ValueError):self.validate_unit(r)
+    def test_old_unit_report_cannot_certify_strict_time_storage(self):
+        r=self.unit()
+        r['scenarios']=[s for s in r['scenarios'] if s['name']!='noninteger time storage is never a valid age or archive timestamp']
+        r['scenario_count']=len(r['scenarios'])
+        r['checks']=sum(s['assertions'] for s in r['scenarios'])
+        with self.assertRaises(ValueError):self.validate_unit(r)
     def test_unit_count_and_bool(self):
         for edit in [lambda r:r.update(checks=True),lambda r:r.update(checks=1),lambda r:r['scenarios'][0].update(assertions=True),lambda r:r['scenarios'][0].update(assertions=0),lambda r:r['scenarios'][0].update(status='FAIL')]:
             r=self.unit();edit(r)

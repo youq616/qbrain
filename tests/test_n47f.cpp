@@ -132,6 +132,29 @@ void boundaries(){
   check(s.lifecycle(f.id)["items"][0]["lifecycle"]["age_state"]=="unknown","negative timestamps unknown");
   check(rev(s,f)==2 && s.lifecycle()["usage_measured"]==false,"age never changes revision or counts reads");
  });
+ scenario("noninteger time storage is never a valid age or archive timestamp",[]{
+  auto b=fresh();memory::FactStore s(*b,"alpha");auto f=seed(*b,"typed-time");
+  const auto now=s.lifecycle(f.id)["evaluated_at"].get<int64_t>();
+  for(const auto* value:{"'123not-a-timestamp'","123.75","X'313233'"}) {
+   b->db().exec(std::string("UPDATE memory_items SET created_at=")+value);
+   const auto age=s.lifecycle(f.id)["items"][0]["lifecycle"];
+   check(age["age_state"]=="unknown" && age["age_seconds"].is_null() &&
+         age["latest_valid_support_created_at"].is_null(),"noninteger support time is unknown");
+   check(rev(s,f)==1,"invalid advisory time never changes fact revision");
+  }
+  b->db().exec("UPDATE memory_items SET created_at="+std::to_string(now));
+  check(s.lifecycle(f.id)["items"][0]["lifecycle"]["age_state"]=="fresh","integer support remains valid");
+  s.archive(payload(f.id,1));
+  for(const auto* value:{"'123not-a-timestamp'","123.75","X'313233'"}) {
+   b->db().exec(std::string("UPDATE memory_fact_archive SET archived_at=")+value);
+   denied([&]{s.lifecycle(f.id);},"fact_lifecycle_invalid_metadata");
+   denied([&]{s.restore(payload(f.id,2));},"fact_lifecycle_invalid_metadata");
+   check(scalar(*b,"SELECT COUNT(*) FROM memory_fact_archive")==1 && rev(s,f)==2,
+         "malformed archive metadata is not silently restored");
+  }
+  b->db().exec("UPDATE memory_fact_archive SET archived_at="+std::to_string(now));
+  check(s.restore(payload(f.id,2))["revision"]==3,"valid integer metadata restores normally");
+ });
  scenario("source filters and strict inputs fail closed",[]{
   auto b=fresh();memory::FactStore s(*b,"alpha"),t(*b,"beta");auto f=seed(*b,"one");
   denied([&]{t.archive(payload(f.id,1));},"fact_not_found");check(t.lifecycle(f.id)["items"].empty(),"read id cannot switch source");

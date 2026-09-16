@@ -1,7 +1,7 @@
-"""N47E complete process/unit evidence gates. No inference from a PASS label alone."""
+"""N47F complete process/unit evidence gates. No inference from a PASS label alone."""
 from test_lifecycle_process import EXPECTED_CHECKS, EXPECTED_COMMAND_COUNT
 
-UNIT_SCENARIOS = ('fresh lifecycle reads and restore no-op do not initialize', 'explicit archive restore keep quote evidence and retirement status', 'archive never suppresses required direct counter-evidence', 'Hook composition excludes archived ordinary-memory bypass', 'promotion and duplicate create cannot remove archive policy', 'retirement and invalid evidence cannot be restored', 'wall-clock expiry and supersession are not reversible archival', 'last support forget cascades archival metadata', 'advisory age boundary newest valid support and clock anomalies', 'source filters and strict inputs fail closed', 'read only budgets and existing caller transactions', 'malformed module foreign keys and atomic migration failure', 'transition failure rolls back metadata and revision together', 'archived matches excluded before candidate cap', 'disk backup and fixed two connection optimistic race', 'first archive committed mid read preserves coherent snapshot')
+UNIT_SCENARIOS = ('fresh lifecycle reads and restore no-op do not initialize', 'explicit archive restore keep quote evidence and retirement status', 'archive never suppresses required direct counter-evidence', 'Hook composition excludes archived ordinary-memory bypass', 'promotion and duplicate create cannot remove archive policy', 'retirement and invalid evidence cannot be restored', 'wall-clock expiry and supersession are not reversible archival', 'last support forget cascades archival metadata', 'advisory age boundary newest valid support and clock anomalies', 'noninteger time storage is never a valid age or archive timestamp', 'source filters and strict inputs fail closed', 'read only budgets and existing caller transactions', 'malformed module foreign keys and atomic migration failure', 'transition failure rolls back metadata and revision together', 'archived matches excluded before candidate cap', 'disk backup and fixed two connection optimistic race', 'first archive committed mid read preserves coherent snapshot')
 
 
 def require(ok,message):
@@ -44,6 +44,6 @@ def validate_unit_payload(r):
     require(tuple(x.get('name') for x in rows)==UNIT_SCENARIOS,'wrong scenario set/order')
     require(type(r.get('scenario_count')) is int and r['scenario_count']==len(UNIT_SCENARIOS),'wrong scenario count')
     require(all(x.get('status')=='PASS' and type(x.get('assertions')) is int and x['assertions']>0 for x in rows),'failed scenario')
-    require(type(r.get('checks')) is int and r['checks']>=153 and sum(x['assertions'] for x in rows)==r['checks'],'wrong assertion totals')
+    require(type(r.get('checks')) is int and r['checks']>=180 and sum(x['assertions'] for x in rows)==r['checks'],'wrong assertion totals')
     return {'scenarios':len(rows),'assertions':r['checks']}
 

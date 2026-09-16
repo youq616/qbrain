@@ -179,10 +179,11 @@ CREATE INDEX idx_memory_fact_archive_source ON memory_fact_archive(source_id,fac
   tx.commit();
 }
 bool is_archived(DB& db,const std::string& source,const std::string& id) {
-  auto row=db.prepare("SELECT archived_at FROM memory_fact_archive WHERE source_id=? AND fact_id=?");
+  auto row=db.prepare("SELECT archived_at,typeof(archived_at) FROM memory_fact_archive WHERE source_id=? AND fact_id=?");
   row.bind_text(1,source);row.bind_text(2,id);
   if (!row.step()) return false;
-  require(!row.column_is_null(0) && row.column_int(0)>=0,"fact_lifecycle_invalid_metadata");
+  require(row.column_text(1)=="integer" && !row.column_is_null(0) && row.column_int(0)>=0,
+          "fact_lifecycle_invalid_metadata");
   return true;
 }
 struct Evidence {
@@ -827,11 +828,11 @@ Json FactStore::lifecycle(const std::string& id,const std::string& pred,
       auto f=load(db,source_,fact_id,at,&work);if(f.is_null())continue;
       int64_t newest=0;bool anomaly=false,unknown=false;
       for(const auto& support:f["evidence"]) {
-        auto time=db.prepare("SELECT created_at FROM memory_items WHERE item_id=?");
+        auto time=db.prepare("SELECT created_at,typeof(created_at) FROM memory_items WHERE item_id=?");
         time.bind_text(1,support["item_id"].get_ref<const std::string&>());
         require(time.step(),"fact_evidence_unavailable");
         const auto value=time.column_int(0);
-        if(time.column_is_null(0) || value<=0)unknown=true;
+        if(time.column_text(1)!="integer" || time.column_is_null(0) || value<=0)unknown=true;
         else if(value>at)anomaly=true;
         else newest=std::max(newest,value);
       }
