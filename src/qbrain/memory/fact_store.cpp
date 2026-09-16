@@ -800,6 +800,78 @@ Json FactStore::set_archived(const Json& p,bool desired) {
   auto out=receipt(f);out["archived"]=desired;return out;
 }
 
+Json FactStore::lifecycle_batch(const Json& p, bool apply) {
+  validate(); keys(p,{"operation","items"});
+  const auto operation=field(p,"operation");
+  require(operation=="archive" || operation=="restore","fact_batch_invalid_operation");
+  require(p.contains("items") && p["items"].is_array() && !p["items"].empty() &&
+          p["items"].size()<=32,"fact_batch_invalid_size");
+  require(p.dump().size()<=8192,"fact_batch_payload_limit");
+  const bool desired=operation=="archive";
+  struct Selection { std::string id; int64_t expected; };
+  std::vector<Selection> selection; std::set<std::string> unique;
+  for(const auto& item:p["items"]) {
+    keys(item,{"fact_id","expected_revision"});
+    auto id=field(item,"fact_id");identifier(id);
+    require(unique.insert(id).second,"fact_batch_duplicate_id");
+    selection.push_back({std::move(id),revision(item)});
+  }
+  auto& db=brain_.db();
+  if(apply)require(sqlite3_get_autocommit(db.handle())!=0,"fact_transaction_active");
+  // Receipts contain only metadata, not copied user quotes. A preview's after
+  // values are predictions, not a reservation or proof that anything was applied.
+  auto inspect=[&](int64_t at) {
+    require(ready(db),"fact_not_found");const bool initialized=archive_ready(db);
+    Json out={{"view","lifecycle_batch"},{"source_id",source_},{"operation",operation},
+        {"result","PREVIEW"},{"applied",false},{"atomic",true},
+        {"archive_initialized",initialized},{"schema_preparation_required",desired && !initialized},
+        {"counts",{{"total",selection.size()},{"change",0},{"unchanged",0}}},
+        {"items",Json::array()},{"untrusted_data",true}};
+    ReadWork work;
+    for(const auto& item:selection) {
+      // Bound damaged stored values before load() materializes the quote.
+      auto bound=db.prepare("SELECT 1 FROM memory_facts WHERE source_id=? AND fact_id=? "
+          "AND subject='user' AND length(CAST(object AS BLOB)) BETWEEN 1 AND 4096");
+      bound.bind_text(1,source_);bound.bind_text(2,item.id);
+      require(bound.step(),"fact_not_found");
+      auto f=load(db,source_,item.id,at,&work);
+      require(!f.is_null(),"fact_not_found");
+      require(f["status"]=="active","fact_state_conflict");
+      require(f["revision"]==item.expected,"fact_revision_conflict");
+      const bool before=initialized && is_archived(db,source_,item.id);
+      const bool change=before!=desired;
+      out["items"].push_back({{"fact_id",item.id},{"revision_before",item.expected},
+          {"revision_after",item.expected+(change?1:0)},
+          {"archived_before",before},{"archived_after",desired},{"change",change}});
+      auto& count=out["counts"][change?"change":"unchanged"];count=count.get<int>()+1;
+    }
+    require(out.dump().size()<=32768,"fact_batch_output_limit");return out;
+  };
+  Json preflight;
+  { ReadSnapshot snapshot(db);preflight=inspect(clock_now()); }
+  if(!apply)return preflight;
+  // Lazy schema preparation is separate, as in the single-item API. On a later
+  // conflict an empty module/backup may remain; policy/revisions never half-apply.
+  if(preflight["schema_preparation_required"].get<bool>())initialize_archive(db);
+  Tx tx(db);const auto at=clock_now();auto out=inspect(at); // fresh work/cache + snapshot
+  for(const auto& item:out["items"]) {
+    if(!item["change"].get<bool>())continue;
+    const auto& id=item["fact_id"].get_ref<const std::string&>();
+    if(desired) {
+      auto insert=db.prepare("INSERT INTO memory_fact_archive(fact_id,source_id,archived_at) VALUES(?,?,?)");
+      insert.bind_text(1,id);insert.bind_text(2,source_);insert.bind_int(3,at);insert.step_done();
+    } else {
+      auto erase=db.prepare("DELETE FROM memory_fact_archive WHERE source_id=? AND fact_id=?");
+      erase.bind_text(1,source_);erase.bind_text(2,id);erase.step_done();
+      require(db.changes()==1,"fact_revision_conflict");
+    }
+    advance(db,source_,id,item["revision_before"].get<int64_t>(),"active",at);
+  }
+  out["result"]="APPLIED";out["applied"]=true;
+  require(out.dump().size()<=32768,"fact_batch_output_limit");
+  tx.commit();return out;
+}
+
 Json FactStore::lifecycle(const std::string& id,const std::string& pred,
                           int days,int limit,int budget) {
   validate();if(!id.empty())identifier(id);if(!pred.empty())predicate_check(pred);

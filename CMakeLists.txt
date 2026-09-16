@@ -250,6 +250,7 @@ add_executable(qbrain_tests
   tests/test_n47d.cpp
   tests/test_n47e.cpp
   tests/test_n47f.cpp
+  tests/test_n47g.cpp
   tests/test_n46f.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
@@ -382,3 +383,9 @@ add_executable(qbrain_lifecycle_tests tests/test_n47f.cpp)
 target_compile_definitions(qbrain_lifecycle_tests PRIVATE QBRAIN_LIFECYCLE_STANDALONE=1)
 target_link_libraries(qbrain_lifecycle_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
 add_test(NAME qbrain_lifecycle_unit COMMAND qbrain_lifecycle_tests)
+
+# N47G: explicit atomic lifecycle batches and read-only preview.
+add_executable(qbrain_lifecycle_batch_tests tests/test_n47g.cpp)
+target_compile_definitions(qbrain_lifecycle_batch_tests PRIVATE QBRAIN_BATCH_STANDALONE=1)
+target_link_libraries(qbrain_lifecycle_batch_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
+add_test(NAME qbrain_lifecycle_batch_unit COMMAND qbrain_lifecycle_batch_tests)

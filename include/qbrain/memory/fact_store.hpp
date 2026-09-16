@@ -13,6 +13,9 @@ class FactStore {
   // the current fact revision; restore never revives unsupported/retired facts.
   Json archive(const Json& payload);
   Json restore(const Json& payload);
+  // Preview or atomically apply 1..32 selected archive/restore changes. The
+  // apply decision is owned by the public route, never accepted from payload.
+  Json lifecycle_batch(const Json& payload, bool apply = false);
   Json lifecycle(const std::string& fact_id = "", const std::string& predicate = "",
                  int stale_after_days = 180, int limit = 10, int max_bytes = 8192);
   Json promote_event(const std::string& event_id);

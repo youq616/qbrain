@@ -150,6 +150,7 @@ void print_help() {
       "  dream [--apply] [--phase p] [--retention-hours N] [--json]\n"
       "  fact create|read|attach|retract|supersede|contradict [--source id] (writes read JSON stdin)\n"
       "  fact archive|restore [--source id] (JSON stdin: fact_id, expected_revision)\n"
+      "  fact batch-preview|batch-apply [--source id] (JSON stdin: operation, items)\n"
       "  fact lifecycle [--id ID] [--predicate KEY] [--stale-after-days N] [--limit N] [--max-bytes N]\n"
       "  fact conflicts [--source id] [--id ID] [--predicate NAME] [--limit N] [--max-bytes N]\n"
       "  fact promote --event ID [--source id]  (local extracted event; complete quotes, no model)\n"
@@ -415,11 +416,15 @@ int cmd_fact(const std::vector<std::string>& args) {
     const bool conflicts=action=="conflicts";
     const bool recall=action=="recall";
     const bool lifecycle=action=="lifecycle";
-    const bool reading=action=="read" || conflicts || recall || lifecycle;
-    if(!reading && !promoting && action!="create" && action!="attach" && action!="retract" &&
+    const bool batch_preview=action=="batch-preview";
+    const bool batch_apply=action=="batch-apply";
+    const bool batch=batch_preview || batch_apply;
+    const bool reading=action=="read" || conflicts || recall || lifecycle || batch_preview;
+    if(!reading && !promoting && !batch_apply && action!="create" && action!="attach" && action!="retract" &&
        action!="supersede" && action!="contradict" && action!="archive" && action!="restore") throw memory::Error("invalid_action");
     std::set<std::string> values={"--brain","--source"},flags;
-    if(reading) {
+    if(batch) flags.insert("--stdin");
+    else if(reading) {
       values.insert({"--predicate","--limit","--max-bytes"});
       values.insert(recall?"--query":"--id");
       if(lifecycle) values.insert("--stale-after-days");
@@ -436,7 +441,11 @@ int cmd_fact(const std::vector<std::string>& args) {
     }
     return with_brain(args,[&](Brain& b) {
       ops::OpContext c; c.brain=&b; c.args["source_id"]=opt(args,"--source","default");
-      if(reading) {
+      if(batch) {
+        c.args["payload"]=bounded_stdin();
+        if(batch_preview)c.args["view"]="lifecycle_batch";
+        else c.args["action"]="fact_lifecycle_batch";
+      } else if(reading) {
         c.args["view"]=lifecycle?"lifecycle":(recall?"recall":(conflicts?"conflicts":"facts"));
         if(recall) c.args["query"]=opt(args,"--query");
         else c.args["fact_id"]=opt(args,"--id");
