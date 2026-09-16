@@ -25,34 +25,31 @@ jobs:
           path=Path('tests/test_n47f.cpp');data=path.read_bytes()
           def blob(b):return hashlib.sha1(b'blob '+str(len(b)).encode()+b'\0'+b).hexdigest()
           assert blob(data)=='ba71e9424dbf35d7bf36796d52bbc40337f557af'
-          old='''   bool backup=false;for(const auto& entry:std::filesystem::directory_iterator(dir)){
-              if(entry.path().filename().string().find(".pre-lifecycle-v1-")==std::string::npos)continue;backup=true;
-              sqlite3* db=nullptr;check(sqlite3_open_v2(util::path_to_utf8(entry.path()).c_str(),&db,SQLITE_OPEN_READONLY,nullptr)==SQLITE_OK,"backup readable");
-              sqlite3_stmt* stmt=nullptr;sqlite3_prepare_v2(db,"SELECT count(*) FROM sqlite_master WHERE name='memory_fact_archive'",-1,&stmt,nullptr);
-              check(sqlite3_step(stmt)==SQLITE_ROW && sqlite3_column_int(stmt,0)==0,"backup precedes new table");sqlite3_finalize(stmt);sqlite3_close(db);
-             }check(backup,"on-disk backup exists");'''
-          # Remove the indentation added to multiline data by this Python source.
-          old=old.splitlines();old='\n'.join([old[0]]+[line[10:] for line in old[1:]])
-          new='''   int backups=0;bool all_open=true,all_before=true,all_closed=true;
-              for(const auto& entry:std::filesystem::directory_iterator(dir)){
-               if(entry.path().filename().string().find(".pre-lifecycle-v1-")==std::string::npos)continue;++backups;
-               sqlite3* db=nullptr;sqlite3_stmt* stmt=nullptr;
-               const bool opened=sqlite3_open_v2(util::path_to_utf8(entry.path()).c_str(),&db,SQLITE_OPEN_READONLY,nullptr)==SQLITE_OK;
-               all_open=all_open&&opened;
-               const bool prepared=opened && sqlite3_prepare_v2(db,"SELECT count(*) FROM sqlite_master WHERE name='memory_fact_archive'",-1,&stmt,nullptr)==SQLITE_OK;
-               const bool prior=prepared && sqlite3_step(stmt)==SQLITE_ROW && sqlite3_column_int(stmt,0)==0;
-               all_before=all_before&&prior;
-               const int finalized=sqlite3_finalize(stmt),closed=sqlite3_close(db);
-               all_closed=all_closed&&finalized==SQLITE_OK&&closed==SQLITE_OK;
-              }
-              // Scheduling may yield one or two backups. Inspect every file but count the
-              // same five invariants, not one assertion pair per timing-dependent file.
-              check(backups>=1,"on-disk backup exists");check(backups<=2,"only racing writers created backups");
-              check(all_open,"all backups readable");check(all_before,"every backup precedes new table");
-              check(all_closed,"all backup readers finalized and closed");'''
-          new=new.splitlines();new='\n'.join([new[0]]+[line[11:] for line in new[1:]])
-          text=data.decode('utf-8');assert text.count(old)==1
-          text=text.replace(old,new);assert blob(text.encode())=='d6f3e1895fe9479e58edb8b99dbf4558ab13d284'
+          text=data.decode('utf-8')
+          first='   bool backup=false;for(const auto& entry:std::filesystem::directory_iterator(dir)){'
+          last='   }check(backup,"on-disk backup exists");'
+          assert text.count(first)==1 and text.count(last)==1
+          start=text.index(first);end=text.index(last,start)+len(last)
+          lines=[
+              '   int backups=0;bool all_open=true,all_before=true,all_closed=true;',
+              '   for(const auto& entry:std::filesystem::directory_iterator(dir)){',
+              '    if(entry.path().filename().string().find(".pre-lifecycle-v1-")==std::string::npos)continue;++backups;',
+              '    sqlite3* db=nullptr;sqlite3_stmt* stmt=nullptr;',
+              '    const bool opened=sqlite3_open_v2(util::path_to_utf8(entry.path()).c_str(),&db,SQLITE_OPEN_READONLY,nullptr)==SQLITE_OK;',
+              '    all_open=all_open&&opened;',
+              '    const bool prepared=opened && sqlite3_prepare_v2(db,"SELECT count(*) FROM sqlite_master WHERE name=\'memory_fact_archive\'",-1,&stmt,nullptr)==SQLITE_OK;',
+              '    const bool prior=prepared && sqlite3_step(stmt)==SQLITE_ROW && sqlite3_column_int(stmt,0)==0;',
+              '    all_before=all_before&&prior;',
+              '    const int finalized=sqlite3_finalize(stmt),closed=sqlite3_close(db);',
+              '    all_closed=all_closed&&finalized==SQLITE_OK&&closed==SQLITE_OK;',
+              '   }',
+              '   // Scheduling may yield one or two backups. Inspect every file but count the',
+              '   // same five invariants, not one assertion pair per timing-dependent file.',
+              '   check(backups>=1,"on-disk backup exists");check(backups<=2,"only racing writers created backups");',
+              '   check(all_open,"all backups readable");check(all_before,"every backup precedes new table");',
+              '   check(all_closed,"all backup readers finalized and closed");']
+          text=text[:start]+'\n'.join(lines)+text[end:]
+          assert blob(text.encode())=='d6f3e1895fe9479e58edb8b99dbf4558ab13d284'
           request=Path(os.environ['RUNNER_TEMP'])/'n47f-count-blob.json'
           request.write_text(json.dumps({'content':text,'encoding':'utf-8'}),encoding='utf-8')
           result=json.loads(subprocess.check_output(['gh','api','--method','POST','repos/youq616/qbrain/git/blobs','--input',str(request)],timeout=60))
