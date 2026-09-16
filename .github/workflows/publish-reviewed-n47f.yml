@@ -1,0 +1,142 @@
+name: Publish exact reviewed N47F candidate
+on:
+  push:
+    branches: ['delivery/n47f-reviewed-cafb4866']
+    paths: ['.github/workflows/publish-reviewed-n47f.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deliver-n47f-cafb4866
+  cancel-in-progress: false
+jobs:
+  publish-approved-bytes:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47f-reviewed-cafb4866'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: cafb48667177002ae6ea0f1976eea2f388826024
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: f646cd9f7dc0f012657836bb18beb1978602449b
+          path: review
+          persist-credentials: false
+      - name: Revalidate fixed evidence, upload draft and compare bytes before publication
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          # Administrative promotion of one reviewed candidate; no product build or execution.
+          import hashlib,io,json,os,re,stat,subprocess,sys,zipfile,importlib
+          from pathlib import Path
+          repo='youq616/qbrain';source='cafb48667177002ae6ea0f1976eea2f388826024'
+          tree='f0111dbec7b3158dc495b3a6394332c23f557212';review='f646cd9f7dc0f012657836bb18beb1978602449b'
+          review_tree='6f82182bcf47e1ea639cd0427a4f434c6f2c154e';merge='3f9bc3671f30b8547a1c8ab1371352d9427974ef'
+          run=35076641849;san_run=35077139073;tag='lifecycle-preview-cafb4866';cap=64*1024*1024
+          root=Path(os.environ['RUNNER_TEMP'])/('n47f-delivery-'+os.environ['GITHUB_RUN_ID']);root.mkdir(exist_ok=False)
+          def sha(b):return hashlib.sha256(b).hexdigest()
+          def gh(*a):return subprocess.check_output(['gh',*a],stderr=subprocess.PIPE,timeout=120)
+          def api(p):return json.loads(gh('api',f'repos/{repo}/{p}'))
+          def git(p,ref):return subprocess.check_output(['git','-C',p,'rev-parse',ref],text=True).strip()
+          def unpack(b):
+           assert len(b)<cap
+           with zipfile.ZipFile(io.BytesIO(b)) as z:
+            rows=z.infolist();assert 0<len(rows)<128 and sum(r.file_size for r in rows)<cap
+            assert len(rows)==len(set(r.orig_filename for r in rows))
+            for r in rows:
+             n=r.orig_filename;assert n==r.filename and not r.is_dir() and not r.flag_bits&1
+             assert not n.startswith('/') and '\\' not in n and ':' not in n and '\x00' not in n and '..' not in n.split('/')
+             assert stat.S_IFMT(r.external_attr>>16) in (0,stat.S_IFREG)
+            return {r.filename:z.read(r) for r in rows}
+          def checkout(p,h):
+           b=Path('candidate',p).read_bytes();assert h in (sha(b),sha(b.replace(b'\r\n',b'\n').replace(b'\n',b'\r\n'))),p
+           return h
+          assert git('candidate','HEAD')==source and git('candidate','HEAD^{tree}')==tree
+          assert git('review','HEAD')==review and git('review','HEAD^{tree}')==review_tree
+          pr=api('pulls/22');assert pr['merged'] is True and pr['merge_commit_sha']==merge and pr['head']['sha']==review
+          audit=json.loads(Path('review/docs/nodes/n47f-evidence/SUMMARY.json').read_text(encoding='utf-8'))
+          assert audit['source_commit']==source and audit['source_tree']==tree and audit['scoped_outcome']=='PASS'
+          assert audit['review']['unresolved_p0_p1']==0 and audit['review']['independent_subagent_claimed'] is False
+          assert audit['readback_checks']==212
+          for rid,commit in [(run,source),(35076641751,source),(san_run,'9db6bab6f56c6943822e1147c5441fb21535b7c0')]:
+           r=api(f'actions/runs/{rid}');assert r['status']=='completed' and r['conclusion']=='success' and r['head_sha']==commit
+          jobs=api(f'actions/runs/{run}/jobs?per_page=100')['jobs']
+          for n in ('source','portable','windows','windows-http-2022'):
+           rows=[j for j in jobs if j['name']==n];assert len(rows)==1 and rows[0]['conclusion']=='success'
+          pins={
+           'package':(10439527037,'5438b2490fc80fb94de67bdf2b1f79b6a11df9ae227606229377dd120145c340',run,source),
+           'windows':(10438858885,'70deef027791a7b8cb4abfa64efc8718088cc6c11c9a925a3ee1345367a1e0e4',run,source),
+           'server2022':(10439201078,'7a13c69bba4b6cff0fab3ac3ac60c5e867ca55439d0a5d39a6ab7de1efd0ba29',run,source),
+           'sanitizer':(10439300167,'47b048df1f9f75c8c0f09281bf55a195c0fd54ca50b90511ed4f8db551781858',san_run,'9db6bab6f56c6943822e1147c5441fb21535b7c0')}
+          archives={}
+          for n,(ident,digest,rid,commit) in pins.items():
+           meta=api(f'actions/artifacts/{ident}');assert not meta['expired'] and 0<meta['size_in_bytes']<cap
+           assert meta['digest']=='sha256:'+digest and meta['workflow_run']['id']==rid and meta['workflow_run']['head_sha']==commit
+           b=gh('api',f'repos/{repo}/actions/artifacts/{ident}/zip');assert len(b)==meta['size_in_bytes'] and sha(b)==digest
+           archives[n]=unpack(b)
+          outer=archives['package'];assert set(outer)=={'qbrain-windows-x64-development.zip','SHA256SUMS.txt'}
+          raw=outer['qbrain-windows-x64-development.zip'];assert len(raw)==2005834 and sha(raw)=='c16f15a7ad318beb58059b05d3f400399b33d34c000d040c3c1ddcc179641f55'
+          assert outer['SHA256SUMS.txt'].decode('ascii').split()==[sha(raw),'qbrain-windows-x64-development.zip']
+          files=unpack(raw);manifest=json.loads(files['MANIFEST.json']);validation=json.loads(files['verification/validation.json'])
+          exe=sha(files['qbrain.exe']);assert len(files['qbrain.exe'])==3986432 and exe=='7032a300215874111bcc0f40b47a9bb2efd357cac85b047b99942fd637304ca1'
+          assert set(files)==set(manifest['files'])|{'MANIFEST.json','README-FIRST.txt'}
+          for n,m in manifest['files'].items():assert type(m['bytes']) is int and m['bytes']==len(files[n]) and m['sha256']==sha(files[n])
+          for r in (manifest,validation):
+           assert r['result']=='PASS' and r['source_commit']==source and r['registered_groups']==54 and r['binary_sha256']==exe
+           assert r['signed'] is False and r['real_host_model_consumption_verified'] is False and r['postgres_memory_context_verified'] is False
+          for n,b in files.items():
+           if n.startswith('verification/') and n.endswith('.json'):assert b==archives['windows'][n.split('/')[-1]]
+          sys.path.insert(0,str(Path('candidate/.ci').resolve()))
+          from validate_native_log import verified_groups
+          from validate_fact_report import validate_report as fp,validate_unit_report as fu
+          from validate_http_lifecycle import validate_report as hl
+          from validate_cjk_report import validate_report as cj
+          verified_groups(Path('candidate/tests/test_main.cpp').read_text(encoding='utf-8'),archives['windows']['regression.log'].decode('utf-8-sig'),54)
+          spec=[('fact-lifecycle','lifecycle','n47f','validate_fact_lifecycle_report'),('promotion','promotion','n47e','validate_promotion_report'),('hook-fact','hook_fact','n47d','validate_hook_fact_report'),('recall','recall','n47c','validate_recall_report'),('conflict','conflict','n47b','validate_conflict_report')]
+          for platform in ('windows','server2022'):
+           for name,script,test,module in spec:
+            m=importlib.import_module(module);u=json.loads(archives[platform][name+'-unit.json'])
+            m.validate_unit(u,source_commit=source,binary_sha256=u['binary_sha256'],script_sha256=checkout('.ci/test_'+script+'_unit.py',u['script_sha256']),test_sha256=checkout('tests/test_'+test+'.cpp',u['test_sha256']))
+            assert u['source_tree']==tree
+            if name=='fact-lifecycle':assert u['scenario_count']==17 and u['checks']==180
+            if platform=='windows':
+             p=json.loads(archives[platform][name+'-process.json']);b=files['verification/test_'+script+'_process.py']
+             m.validate_process(p,source_commit=source,binary_sha256=exe,script_sha256=checkout('.ci/test_'+script+'_process.py',sha(b)))
+             assert p['source_tree']==tree
+           h=json.loads(archives[platform]['http-lifecycle.json']);hl(h,source_commit=source,probe_hashes={n:h['variants'][n]['sha256'] for n in ('legacy','per_call','current')})
+           w=json.loads(archives[platform]['http-transport.json']);assert w['result']=='PASS' and w['native_windows'] is True and w['source_commit']==source and w['check_count']==len(w['checks'])==81
+          for name,script in [('promotion','promotion'),('hook-fact','hook_fact')]:
+           m=importlib.import_module('validate_'+script+'_report')
+           for suffix,major in [('51',5),('7',7)]:
+            r=json.loads(archives['windows'][name+'-install'+suffix+'.json'])
+            m.validate_install(r,source_commit=source,binary_sha256=exe,script_sha256=checkout('.ci/test_'+script+'_install.ps1',r['script_sha256']),installer_sha256=checkout('scripts/Install-QbrainMemory.ps1',r['installer_sha256']),shell_major=major)
+          f=json.loads(files['verification/fact-unit.json']);fu(f,source_commit=source,binary_sha256=f['binary_sha256'],test_sha256=checkout('tests/test_n47a.cpp',f['test_sha256']),expected_scenarios=re.findall(r'scenario\("([^"\r\n]+)"',Path('candidate/tests/test_n47a.cpp').read_text(encoding='utf-8')))
+          p=json.loads(files['verification/fact-process.json']);b=files['verification/test_fact_process.py'];fp(p,source_commit=source,binary_sha256=exe,script_sha256=checkout('.ci/test_fact_process.py',sha(b)))
+          p=json.loads(files['verification/cjk-recall.json']);b=files['verification/test_cjk_recall.py'];cj(p,source_commit=source,binary_sha256=exe,script_sha256=checkout('.ci/test_cjk_recall.py',sha(b)))
+          san=archives['sanitizer'];s=json.loads(san['sanitizer-summary.json']);assert s['result']=='PASS' and s['source_commit']==source and s['asan'] is True and s['ubsan'] is True
+          assert san['source.txt'].decode().strip()==source
+          m=importlib.import_module('validate_fact_lifecycle_report');u=json.loads(san['lifecycle-unit.json']);p=json.loads(san['lifecycle-process.json'])
+          assert m.validate_unit(u,source_commit=source,binary_sha256=u['binary_sha256'],script_sha256=checkout('.ci/test_lifecycle_unit.py',u['script_sha256']),test_sha256=checkout('tests/test_n47f.cpp',u['test_sha256']),native=False)==s['unit']=={'scenarios':17,'assertions':180}
+          assert m.validate_process(p,source_commit=source,binary_sha256=p['binary_sha256'],script_sha256=checkout('.ci/test_lifecycle_process.py',p['script_sha256']),native=False)==s['process']=={'checks':36,'commands':58}
+          assert u['native_windows'] is False and p['native_windows'] is False
+          checkout('docs/integration/FACT-LIFECYCLE.zh-CN.md',sha(files['FACT-LIFECYCLE.zh-CN.md']))
+          provenance={'repository':repo,'source_commit':source,'source_tree':tree,'review_commit':review,'merge_commit':merge,'product_run':run,'n42_run':35076641751,'sanitizer_run':san_run,'delivery_run':int(os.environ['GITHUB_RUN_ID']),'delivery_commit':os.environ['GITHUB_SHA'],'package_artifact_id':pins['package'][0],'package_bytes':len(raw),'package_sha256':sha(raw),'exe_bytes':len(files['qbrain.exe']),'exe_sha256':exe,'native_registered_groups':54,'lifecycle_scenarios':17,'lifecycle_assertions':180,'lifecycle_process_checks':36,'lifecycle_commands':58,'signed':False,'rebuilt_or_repacked':False,'probe_binaries_separately_downloaded':False,'new_user_host_verified':False,'review_type':'Owner-authorized separate engineering self-review, not third-party/subagent','scope':'Explicit reversible archival and advisory age; no usage counters, semantic merge, inferred truth or automatic aging'}
+          out=root/'release';out.mkdir();(out/'qbrain-windows-x64-lifecycle.zip').write_bytes(raw)
+          (out/'SHA256SUMS.txt').write_text(sha(raw)+'  qbrain-windows-x64-lifecycle.zip\n',encoding='ascii')
+          (out/'PROVENANCE.json').write_text(json.dumps(provenance,indent=2)+'\n',encoding='utf-8')
+          assets=['qbrain-windows-x64-lifecycle.zip','SHA256SUMS.txt','PROVENANCE.json']
+          notes=('N47F unsigned development preview. Exact tested CI bytes. Explicit fact archive/restore with revision and valid evidence checks; lifecycle age is advisory, not truth or usage. Archived anchors stay out of default fact recall but remain mandatory direct counter-evidence. Restore cannot revive retired/expired/forgotten facts. First optional module setup backs up the DB; old binaries ignore archive policy. 54 native groups,17 lifecycle scenarios/180 assertions,36 process checks/58 expected exits,ASan+UBSan checks passed. No semantic consolidation or automatic aging. Read FACT-LIFECYCLE.zh-CN.md. ZIP SHA256 '+sha(raw))
+          gh('release','create',tag,*(str(out/n) for n in assets),'--repo',repo,'--target',source,'--draft','--prerelease','--latest=false','--title','Qbrain N47F reversible archival (cafb4866)','--notes',notes)
+          rb=root/'readback';gh('release','download',tag,'--repo',repo,'--dir',str(rb));assert set(p.name for p in rb.iterdir())==set(assets)
+          for n in assets:assert (out/n).read_bytes()==(rb/n).read_bytes()
+          gh('release','edit',tag,'--repo',repo,'--draft=false','--prerelease','--latest=false')
+          print(json.dumps({'result':'PUBLISHED','tag':tag,**provenance}))
