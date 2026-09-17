@@ -1,0 +1,51 @@
+{
+  "result": "PASS_RECOVERY_CONTROL_SCOPED",
+  "reviewer": "/root/recall_storage_review",
+  "plan_verdict": "PASS_FOR_IMPLEMENTATION",
+  "plan_approved_before_implementation": true,
+  "workflow_sha256": "d81f84d3dd0b2f83b05ad6812fdca4f7105db0ee36a85624041b68add42f60f3",
+  "original_workflow_sha256": "389b6f38cf695e2f1ebfe149761e45ccd5b8dac35142f97e8ff1650991fe7a3a",
+  "release_id": 390787606,
+  "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "initial_delivery": {
+    "id": 35233247840,
+    "head_sha": "2f254681c31fd493fa9cb5ab14ae089608f8a4ad",
+    "run_attempt": 1,
+    "status": "completed",
+    "conclusion": "failure",
+    "workflow": ".github/workflows/publish-reviewed-n47l.yml",
+    "url": "https://github.com/youq616/qbrain/actions/runs/35233247840"
+  },
+  "initial_failure": "Draft lookup used the published-only release-by-tag endpoint after 1094-check artifact verification and draft asset creation; no publication PATCH was reached.",
+  "closed_findings": [
+    {
+      "priority": "P2",
+      "finding": "Published-only release-by-tag endpoint used to fetch a draft",
+      "resolution": "One fixed draft is read by release ID; original assets downloaded by their fixed IDs; by-tag used only after publication"
+    }
+  ],
+  "unresolved_scoped_p0_p1_p2": 0,
+  "independent_offline_cases": 22,
+  "positive_controls": 1,
+  "prepublication_negative_cases": 20,
+  "postpatch_nonatomicity_demonstrations": 1,
+  "all_cases_zero_draft_by_tag_reads": true,
+  "preserved_original_sections": {
+    "first_pin_guard_byte_identical": true,
+    "source_review_and_evidence_gates_byte_identical": true,
+    "live_ci_seven_artifact_and_1094_verifier_segment_byte_identical": true
+  },
+  "original_provenance_bytes_preserved": true,
+  "initial_run_reported_as_failure": true,
+  "recovery_identity_recorded_separately": true,
+  "source_product_executed": false,
+  "publication_performed_by_reviewer": false,
+  "frozen_prior_reviews_rewritten": false,
+  "evidence_files": {
+    "initial_failure": "N47L-RECOVERY-INITIAL-FAILURE.json",
+    "offline_results": "N47L-RECOVERY-OFFLINE-REVIEW-FINAL.json",
+    "offline_probe": "n47l-recovery-review-probe.py",
+    "review": "N47L-PUBLICATION-RECOVERY-REVIEW.md"
+  },
+  "scope": "Fixed-draft recovery plan/code and independent offline controls; actual recovery runtime publication not claimed"
+}

@@ -1,0 +1,432 @@
+{
+  "result": "PASS",
+  "template_sha256": "389b6f38cf695e2f1ebfe149761e45ccd5b8dac35142f97e8ff1650991fe7a3a",
+  "scope": "Offline execution of extracted template validators using synthetic fixtures; no repository changes, network or publication",
+  "network_or_actual_publication": false,
+  "pin_negatives": [
+    {
+      "field": "SOURCE_SHA",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: SOURCE_SHA"
+    },
+    {
+      "field": "SOURCE_SHA",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: SOURCE_SHA"
+    },
+    {
+      "field": "SOURCE_SHA",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed hash pin: SOURCE_SHA"
+    },
+    {
+      "field": "SOURCE_TREE",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: SOURCE_TREE"
+    },
+    {
+      "field": "SOURCE_TREE",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: SOURCE_TREE"
+    },
+    {
+      "field": "SOURCE_TREE",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed hash pin: SOURCE_TREE"
+    },
+    {
+      "field": "N44_RUN",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: N44_RUN"
+    },
+    {
+      "field": "N44_RUN",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: N44_RUN"
+    },
+    {
+      "field": "N44_RUN",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed positive integer pin: N44_RUN"
+    },
+    {
+      "field": "N42_RUN",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: N42_RUN"
+    },
+    {
+      "field": "N42_RUN",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: N42_RUN"
+    },
+    {
+      "field": "N42_RUN",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed positive integer pin: N42_RUN"
+    },
+    {
+      "field": "REVIEW_SHA",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: REVIEW_SHA"
+    },
+    {
+      "field": "REVIEW_SHA",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: REVIEW_SHA"
+    },
+    {
+      "field": "REVIEW_SHA",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed hash pin: REVIEW_SHA"
+    },
+    {
+      "field": "REVIEW_TREE",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: REVIEW_TREE"
+    },
+    {
+      "field": "REVIEW_TREE",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: REVIEW_TREE"
+    },
+    {
+      "field": "REVIEW_TREE",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed hash pin: REVIEW_TREE"
+    },
+    {
+      "field": "MERGE_SHA",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: MERGE_SHA"
+    },
+    {
+      "field": "MERGE_SHA",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: MERGE_SHA"
+    },
+    {
+      "field": "MERGE_SHA",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed hash pin: MERGE_SHA"
+    },
+    {
+      "field": "METADATA_SHA256",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: METADATA_SHA256"
+    },
+    {
+      "field": "METADATA_SHA256",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: METADATA_SHA256"
+    },
+    {
+      "field": "METADATA_SHA256",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed hash pin: METADATA_SHA256"
+    },
+    {
+      "field": "SUMMARY_SHA256",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: SUMMARY_SHA256"
+    },
+    {
+      "field": "SUMMARY_SHA256",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: SUMMARY_SHA256"
+    },
+    {
+      "field": "SUMMARY_SHA256",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed hash pin: SUMMARY_SHA256"
+    },
+    {
+      "field": "VERIFIER_SHA256",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: VERIFIER_SHA256"
+    },
+    {
+      "field": "VERIFIER_SHA256",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: VERIFIER_SHA256"
+    },
+    {
+      "field": "VERIFIER_SHA256",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed hash pin: VERIFIER_SHA256"
+    },
+    {
+      "field": "READBACK_CHECKS",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: READBACK_CHECKS"
+    },
+    {
+      "field": "READBACK_CHECKS",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: READBACK_CHECKS"
+    },
+    {
+      "field": "READBACK_CHECKS",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed positive integer pin: READBACK_CHECKS"
+    },
+    {
+      "field": "PACKAGE_BYTES",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: PACKAGE_BYTES"
+    },
+    {
+      "field": "PACKAGE_BYTES",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: PACKAGE_BYTES"
+    },
+    {
+      "field": "PACKAGE_BYTES",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed positive integer pin: PACKAGE_BYTES"
+    },
+    {
+      "field": "PACKAGE_SHA256",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: PACKAGE_SHA256"
+    },
+    {
+      "field": "PACKAGE_SHA256",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: PACKAGE_SHA256"
+    },
+    {
+      "field": "PACKAGE_SHA256",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed hash pin: PACKAGE_SHA256"
+    },
+    {
+      "field": "EXE_BYTES",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: EXE_BYTES"
+    },
+    {
+      "field": "EXE_BYTES",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: EXE_BYTES"
+    },
+    {
+      "field": "EXE_BYTES",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed positive integer pin: EXE_BYTES"
+    },
+    {
+      "field": "EXE_SHA256",
+      "mutation": "",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: EXE_SHA256"
+    },
+    {
+      "field": "EXE_SHA256",
+      "mutation": "REPLACE_UNRESOLVED",
+      "result": "REJECTED",
+      "error": "Unresolved publication pin: EXE_SHA256"
+    },
+    {
+      "field": "EXE_SHA256",
+      "mutation": "invalid",
+      "result": "REJECTED",
+      "error": "Malformed hash pin: EXE_SHA256"
+    }
+  ],
+  "asset_negatives": [
+    {
+      "stage": "initial_draft",
+      "mutation": "missing_id",
+      "result": "REJECTED",
+      "error": "Release asset IDs are missing, invalid or duplicated"
+    },
+    {
+      "stage": "initial_draft",
+      "mutation": "boolean_id",
+      "result": "REJECTED",
+      "error": "Release asset IDs are missing, invalid or duplicated"
+    },
+    {
+      "stage": "initial_draft",
+      "mutation": "duplicate_id",
+      "result": "REJECTED",
+      "error": "Release asset IDs are missing, invalid or duplicated"
+    },
+    {
+      "stage": "initial_draft",
+      "mutation": "duplicate_name",
+      "result": "REJECTED",
+      "error": "Release assets are missing, duplicated or unexpected"
+    },
+    {
+      "stage": "initial_draft",
+      "mutation": "missing_digest",
+      "result": "REJECTED",
+      "error": "Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip"
+    },
+    {
+      "stage": "initial_draft",
+      "mutation": "null_digest",
+      "result": "REJECTED",
+      "error": "Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip"
+    },
+    {
+      "stage": "initial_draft",
+      "mutation": "wrong_digest",
+      "result": "REJECTED",
+      "error": "Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip"
+    },
+    {
+      "stage": "initial_draft",
+      "mutation": "wrong_size",
+      "result": "REJECTED",
+      "error": "Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip"
+    },
+    {
+      "stage": "initial_draft",
+      "mutation": "boolean_size",
+      "result": "REJECTED",
+      "error": "Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip"
+    },
+    {
+      "stage": "initial_draft",
+      "mutation": "incomplete_state",
+      "result": "REJECTED",
+      "error": "Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip"
+    },
+    {
+      "stage": "initial_draft",
+      "mutation": "missing_asset",
+      "result": "REJECTED",
+      "error": "Release assets are missing or malformed"
+    },
+    {
+      "stage": "initial_draft",
+      "mutation": "extra_asset",
+      "result": "REJECTED",
+      "error": "Release assets are missing or malformed"
+    },
+    {
+      "stage": "again",
+      "mutation": "same_bytes_new_id",
+      "result": "REJECTED",
+      "error": "Release assets changed after the initial upload was pinned"
+    },
+    {
+      "stage": "again",
+      "mutation": "same_id_changed_digest",
+      "result": "REJECTED",
+      "error": "Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip"
+    },
+    {
+      "stage": "again",
+      "mutation": "new_id_same_size_changed_digest",
+      "result": "REJECTED",
+      "error": "Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip"
+    },
+    {
+      "stage": "again",
+      "mutation": "missing_digest_after_readback",
+      "result": "REJECTED",
+      "error": "Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip"
+    },
+    {
+      "stage": "public",
+      "mutation": "same_bytes_new_id",
+      "result": "REJECTED",
+      "error": "Release assets changed after the initial upload was pinned"
+    },
+    {
+      "stage": "public",
+      "mutation": "same_id_changed_digest",
+      "result": "REJECTED",
+      "error": "Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip"
+    },
+    {
+      "stage": "public",
+      "mutation": "new_id_same_size_changed_digest",
+      "result": "REJECTED",
+      "error": "Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip"
+    },
+    {
+      "stage": "public",
+      "mutation": "missing_digest_after_readback",
+      "result": "REJECTED",
+      "error": "Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip"
+    }
+  ],
+  "api_negatives": [
+    {
+      "mutation": "rate_limit",
+      "result": "REJECTED"
+    },
+    {
+      "mutation": "network",
+      "result": "REJECTED"
+    },
+    {
+      "mutation": "authentication",
+      "result": "REJECTED"
+    }
+  ],
+  "default_guard": {
+    "result": "PIN_FORMATS_ACCEPTED_ONLY"
+  },
+  "synthetic_pin_format_control": "PASS",
+  "asset_controls": {
+    "initial_draft": "PASS",
+    "unchanged_pinned_assets": "PASS"
+  },
+  "both_post_upload_checks_use_original_pins": true,
+  "api_controls": {
+    "success": "PASS",
+    "actual_404_absence": "PASS"
+  },
+  "counts": {
+    "pin_negatives": 45,
+    "asset_negatives": 20,
+    "api_negatives": 3
+  }
+}

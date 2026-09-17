@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "result": "PASS",
+  "scope": "Bounded factual review of the final Chinese README introduction and CURRENT-STATUS document; not a new product or live-publication audit.",
+  "reviewer": "/root/recall_interface_review",
+  "record_frozen_at_utc": "2026-09-17 14:44:40 UTC",
+  "repository": "youq616/qbrain",
+  "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "reviewed_files": {
+    "README.md": {
+      "bytes": 14528,
+      "sha256": "3b61193865e8ded018f7b96cf8dbcf0fc2bfe4ccb5cb76285452a61ba6ecf78f"
+    },
+    "CURRENT-STATUS.md": {
+      "bytes": 9252,
+      "sha256": "3e89e359c020a28aeaa03a5036f5b63de3203488ea50da70a3f90b72544a0b77"
+    }
+  },
+  "release_receipt": {
+    "path": "docs/nodes/n47l-evidence/RELEASE.json",
+    "bytes": 3374,
+    "sha256": "e37d528abb7427c322fd1809d161f8d564d163acf4596cf9e401e4fe5b0f1d6d",
+    "initial_delivery_run": 35233247840,
+    "recovery_run": 35234743634,
+    "release_id": 390787606
+  },
+  "checked_claims": [
+    "Product, review and merge identities match the archived release receipt; initial failure and successful recovery of the same draft remain distinct.",
+    "The original PROVENANCE bytes retain initial-upload identity; the receipt separately records recovery identity.",
+    "No claim is made that all three assets were independently downloaded through their public URLs. Public product-package readback is distinguished from workflow downloads and live asset metadata.",
+    "Native 60-group registries, 16/258 unit and 112/126 process counts, local 193 and 32 tests, and 1094 artifact checks are accurately scoped; Server 2022 is HTTP/unit coverage.",
+    "Original 81-command schedule and first 61 check names/order are distinguished from 116 separate baseline stdout-byte comparisons; three original malformed histories and 881 mutations are separate counts.",
+    "Preexisting memory/context parser defects remain reproduced but unrepaired; search is separate next-stage work. Unsigned, non-latest prerelease, PostgreSQL and new-client acceptance limits remain explicit."
+  ],
+  "unresolved_findings_in_reviewed_scope": [],
+  "limits": {
+    "product_tests_reexecuted": false,
+    "live_github_requeried_by_this_reviewer": false,
+    "repository_files_modified_by_this_review": false,
+    "remote_state_evidence_source": "Archived RELEASE.json and final CI-auditor/coordinator facts supplied for this review; no independent live API or download execution in this documentation pass.",
+    "release_readback_archival_at_review": "RELEASE-READBACK.json was still awaiting final CI-auditor freeze and repository archival. Its temporarily missing link was permitted and was not treated as a product failure."
+  }
+}

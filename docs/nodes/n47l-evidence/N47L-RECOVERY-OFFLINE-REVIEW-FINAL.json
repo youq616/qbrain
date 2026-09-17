@@ -1,0 +1,302 @@
+{
+  "result": "PASS_RECOVERY_OFFLINE_CONTROL_SCOPED",
+  "workflow_sha256": "d81f84d3dd0b2f83b05ad6812fdca4f7105db0ee36a85624041b68add42f60f3",
+  "original_workflow_sha256": "389b6f38cf695e2f1ebfe149761e45ccd5b8dac35142f97e8ff1650991fe7a3a",
+  "case_count": 22,
+  "network_or_actual_publication": false,
+  "scope": "Unchanged real API helpers plus ID-bound recovery preflight/tail; transport doubled. No fresh CI execution.",
+  "preserved_original_sections": {
+    "first_pin_guard_byte_identical": true,
+    "source_review_and_evidence_gates_byte_identical": true,
+    "live_ci_seven_artifact_and_1094_verifier_segment_byte_identical": true
+  },
+  "fixture": {
+    "product": "original authenticated CI inner ZIP",
+    "provenance_and_checksums": "reconstructed original bytes verified against live draft asset hashes; not fetched downloads"
+  },
+  "results": [
+    {
+      "case": "control_published_only_tag_semantics",
+      "failure": null,
+      "release_mutations": [
+        {
+          "method": "PATCH",
+          "path": "releases/390787606"
+        }
+      ],
+      "asset_ids_downloaded": [
+        570420529,
+        570420531,
+        570420528
+      ],
+      "draft_by_tag_attempts": 0,
+      "final_draft": false,
+      "receipt_result": "PUBLISHED",
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "missing_draft",
+      "failure": "RuntimeError: GitHub API request failed: releases/390787606",
+      "release_mutations": [],
+      "asset_ids_downloaded": [],
+      "draft_by_tag_attempts": 0,
+      "final_draft": null,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "already_public",
+      "failure": "RuntimeError: Release identity/state differs from the one authorized draft",
+      "release_mutations": [],
+      "asset_ids_downloaded": [],
+      "draft_by_tag_attempts": 0,
+      "final_draft": false,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "wrong_release_id",
+      "failure": "RuntimeError: Release identity/state differs from the one authorized draft",
+      "release_mutations": [],
+      "asset_ids_downloaded": [],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "wrong_source_target",
+      "failure": "RuntimeError: Release identity/state differs from the one authorized draft",
+      "release_mutations": [],
+      "asset_ids_downloaded": [],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "wrong_release_tag",
+      "failure": "RuntimeError: Release identity/state differs from the one authorized draft",
+      "release_mutations": [],
+      "asset_ids_downloaded": [],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "changed_tag_late",
+      "failure": "RuntimeError: Tag changed before fixed-draft publication",
+      "release_mutations": [],
+      "asset_ids_downloaded": [
+        570420529,
+        570420531,
+        570420528
+      ],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "new_asset_id",
+      "failure": "RuntimeError: Release assets changed after the initial upload was pinned",
+      "release_mutations": [],
+      "asset_ids_downloaded": [],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "wrong_asset_digest",
+      "failure": "RuntimeError: Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip",
+      "release_mutations": [],
+      "asset_ids_downloaded": [],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "missing_asset_digest",
+      "failure": "RuntimeError: Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip",
+      "release_mutations": [],
+      "asset_ids_downloaded": [],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "duplicate_asset_id",
+      "failure": "RuntimeError: Release asset IDs are missing, invalid or duplicated",
+      "release_mutations": [],
+      "asset_ids_downloaded": [],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "extra_asset",
+      "failure": "RuntimeError: Release assets are missing or malformed",
+      "release_mutations": [],
+      "asset_ids_downloaded": [],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "missing_asset",
+      "failure": "RuntimeError: Release assets are missing or malformed",
+      "release_mutations": [],
+      "asset_ids_downloaded": [],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "corrupt_product_download",
+      "failure": "RuntimeError: Original draft asset bytes differ from fixed ID/digest: qbrain-windows-x64-multiterm.zip",
+      "release_mutations": [],
+      "asset_ids_downloaded": [
+        570420529
+      ],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "json_instead_of_binary",
+      "failure": "RuntimeError: Original draft asset bytes differ from fixed ID/digest: qbrain-windows-x64-multiterm.zip",
+      "release_mutations": [],
+      "asset_ids_downloaded": [
+        570420529
+      ],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "corrupt_provenance_download",
+      "failure": "RuntimeError: Original draft asset bytes differ from fixed ID/digest: PROVENANCE.json",
+      "release_mutations": [],
+      "asset_ids_downloaded": [
+        570420529,
+        570420531
+      ],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "corrupt_checksums_download",
+      "failure": "RuntimeError: Original draft asset bytes differ from fixed ID/digest: SHA256SUMS.txt",
+      "release_mutations": [],
+      "asset_ids_downloaded": [
+        570420529,
+        570420531,
+        570420528
+      ],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "replace_asset_after_readback",
+      "failure": "RuntimeError: Release assets changed after the initial upload was pinned",
+      "release_mutations": [],
+      "asset_ids_downloaded": [
+        570420529,
+        570420531,
+        570420528
+      ],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "wrong_initial_commit",
+      "failure": "RuntimeError: Initial failed delivery does not match the pinned draft provenance",
+      "release_mutations": [],
+      "asset_ids_downloaded": [],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "initial_run_claims_success",
+      "failure": "RuntimeError: Initial failed delivery does not match the pinned draft provenance",
+      "release_mutations": [],
+      "asset_ids_downloaded": [],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "api_error_before_patch",
+      "failure": "RuntimeError: GitHub API request failed: releases/390787606",
+      "release_mutations": [],
+      "asset_ids_downloaded": [
+        570420529,
+        570420531,
+        570420528
+      ],
+      "draft_by_tag_attempts": 0,
+      "final_draft": true,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "connection_error_after_committed_patch",
+      "failure": "RuntimeError: GitHub API request failed: releases/390787606",
+      "release_mutations": [
+        {
+          "method": "PATCH",
+          "path": "releases/390787606"
+        }
+      ],
+      "asset_ids_downloaded": [
+        570420529,
+        570420531,
+        570420528
+      ],
+      "draft_by_tag_attempts": 0,
+      "final_draft": false,
+      "receipt_result": null,
+      "original_provenance_preserved": true,
+      "expected_outcome_observed": true
+    }
+  ]
+}

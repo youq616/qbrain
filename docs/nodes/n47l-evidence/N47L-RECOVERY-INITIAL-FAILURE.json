@@ -1,0 +1,62 @@
+{
+  "observed_at": "2026-09-17 14:28:23 UTC",
+  "initial_run": {
+    "id": 35233247840,
+    "head_sha": "2f254681c31fd493fa9cb5ab14ae089608f8a4ad",
+    "run_attempt": 1,
+    "status": "completed",
+    "conclusion": "failure",
+    "workflow": ".github/workflows/publish-reviewed-n47l.yml",
+    "url": "https://github.com/youq616/qbrain/actions/runs/35233247840"
+  },
+  "draft": {
+    "id": 390787606,
+    "tag_name": "multiterm-preview-17e9a435",
+    "target_commitish": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+    "name": "Qbrain N47L explicit multi-term recall (17e9a435)",
+    "draft": true,
+    "prerelease": true,
+    "published_at": null,
+    "assets": [
+      {
+        "id": 570420531,
+        "name": "PROVENANCE.json",
+        "state": "uploaded",
+        "size": 2049,
+        "digest": "sha256:6cc243b432dbb444f83f9983f4294d0a4c516edc2ad0180b9a2940cc810cd59a"
+      },
+      {
+        "id": 570420529,
+        "name": "qbrain-windows-x64-multiterm.zip",
+        "state": "uploaded",
+        "size": 2114341,
+        "digest": "sha256:ed44a43d79e1e76efa768e74872223cd5d867dfb92881fe67aab129789cd4408"
+      },
+      {
+        "id": 570420528,
+        "name": "SHA256SUMS.txt",
+        "state": "uploaded",
+        "size": 181,
+        "digest": "sha256:5cd993f0e3a1fe73cfb818706f27e353902738ceabb5e01482b120489c0d715b"
+      }
+    ]
+  },
+  "job_id": 105242528968,
+  "log_excerpt": [
+    "2026-09-17T14:23:54.2183395Z {\"result\": \"PASS\", \"source_commit\": \"17e9a435f94e45b3ca22d3da062ba4683c135c4b\", \"checks\": 1094, \"N47L\": {\"checks\": 112, \"commands\": 126}}",
+    "2026-09-17T14:23:57.6929032Z Traceback (most recent call last):",
+    "2026-09-17T14:23:57.6929585Z   File \"/home/runner/work/_temp/b6e3127d-039c-4183-b3ba-af1a17bcb2ea.py\", line 274, in <module>",
+    "2026-09-17T14:23:57.6929963Z     draft=api('releases/tags/'+tag)",
+    "2026-09-17T14:23:57.6930130Z           ^^^^^^^^^^^^^^^^^^^^^^^^^",
+    "2026-09-17T14:23:57.6930375Z   File \"/home/runner/work/_temp/b6e3127d-039c-4183-b3ba-af1a17bcb2ea.py\", line 63, in api",
+    "2026-09-17T14:23:57.6930670Z     raise RuntimeError('GitHub API request failed: '+path)",
+    "2026-09-17T14:23:57.6931129Z RuntimeError: GitHub API request failed: releases/tags/multiterm-preview-17e9a435",
+    "2026-09-17T14:23:57.7074039Z ##[error]Process completed with exit code 1.",
+    "2026-09-17T14:23:57.7129023Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/",
+    "2026-09-17T14:23:57.7129821Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+    "2026-09-17T14:23:57.7130045Z with:",
+    "2026-09-17T14:23:57.7130173Z   name: qbrain-n47l-reviewed-delivery"
+  ],
+  "read_only_observation": true,
+  "publication_performed_by_reviewer": false
+}

@@ -1,0 +1,68 @@
+{
+  "schema": "qbrain.n47l.failed-delivery-readback.v1",
+  "recorded_at_utc": "2026-09-17 14:30:36 UTC",
+  "repository": "youq616/qbrain",
+  "result": "DRAFT_ONLY",
+  "published": false,
+  "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a",
+  "review_commit": "218482b5714a28cb8b27451310b8cafb6927076d",
+  "merge_commit": "17aba70b73374fc39a0bb220f038ba11018b4b4a",
+  "workflow": {
+    "run_id": 35233247840,
+    "run_attempt": 1,
+    "head_sha": "2f254681c31fd493fa9cb5ab14ae089608f8a4ad",
+    "status": "completed",
+    "conclusion": "failure",
+    "job_id": 105242528968,
+    "url": "https://github.com/youq616/qbrain/actions/runs/35233247840/job/105242528968",
+    "failure_step": "Revalidate original CI bytes, create draft, read back, then publish",
+    "failure_statement": "draft=api('releases/tags/'+tag)",
+    "error": "RuntimeError: GitHub API request failed: releases/tags/multiterm-preview-17e9a435"
+  },
+  "delivery_artifact": {
+    "id": 10501699442,
+    "name": "qbrain-n47l-reviewed-delivery",
+    "bytes": 9455,
+    "sha256": "13157852877a2dc1dfda42dcf8abdca543d2dcbaf165775f5789458bb1f40b9e",
+    "members": [
+      "readback.json"
+    ]
+  },
+  "readback": {
+    "result": "PASS",
+    "checks": 1094,
+    "bytes": 81068,
+    "sha256": "016bdd09c7c51d45c067e4e725438a3fe1f0b481da572062910e40639473e2c0",
+    "byte_identical_to_independently_verified_candidate": true
+  },
+  "publication_receipt_present": false,
+  "release": {
+    "id": 390787606,
+    "tag": "multiterm-preview-17e9a435",
+    "draft": true,
+    "prerelease": true,
+    "published_at": null,
+    "tag_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+    "asset_pins": {
+      "qbrain-windows-x64-multiterm.zip": {
+        "id": 570420529,
+        "bytes": 2114341,
+        "digest": "sha256:ed44a43d79e1e76efa768e74872223cd5d867dfb92881fe67aab129789cd4408"
+      },
+      "PROVENANCE.json": {
+        "id": 570420531,
+        "bytes": 2049,
+        "digest": "sha256:6cc243b432dbb444f83f9983f4294d0a4c516edc2ad0180b9a2940cc810cd59a"
+      },
+      "SHA256SUMS.txt": {
+        "id": 570420528,
+        "bytes": 181,
+        "digest": "sha256:5cd993f0e3a1fe73cfb818706f27e353902738ceabb5e01482b120489c0d715b"
+      }
+    }
+  },
+  "assets_downloaded_by_this_auditor": false,
+  "reconstructed_expected_assets_match_live_digests": true,
+  "auditor_remote_mutations": false
+}

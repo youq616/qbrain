@@ -1,0 +1,42 @@
+{
+  "fetched_at_utc": "2026-09-17 14:19:08 UTC",
+  "merge": {
+    "commit": "17aba70b73374fc39a0bb220f038ba11018b4b4a",
+    "parents": [
+      "d033bdb23ae483a9bc68893ce1bb32c77d76fb28",
+      "218482b5714a28cb8b27451310b8cafb6927076d"
+    ],
+    "tree": "babfb44341e5aec9576c3ccd84f88ac373871ebe",
+    "url": "https://github.com/youq616/qbrain/commit/17aba70b73374fc39a0bb220f038ba11018b4b4a"
+  },
+  "pr28": {
+    "base_ref": "main",
+    "base_repository": "youq616/qbrain",
+    "head_ref": "optimization/n47l-multi-term-recall",
+    "head_repository": "youq616/qbrain",
+    "head_sha": "218482b5714a28cb8b27451310b8cafb6927076d",
+    "merge_commit_sha": "17aba70b73374fc39a0bb220f038ba11018b4b4a",
+    "merged": true,
+    "merged_at": "2026-09-17T14:16:41Z",
+    "number": 28,
+    "state": "closed",
+    "url": "https://github.com/youq616/qbrain/pull/28"
+  },
+  "repository": "youq616/qbrain",
+  "review": {
+    "commit": "218482b5714a28cb8b27451310b8cafb6927076d",
+    "parents": [
+      "17e9a435f94e45b3ca22d3da062ba4683c135c4b"
+    ],
+    "tree": "babfb44341e5aec9576c3ccd84f88ac373871ebe",
+    "url": "https://github.com/youq616/qbrain/commit/218482b5714a28cb8b27451310b8cafb6927076d"
+  },
+  "source": {
+    "commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+    "parents": [
+      "1118e0faf5b7acdd3f27f933c801b4a2b1278d41"
+    ],
+    "tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a",
+    "url": "https://github.com/youq616/qbrain/commit/17e9a435f94e45b3ca22d3da062ba4683c135c4b"
+  }
+}

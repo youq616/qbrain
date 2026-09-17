@@ -4,18 +4,55 @@ Windows 原生 C++20 / PowerShell Agent 记忆与知识库，默认 SQLite + FTS
 不要求 Docker、WSL 或 Python 服务。由 Lordakee/qbrain 的 MIT 代码继续开发；
 gbrain / OpenViking 是设计参考，不表示完整功能等价。
 
-## 当前开发预览：N47K
+## 当前开发预览：N47L
 
-[仓库 Release：diagnostics-preview-a23800df](https://github.com/youq616/qbrain/releases/tag/diagnostics-preview-a23800df)
-选择 `qbrain-windows-x64-diagnostics.zip` 并完整解压。ZIP SHA256：
-`6f35d1cb1eccb4cdab727963ae45ba805dbc9edfa0c5867472aa62b992b35bb3`。
-原CI测试字节、未重打包、未签名，不是整个项目的最终发行。实际产品源码
-`a23800df3709ac9ef73a51d150b64d2d20d7d21f`，
-[PR #27](https://github.com/youq616/qbrain/pull/27) 已合并。
-用MANIFEST、完整源码SHA和外部摘要识别版本，不以旧dist或旧固定哈希入口替代。
+**交付状态：已合并并发布，公开预览包已完成回读核验。** [N47L 预览 Release：multiterm-preview-17e9a435](https://github.com/youq616/qbrain/releases/tag/multiterm-preview-17e9a435) 的产品文件为 `qbrain-windows-x64-multiterm.zip`，大小 `2114341` 字节，SHA-256：
 
-[当前状态](CURRENT-STATUS.md) · [阶段审核](docs/nodes/N47K-HARD-AUDIT.md) ·
-[测试摘要](docs/nodes/n47k-evidence/SUMMARY.json) · [发布记录](docs/nodes/n47k-evidence/RELEASE.json)
+`ed44a43d79e1e76efa768e74872223cd5d867dfb92881fe67aab129789cd4408`
+
+完整解压后阅读 `MULTI-TERM-RECALL.zh-CN.md`，并用同一 Release 的 `PROVENANCE.json`、`SHA256SUMS.txt` 和包内 `MANIFEST.json` 核对版本。产品使用原 CI 测试包字节，只更改下载名称，没有重新编译或重打包；这是**未签名、非 latest 的 prerelease**。运行预编译包不需要本机编译器。
+
+实际产品与测试源码为 `17e9a435f94e45b3ca22d3da062ba4683c135c4b`，产品源树为 `f9d42819772df53dd8c6337c3cb19c8940d7023a`。[PR #28](https://github.com/youq616/qbrain/pull/28) 的合并、审核身份及发布核验记录见[当前交付状态](CURRENT-STATUS.md)；不要用旧 `dist` 或旧固定哈希入口识别这一版本。
+
+[阶段审核](docs/nodes/N47L-HARD-AUDIT.md) · [测试与回读摘要](docs/nodes/n47l-evidence/SUMMARY.json) · [固定 CI 元数据](docs/nodes/n47l-evidence/CI-METADATA.json) · [发布回执](docs/nodes/n47l-evidence/RELEASE.json) · [恢复公开运行](https://github.com/youq616/qbrain/actions/runs/35234743634)
+
+## N47L：选择连续字串、全部词或任意词
+
+`fact recall` 支持三种明确的匹配模式，现有 MCP `memory_read(view=recall)` 使用同名 `match` 参数。
+
+| 模式 | 含义 |
+| --- | --- |
+| 不传模式，或 `literal` | 将完整查询作为连续字串，保留输出格式；兼容探针验证字节一致，选项形状输入按下述缺陷修复 |
+| `all_terms` | 同一个有效事实包含全部查询词 |
+| `any_terms` | 同一个有效事实包含至少一个查询词 |
+
+将 `my-brain`、`my-project` 换成实际脑库和来源。以下命令读取已经建立的事实：
+
+```powershell
+.\qbrain.exe fact recall --brain my-brain --source my-project --query "日志 前缀" --match all_terms --limit 5 --max-bytes 8192
+.\qbrain.exe fact recall --brain my-brain --source my-project --query "Python C++" --match any_terms --limit 5 --max-bytes 8192
+.\qbrain.exe fact recall --brain my-brain --source my-project --query "--match" --match literal --limit 5 --max-bytes 8192
+```
+
+只有明确选择 `all_terms` / `any_terms` 才分词。仅用 ASCII 空格、制表符、回车和换行分隔，最多 8 词，重复词也计数；完整查询最多 1024 UTF-8 字节。每个词仍按字串匹配，不自动中文分词、不推断同义词或真假，也不会把多个不同事实的词组合成一个结论。
+
+查询词只筛选命中事实；它关联的有效直接反证即使不含查询词、或已被归档，也必须完整保留。证据和预算按整组处理，响应截断时的空结果不能证明没有匹配。`--match`、`--source`、`--brain` 等文字可作为 `fact` 查询内容，不会改变实际选项或脑库。
+
+MCP 调用示例：
+
+```json
+{"name":"memory_read","arguments":{"source_id":"my-project","view":"recall","query":"日志 前缀","match":"all_terms","limit":5,"max_bytes":8192}}
+```
+
+该参数只适用于事实召回视图，不新增 MCP 工具或写权限，也不改变 Hook 自动取词 / 注入、安装默认开关、采集授权或数据库结构。[完整模式、字节边界和限制](docs/integration/MULTI-TERM-RECALL.zh-CN.md)。
+
+本阶段固定原生证据来自 [N44 `35228307025`](https://github.com/youq616/qbrain/actions/runs/35228307025) 与 [N42 `35228306922`](https://github.com/youq616/qbrain/actions/runs/35228306922)，核对 60 个注册组和保留的 MSVC 门槛。N47L 专项规模为 16 场景 / 258 断言、真实 CLI / MCP 112 检查 / 126 命令；本地另已执行 193 项报告门槛与 32 项注册 / 构建清单检查。这些本地结果与 Windows 原生证据分开记录，最终原始工件回读数填写在[当前状态](CURRENT-STATUS.md)。
+
+真实独立子代理发现并复验关闭了两个产品 P2：查询内容被二次当作选项，以及报告可用重复命令或自报退出码绕过覆盖检查。发布代码独立审核还关闭了一个资产 P2，现在上传后以固定 ID / size / digest 和下载字节核验同一组资产。审核为真实分别运行的工程子代理审查，不冒称第三方认证。
+
+**已知下一阶段：旧 `memory` / `context` 路由仍存在参数二次解析问题，已实测可误选来源或误建脑库，尚未修复。** 下一节点将限定修复这两个处理器；`search` 的字面查询语法另行处理。[已确认的最小下一阶段](docs/nodes/n47l-evidence/NEXT-STAGE.md)。
+
+当前无需本机补验或本地 Agent，没有新增 localhost、已登录客户端、PostgreSQL 或 provider-egress 验收。N47L 是限定范围的开发阶段，不代表整个项目完成。下面的 N47K 及更早能力继续保留。
 
 ## N47K：只读查看诊断，区分记录状态
 

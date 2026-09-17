@@ -1,0 +1,251 @@
+{
+  "result": "PASS_OFFLINE",
+  "workflow_sha256": "d81f84d3dd0b2f83b05ad6812fdca4f7105db0ee36a85624041b68add42f60f3",
+  "scope": "Actual extracted recovery tail with mocked by-ID API and octet-stream assets; original CI gates byte-compared only, not re-executed",
+  "fixture_provenance": "Original CI product bytes; reconstructed original PROVENANCE/checksums matching authenticated draft size/digests",
+  "network_or_actual_publication": false,
+  "original_gate_blocks_unchanged": true,
+  "cases": 16,
+  "results": [
+    {
+      "case": "control",
+      "result": "PASS",
+      "recovery_patch_calls": 1,
+      "downloads": 3,
+      "expected_rejection": null,
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ],
+        [
+          "GET",
+          "releases/390787606"
+        ],
+        [
+          "PATCH",
+          "releases/390787606"
+        ],
+        [
+          "GET",
+          "releases/390787606"
+        ],
+        [
+          "GET",
+          "releases/tags/multiterm-preview-17e9a435"
+        ],
+        [
+          "GET",
+          "releases/latest"
+        ]
+      ]
+    },
+    {
+      "case": "wrong_release_id",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 0,
+      "expected_rejection": "RuntimeError: Release identity/state differs from the one authorized draft",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "missing_draft",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 0,
+      "expected_rejection": "RuntimeError: Fixed draft ID was not found",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "already_public",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 0,
+      "expected_rejection": "RuntimeError: Release identity/state differs from the one authorized draft",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "wrong_source",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 0,
+      "expected_rejection": "RuntimeError: Release identity/state differs from the one authorized draft",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "wrong_tag",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 0,
+      "expected_rejection": "RuntimeError: Release identity/state differs from the one authorized draft",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "missing_asset",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 0,
+      "expected_rejection": "RuntimeError: Release assets are missing or malformed",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "new_asset_id_same_bytes",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 0,
+      "expected_rejection": "RuntimeError: Release assets changed after the initial upload was pinned",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "duplicate_asset_id",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 0,
+      "expected_rejection": "RuntimeError: Release asset IDs are missing, invalid or duplicated",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "missing_digest",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 0,
+      "expected_rejection": "RuntimeError: Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "download_json",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 1,
+      "expected_rejection": "RuntimeError: Original draft asset bytes differ from fixed ID/digest: qbrain-windows-x64-multiterm.zip",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "wrong_download_bytes",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 1,
+      "expected_rejection": "RuntimeError: Original draft asset bytes differ from fixed ID/digest: qbrain-windows-x64-multiterm.zip",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "replaced_after_download",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 3,
+      "expected_rejection": "RuntimeError: Release assets changed after the initial upload was pinned",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ],
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "changed_tag_before_patch",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 3,
+      "expected_rejection": "RuntimeError: Tag changed before fixed-draft publication",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ],
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "published_before_patch",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 3,
+      "expected_rejection": "RuntimeError: Release identity/state differs from the one authorized draft",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ],
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    },
+    {
+      "case": "wrong_ci_inner_bytes",
+      "result": "PASS",
+      "recovery_patch_calls": 0,
+      "downloads": 3,
+      "expected_rejection": "RuntimeError: Draft product differs from the original verified CI inner ZIP",
+      "api_calls": [
+        [
+          "GET",
+          "releases/390787606"
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "repository": "youq616/qbrain",
+  "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a",
+  "review_commit": "218482b5714a28cb8b27451310b8cafb6927076d",
+  "review_tree": "babfb44341e5aec9576c3ccd84f88ac373871ebe",
+  "merge_commit": "17aba70b73374fc39a0bb220f038ba11018b4b4a",
+  "reviewed_pr": 28,
+  "workflow_runs": {
+    "n44": 35228307025,
+    "n42": 35228306922
+  },
+  "delivery_run": 35233247840,
+  "delivery_run_attempt": 1,
+  "delivery_commit": "2f254681c31fd493fa9cb5ab14ae089608f8a4ad",
+  "metadata_sha256": "e3d4ebcf21131b6cfa891b0af2c3a72f10343986a142f2de5cd8a9f95b0832df",
+  "summary_sha256": "771de3746760513abffd7bc0c94543c13678629e54d4cd4b9c84c6dcec6f963d",
+  "verifier_sha256": "5a8f793b4f0054d55ffff0a134b013c770f3c686974c47dd46d57fd951ee80c6",
+  "artifact_ids": {
+    "source": 10499777695,
+    "windows": 10501710021,
+    "package": 10500874382,
+    "server2022": 10500761185,
+    "portable": 10500153030,
+    "sanitizer": 10500261264,
+    "n42-windows": 10500242901
+  },
+  "readback_checks": 1094,
+  "package_bytes": 2114341,
+  "package_sha256": "ed44a43d79e1e76efa768e74872223cd5d867dfb92881fe67aab129789cd4408",
+  "original_inner_zip": "qbrain-windows-x64-development.zip",
+  "release_asset": "qbrain-windows-x64-multiterm.zip",
+  "exe_bytes": 4068864,
+  "exe_sha256": "0bf0a19edcc672b750790016ed0979e001529a46d91def8f7d8b9bdffd8aae69",
+  "native_registered_groups": 60,
+  "multiterm_unit": {
+    "scenarios": 16,
+    "assertions": 258
+  },
+  "multiterm_process": {
+    "checks": 112,
+    "commands": 126
+  },
+  "review_type": "Owner-authorized engineering review by separate actual subagents; not third-party certification",
+  "independent_subagent_reviewed": true,
+  "unresolved_scoped_p0_p1_p2": 0,
+  "signed": false,
+  "rebuilt_or_repacked": false,
+  "postgres_integration_verified": false,
+  "new_live_host_acceptance": false,
+  "new_provider_egress_verified": false,
+  "live_host_model_consumption_verified": false,
+  "whole_project_complete": false
+}

@@ -1,0 +1,61 @@
+{
+  "public_assets": {
+    "qbrain-windows-x64-multiterm.zip": {
+      "url": "https://github.com/youq616/qbrain/releases/download/multiterm-preview-17e9a435/qbrain-windows-x64-multiterm.zip",
+      "attempts": [
+        {
+          "exit_code": 0,
+          "http_status": "200"
+        }
+      ],
+      "downloaded": true,
+      "bytes": 2114341,
+      "sha256": "ed44a43d79e1e76efa768e74872223cd5d867dfb92881fe67aab129789cd4408"
+    },
+    "SHA256SUMS.txt": {
+      "url": "https://github.com/youq616/qbrain/releases/download/multiterm-preview-17e9a435/SHA256SUMS.txt",
+      "attempts": [
+        {
+          "exit_code": 0,
+          "http_status": "200"
+        }
+      ],
+      "downloaded": true,
+      "bytes": 181,
+      "sha256": "5cd993f0e3a1fe73cfb818706f27e353902738ceabb5e01482b120489c0d715b"
+    },
+    "PROVENANCE.json": {
+      "url": "https://github.com/youq616/qbrain/releases/download/multiterm-preview-17e9a435/PROVENANCE.json",
+      "attempts": [
+        {
+          "method": "curl public URL GET",
+          "exit_code": 28,
+          "http_status": "000",
+          "error": "Connection timed out after 8018 milliseconds"
+        },
+        {
+          "method": "curl public URL GET",
+          "exit_code": 28,
+          "http_status": "000",
+          "error": "Connection timed out after 9865 milliseconds"
+        },
+        {
+          "method": "GitHub plugin fetch public download URL",
+          "error_code": "NOT_FOUND",
+          "api_error_status": "404"
+        },
+        {
+          "method": "curl public asset API GET, Accept application/octet-stream",
+          "url": "https://api.github.com/repos/youq616/qbrain/releases/assets/570420531",
+          "exit_code": 28,
+          "http_status": "000",
+          "error": "Operation timed out after 10214 milliseconds with 0 bytes received"
+        }
+      ],
+      "downloaded": false,
+      "fallback": "The original asset bytes were downloaded by fixed asset ID 570420531 in successful recovery run 35234743634, preserved in its immutable Actions artifact, independently downloaded and compared against the live release metadata digest and original expected bytes."
+    }
+  },
+  "readonly": true,
+  "remote_mutations": false
+}

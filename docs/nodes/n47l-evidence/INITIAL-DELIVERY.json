@@ -1,0 +1,52 @@
+{
+  "status": "INITIAL_DELIVERY_FAILED_BEFORE_PUBLICATION",
+  "run": 35233247840,
+  "job": 105242528968,
+  "delivery_commit": "2f254681c31fd493fa9cb5ab14ae089608f8a4ad",
+  "workflow_sha256": "389b6f38cf695e2f1ebfe149761e45ccd5b8dac35142f97e8ff1650991fe7a3a",
+  "url": "https://github.com/youq616/qbrain/actions/runs/35233247840",
+  "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "review_commit": "218482b5714a28cb8b27451310b8cafb6927076d",
+  "merge_commit": "17aba70b73374fc39a0bb220f038ba11018b4b4a",
+  "actual_offline_readback_checks_passed": 1094,
+  "failed_operation": "GET releases/tags/multiterm-preview-17e9a435 immediately after successful draft creation",
+  "cause": "The by-tag REST endpoint retrieves published releases; a draft must be selected through its exact ID or authorized list.",
+  "official_reference": "https://docs.github.com/en/rest/releases/releases#get-a-release-by-tag-name",
+  "error": "RuntimeError: GitHub API request failed: releases/tags/multiterm-preview-17e9a435",
+  "failure_before_publication_patch": true,
+  "live_state_verified_by": [
+    "/root",
+    "/root/ci_handoff_audit"
+  ],
+  "observed_draft": {
+    "initial_run": 35233247840,
+    "initial_commit": "2f254681c31fd493fa9cb5ab14ae089608f8a4ad",
+    "release_id": 390787606,
+    "tag": "multiterm-preview-17e9a435",
+    "source": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+    "draft": true,
+    "assets": {
+      "PROVENANCE.json": {
+        "id": 570420531,
+        "size": 2049,
+        "sha256": "6cc243b432dbb444f83f9983f4294d0a4c516edc2ad0180b9a2940cc810cd59a"
+      },
+      "qbrain-windows-x64-multiterm.zip": {
+        "id": 570420529,
+        "size": 2114341,
+        "sha256": "ed44a43d79e1e76efa768e74872223cd5d867dfb92881fe67aab129789cd4408"
+      },
+      "SHA256SUMS.txt": {
+        "id": 570420528,
+        "size": 181,
+        "sha256": "5cd993f0e3a1fe73cfb818706f27e353902738ceabb5e01482b120489c0d715b"
+      }
+    }
+  },
+  "initial_delivery_artifact": {
+    "id": 10501699442,
+    "size": 9455,
+    "sha256": "13157852877a2dc1dfda42dcf8abdca543d2dcbaf165775f5789458bb1f40b9e"
+  },
+  "recovery_constraint": "Resume only observed draft ID and unchanged existing asset IDs/bytes; repeat all fixed CI gates, read back by asset ID, and publish exact draft ID after separate review. No new tag/release, replacement, rebuild or repackaging."
+}

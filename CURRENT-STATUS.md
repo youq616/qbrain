@@ -1,68 +1,80 @@
 # Qbrain 当前交付状态
 
-## 已合并并发布：N47K 只读诊断查看
+## 当前阶段：N47L 显式多词事实召回
 
-[PR #27](https://github.com/youq616/qbrain/pull/27) 已合并，产品合并提交
-`bff8bff5a45f71b857e363bf6d50fda3e3473f4a`。实际产品／原生测试源码为
-`a23800df3709ac9ef73a51d150b64d2d20d7d21f`，源树
-`b95af421ea5ebb756a127fe8cc519b5b62e17cf6`。
-审核头1400018a相对产品只增加/更新docs下8个计划和审核证据路径，未改变生产代码、
-原测试、产品构建或包字节。合并提交与审核头无文件差异。
+**交付状态：已合并并发布，公开预览包已完成回读核验。** 本阶段为 Windows 原生开发预览，继续使用 C++20 / PowerShell 和 SQLite。运行预编译包不要求本机编译器、Docker、WSL 或 Python 服务。
 
-[预览 Release：diagnostics-preview-a23800df](https://github.com/youq616/qbrain/releases/tag/diagnostics-preview-a23800df)
-已公开。产品 `qbrain-windows-x64-diagnostics.zip`，2,091,494 字节，SHA256：
-`6f35d1cb1eccb4cdab727963ae45ba805dbc9edfa0c5867472aa62b992b35bb3`。
-完整解压并阅读 `HOOK-DIAGNOSTIC-INSPECTION.zh-CN.md`。原CI字节，未重打包、未签名，
-不是整个融合项目的最终发行；运行预编译包不要求本机编译器。
+N47L 为 `fact recall` 和现有 MCP `memory_read(view=recall)` 增加明确选择的多词查询：`all_terms` 要求同一个事实包含全部词，`any_terms` 要求同一个事实包含至少一个词。省略模式或明确使用 `literal`，仍按完整连续字串匹配并保留输出格式；兼容探针验证字节一致，选项形状输入按下述缺陷修复。有效的直接反证即使不含查询词、或已被归档，也必须完整返回。
 
-## 新增的本地排查入口
+| 版本身份 | 固定值或最终证据 |
+| --- | --- |
+| 实际产品与测试源码 | `17e9a435f94e45b3ca22d3da062ba4683c135c4b` |
+| 产品源树 | `f9d42819772df53dd8c6337c3cb19c8940d7023a` |
+| 审核提交 | `218482b5714a28cb8b27451310b8cafb6927076d` |
+| 审核源树 | `babfb44341e5aec9576c3ccd84f88ac373871ebe` |
+| [PR #28](https://github.com/youq616/qbrain/pull/28) 合并提交 | `17aba70b73374fc39a0bb220f038ba11018b4b4a` |
+| [原始 N44 验证运行](https://github.com/youq616/qbrain/actions/runs/35228307025) | `35228307025` |
+| [原始 N42 验证运行](https://github.com/youq616/qbrain/actions/runs/35228306922) | `35228306922` |
+| 恢复公开运行 | [35234743634](https://github.com/youq616/qbrain/actions/runs/35234743634) |
 
-`qbrain hook diagnostics --config <绝对配置路径>` 只读该host的五个固定N47J诊断槽，
-可按固定事件或精确session-key筛选。不打开脑库、不触发Hook、不创建锁或目录、不
-调用模型，也不新增MCP本地文件读取入口。普通Hook和所有安装默认开关保持。
+发布核验以这组固定身份为准：产品提交至审核提交只能有 `docs/` 改动；合并源树必须与审核源树完全相同。文档审核提交不替代实际生成 EXE、测试报告和产品包的源码提交。
 
-返回INSPECTED以及present/missing/invalid/unreadable/unsafe_path/oversized/
-session_mismatch。严格验证完整元数据；无效记录不回显原文、异常文字或路径。
-不读取任意记录、不回退last-trace或tmp；配置关闭仍可查看历史，但不代表目前启用。
+## 下载与使用
 
-INSPECTED/present不是模型消费、真实性、安装健康或新鲜度证明。单配置64KiB、记录
-4096字节、最多五槽、响应32KiB。各文件独立观察，不是原子快照；静态link/reparse
-检查不保证抵御敌对目录竞争或硬链接。读取可能影响OS atime，不能承诺零系统副作用。
+[N47L 预览 Release：multiterm-preview-17e9a435](https://github.com/youq616/qbrain/releases/tag/multiterm-preview-17e9a435) 的产品资产为 `qbrain-windows-x64-multiterm.zip`。完整解压后阅读 `MULTI-TERM-RECALL.zh-CN.md`；通过同一 Release 的 `PROVENANCE.json` 和 `SHA256SUMS.txt` 核对版本。
 
-## 修复与已执行验证
+| 文件 | 大小与 SHA-256 |
+| --- | --- |
+| 产品 ZIP | `2114341` 字节；`ed44a43d79e1e76efa768e74872223cd5d867dfb92881fe67aab129789cd4408` |
+| 包内 `qbrain.exe` | SHA-256：`0bf0a19edcc672b750790016ed0979e001529a46d91def8f7d8b9bdffd8aae69` |
 
-初始e9d8f3e1真实Windows构建因两处显式链接清单漏diagnostics.obj而失败。修复版
-补齐生产和全测试链接，并加10项默认源/对象闭合检查；原失败与证伪记录保留。
-这不是用户缺少工具链，也未用CMake通过替代原生链接验证。
+产品 ZIP 使用原 CI 生成的 inner ZIP 字节，只更改下载资产名称，没有重新编译或重打包。它是 **未签名、非 latest 的 prerelease**，不是整个项目的最终发行；旧 Release 不覆盖，已有 tag 不移动。
 
-修复运行35186099196与35186099174必需任务全部完成成功：完整Windows59注册组、
-最终打包、Server2022、portable及Linux ASan/UBSan通过。新诊断单元各11场景107断言；
-真实CLI各60检查68命令（54预期exit0、14预期exit2）。全部既有事实、记忆、Hook、
-严格JSON、生命周期、HTTP/队列/CJK及双PowerShell门槛保留。真实PG DSN仍SKIP-PG。
+将示例中的 `my-brain`、`my-project` 换成实际脑库和来源：
 
-本轮单独工程自审从866文件原始源码重新GCC14.2构建，诊断11/107、60/68、旧trace
-9/169、66/80及原Hook69检查通过；204项报告/注册测试和40命令160断言独立CLI检查
-通过。新检查覆盖完整规范记录、损坏与敏感字段、精确字节边界、不回退旧记录、
-会话筛选及内容/mtime/拓扑不变。历史检查点的大型探针不重复计入本轮。
+```powershell
+.\qbrain.exe fact recall --brain my-brain --source my-project --query "日志 前缀" --match all_terms --limit 5 --max-bytes 8192
+.\qbrain.exe fact recall --brain my-brain --source my-project --query "Python C++" --match any_terms --limit 5 --max-bytes 8192
+.\qbrain.exe fact recall --brain my-brain --source my-project --query "--match" --match literal --limit 5 --max-bytes 8192
+```
 
-6个原始工件、全部70包成员及完整源树/原报告/脚本/EXE等318项回读通过。审核无
-本阶段未解决P0/P1，不保证不存在所有潜在缺陷；按所有者授权单独自审，不冒称
-第三方或真实子代理。诊断探针EXE未另下载，身份依赖固定原报告及原CI实际文件核验。
+模式只影响本次事实召回。`--match`、`--source`、`--brain` 等文字可以作为查询内容，不能被二次解释为选项。该修复已覆盖 `fact` 参数读取及其脑库选择；下面列出的旧 `memory` / `context` 问题尚未修复。
 
-发布35198816028成功：核对固定产品、审核、已合并PR和原CI，重复318项检查，先上传
-新草稿、下载逐字节比对三个资产再公开。发布核验报告已另下载，其字节与本地报告
-完全一致。无重编译/重打包、覆盖旧Release或开启通用未审核自动发布。
+只有明确选择 `all_terms` / `any_terms` 才按 ASCII 空格、制表符、回车和换行分词，最多 8 词，重复词也计数；完整原始查询最多 1024 UTF-8 字节。每个词仍按字串匹配，仅折叠 ASCII 大小写，不提供中文自动分词、同义词或语义推断。不会把不同事实中的词拼成一个新结论；预算不足会丢弃整组并标记截断，不能将截断后的空结果当作“没有匹配”。
 
-[阶段审核](docs/nodes/N47K-HARD-AUDIT.md) · [测试摘要](docs/nodes/n47k-evidence/SUMMARY.json) ·
-[发布记录](docs/nodes/n47k-evidence/RELEASE.json)
+## 验证与独立审核
 
-## 保留能力与未完成范围
+**最终原生与交付证据结论：固定源码的两条 CI 全部必需任务成功；恢复运行 35234743634 成功，三个原资产与固定字节一致。** 原生结论必须来自上表两个固定运行和对应原始工件，不能沿用初始候选的 CI 结果。
 
-N47J分事件记录和forgotten重放修复、严格JSON、候选分页、原子批量归档/恢复、只读
-证据年龄、明确开启的本地规则整理/事实Hook、证据生命周期与含反证召回均保留。
-没有新采集/外发许可、数据库迁移或真实Claude/Codex会话验收，不修改Codex认证。
+| 验证范围 | 核对内容与规模 |
+| --- | --- |
+| Windows 原生与构建门槛 | N44 / N42 各自核对全部 60 个注册组；保留生产、全测试两条 MSVC 源文件 / 对象闭合检查 |
+| N47L 专项 | 16 个场景、258 条断言；真实 CLI / MCP 112 项检查、126 次命令调用 |
+| 其他平台 | 对应固定 N44 的 Server 2022 HTTP / 单元、portable 及 Linux ASan / UBSan 工件；Server 2022 不代表另跑完整 CLI / MCP 套件 |
+| 已执行的本地工程检查 | 193 项报告验证器测试、32 项注册与 MSVC 清单检查通过；这些 Linux 检查与 Windows 实际运行分开记录 |
+| 原始工件回读 | 7 份固定 artifact、完整源码树、原报告、包成员及 EXE 身份；最终实际回读数为 `1094` |
 
-自动语义合并/冲突推断、使用/确认计数、自动衰减、画像、PG对等、完整ACL/DLP、
-模型质量/费用与正式签名仍未完成。阶段完成不等于整个项目完成。
-当前无需本地Agent接手或重复N47E验收，不需Token、额外GitHub权限、编译器或再次
-导出源码。真正本机任务仍只给一个完整提示词，所需文件先放仓库并固定来源与用法。
+真实独立子代理分别审核存储、接口和报告门槛。初始候选虽通过原有 CI，仍在独立审核中发现两个产品 P2，现均已修复并复验关闭：
+
+- `--match` 等查询文字被再次扫描为选项，可能改变模式、来源或脑库选择。`fact` 现在只读取严格解析后保存的参数值。
+- 进程报告只核对数量和自报退出预期，重复命令也可能通过。现在固定语义命令顺序、完整 argv / stdin、跨命令动态 ID 和独立预期退出码；打包也包含新增验证依赖。
+
+原有前 61 项检查的名称与顺序、81 次命令的 argv / 顺序 / 预期退出码保留，再追加 45 次回归调用；另对 29 组输入的 CLI / MCP default / explicit literal 做 116 次基线原始 stdout 字节比较。这不表示原 81 条命令的所有响应均做了字节比较。原缺陷 binary 会被新回归拒绝。独立报告复核还拒绝了原三种伪报告及 881 个篡改变体。这里的“独立”指真实分别运行的工程子代理，不冒称第三方认证。
+
+发布流程的独立审核另发现并关闭一个资产 P2：下载比对后，同名同长度的新资产可能替换旧资产。现在首次 draft 即固定三个资产的唯一 ID、本地字节 SHA-256 和大小，在公开前后都核对相同 ID / digest；缺 digest 拒绝。公开前逐字节下载核对三个资产，公开后再次核对 tag、source、资产身份与非 latest 状态。
+
+首发运行 [35233247840](https://github.com/youq616/qbrain/actions/runs/35233247840) 已重新通过 1094 项工件核验并上传三个草稿资产，随后因使用仅查询已发布版本的 by-tag 接口读取草稿而失败，未到公开步骤。恢复流程按固定草稿 ID `390787606` 和原资产 ID 下载复核，重新检查固定 CI、源码和包身份后公开同一草稿；没有重建 tag、Release 或替换资产。原 `PROVENANCE.json` 保留首发运行的原始字节，成功恢复的运行与提交另见[发布回执](docs/nodes/n47l-evidence/RELEASE.json)和[独立发布回读](docs/nodes/n47l-evidence/RELEASE-READBACK.json)。原失败记录保留在 [INITIAL-DELIVERY.json](docs/nodes/n47l-evidence/INITIAL-DELIVERY.json)。
+
+[阶段审核](docs/nodes/N47L-HARD-AUDIT.md) · [测试与回读摘要](docs/nodes/n47l-evidence/SUMMARY.json) · [固定 CI 元数据](docs/nodes/n47l-evidence/CI-METADATA.json) · [完整用法](docs/integration/MULTI-TERM-RECALL.zh-CN.md)
+
+## 下一阶段与当前边界
+
+**最小下一阶段：修复旧 `memory` / `context` 命名参数的二次解析。** 同一最终候选上的隔离实测已确认：特定以 `--source` / `--brain` 为内容的参数组合，可能读取错误来源，或在失败前误建脑库目录；只调整真实选项顺序即可得到正常对照。这些处理器与基线相同，问题早于 N47L，当前仅已复现和登记，尚未修改生产代码。
+
+下一节点将只修这两个处理器的已解析值读取和实际 brain 参数传递，补来源、脑库、原文 / 页面、默认优先级及不误建目录的回归，并重跑原生门槛。`search` 的前缀选项与字面查询存在另一个语法问题，单独定义边界后处理，不扩大成全 CLI 重写。详见[下一阶段范围与原始复现](docs/nodes/n47l-evidence/NEXT-STAGE.md)。
+
+N47K 只读诊断、N47J 分事件记录、严格 JSON、分页候选、原子批量归档 / 恢复、明确开启的本地事实整理与 Hook 召回、证据生命周期、来源限制及双 PowerShell 安装路径保留。N47L 没有新增采集 / 外发授权、MCP 工具、数据库迁移、Hook 默认开关或模型请求。
+
+真实 PostgreSQL DSN 仍为 `SKIP-PG`；没有新增已登录客户端、localhost、模型消费或 provider-egress 验收。未完成范围还包括通用语义合并 / 冲突推断、使用确认计数、自动衰减、画像、PG 对等、完整 ACL / DLP、模型质量 / 费用与正式签名。**本阶段的限定范围通过不等于整个项目完成。**
+
+当前不需要用户在本机补做工作，也不需要本地 Agent。无需重复已经完成的客户端验收。以后只有确实必须本机执行的任务，才按项目规则给出一个完整可复制提示词，并先把所需文件放到仓库或版本化 Release，写清下载、完整性检查与用法。
