@@ -3,6 +3,7 @@
 #include "qbrain/cli/app.hpp"
 #include "qbrain/memory/session_memory.hpp"
 #include "qbrain/util/hash.hpp"
+#include <map>
 #include <set>
 #include "qbrain/core/brain.hpp"
 #include "qbrain/ops/registry.hpp"
@@ -439,29 +440,38 @@ int cmd_fact(const std::vector<std::string>& args) {
     else if(promoting) values.insert("--event");
     else flags.insert("--stdin");
     std::set<std::string> seen;
+    std::map<std::string,std::string> parsed;
     for(std::size_t i=1;i<args.size();++i) {
       if(!seen.insert(args[i]).second) throw memory::Error("duplicate_argument");
       if(flags.count(args[i])) continue;
       if(!values.count(args[i]) || i+1>=args.size()) throw memory::Error("invalid_cli_argument");
+      parsed.emplace(args[i],args[i+1]);
       ++i;
     }
-    return with_brain(args,[&](Brain& b) {
-      ops::OpContext c; c.brain=&b; c.args["source_id"]=opt(args,"--source","default");
+    // Consume only option positions validated above. A literal query such as
+    // "--match" or "--brain" is data, never a second option during lookup.
+    const auto value=[&](const std::string& key,const std::string& fallback=std::string{}) {
+      const auto it=parsed.find(key);return it==parsed.end()?fallback:it->second;
+    };
+    std::vector<std::string> brain_args;
+    if(parsed.count("--brain")) brain_args={"--brain",value("--brain")};
+    return with_brain(brain_args,[&](Brain& b) {
+      ops::OpContext c; c.brain=&b; c.args["source_id"]=value("--source","default");
       if(batch) {
         c.args["payload"]=bounded_stdin();
         if(batch_preview)c.args["view"]="lifecycle_batch";
         else c.args["action"]="fact_lifecycle_batch";
       } else if(reading) {
         c.args["view"]=candidates?"lifecycle_candidates":lifecycle?"lifecycle":(recall?"recall":(conflicts?"conflicts":"facts"));
-        if(candidates) {c.args["operation"]=opt(args,"--operation");c.args["after_id"]=opt(args,"--after-id");}
-        else if(recall) { c.args["query"]=opt(args,"--query"); c.args["match"]=opt(args,"--match","literal"); }
-        else c.args["fact_id"]=opt(args,"--id");
-        c.args["predicate"]=opt(args,"--predicate"); c.args["limit"]=opt(args,"--limit","10");
-        c.args["max_bytes"]=opt(args,"--max-bytes","8192");
-        if(lifecycle || candidates) c.args["stale_after_days"]=opt(args,"--stale-after-days","180");
-        if(!conflicts && !recall && !lifecycle && !candidates) c.args["include_history"]=flag(args,"--history")?"true":"false";
+        if(candidates) {c.args["operation"]=value("--operation");c.args["after_id"]=value("--after-id");}
+        else if(recall) { c.args["query"]=value("--query"); c.args["match"]=value("--match","literal"); }
+        else c.args["fact_id"]=value("--id");
+        c.args["predicate"]=value("--predicate"); c.args["limit"]=value("--limit","10");
+        c.args["max_bytes"]=value("--max-bytes","8192");
+        if(lifecycle || candidates) c.args["stale_after_days"]=value("--stale-after-days","180");
+        if(!conflicts && !recall && !lifecycle && !candidates) c.args["include_history"]=seen.count("--history")?"true":"false";
       } else if(promoting) {
-        c.args["action"]="fact_promote";c.args["event_id"]=opt(args,"--event");
+        c.args["action"]="fact_promote";c.args["event_id"]=value("--event");
       } else { c.args["action"]="fact_"+action; c.args["payload"]=bounded_stdin(); }
       const auto result=ops::global_registry().call(reading?"memory_read":"memory_write",c);
       std::cout<<result.json<<"\n"; return result.ok?0:1;

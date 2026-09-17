@@ -1,3 +1,19 @@
+# Owner continuation — September 17, 2026
+
+The current owner handoff retains the requirement for a real independent
+subagent outcome review after each development stage. Use separate agents to
+review changes and evidence, fix blocking findings, and obtain a fresh review
+before declaring the stage complete. Record the actual reviewer identity, scope,
+commands, findings and limits; do not present the coordinator's self-review as a
+subagent review. The September 12 waiver of mandatory external/Claude Code review
+still applies. No new local-machine task is required solely to obtain an external
+review when the current environment can perform independent subagent review.
+
+Continue authorized repository development and validation here. The one-prompt
+local handoff convention below remains in force when actual host access is needed.
+
+---
+
 # Owner handoff convention — September 13, 2026
 
 The owner requests ONE complete copyable prompt per local-agent handoff, not

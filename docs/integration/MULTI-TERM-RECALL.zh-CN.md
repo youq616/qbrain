@@ -37,6 +37,10 @@ match 必须是精确的字符串枚举；显式空字符串、null、布尔和�
 所有其他 memory_read 视图、memory_write 动作以及其他 fact CLI 动作都拒绝 match。
 重复CLI参数继续拒绝。省略match不等于开启多词模式。
 
+查询内容可以恰好是 `--match`、`--source` 或 `--brain` 等文字，例如
+`fact recall --query "--match" --match literal --brain my-brain`。
+这些查询值按普通字串匹配，不会改变匹配模式、数据源或脑库；选项前后顺序不影响结果。
+
 本节点没有改动 Hook 的取词／自动注入、安装默认开关、数据库结构、采集授权、
 归档策略或模型请求，不需要重新执行已完成的客户端验收。仍然是未签名开发版。
 本接口不支持PostgreSQL事实模块，也不是向量／语义搜索或整个项目完成。

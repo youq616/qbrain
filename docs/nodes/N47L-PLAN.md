@@ -5,6 +5,23 @@ Status: approved after N47L-PLAN-AUDIT.md; implementation/outcome pending.
 Only Windows-native youq616/qbrain. Owner authorizes separate engineering
 self-review, not a fictitious external/subagent approval.
 
+September 17 continuation: real independent subagents are now available and
+reviewing this stage. Complete that review before closing the node, as the owner
+requested. The original implementation `1118e0faf5b7acdd3f27f933c801b4a2b1278d41`
+passed its existing CI, but the independent CLI review found a literal query
+`--match` misread as an option by the second argv scan. That candidate is blocked.
+The approved compatibility repair retains validated option values once in
+`cmd_fact`, including the explicit brain selection, and never rescans literal
+values as flags. Keep the existing absent-brain environment/config fallback and
+explicit-empty rejection. Other command parsers are outside this repair.
+
+Add real nonempty option-shaped quote recall and raw stdout literal compatibility
+tests. Also bind the process report to its complete semantic command schedule and
+fixed expected exits; command count and self-reported expected exits alone are
+insufficient. Retain all previous assertions and fail on repeated, reordered,
+missing or wrong-exit command records. Obtain new native evidence for the repaired
+source; original successful CI is historical evidence only.
+
 ## User-visible slice
 
 Existing public fact recall treats the entire query as one literal substring.
