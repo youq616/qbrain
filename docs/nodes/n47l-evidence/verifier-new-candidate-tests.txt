@@ -1,0 +1,21 @@
+test_authentic_fixture_passes (__main__.FixtureTests.test_authentic_fixture_passes) ... ok
+test_fixed_metadata_and_external_digest_rejected (__main__.FixtureTests.test_fixed_metadata_and_external_digest_rejected) ... ok
+test_missing_job_and_artifact_wrong_run_rejected (__main__.FixtureTests.test_missing_job_and_artifact_wrong_run_rejected) ... ok
+test_package_and_manifest_cannot_drop_same_member (__main__.FixtureTests.test_package_and_manifest_cannot_drop_same_member) ... ok
+test_package_report_must_match_windows_original_bytes (__main__.FixtureTests.test_package_report_must_match_windows_original_bytes) ... ok
+test_registered_group_missing_rejected (__main__.FixtureTests.test_registered_group_missing_rejected) ... ok
+test_run_source_repository_and_attempt_rejected (__main__.FixtureTests.test_run_source_repository_and_attempt_rejected) ... ok
+test_same_platform_process_binary_must_match (__main__.FixtureTests.test_same_platform_process_binary_must_match) ... ok
+test_wrong_source_tree_rejected (__main__.FixtureTests.test_wrong_source_tree_rejected) ... ok
+test_duplicate_and_symlink_zip_members_rejected (__main__.ParsingTests.test_duplicate_and_symlink_zip_members_rejected) ... /opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/zipfile/__init__.py:1625: UserWarning: Duplicate name: 'x'
+  return self._open_to_write(zinfo, force_zip64=force_zip64)
+ok
+test_json_ambiguity_and_nonfinite_rejected (__main__.ParsingTests.test_json_ambiguity_and_nonfinite_rejected) ... ok
+test_package_mapping_is_literal_and_dynamic (__main__.ParsingTests.test_package_mapping_is_literal_and_dynamic) ... ok
+test_source_mode_changes_tree_identity (__main__.ParsingTests.test_source_mode_changes_tree_identity) ... ok
+test_zip_path_escape_and_collisions_rejected (__main__.ParsingTests.test_zip_path_escape_and_collisions_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 5.822s
+
+OK

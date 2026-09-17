@@ -1,0 +1,415 @@
+# PREPARATION ONLY. Keep outside the repository until the exact candidate,
+# outcome review and this publication code pass independent review.
+# Every REPLACE_* pin must be filled from verified evidence by the root reviewer.
+# The first step fails before checkout/network/mutation while any pin is unresolved.
+name: Publish exact reviewed N47L candidate
+on:
+  push:
+    branches: ['delivery/n47l-reviewed-17e9a435']
+    paths: ['.github/workflows/publish-reviewed-n47l.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deliver-n47l-17e9a435
+  cancel-in-progress: false
+jobs:
+  publish-approved-bytes:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47l-reviewed-17e9a435'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    env:
+      SOURCE_SHA: '17e9a435f94e45b3ca22d3da062ba4683c135c4b'
+      SOURCE_TREE: 'f9d42819772df53dd8c6337c3cb19c8940d7023a'
+      N44_RUN: '35228307025'
+      N42_RUN: '35228306922'
+      REVIEW_SHA: 'REPLACE_REVIEW_COMMIT_SHA40'
+      REVIEW_TREE: 'REPLACE_REVIEW_TREE_SHA40'
+      MERGE_SHA: 'REPLACE_PR28_MERGE_COMMIT_SHA40'
+      METADATA_SHA256: 'REPLACE_REVIEWED_CI_METADATA_SHA256'
+      SUMMARY_SHA256: 'REPLACE_FINAL_SCOPED_SUMMARY_SHA256'
+      VERIFIER_SHA256: 'REPLACE_REVIEWED_OFFLINE_VERIFIER_SHA256'
+      READBACK_CHECKS: 'REPLACE_EXACT_READBACK_CHECK_COUNT'
+      PACKAGE_BYTES: 'REPLACE_ORIGINAL_INNER_ZIP_BYTES'
+      PACKAGE_SHA256: 'REPLACE_ORIGINAL_INNER_ZIP_SHA256'
+      EXE_BYTES: 'REPLACE_ORIGINAL_PACKAGED_EXE_BYTES'
+      EXE_SHA256: 'REPLACE_ORIGINAL_PACKAGED_EXE_SHA256'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Refuse unresolved review and package pins
+        shell: python
+        run: |
+          import os,re
+          sha40=('SOURCE_SHA','SOURCE_TREE','REVIEW_SHA','REVIEW_TREE','MERGE_SHA')
+          sha64=('METADATA_SHA256','SUMMARY_SHA256','VERIFIER_SHA256','PACKAGE_SHA256','EXE_SHA256')
+          numbers=('N44_RUN','N42_RUN','READBACK_CHECKS','PACKAGE_BYTES','EXE_BYTES')
+          for name in (*sha40,*sha64,*numbers):
+              value=os.environ.get(name,'')
+              if not value or 'REPLACE' in value:
+                  raise RuntimeError('Unresolved publication pin: '+name)
+          for names,length in ((sha40,40),(sha64,64)):
+              for name in names:
+                  if re.fullmatch('[0-9a-f]{%d}' % length,os.environ[name]) is None:
+                      raise RuntimeError('Malformed hash pin: '+name)
+          for name in numbers:
+              if re.fullmatch('[1-9][0-9]*',os.environ[name]) is None:
+                  raise RuntimeError('Malformed positive integer pin: '+name)
+          if os.environ['SOURCE_SHA']!='17e9a435f94e45b3ca22d3da062ba4683c135c4b' or os.environ['SOURCE_TREE']!='f9d42819772df53dd8c6337c3cb19c8940d7023a':
+              raise RuntimeError('This workflow is reserved for the fixed N47L source')
+          if os.environ['N44_RUN']!='35228307025' or os.environ['N42_RUN']!='35228306922':
+              raise RuntimeError('This workflow is reserved for the original N47L CI runs')
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.REVIEW_SHA }}
+          path: review
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.MERGE_SHA }}
+          path: merged
+          persist-credentials: false
+      - name: Revalidate original CI bytes, create draft, read back, then publish
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import hashlib,io,json,os,re,subprocess,sys,zipfile
+          from pathlib import Path
+
+          repo='youq616/qbrain'
+          source=os.environ['SOURCE_SHA'];tree=os.environ['SOURCE_TREE']
+          review=os.environ['REVIEW_SHA'];review_tree=os.environ['REVIEW_TREE'];merge=os.environ['MERGE_SHA']
+          run_ids={'n44':int(os.environ['N44_RUN']),'n42':int(os.environ['N42_RUN'])}
+          metadata_sha=os.environ['METADATA_SHA256'];summary_sha=os.environ['SUMMARY_SHA256']
+          verifier_sha=os.environ['VERIFIER_SHA256'];readback_checks=int(os.environ['READBACK_CHECKS'])
+          package_size=int(os.environ['PACKAGE_BYTES']);package_sha=os.environ['PACKAGE_SHA256']
+          exe_size=int(os.environ['EXE_BYTES']);exe_sha=os.environ['EXE_SHA256']
+          tag='multiterm-preview-17e9a435';product='qbrain-windows-x64-multiterm.zip'
+          title='Qbrain N47L explicit multi-term recall (17e9a435)'
+          cap=128*1024*1024
+          runs={
+              'n44':('.github/workflows/n44-validation.yml',{'source','windows','windows-http-2022','portable','batch-sanitized'}),
+              'n42':('.github/workflows/n42-validation.yml',{'source','windows','portable'}),
+          }
+          artifact_names={
+              'source':('n44','qbrain-n44-source'),
+              'windows':('n44','qbrain-n44-windows-logs'),
+              'package':('n44','qbrain-n44-windows-development-package'),
+              'server2022':('n44','qbrain-n46f-server2022-http-evidence'),
+              'portable':('n44','qbrain-n44-portable-logs'),
+              'sanitizer':('n44','qbrain-n47g-sanitizer-evidence'),
+              'n42-windows':('n42','qbrain-n42-windows-logs'),
+          }
+          def need(ok,message):
+              if not ok:raise RuntimeError(message)
+          def sha(raw):return hashlib.sha256(raw).hexdigest()
+          def positive_int(value):return type(value) is int and value>0
+          def is_sha(value,length=64):return isinstance(value,str) and re.fullmatch('[0-9a-f]{%d}' % length,value) is not None
+          def unique(pairs):
+              result={}
+              for key,value in pairs:
+                  need(key not in result,'Duplicate JSON key: '+key)
+                  result[key]=value
+              return result
+          def obj(raw):
+              result=json.loads(raw,object_pairs_hook=unique)
+              need(isinstance(result,dict),'Expected a JSON object')
+              return result
+          def read(path,limit=cap):
+              need(path.is_file() and not path.is_symlink(),'Expected a regular file: '+str(path))
+              with path.open('rb') as stream:raw=stream.read(limit+1)
+              need(len(raw)<=limit,'File exceeds byte cap: '+str(path))
+              return raw
+          def gh(*args):
+              return subprocess.check_output(['gh',*args],stderr=subprocess.PIPE,timeout=120)
+          def api(path,*,optional=False,method='GET',body=None):
+              args=['gh','api',f'repos/{repo}/{path}','--method',method]
+              if body is not None:args+=['--input','-']
+              call=subprocess.run(args,input=None if body is None else json.dumps(body).encode('utf-8'),
+                                  stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120)
+              if call.returncode==0:return obj(call.stdout)
+              # Only an actual REST 404 is absence; authentication/network/rate
+              # failures must never authorize creating a tag or release.
+              if optional and method=='GET':
+                  try:error=obj(call.stdout)
+                  except (ValueError,RuntimeError):error={}
+                  if error.get('status')=='404' and error.get('message')=='Not Found' and b'(HTTP 404)' in call.stderr:
+                      return None
+              raise RuntimeError('GitHub API request failed: '+path)
+          def git(path,*args):
+              return subprocess.check_output(['git','-C',str(path),*args],stderr=subprocess.PIPE,timeout=60)
+          def pin_checkout(path,commit,expected_tree):
+              need(git(path,'rev-parse','HEAD').decode().strip()==commit,'Wrong checkout commit: '+str(path))
+              need(git(path,'rev-parse','HEAD^{tree}').decode().strip()==expected_tree,'Wrong checkout tree: '+str(path))
+              need(git(path,'status','--porcelain')==b'','Dirty checkout: '+str(path))
+          def tag_source():
+              ref=api('git/ref/tags/'+tag,optional=True)
+              if ref is None:return None
+              need(ref.get('ref')=='refs/tags/'+tag,'Wrong tag ref')
+              target=ref['object'];seen=set()
+              for _ in range(5):
+                  need(is_sha(target.get('sha'),40) and target['sha'] not in seen,'Invalid/cyclic tag object')
+                  seen.add(target['sha'])
+                  if target.get('type')=='commit':return target['sha']
+                  need(target.get('type')=='tag','Tag does not point to a commit')
+                  annotation=api('git/tags/'+target['sha'])
+                  need(annotation.get('sha')==target['sha'],'Wrong annotated tag object')
+                  target=annotation['object']
+              raise RuntimeError('Tag annotation depth exceeded')
+
+          # Repeat critical fixed pins inside the publication step before I/O.
+          need(source=='17e9a435f94e45b3ca22d3da062ba4683c135c4b' and tree=='f9d42819772df53dd8c6337c3cb19c8940d7023a','Wrong fixed source pins')
+          need(run_ids=={'n44':35228307025,'n42':35228306922},'Wrong fixed workflow runs')
+          need(all(is_sha(v,40) for v in (review,review_tree,merge)) and
+               all(is_sha(v) for v in (metadata_sha,summary_sha,verifier_sha,package_sha,exe_sha)),
+               'Unresolved or malformed review/content pins')
+          need(0<package_size<=cap and 0<exe_size<=cap and readback_checks>0,'Invalid size/count pins')
+          need(os.environ.get('GITHUB_REPOSITORY')==repo and
+               os.environ.get('GITHUB_REF')=='refs/heads/delivery/n47l-reviewed-17e9a435','Wrong delivery context')
+          workspace=Path(os.environ['GITHUB_WORKSPACE']).resolve()
+          candidate=workspace/'candidate';review_dir=workspace/'review';merged=workspace/'merged'
+          pin_checkout(candidate,source,tree)
+          pin_checkout(review_dir,review,review_tree)
+          pin_checkout(merged,merge,review_tree)  # Exact tree equality includes every file.
+          subprocess.run(['git','-C',str(review_dir),'merge-base','--is-ancestor',source,review],
+                         stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True,timeout=60)
+          # Local diff has no GitHub compare API's truncated file-list boundary.
+          changed=git(review_dir,'diff','--name-only','--no-renames','-z',source,review,'--').split(b'\0')
+          changed=[path.decode('utf-8') for path in changed if path]
+          need(changed and all(path.startswith('docs/') for path in changed),'Source-to-review changes outside docs')
+          pr=api('pulls/28')
+          need(pr.get('merged') is True and pr.get('state')=='closed' and pr['head']['sha']==review and
+               pr['merge_commit_sha']==merge and pr['head']['repo']['full_name']==repo and
+               pr['base']['repo']['full_name']==repo and pr['base']['ref']=='main','PR 28 does not match the reviewed merge')
+
+          evidence_dir=review_dir/'docs/nodes/n47l-evidence'
+          metadata_path=evidence_dir/'CI-METADATA.json'
+          verifier=evidence_dir/'verify_candidate.py'
+          summary_bytes=read(evidence_dir/'SUMMARY.json',4*1024*1024)
+          metadata_bytes=read(metadata_path,4*1024*1024)
+          need(sha(summary_bytes)==summary_sha and sha(metadata_bytes)==metadata_sha,'Wrong fixed review metadata bytes')
+          need(sha(read(verifier,4*1024*1024))==verifier_sha,'Wrong reviewed verifier bytes')
+          audit=obj(summary_bytes);metadata=obj(metadata_bytes)
+          need(audit.get('source_commit')==source and audit.get('source_tree')==tree and
+               audit.get('scoped_result')=='PASS_SCOPED' and audit.get('independent_subagent_reviewed') is True and
+               type(audit.get('unresolved_scoped_p0_p1_p2')) is int and audit['unresolved_scoped_p0_p1_p2']==0,
+               'Scoped review is missing, unapproved or has unresolved findings')
+          need(audit.get('reviews',{}).get('storage')=='PASS_SCOPED' and
+               audit.get('reviews',{}).get('interface')=='PASS_SCOPED' and
+               type(audit.get('readback',{}).get('check_count')) is int and
+               audit['readback']['check_count']==readback_checks,'Independent reviews/readback do not match the approved outcome')
+          need(type(metadata.get('schema_version')) is int and metadata['schema_version']==1 and
+               metadata.get('repository')==repo and metadata.get('source_commit')==source and
+               metadata.get('source_tree')==tree and set(metadata.get('runs',{}))==set(runs),
+               'Metadata source or schema mismatch')
+          need(set(metadata.get('artifacts',{}))==set(artifact_names),'Missing/extra original artifact pins')
+          need(api('releases/tags/'+tag,optional=True) is None,'Release already exists; no overwrite is allowed')
+          existing_tag=tag_source()
+          need(existing_tag in (None,source),'Existing tag belongs to another source; tag movement is forbidden')
+
+          # Requery the exact run attempts, all jobs and their steps. A new run,
+          # partial run or older attempt cannot substitute for reviewed evidence.
+          for label,(workflow,mandatory) in runs.items():
+              rid=run_ids[label];pinned=metadata['runs'][label];live=api(f'actions/runs/{rid}')
+              need(live.get('id')==rid and live.get('head_sha')==source and live.get('path')==workflow and
+                   live.get('status')=='completed' and live.get('conclusion')=='success' and
+                   live['repository']['full_name']==repo and live['head_repository']['full_name']==repo and
+                   live.get('event') in ('push','workflow_dispatch') and positive_int(live.get('run_attempt')),
+                   'Original workflow is not complete/successful for this source: '+label)
+              for key in ('id','head_sha','path','status','conclusion','event','run_attempt','html_url'):
+                  need(live.get(key)==pinned.get(key),'Live workflow differs from metadata: '+label+'/'+key)
+              need(pinned.get('repository')==repo and pinned.get('head_repository')==repo,'Wrong pinned run repository')
+              attempt=live['run_attempt']
+              listing=api(f'actions/runs/{rid}/attempts/{attempt}/jobs?per_page=100')
+              jobs=listing.get('jobs');pinned_jobs=pinned.get('jobs')
+              need(isinstance(jobs,list) and isinstance(pinned_jobs,list) and
+                   type(listing.get('total_count')) is int and
+                   listing['total_count']==len(jobs)==len(pinned_jobs)==pinned.get('jobs_total_count'),
+                   'Incomplete or changed workflow job inventory: '+label)
+              need(len({job.get('name') for job in jobs})==len(jobs) and
+                   len({job.get('id') for job in jobs})==len(jobs),'Duplicate live jobs: '+label)
+              named={job['name']:job for job in jobs};pinned_named={job['name']:job for job in pinned_jobs}
+              need(set(named)==set(pinned_named) and mandatory<=set(named),'Missing/extra pinned jobs: '+label)
+              for name,job in named.items():
+                  expected=pinned_named[name]
+                  need(positive_int(job.get('id')) and job.get('run_id')==rid and job.get('head_sha')==source and
+                       job.get('run_attempt')==attempt and job.get('status')=='completed','Wrong job source/attempt: '+label+'/'+name)
+                  for key in ('id','name','run_id','head_sha','run_attempt','status','conclusion'):
+                      need(job.get(key)==expected.get(key),'Live job differs from reviewed snapshot: '+label+'/'+name+'/'+key)
+                  steps=job.get('steps');old_steps=expected.get('steps')
+                  need(isinstance(steps,list) and isinstance(old_steps,list) and len(steps)==len(old_steps),
+                       'Changed/missing job steps: '+label+'/'+name)
+                  for step,old in zip(steps,old_steps):
+                      need(all(step.get(k)==old.get(k) for k in ('number','name','status','conclusion')),
+                           'Changed job step: '+label+'/'+name)
+                  if name in mandatory:
+                      need(job.get('conclusion')=='success' and steps and
+                           all(step.get('status')=='completed' and step.get('conclusion')=='success' for step in steps),
+                           'Required job/step did not succeed: '+label+'/'+name)
+                  else:
+                      need(label=='n44' and name in ('publish-cjk-preview','publish-fact-preview') and
+                           job.get('conclusion')=='skipped','Unexpected extra workflow job: '+label+'/'+name)
+
+          temp=Path(os.environ['RUNNER_TEMP'])/('n47l-delivery-'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT'])
+          temp.mkdir(exist_ok=False);artifacts=temp/'artifacts';artifacts.mkdir()
+          ids=set()
+          for label,(run_label,name) in artifact_names.items():
+              pin=metadata['artifacts'][label];ident=pin.get('id')
+              need(positive_int(ident) and ident not in ids,'Invalid/duplicate artifact ID: '+label);ids.add(ident)
+              need(pin.get('name')==name and pin.get('run_id')==run_ids[run_label] and pin.get('head_sha')==source and
+                   pin.get('expired') is False and pin.get('file')==label+'.zip' and is_sha(pin.get('sha256')) and
+                   positive_int(pin.get('size_in_bytes')) and pin['size_in_bytes']<=cap,'Malformed artifact pin: '+label)
+              live=api(f'actions/artifacts/{ident}')
+              need(live.get('id')==ident and live.get('name')==name and live.get('expired') is False and
+                   live.get('size_in_bytes')==pin['size_in_bytes'] and live.get('digest')=='sha256:'+pin['sha256'] and
+                   live.get('workflow_run',{}).get('id')==run_ids[run_label] and
+                   live.get('workflow_run',{}).get('head_sha')==source,'Live artifact metadata differs from fixed pins: '+label)
+              path=artifacts/(label+'.zip')
+              with path.open('xb') as output:
+                  subprocess.run(['gh','api',f'repos/{repo}/actions/artifacts/{ident}/zip'],stdout=output,
+                                 stderr=subprocess.PIPE,check=True,timeout=120)
+              raw=read(path)
+              need(len(raw)==pin['size_in_bytes'] and sha(raw)==pin['sha256'],'Original artifact size/hash mismatch: '+label)
+
+          evidence=workspace/'evidence';evidence.mkdir(exist_ok=False)
+          readback=evidence/'readback.json'
+          # The offline verifier receives no GitHub token and executes no product.
+          offline_env={k:v for k,v in os.environ.items() if k not in ('GH_TOKEN','GITHUB_TOKEN')}
+          subprocess.run([sys.executable,'-I','-S','-B',str(verifier),'--source',str(candidate),
+                          '--artifacts',str(artifacts),'--metadata',str(metadata_path),'--metadata-sha256',metadata_sha,
+                          '--source-sha',source,'--source-tree',tree,'--n44-run',str(run_ids['n44']),
+                          '--n42-run',str(run_ids['n42']),'--report',str(readback)],
+                         cwd=temp,env=offline_env,check=True,timeout=180)
+          result=obj(read(readback,4*1024*1024))
+          need(result.get('result')=='PASS' and result.get('source_commit')==source and result.get('source_tree')==tree and
+               result.get('metadata_sha256')==metadata_sha and result.get('workflow_runs')==run_ids and
+               type(result.get('check_count')) is int and result['check_count']==readback_checks,
+               'Full offline candidate readback failed')
+          need(result.get('package',{}).get('bytes')==package_size and result['package'].get('sha256')==package_sha and
+               result.get('exe',{}).get('bytes')==exe_size and result['exe'].get('sha256')==exe_sha,
+               'Offline readback differs from the final package/executable pins')
+          need(result.get('signed') is False and result.get('product_executed_by_verifier') is False and
+               result.get('published_by_verifier') is False and result.get('live_host_model_consumption_verified') is False and
+               result.get('postgres_integration_verified') is False,'Readback exceeded the reviewed evidence scope')
+          native=result['report_summaries']['windows']
+          need(native.get('multiterm-process')=={'checks':112,'commands':126} and
+               native.get('multiterm-unit')=={'scenarios':16,'assertions':258},'Wrong N47L regression evidence')
+          # This reads the already-verified member; it never rebuilds or rezips it.
+          with zipfile.ZipFile(io.BytesIO(read(artifacts/'package.zip'))) as archive:
+              raw=archive.read('qbrain-windows-x64-development.zip')
+          need(len(raw)==package_size and sha(raw)==package_sha,'Original inner ZIP changed')
+
+          provenance={
+              'repository':repo,'source_commit':source,'source_tree':tree,'review_commit':review,'review_tree':review_tree,
+              'merge_commit':merge,'reviewed_pr':28,'workflow_runs':run_ids,'delivery_run':int(os.environ['GITHUB_RUN_ID']),
+              'delivery_run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),'delivery_commit':os.environ['GITHUB_SHA'],
+              'metadata_sha256':metadata_sha,'summary_sha256':summary_sha,'verifier_sha256':verifier_sha,
+              'artifact_ids':{name:pin['id'] for name,pin in metadata['artifacts'].items()},
+              'readback_checks':readback_checks,'package_bytes':package_size,'package_sha256':package_sha,
+              'original_inner_zip':'qbrain-windows-x64-development.zip','release_asset':product,
+              'exe_bytes':exe_size,'exe_sha256':exe_sha,'native_registered_groups':60,
+              'multiterm_unit':native['multiterm-unit'],'multiterm_process':native['multiterm-process'],
+              'review_type':'Owner-authorized engineering review by separate actual subagents; not third-party certification',
+              'independent_subagent_reviewed':True,'unresolved_scoped_p0_p1_p2':0,
+              'signed':False,'rebuilt_or_repacked':False,'postgres_integration_verified':False,
+              'new_live_host_acceptance':False,'new_provider_egress_verified':False,
+              'live_host_model_consumption_verified':False,'whole_project_complete':False,
+          }
+          release_dir=temp/'release';release_dir.mkdir()
+          (release_dir/product).write_bytes(raw)
+          provenance_raw=(json.dumps(provenance,indent=2,ensure_ascii=False)+'\n').encode('utf-8')
+          (release_dir/'PROVENANCE.json').write_bytes(provenance_raw)
+          (release_dir/'SHA256SUMS.txt').write_text(package_sha+'  '+product+'\n'+sha(provenance_raw)+'  PROVENANCE.json\n',encoding='ascii')
+          assets=[product,'PROVENANCE.json','SHA256SUMS.txt']
+          expected_assets={}
+          for name in assets:
+              content=read(release_dir/name)
+              expected_assets[name]={'size':len(content),'digest':'sha256:'+sha(content)}
+          notes=('N47L unsigned Windows development preview. Exact original CI inner ZIP, renamed without rebuilding or repacking. '
+                 'Explicit literal/all_terms/any_terms fact recall preserves complete recorded counter-evidence. '
+                 'Option-shaped queries stay literal data; default and explicit literal retain identical output bytes. '
+                 'The reviewed candidate passed 60 registered native groups and N47L 16 scenarios/258 assertions plus '
+                 '112 CLI/MCP checks across 126 commands, with Server 2022, portable and sanitizer evidence. '
+                 'Separate actual subagents reviewed storage and interfaces and closed scoped findings. '
+                 'This release does not establish new PostgreSQL integration, live-host model consumption or provider-egress acceptance. '
+                 'Read MULTI-TERM-RECALL.zh-CN.md and PROVENANCE.json. ZIP SHA-256: '+package_sha)
+
+          # The first mutations occur only after every gate above. A rerun refuses
+          # any existing release (including a failed prior draft). Never use force,
+          # upload --clobber, tag movement, release deletion or asset replacement.
+          need(api('releases/tags/'+tag,optional=True) is None,'Release appeared during verification; refusing overwrite')
+          current_tag=tag_source()
+          need(current_tag in (None,source),'Tag changed during verification')
+          if current_tag is None:
+              created=api('git/refs',method='POST',body={'ref':'refs/tags/'+tag,'sha':source})
+              need(created.get('ref')=='refs/tags/'+tag and created.get('object',{}).get('sha')==source,'Wrong new tag')
+          need(tag_source()==source,'Tag does not resolve to the exact candidate')
+          gh('release','create',tag,*(str(release_dir/name) for name in assets),'--repo',repo,'--target',source,
+             '--verify-tag','--draft','--prerelease','--latest=false','--title',title,'--notes',notes)
+          draft=api('releases/tags/'+tag)
+          need(positive_int(draft.get('id')) and draft.get('draft') is True and draft.get('prerelease') is True and
+               draft.get('tag_name')==tag and draft.get('target_commitish')==source and draft.get('name')==title,
+               'Created release metadata is not the expected draft prerelease')
+          release_id=draft['id']
+          def asset_metadata(release,pinned=None):
+              rows=release.get('assets')
+              need(isinstance(rows,list) and len(rows)==len(assets) and all(isinstance(row,dict) for row in rows),
+                   'Release assets are missing or malformed')
+              names=[row.get('name') for row in rows]
+              need(all(isinstance(name,str) for name in names) and len(set(names))==len(names) and set(names)==set(assets),
+                   'Release assets are missing, duplicated or unexpected')
+              identifiers=[row.get('id') for row in rows]
+              need(all(positive_int(ident) for ident in identifiers) and len(set(identifiers))==len(identifiers),
+                   'Release asset IDs are missing, invalid or duplicated')
+              current={}
+              for row in rows:
+                  name=row['name'];expected=expected_assets[name]
+                  need(row.get('state')=='uploaded' and type(row.get('size')) is int and row['size']==expected['size'] and
+                       isinstance(row.get('digest'),str) and row['digest']==expected['digest'],
+                       'Release asset size/digest differs from the fixed local bytes: '+name)
+                  current[name]={'id':row['id'],'size':row['size'],'digest':row['digest']}
+              if pinned is not None:
+                  need(current==pinned,'Release assets changed after the initial upload was pinned')
+              return current
+          uploaded_assets=asset_metadata(draft)
+          downloaded=temp/'release-readback'
+          gh('release','download',tag,'--repo',repo,'--dir',str(downloaded))
+          need({path.name for path in downloaded.iterdir()}==set(assets),'Downloaded release member list mismatch')
+          for name in assets:
+              need(read(release_dir/name)==read(downloaded/name),'Release asset byte mismatch: '+name)
+          again=api(f'releases/{release_id}')
+          need(again.get('draft') is True and again.get('tag_name')==tag and again.get('target_commitish')==source and
+               tag_source()==source,'Release/tag changed before publication')
+          asset_metadata(again,uploaded_assets)
+          # Publish the exact draft ID that was read back, rather than re-resolving
+          # a release by tag for the mutation. This never makes it the latest release.
+          published=api(f'releases/{release_id}',method='PATCH',body={'draft':False,'prerelease':True,'make_latest':'false'})
+          public=api('releases/tags/'+tag)
+          need(published.get('id')==release_id and public.get('id')==release_id and public.get('draft') is False and
+               public.get('prerelease') is True and public.get('tag_name')==tag and public.get('target_commitish')==source and
+               public.get('name')==title and isinstance(public.get('published_at'),str) and tag_source()==source,
+               'Public release metadata or tag does not match the exact reviewed source')
+          asset_metadata(public,uploaded_assets)
+          latest=api('releases/latest',optional=True)
+          need(latest is None or latest.get('id')!=release_id,'Preview unexpectedly became the latest release')
+          receipt={'result':'PUBLISHED','tag':tag,'release_id':release_id,'url':public['html_url'],
+                   'assets_read_back':assets,'asset_pins':uploaded_assets,**provenance}
+          (evidence/'publication.json').write_text(json.dumps(receipt,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          print(json.dumps(receipt,ensure_ascii=False))
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47l-reviewed-delivery
+          path: evidence/
+          if-no-files-found: ignore
+          retention-days: 14

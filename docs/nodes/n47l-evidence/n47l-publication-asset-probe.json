@@ -1,0 +1,24 @@
+{
+  "template_sha256": "96796d47fdf75a4e14dc181b0d2e3f9e3efcb6253e89eb81b03fa7a506d8e50a",
+  "network_or_actual_publication": false,
+  "results": [
+    {
+      "replacement_after_download": false,
+      "failure": null,
+      "publication_patch_calls": 1,
+      "published": true,
+      "original_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "remote_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "receipt_result": "PUBLISHED"
+    },
+    {
+      "replacement_after_download": true,
+      "failure": null,
+      "publication_patch_calls": 1,
+      "published": true,
+      "original_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "remote_package_sha256": "aeb8ff5bf3c0e2755ea9b08806295a296da5f657cc3f82e2c7b1a46407335f6a",
+      "receipt_result": "PUBLISHED"
+    }
+  ]
+}

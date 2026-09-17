@@ -1,0 +1,397 @@
+{
+  "result": "PASS",
+  "checks": [
+    {
+      "case": "mode_type_enum",
+      "input": null,
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "string value required"
+      }
+    },
+    {
+      "case": "mode_type_enum",
+      "input": true,
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "string value required"
+      }
+    },
+    {
+      "case": "mode_type_enum",
+      "input": false,
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "string value required"
+      }
+    },
+    {
+      "case": "mode_type_enum",
+      "input": 0,
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "string value required"
+      }
+    },
+    {
+      "case": "mode_type_enum",
+      "input": 1.5,
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "string value required"
+      }
+    },
+    {
+      "case": "mode_type_enum",
+      "input": [],
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "string value required"
+      }
+    },
+    {
+      "case": "mode_type_enum",
+      "input": {},
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "string value required"
+      }
+    },
+    {
+      "case": "mode_type_enum",
+      "input": "",
+      "error": {
+        "code": "fact_invalid_match"
+      }
+    },
+    {
+      "case": "mode_type_enum",
+      "input": "LITERAL",
+      "error": {
+        "code": "fact_invalid_match"
+      }
+    },
+    {
+      "case": "mode_type_enum",
+      "input": "literal_substring",
+      "error": {
+        "code": "fact_invalid_match"
+      }
+    },
+    {
+      "case": "mode_type_enum",
+      "input": "all_terms ",
+      "error": {
+        "code": "fact_invalid_match"
+      }
+    },
+    {
+      "case": "mode_type_enum",
+      "input": "\u0000literal",
+      "error": {
+        "code": "fact_invalid_match"
+      }
+    },
+    {
+      "case": "wrong_view",
+      "view": null,
+      "error": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "case": "wrong_view",
+      "view": "memories",
+      "error": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "case": "wrong_view",
+      "view": "facts",
+      "error": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "case": "wrong_view",
+      "view": "conflicts",
+      "error": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "case": "wrong_view",
+      "view": "lifecycle",
+      "error": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "case": "wrong_view",
+      "view": "lifecycle_candidates",
+      "error": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "case": "wrong_view",
+      "view": "lifecycle_batch",
+      "error": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "case": "wrong_view",
+      "view": "unknown",
+      "error": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "case": "wrong_view",
+      "view": "",
+      "error": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "case": "write_view",
+      "action": "capture",
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "case": "write_view",
+      "action": "extract",
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "case": "write_view",
+      "action": "forget",
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "case": "write_view",
+      "action": "fact_create",
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "case": "write_view",
+      "action": "fact_archive",
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "case": "write_view",
+      "action": "fact_lifecycle_batch",
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "case": "write_view",
+      "action": "fact_promote",
+      "error": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "literal",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "literal",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "literal",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "literal",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "literal",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "literal",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "literal",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "literal",
+      "error": {
+        "code": "sensitive_material_rejected"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "all_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "all_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "all_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "all_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "all_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "all_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "all_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "all_terms",
+      "error": {
+        "code": "sensitive_material_rejected"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "any_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "any_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "any_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "any_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "any_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "any_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "any_terms",
+      "error": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "case": "query_rejection",
+      "mode": "any_terms",
+      "error": {
+        "code": "sensitive_material_rejected"
+      }
+    }
+  ]
+}

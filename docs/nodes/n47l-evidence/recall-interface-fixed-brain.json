@@ -1,0 +1,67 @@
+{
+  "result": "PASS",
+  "checks": [
+    {
+      "name": "config_fallback",
+      "status": "PASS"
+    },
+    {
+      "name": "environment_precedes_config",
+      "status": "PASS"
+    },
+    {
+      "name": "explicit_precedes_environment",
+      "status": "PASS"
+    },
+    {
+      "name": "empty_env_uses_config",
+      "status": "PASS"
+    },
+    {
+      "name": "empty_brain",
+      "status": "PASS",
+      "exit": 2,
+      "stdout": "",
+      "stderr": "error: invalid brain id\n"
+    },
+    {
+      "name": "missing_match",
+      "status": "PASS",
+      "exit": 1,
+      "stdout": "{\"error\":{\"code\":\"invalid_cli_argument\"}}\n",
+      "stderr": ""
+    },
+    {
+      "name": "missing_query",
+      "status": "PASS",
+      "exit": 1,
+      "stdout": "{\"error\":{\"code\":\"fact_invalid_query\"}}\n",
+      "stderr": ""
+    },
+    {
+      "name": "duplicate_match",
+      "status": "PASS",
+      "exit": 1,
+      "stdout": "{\"error\":{\"code\":\"duplicate_argument\"}}\n",
+      "stderr": ""
+    },
+    {
+      "name": "duplicate_brain",
+      "status": "PASS",
+      "exit": 1,
+      "stdout": "{\"error\":{\"code\":\"duplicate_argument\"}}\n",
+      "stderr": ""
+    },
+    {
+      "name": "duplicate_query",
+      "status": "PASS",
+      "exit": 1,
+      "stdout": "{\"error\":{\"code\":\"duplicate_argument\"}}\n",
+      "stderr": ""
+    },
+    {
+      "name": "query_not_used_as_brain",
+      "status": "PASS"
+    }
+  ]
+}

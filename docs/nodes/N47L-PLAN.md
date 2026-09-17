@@ -1,7 +1,8 @@
 # N47L — explicit multi-term fact recall with complete counter-evidence
 
 Baseline main: d033bdb23ae483a9bc68893ce1bb32c77d76fb28.
-Status: approved after N47L-PLAN-AUDIT.md; implementation/outcome pending.
+Status: done after N47L-HARD-AUDIT.md PASS_SCOPED on repaired product
+17e9a435f94e45b3ca22d3da062ba4683c135c4b and current native/artifact acceptance.
 Only Windows-native youq616/qbrain. Owner authorizes separate engineering
 self-review, not a fictitious external/subagent approval.
 

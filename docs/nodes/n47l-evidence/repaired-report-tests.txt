@@ -1,0 +1,111 @@
+..N46F CJK recall FAILED: synthetic failure
+.....{
+  "suite": "n46f_cjk_recall",
+  "result": "FAIL",
+  "error": "synthetic failure",
+  "binary": "/tmp/tmpfgsikkyv/fake",
+  "binary_sha256": "f600c9529a3454d95264c4c2749da63e907489286f7850937f69cbf5bc23a156",
+  "script_sha256": "497dad9edea48f98232f2e8359fa39d70fe243142bbd846d4f7ee6f795bf3da2",
+  "fixture_quote": "我偏好在这个测试项目中使用日志前缀QBCJKfixture，并且保持原文。",
+  "checks": [
+    {
+      "name": "earlier",
+      "status": "PASS",
+      "detail": "synthetic"
+    },
+    {
+      "name": "execution_error",
+      "status": "FAIL",
+      "detail": "CheckFailure"
+    }
+  ],
+  "check_count": 2,
+  "counts": {
+    "total": 2,
+    "pass": 1,
+    "fail": 1
+  },
+  "commands": [
+    {
+      "exit_code": 7
+    }
+  ],
+  "native_windows": false,
+  "real_agent_verified": false,
+  "live_provider_verified": false,
+  "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "tracked_tree_clean": true,
+  "declared_package_source": null
+}
+PASS :: earlier :: synthetic
+FAIL :: execution_error :: CheckFailure
+N46F CJK recall: 2 checks, result=FAIL
+N46F CJK recall FAILED: synthetic failure
+......{
+  "suite": "n46f_cjk_recall",
+  "result": "FAIL",
+  "error": "synthetic failure",
+  "binary": "/tmp/tmpeejn9xml/fake",
+  "binary_sha256": "f600c9529a3454d95264c4c2749da63e907489286f7850937f69cbf5bc23a156",
+  "script_sha256": "497dad9edea48f98232f2e8359fa39d70fe243142bbd846d4f7ee6f795bf3da2",
+  "fixture_quote": "我偏好在这个测试项目中使用日志前缀QBCJKfixture，并且保持原文。",
+  "checks": [
+    {
+      "name": "earlier",
+      "status": "PASS",
+      "detail": "synthetic"
+    },
+    {
+      "name": "execution_error",
+      "status": "FAIL",
+      "detail": "CheckFailure"
+    }
+  ],
+  "check_count": 2,
+  "counts": {
+    "total": 2,
+    "pass": 1,
+    "fail": 1
+  },
+  "commands": [
+    {
+      "exit_code": 7
+    }
+  ],
+  "native_windows": false,
+  "real_agent_verified": false,
+  "live_provider_verified": false,
+  "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "tracked_tree_clean": true,
+  "declared_package_source": null
+}
+PASS :: earlier :: synthetic
+FAIL :: execution_error :: CheckFailure
+N46F CJK recall: 2 checks, result=FAIL
+..........{"result": "FAIL", "checks": {"pass": 1, "fail": 1, "total": 2}, "commands": 1, "report": "/tmp/tmpz7t1zj1e/report.json"}
+..{"result": "FAIL", "checks": [{"name": "earlier", "status": "PASS"}, {"name": "execution_interrupted", "status": "FAIL"}], "commands": [{"exit_code": 2, "expected_exit": 0}], "binary_sha256": "f600c9529a3454d95264c4c2749da63e907489286f7850937f69cbf5bc23a156", "script_sha256": "8cd08f1c5a4c01fb5b1caa6fcf1484d180d90522563c056208a3d15a80dc3f05", "native_windows": false, "error_type": "AssertionError", "error": "synthetic startup failure", "check_count": 2, "counts": {"pass": 1, "fail": 1, "total": 2}, "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "tracked_tree_clean": true, "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a"}
+....{"result": "FAIL", "checks": [{"name": "one", "status": "PASS"}, {"name": "two", "status": "FAIL"}], "commands": [{"exit_code": 1, "expected_exit": 0}], "binary_sha256": "4cb744a08586a376b416d59f87c853398af16764d4966779b513ec4c9fcbf1bb", "script_sha256": "8cd08f1c5a4c01fb5b1caa6fcf1484d180d90522563c056208a3d15a80dc3f05", "native_windows": false, "error_type": "RuntimeError", "error": "synthetic fixture", "check_count": 2, "counts": {"pass": 1, "fail": 1, "total": 2}, "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "tracked_tree_clean": true, "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a"}
+....................................................................{"result": "FAIL", "checks": [{"name": "one", "status": "PASS"}, {"name": "two", "status": "FAIL"}], "commands": [{"exit_code": 1, "expected_exit": 0}], "binary_sha256": "4cb744a08586a376b416d59f87c853398af16764d4966779b513ec4c9fcbf1bb", "script_sha256": "8cd08f1c5a4c01fb5b1caa6fcf1484d180d90522563c056208a3d15a80dc3f05", "native_windows": false, "error_type": "RuntimeError", "error": "synthetic fixture", "check_count": 2, "counts": {"pass": 1, "fail": 1, "total": 2}, "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "tracked_tree_clean": true, "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a"}
+{"result": "FAIL", "checks": 1, "commands": 0, "error": "synthetic"}
+{"result": "FAIL", "checks": 2, "commands": 1, "error": "synthetic interruption"}
+{"result": "FAIL", "counts": {"total": 2, "pass": 1, "fail": 1}, "commands": 1, "error": "synthetic failure"}
+{"result": "FAIL", "counts": {"pass": 0, "fail": 1, "total": 1}, "commands": 0, "error": "synthetic"}
+{"result": "FAIL", "counts": {"pass": 1, "fail": 1, "total": 2}, "commands": 1, "error": "synthetic interruption"}
+..{"result": "FAIL", "checks": [{"name": "failed", "status": "FAIL"}], "commands": [], "native_windows": false, "real_host_consumption_verified": false, "binary_sha256": "f600c9529a3454d95264c4c2749da63e907489286f7850937f69cbf5bc23a156", "script_sha256": "a04cfc79ca9fd4556503f76a4055ea6965196a3be40f1ac8b421a0e4f67d8933", "error_type": "AssertionError", "error": "synthetic", "check_count": 1, "counts": {"total": 1, "pass": 0, "fail": 1}, "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "tracked_tree_clean": true, "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a"}
+............{"result": "FAIL", "checks": [{"name": "earlier", "status": "PASS"}, {"name": "execution_interrupted", "status": "FAIL"}], "commands": [{"exit_code": 2, "expected_exit": 0}], "native_windows": false, "real_host_consumption_verified": false, "binary_sha256": "f600c9529a3454d95264c4c2749da63e907489286f7850937f69cbf5bc23a156", "script_sha256": "a04cfc79ca9fd4556503f76a4055ea6965196a3be40f1ac8b421a0e4f67d8933", "error_type": "RuntimeError", "error": "synthetic interruption", "check_count": 2, "counts": {"total": 2, "pass": 1, "fail": 1}, "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "tracked_tree_clean": true, "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a"}
+..{"result": "FAIL", "checks": [{"name": "failed", "status": "FAIL"}], "commands": [], "native_windows": false, "real_host_consumption_verified": false, "binary_sha256": "f600c9529a3454d95264c4c2749da63e907489286f7850937f69cbf5bc23a156", "script_sha256": "fc6ca571ff3f7b314cb70ab683254da9aa99ba896bf00f04c56a70fe35de768c", "error_type": "AssertionError", "error": "synthetic", "check_count": 1, "counts": {"total": 1, "pass": 0, "fail": 1}, "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "tracked_tree_clean": true, "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a"}
+.............................{"result": "FAIL", "checks": [{"name": "earlier", "status": "PASS"}, {"name": "execution_interrupted", "status": "FAIL"}], "commands": [{"exit_code": 2, "expected_exit": 0}], "native_windows": false, "real_host_consumption_verified": false, "binary_sha256": "f600c9529a3454d95264c4c2749da63e907489286f7850937f69cbf5bc23a156", "script_sha256": "fc6ca571ff3f7b314cb70ab683254da9aa99ba896bf00f04c56a70fe35de768c", "error_type": "RuntimeError", "error": "synthetic interruption", "check_count": 2, "counts": {"total": 2, "pass": 1, "fail": 1}, "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "tracked_tree_clean": true, "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a"}
+{"result": "FAIL", "native_windows": false, "checks": [{"name": "failed", "status": "FAIL"}], "commands": [], "real_host_consumption_verified": false, "binary_sha256": "f600c9529a3454d95264c4c2749da63e907489286f7850937f69cbf5bc23a156", "script_sha256": "bb59f983237e212073e1dcca23ee63edd08f01b9ab9c3766d7f7434e85432f59", "error_type": "AssertionError", "error": "synthetic", "check_count": 1, "counts": {"total": 1, "pass": 0, "fail": 1}, "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "tracked_tree_clean": true, "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a"}
+{"result": "FAIL", "native_windows": false, "checks": [{"name": "earlier", "status": "PASS"}, {"name": "execution_interrupted", "status": "FAIL"}], "commands": [{"exit_code": 2, "expected_exit": 0}], "real_host_consumption_verified": false, "binary_sha256": "f600c9529a3454d95264c4c2749da63e907489286f7850937f69cbf5bc23a156", "script_sha256": "bb59f983237e212073e1dcca23ee63edd08f01b9ab9c3766d7f7434e85432f59", "error_type": "RuntimeError", "error": "synthetic interruption", "check_count": 2, "counts": {"total": 2, "pass": 1, "fail": 1}, "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "tracked_tree_clean": true, "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a"}
+.............................{"result": "FAIL", "checks": {"total": 2, "pass": 1, "fail": 1}, "commands": 1}
+{"result": "FAIL", "checks": [{"name": "earlier", "status": "PASS"}, {"name": "execution_interrupted", "status": "FAIL"}], "commands": [{"exit_code": 2, "expected_exit": 0}], "native_windows": false, "scope": "synthetic CLI/MCP/Hook; no authenticated client", "real_host_consumption_verified": false, "binary_sha256": "de5f9d00b87299970956237d1c66796079465aa12199847fe0d02d10ab44a648", "script_sha256": "e13e0c524bd23754a4ed2df38351e334dd21b683ddb6f312d28eae5d849b3648", "error_type": "RuntimeError", "error": "synthetic failure", "check_count": 2, "counts": {"pass": 1, "fail": 1, "total": 2}, "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b", "tracked_tree_clean": true, "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a"}
+.............{"result": "FAIL", "checks": {"pass": 1, "fail": 1, "total": 2}, "commands": 1, "report": "/tmp/tmp9zxapnvp/report.json"}
+..{"result": "FAIL", "checks": 1, "commands": 0, "error": "synthetic"}
+.......
+----------------------------------------------------------------------
+Ran 193 tests in 0.574s
+
+OK
+{"result": "FAIL", "checks": 2, "commands": 1, "error": "synthetic interruption"}

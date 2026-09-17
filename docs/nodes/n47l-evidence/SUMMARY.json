@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "repository": "youq616/qbrain",
+  "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a",
+  "baseline_commit": "d033bdb23ae483a9bc68893ce1bb32c77d76fb28",
+  "scoped_result": "PASS_SCOPED",
+  "independent_subagent_reviewed": true,
+  "unresolved_scoped_p0_p1_p2": 0,
+  "reviews": {
+    "storage": "PASS_SCOPED",
+    "interface": "PASS_SCOPED",
+    "ci_artifact_readback": "PASS_SCOPED",
+    "publication_control": "PASS_SCOPED"
+  },
+  "reviewers": {
+    "storage": "/root/recall_storage_review",
+    "interface": "/root/recall_interface_review",
+    "report_gate": "/root/recall_interface_review/report_gate_review",
+    "ci": "/root/ci_handoff_audit",
+    "offline_verifier": "/root/ci_handoff_audit/verifier_inventory_review",
+    "publication_control": "/root/recall_storage_review"
+  },
+  "review_type": "Owner-authorized engineering review by separate actual subagents; not third-party or Claude Code certification",
+  "closed_product_findings": [
+    {
+      "severity": "P2",
+      "scope": "CLI",
+      "finding": "Literal --match query reparsed as a flag; fact fields now use the strict single parse, including actual brain selection."
+    },
+    {
+      "severity": "P2",
+      "scope": "Process evidence",
+      "finding": "Repeated or unidentified command histories and self-asserted exits accepted; fixed semantic schedule, argv/stdin, ID bindings and expected exits now enforced."
+    }
+  ],
+  "publication_control": {
+    "result": "PASS_SCOPED",
+    "template_sha256": "aad1e079a252ce58dff3decebf95f040c46979530da75af3c9236d73cd7e651a",
+    "closed_p2": "Same-name/same-size asset replacement now rejected using fixed IDs, sizes and digests.",
+    "independent_offline_state_cases": 11,
+    "author_pin_negatives": 45,
+    "author_asset_negatives": 20,
+    "author_api_negatives": 3,
+    "actual_publication_at_outcome_review": false,
+    "final_concrete_pins_must_be_checked": true
+  },
+  "workflow_runs": {
+    "n44": 35228307025,
+    "n42": 35228306922
+  },
+  "required_ci": {
+    "n44": {
+      "id": 35228307025,
+      "run_attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/youq616/qbrain/actions/runs/35228307025",
+      "native_registered_groups": 60
+    },
+    "n42": {
+      "id": 35228306922,
+      "run_attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/youq616/qbrain/actions/runs/35228306922",
+      "native_registered_groups": 60
+    }
+  },
+  "multiterm_reports": {
+    "windows": {
+      "multiterm-unit": {
+        "scenarios": 16,
+        "assertions": 258
+      },
+      "multiterm-process": {
+        "checks": 112,
+        "commands": 126
+      }
+    },
+    "server2022": {
+      "multiterm-unit": {
+        "scenarios": 16,
+        "assertions": 258
+      }
+    },
+    "portable": {
+      "multiterm-unit": {
+        "scenarios": 16,
+        "assertions": 258
+      },
+      "multiterm-process": {
+        "checks": 112,
+        "commands": 126
+      }
+    },
+    "sanitizer": {
+      "multiterm-unit": {
+        "scenarios": 16,
+        "assertions": 258
+      },
+      "multiterm-process": {
+        "checks": 112,
+        "commands": 126
+      }
+    }
+  },
+  "local_validation": {
+    "compiler": "GCC 13.3 Release",
+    "multiterm_unit": {
+      "scenarios": 16,
+      "assertions": 258
+    },
+    "multiterm_process": {
+      "checks": 112,
+      "commands": 126
+    },
+    "prior_process_suites": 18,
+    "report_tests": 193,
+    "registry_msvc_tests": 32,
+    "native_windows": false
+  },
+  "independent_execution": {
+    "storage_query_mode_cases": 600,
+    "storage_assertions_including_fixture_checks": 3415,
+    "interface_differential_checks": 170,
+    "brain_argument_checks": 11,
+    "mcp_boundary_checks": 52,
+    "original_differential_failures": 23,
+    "original_new_match_issue_failed_assertions": 5,
+    "original_preexisting_alias_failed_assertions": 18,
+    "report_mutations_rejected": 881,
+    "original_three_malformed_history_shapes_also_rejected": 3,
+    "final_report_tests": 20,
+    "historical_fixture_offline_verifier_tests": 14,
+    "current_candidate_offline_verifier_tests": 14,
+    "offline_verifier_test_note": "The same 14 verifier tests ran on the historical fixture and later separately on the repaired candidate; these are not 28 distinct test methods."
+  },
+  "readback": {
+    "check_count": 1094,
+    "metadata_sha256": "e3d4ebcf21131b6cfa891b0af2c3a72f10343986a142f2de5cd8a9f95b0832df",
+    "report_sha256": "016bdd09c7c51d45c067e4e725438a3fe1f0b481da572062910e40639473e2c0",
+    "verifier_sha256": "5a8f793b4f0054d55ffff0a134b013c770f3c686974c47dd46d57fd951ee80c6",
+    "source_file_count": 883,
+    "artifact_count": 7,
+    "artifact_ids": {
+      "source": 10499777695,
+      "windows": 10501710021,
+      "package": 10500874382,
+      "server2022": 10500761185,
+      "portable": 10500153030,
+      "sanitizer": 10500261264,
+      "n42-windows": 10500242901
+    },
+    "package": {
+      "bytes": 2114341,
+      "sha256": "ed44a43d79e1e76efa768e74872223cd5d867dfb92881fe67aab129789cd4408",
+      "manifest_files": 73
+    },
+    "exe": {
+      "bytes": 4068864,
+      "sha256": "0bf0a19edcc672b750790016ed0979e001529a46d91def8f7d8b9bdffd8aae69"
+    },
+    "msvc_source_counts": {
+      "production_sources": 50,
+      "test_sources": 59
+    },
+    "executors": [
+      "/root/ci_handoff_audit",
+      "/root"
+    ],
+    "independent_reexecution_report_bytes_equal": true
+  },
+  "scope_limits": [
+    "Server2022 checks HTTP and unit suites; it does not run the full CLI/MCP process suite.",
+    "Probe executables are not separately downloaded; their identities remain report attestations.",
+    "The 881-case mutation execution was inline; its supplementary report/probe transcription is explicitly post-run, not an original raw log.",
+    "Historical storage execution is bound by unchanged relevant source; it is not presented as a fresh run on the final commit.",
+    "Known preexisting memory/context/search CLI parser defects remain separate next-stage work; see NEXT-STAGE.md.",
+    "GitHub multi-request publication is not atomic; a remote PATCH may succeed before a connection failure."
+  ],
+  "signed": false,
+  "new_live_host_acceptance": false,
+  "postgres_integration_verified": false,
+  "live_host_model_consumption_verified": false,
+  "whole_project_complete": false
+}

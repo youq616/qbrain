@@ -1,0 +1,5 @@
+differential: 600 query/mode cases passed
+candidate cap: AND before cap and bounded invalid OR candidates passed
+evidence budget: 528-support neighborhoods discard on 512 bound, next call resets
+snapshot: archive schema created between initial snapshot and schema detection passed
+Independent storage probe PASS, assertions=3415
