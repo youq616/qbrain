@@ -1,5 +1,5 @@
-# Exact original N47L CI bytes; concrete pins follow the independently reviewed template.
-name: Publish exact reviewed N47L candidate
+# Recover only the already-created, pinned N47L draft. No release/tag creation or asset replacement.
+name: Recover exact reviewed N47L draft
 on:
   push:
     branches: ['delivery/n47l-reviewed-17e9a435']
@@ -75,7 +75,7 @@ jobs:
           ref: ${{ env.MERGE_SHA }}
           path: merged
           persist-credentials: false
-      - name: Revalidate original CI bytes, create draft, read back, then publish
+      - name: Revalidate original CI bytes and recover only the pinned draft by ID
         shell: python
         env:
           GH_TOKEN: ${{ github.token }}
@@ -93,6 +93,16 @@ jobs:
           exe_size=int(os.environ['EXE_BYTES']);exe_sha=os.environ['EXE_SHA256']
           tag='multiterm-preview-17e9a435';product='qbrain-windows-x64-multiterm.zip'
           title='Qbrain N47L explicit multi-term recall (17e9a435)'
+          release_id=390787606
+          initial_run=35233247840;initial_attempt=1
+          initial_commit='2f254681c31fd493fa9cb5ab14ae089608f8a4ad'
+          assets=[product,'PROVENANCE.json','SHA256SUMS.txt']
+          asset_pins={
+              product:{'id':570420529,'size':2114341,'digest':'sha256:ed44a43d79e1e76efa768e74872223cd5d867dfb92881fe67aab129789cd4408'},
+              'PROVENANCE.json':{'id':570420531,'size':2049,'digest':'sha256:6cc243b432dbb444f83f9983f4294d0a4c516edc2ad0180b9a2940cc810cd59a'},
+              'SHA256SUMS.txt':{'id':570420528,'size':181,'digest':'sha256:5cd993f0e3a1fe73cfb818706f27e353902738ceabb5e01482b120489c0d715b'},
+          }
+          expected_assets={name:{'size':pin['size'],'digest':pin['digest']} for name,pin in asset_pins.items()}
           cap=128*1024*1024
           runs={
               'n44':('.github/workflows/n44-validation.yml',{'source','windows','windows-http-2022','portable','batch-sanitized'}),
@@ -163,6 +173,37 @@ jobs:
                   need(annotation.get('sha')==target['sha'],'Wrong annotated tag object')
                   target=annotation['object']
               raise RuntimeError('Tag annotation depth exceeded')
+          def asset_metadata(release,pinned=None):
+              rows=release.get('assets')
+              need(isinstance(rows,list) and len(rows)==len(assets) and all(isinstance(row,dict) for row in rows),
+                   'Release assets are missing or malformed')
+              names=[row.get('name') for row in rows]
+              need(all(isinstance(name,str) for name in names) and len(set(names))==len(names) and set(names)==set(assets),
+                   'Release assets are missing, duplicated or unexpected')
+              identifiers=[row.get('id') for row in rows]
+              need(all(positive_int(ident) for ident in identifiers) and len(set(identifiers))==len(identifiers),
+                   'Release asset IDs are missing, invalid or duplicated')
+              current={}
+              for row in rows:
+                  name=row['name'];expected=expected_assets[name]
+                  need(row.get('state')=='uploaded' and type(row.get('size')) is int and row['size']==expected['size'] and
+                       isinstance(row.get('digest'),str) and row['digest']==expected['digest'],
+                       'Release asset size/digest differs from the fixed local bytes: '+name)
+                  current[name]={'id':row['id'],'size':row['size'],'digest':row['digest']}
+              if pinned is not None:
+                  need(current==pinned,'Release assets changed after the initial upload was pinned')
+              return current
+          def release_metadata(release,*,draft_required):
+              need(type(release.get('id')) is int and release['id']==release_id and
+                   release.get('draft') is draft_required and release.get('prerelease') is True and
+                   release.get('tag_name')==tag and release.get('target_commitish')==source and release.get('name')==title,
+                   'Release identity/state differs from the one authorized draft')
+              if draft_required:
+                  need(release.get('published_at') is None,'Draft already has a publication timestamp')
+              else:
+                  need(isinstance(release.get('published_at'),str) and release['published_at'],
+                       'Public release has no publication timestamp')
+              asset_metadata(release,asset_pins)
 
           # Repeat critical fixed pins inside the publication step before I/O.
           need(source=='17e9a435f94e45b3ca22d3da062ba4683c135c4b' and tree=='f9d42819772df53dd8c6337c3cb19c8940d7023a','Wrong fixed source pins')
@@ -210,9 +251,16 @@ jobs:
                metadata.get('source_tree')==tree and set(metadata.get('runs',{}))==set(runs),
                'Metadata source or schema mismatch')
           need(set(metadata.get('artifacts',{}))==set(artifact_names),'Missing/extra original artifact pins')
-          need(api('releases/tags/'+tag,optional=True) is None,'Release already exists; no overwrite is allowed')
-          existing_tag=tag_source()
-          need(existing_tag in (None,source),'Existing tag belongs to another source; tag movement is forbidden')
+          need(tag_source()==source,'Existing tag must already resolve to the exact candidate')
+          # Drafts are queried by their authenticated release ID. The by-tag
+          # endpoint is for published releases and caused the initial failure.
+          release_metadata(api(f'releases/{release_id}'),draft_required=True)
+          initial=api(f'actions/runs/{initial_run}')
+          need(initial.get('id')==initial_run and initial.get('head_sha')==initial_commit and
+               initial.get('run_attempt')==initial_attempt and initial.get('status')=='completed' and
+               initial.get('conclusion')=='failure' and initial.get('path')=='.github/workflows/publish-reviewed-n47l.yml' and
+               initial.get('repository',{}).get('full_name')==repo and initial.get('head_repository',{}).get('full_name')==repo,
+               'Initial failed delivery does not match the pinned draft provenance')
 
           # Requery the exact run attempts, all jobs and their steps. A new run,
           # partial run or older attempt cannot substitute for reviewed evidence.
@@ -306,10 +354,10 @@ jobs:
               raw=archive.read('qbrain-windows-x64-development.zip')
           need(len(raw)==package_size and sha(raw)==package_sha,'Original inner ZIP changed')
 
-          provenance={
+          expected_provenance={
               'repository':repo,'source_commit':source,'source_tree':tree,'review_commit':review,'review_tree':review_tree,
-              'merge_commit':merge,'reviewed_pr':28,'workflow_runs':run_ids,'delivery_run':int(os.environ['GITHUB_RUN_ID']),
-              'delivery_run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),'delivery_commit':os.environ['GITHUB_SHA'],
+              'merge_commit':merge,'reviewed_pr':28,'workflow_runs':run_ids,'delivery_run':initial_run,
+              'delivery_run_attempt':initial_attempt,'delivery_commit':initial_commit,
               'metadata_sha256':metadata_sha,'summary_sha256':summary_sha,'verifier_sha256':verifier_sha,
               'artifact_ids':{name:pin['id'] for name,pin in metadata['artifacts'].items()},
               'readback_checks':readback_checks,'package_bytes':package_size,'package_sha256':package_sha,
@@ -322,85 +370,56 @@ jobs:
               'new_live_host_acceptance':False,'new_provider_egress_verified':False,
               'live_host_model_consumption_verified':False,'whole_project_complete':False,
           }
-          release_dir=temp/'release';release_dir.mkdir()
-          (release_dir/product).write_bytes(raw)
-          provenance_raw=(json.dumps(provenance,indent=2,ensure_ascii=False)+'\n').encode('utf-8')
-          (release_dir/'PROVENANCE.json').write_bytes(provenance_raw)
-          (release_dir/'SHA256SUMS.txt').write_text(package_sha+'  '+product+'\n'+sha(provenance_raw)+'  PROVENANCE.json\n',encoding='ascii')
-          assets=[product,'PROVENANCE.json','SHA256SUMS.txt']
-          expected_assets={}
+          # Re-read the same draft immediately before downloading its fixed IDs.
+          # No creation, upload, overwrite, deletion or tag mutation is available.
+          release_metadata(api(f'releases/{release_id}'),draft_required=True)
+          need(tag_source()==source,'Tag changed before draft-asset readback')
+          downloaded=evidence/'release-assets';downloaded.mkdir()
+          asset_bytes={}
           for name in assets:
-              content=read(release_dir/name)
-              expected_assets[name]={'size':len(content),'digest':'sha256:'+sha(content)}
-          notes=('N47L unsigned Windows development preview. Exact original CI inner ZIP, renamed without rebuilding or repacking. '
-                 'Explicit literal/all_terms/any_terms fact recall preserves complete recorded counter-evidence. '
-                 'Option-shaped queries stay literal data; default and explicit literal retain identical output bytes. '
-                 'The reviewed candidate passed 60 registered native groups and N47L 16 scenarios/258 assertions plus '
-                 '112 CLI/MCP checks across 126 commands, with Server 2022, portable and sanitizer evidence. '
-                 'Separate actual subagents reviewed storage and interfaces and closed scoped findings. '
-                 'This release does not establish new PostgreSQL integration, live-host model consumption or provider-egress acceptance. '
-                 'Read MULTI-TERM-RECALL.zh-CN.md and PROVENANCE.json. ZIP SHA-256: '+package_sha)
-
-          # The first mutations occur only after every gate above. A rerun refuses
-          # any existing release (including a failed prior draft). Never use force,
-          # upload --clobber, tag movement, release deletion or asset replacement.
-          need(api('releases/tags/'+tag,optional=True) is None,'Release appeared during verification; refusing overwrite')
-          current_tag=tag_source()
-          need(current_tag in (None,source),'Tag changed during verification')
-          if current_tag is None:
-              created=api('git/refs',method='POST',body={'ref':'refs/tags/'+tag,'sha':source})
-              need(created.get('ref')=='refs/tags/'+tag and created.get('object',{}).get('sha')==source,'Wrong new tag')
-          need(tag_source()==source,'Tag does not resolve to the exact candidate')
-          gh('release','create',tag,*(str(release_dir/name) for name in assets),'--repo',repo,'--target',source,
-             '--verify-tag','--draft','--prerelease','--latest=false','--title',title,'--notes',notes)
-          draft=api('releases/tags/'+tag)
-          need(positive_int(draft.get('id')) and draft.get('draft') is True and draft.get('prerelease') is True and
-               draft.get('tag_name')==tag and draft.get('target_commitish')==source and draft.get('name')==title,
-               'Created release metadata is not the expected draft prerelease')
-          release_id=draft['id']
-          def asset_metadata(release,pinned=None):
-              rows=release.get('assets')
-              need(isinstance(rows,list) and len(rows)==len(assets) and all(isinstance(row,dict) for row in rows),
-                   'Release assets are missing or malformed')
-              names=[row.get('name') for row in rows]
-              need(all(isinstance(name,str) for name in names) and len(set(names))==len(names) and set(names)==set(assets),
-                   'Release assets are missing, duplicated or unexpected')
-              identifiers=[row.get('id') for row in rows]
-              need(all(positive_int(ident) for ident in identifiers) and len(set(identifiers))==len(identifiers),
-                   'Release asset IDs are missing, invalid or duplicated')
-              current={}
-              for row in rows:
-                  name=row['name'];expected=expected_assets[name]
-                  need(row.get('state')=='uploaded' and type(row.get('size')) is int and row['size']==expected['size'] and
-                       isinstance(row.get('digest'),str) and row['digest']==expected['digest'],
-                       'Release asset size/digest differs from the fixed local bytes: '+name)
-                  current[name]={'id':row['id'],'size':row['size'],'digest':row['digest']}
-              if pinned is not None:
-                  need(current==pinned,'Release assets changed after the initial upload was pinned')
-              return current
-          uploaded_assets=asset_metadata(draft)
-          downloaded=temp/'release-readback'
-          gh('release','download',tag,'--repo',repo,'--dir',str(downloaded))
-          need({path.name for path in downloaded.iterdir()}==set(assets),'Downloaded release member list mismatch')
-          for name in assets:
-              need(read(release_dir/name)==read(downloaded/name),'Release asset byte mismatch: '+name)
-          again=api(f'releases/{release_id}')
-          need(again.get('draft') is True and again.get('tag_name')==tag and again.get('target_commitish')==source and
-               tag_source()==source,'Release/tag changed before publication')
-          asset_metadata(again,uploaded_assets)
-          # Publish the exact draft ID that was read back, rather than re-resolving
-          # a release by tag for the mutation. This never makes it the latest release.
+              pin=asset_pins[name];path=downloaded/name
+              with path.open('xb') as output:
+                  subprocess.run(['gh','api',f'repos/{repo}/releases/assets/{pin["id"]}',
+                                  '--header','Accept: application/octet-stream'],stdout=output,
+                                 stderr=subprocess.PIPE,check=True,timeout=120)
+              content=read(path)
+              need(len(content)==pin['size'] and 'sha256:'+sha(content)==pin['digest'],
+                   'Original draft asset bytes differ from fixed ID/digest: '+name)
+              asset_bytes[name]=content
+          need({path.name for path in downloaded.iterdir()}==set(assets),'Unexpected downloaded draft-asset inventory')
+          need(asset_bytes[product]==raw,'Draft product differs from the original verified CI inner ZIP')
+          # These are the original uploaded bytes. They are never regenerated or
+          # uploaded, and retain the failed initial delivery identity verbatim.
+          provenance=obj(asset_bytes['PROVENANCE.json'])
+          need(provenance==expected_provenance,'Original PROVENANCE fields differ from the fixed source/initial delivery')
+          expected_sums=(package_sha+'  '+product+'\n'+sha(asset_bytes['PROVENANCE.json'])+'  PROVENANCE.json\n').encode('ascii')
+          need(asset_bytes['SHA256SUMS.txt']==expected_sums,'Original checksum file does not bind the original assets')
+          draft=api(f'releases/{release_id}')
+          release_metadata(draft,draft_required=True)
+          need(tag_source()==source,'Tag changed before fixed-draft publication')
+          (evidence/'draft-before-publication.json').write_text(json.dumps(draft,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          # The recovery has exactly one remote mutation: publish this checked
+          # draft ID. Existing public releases are rejected above, never edited.
           published=api(f'releases/{release_id}',method='PATCH',body={'draft':False,'prerelease':True,'make_latest':'false'})
-          public=api('releases/tags/'+tag)
-          need(published.get('id')==release_id and public.get('id')==release_id and public.get('draft') is False and
-               public.get('prerelease') is True and public.get('tag_name')==tag and public.get('target_commitish')==source and
-               public.get('name')==title and isinstance(public.get('published_at'),str) and tag_source()==source,
-               'Public release metadata or tag does not match the exact reviewed source')
-          asset_metadata(public,uploaded_assets)
+          release_metadata(published,draft_required=False)
+          public=api(f'releases/{release_id}')
+          release_metadata(public,draft_required=False)
+          # Only after successful publication is the published-by-tag endpoint used.
+          by_tag=api('releases/tags/'+tag)
+          release_metadata(by_tag,draft_required=False)
+          need(tag_source()==source,'Published tag no longer resolves to the exact source')
+          (evidence/'release-public.json').write_text(json.dumps(public,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          (evidence/'release-by-tag.json').write_text(json.dumps(by_tag,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
           latest=api('releases/latest',optional=True)
           need(latest is None or latest.get('id')!=release_id,'Preview unexpectedly became the latest release')
-          receipt={'result':'PUBLISHED','tag':tag,'release_id':release_id,'url':public['html_url'],
-                   'assets_read_back':assets,'asset_pins':uploaded_assets,**provenance}
+          receipt={**provenance,'result':'PUBLISHED','publication_mode':'RECOVER_FIXED_DRAFT',
+                   'tag':tag,'release_id':release_id,'url':public['html_url'],'assets_read_back':assets,'asset_pins':asset_pins,
+                   'original_provenance_sha256':sha(asset_bytes['PROVENANCE.json']),
+                   'initial_delivery_run':initial_run,'initial_delivery_run_attempt':initial_attempt,
+                   'initial_delivery_commit':initial_commit,'initial_delivery_conclusion':'failure',
+                   'recovery_run':int(os.environ['GITHUB_RUN_ID']),
+                   'recovery_run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),'recovery_commit':os.environ['GITHUB_SHA'],
+                   'original_assets_replaced':False}
           (evidence/'publication.json').write_text(json.dumps(receipt,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
           print(json.dumps(receipt,ensure_ascii=False))
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
