@@ -1,0 +1,128 @@
+name: Publish exact reviewed N47J candidate
+on:
+  push:
+    branches: ['delivery/n47j-reviewed-2ec0c3da']
+    paths: ['.github/workflows/publish-reviewed-n47j.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deliver-n47j-2ec0c3da
+  cancel-in-progress: false
+jobs:
+  publish-approved-bytes:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47j-reviewed-2ec0c3da'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 2ec0c3daaa6d324bcc9f16a1ebacc88c63abe561
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: f75dab6bb665b9c5a2b36b44983febbb46e1f336
+          path: review
+          persist-credentials: false
+      - name: Validate reviewed merge and publish unchanged CI package
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          import hashlib,importlib.util,json,os,subprocess,sys
+          from pathlib import Path
+          repo='youq616/qbrain'
+          source='2ec0c3daaa6d324bcc9f16a1ebacc88c63abe561'
+          tree='37cfb0d5bd1df6501f0a42fe19d253e0e9e8b431'
+          review='f75dab6bb665b9c5a2b36b44983febbb46e1f336'
+          review_tree='cfc00fe0b073ac737fb25bb0973c16066daa3b39'
+          merge='f45af31e06243b41184b9274c0fc39073e10dd0a'
+          product_run=35163779907
+          tag='trace-preview-2ec0c3da'
+          root=Path(os.environ['RUNNER_TEMP'])/('n47j-delivery-'+os.environ['GITHUB_RUN_ID'])
+          root.mkdir(exist_ok=False)
+          def need(ok,msg):
+              if not ok:raise RuntimeError(msg)
+          def sha(b):return hashlib.sha256(b).hexdigest()
+          def gh(*args):return subprocess.check_output(['gh',*args],stderr=subprocess.PIPE,timeout=120)
+          def api(path):return json.loads(gh('api',f'repos/{repo}/{path}'))
+          def git(path,ref):return subprocess.check_output(['git','-C',path,'rev-parse',ref],text=True).strip()
+          need(git('candidate','HEAD')==source and git('candidate','HEAD^{tree}')==tree,'wrong product checkout')
+          need(git('review','HEAD')==review and git('review','HEAD^{tree}')==review_tree,'wrong review checkout')
+          pr=api('pulls/26')
+          need(pr['merged'] is True and pr['head']['sha']==review and pr['merge_commit_sha']==merge,'wrong merged PR')
+          delta=api(f'compare/{source}...{review}')
+          need(len(delta['files'])==6 and all(f['filename'].startswith('docs/') for f in delta['files']),'post-test runtime changes')
+          audit=json.loads(Path('review/docs/nodes/n47j-evidence/SUMMARY.json').read_text(encoding='utf-8'))
+          need(audit['source_commit']==source and audit['source_tree']==tree and audit['scoped_result']=='PASS_SCOPED' and audit['unresolved_scoped_p0_p1']==0,'review gate')
+          need(audit['closeout_execution']['readback_checks']==292 and audit['independent_subagent_or_third_party_claimed'] is False,'review scope')
+          for rid in (product_run,35163779904):
+              r=api(f'actions/runs/{rid}')
+              need(r['head_sha']==source and r['status']=='completed' and r['conclusion']=='success','original workflow failure')
+          jobs=api(f'actions/runs/{product_run}/jobs?per_page=100')['jobs']
+          for name in ('source','windows','windows-http-2022','portable','batch-sanitized'):
+              found=[j for j in jobs if j['name']==name]
+              need(len(found)==1 and found[0]['status']=='completed' and found[0]['conclusion']=='success','required job '+name)
+          verifier=Path('review/docs/nodes/n47j-evidence/verify_candidate.py')
+          need(sha(verifier.read_bytes())=='a518cdfcb4408ee19fe773074ccb2e03f105b90e1c9e899092e42520f6b18ffd','verifier bytes')
+          spec=importlib.util.spec_from_file_location('n47j_readback',verifier)
+          v=importlib.util.module_from_spec(spec);spec.loader.exec_module(v)
+          artifacts=root/'artifacts';artifacts.mkdir()
+          for name,(ident,digest) in v.PINS.items():
+              m=api(f'actions/artifacts/{ident}')
+              need(not m['expired'] and m['workflow_run']['id']==product_run and m['workflow_run']['head_sha']==source,'artifact source')
+              need(m['digest']=='sha256:'+digest and 0<m['size_in_bytes']<=v.CAP,'artifact digest/size')
+              path=artifacts/(name+'.zip')
+              with path.open('xb') as out:
+                  subprocess.run(['gh','api',f'repos/{repo}/actions/artifacts/{ident}/zip'],stdout=out,stderr=subprocess.PIPE,check=True,timeout=120)
+              need(path.stat().st_size==m['size_in_bytes'] and sha(path.read_bytes())==digest,'artifact bytes')
+          result=v.verify(Path('candidate').resolve(),artifacts)
+          need(result['result']=='PASS' and result['check_count']==292,'complete readback')
+          evidence=Path('evidence');evidence.mkdir()
+          (evidence/'readback.json').write_text(json.dumps(result,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          outer=v.unzip((artifacts/'package.zip').read_bytes())
+          raw=outer['qbrain-windows-x64-development.zip']
+          need(len(raw)==2071649 and sha(raw)==v.PACKAGE_SHA,'original inner package')
+          provenance={
+              'repository':repo,'source_commit':source,'source_tree':tree,'review_commit':review,'merge_commit':merge,
+              'product_run':product_run,'n42_run':35163779904,'delivery_run':int(os.environ['GITHUB_RUN_ID']),
+              'delivery_commit':os.environ['GITHUB_SHA'],'readback_checks':292,
+              'package_bytes':len(raw),'package_sha256':sha(raw),'exe_bytes':4038656,'exe_sha256':v.EXE_SHA,
+              'native_registered_groups':58,'trace_unit_scenarios':9,'trace_unit_assertions':169,'trace_process_checks':66,'trace_commands':80,
+              'review_type':'Owner-authorized separate engineering self-review, not third party/subagent',
+              'signed':False,'rebuilt_or_repacked':False,'diagnostic_probe_binaries_separately_downloaded':False,
+              'new_live_host_acceptance':False,'whole_project_complete':False}
+          release=root/'release';release.mkdir()
+          product='qbrain-windows-x64-hook-trace.zip'
+          (release/product).write_bytes(raw)
+          (release/'SHA256SUMS.txt').write_text(sha(raw)+'  '+product+'\n',encoding='ascii')
+          (release/'PROVENANCE.json').write_text(json.dumps(provenance,indent=2)+'\n',encoding='utf-8')
+          assets=[product,'SHA256SUMS.txt','PROVENANCE.json']
+          notes=('N47J unsigned development preview. Original tested CI package; no rebuild/repack. '
+                 'Per-event bounded metadata checkpoints preserve accepted failure stages and forgotten replay diagnostics. '
+                 'No prompt/answer/context recording, no memory revival and no model-consumption claim. '
+                 '58 native groups, trace9 scenarios/169 assertions and66 Hook checks/80 commands passed. '
+                 'Server2022,portable and Linux sanitizer evidence verified. Read HOOK-DIAGNOSTIC-CHECKPOINTS.zh-CN.md. '
+                 'Best-effort diagnostics, not a durable full audit trail. ZIP SHA256 '+sha(raw))
+          gh('release','create',tag,*(str(release/n) for n in assets),'--repo',repo,'--target',source,
+             '--draft','--prerelease','--latest=false','--title','Qbrain N47J event diagnostics (2ec0c3da)','--notes',notes)
+          downloaded=root/'readback-release'
+          gh('release','download',tag,'--repo',repo,'--dir',str(downloaded))
+          need({p.name for p in downloaded.iterdir()}==set(assets),'release member list')
+          for name in assets:need((release/name).read_bytes()==(downloaded/name).read_bytes(),'release readback '+name)
+          gh('release','edit',tag,'--repo',repo,'--draft=false','--prerelease','--latest=false')
+          receipt={'result':'PUBLISHED','tag':tag,**provenance}
+          (evidence/'publication.json').write_text(json.dumps(receipt,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(receipt))
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47j-reviewed-delivery
+          path: evidence/
+          retention-days: 14
