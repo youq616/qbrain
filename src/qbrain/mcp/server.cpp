@@ -246,7 +246,7 @@ const std::unordered_map<std::string, ArgumentType>* typed_argument_schema(
       {"symbol", Type::String}, {"name", Type::String}, {"source_id", Type::String},
       {"limit", Type::UnsignedInteger}, {"page_limit", Type::UnsignedInteger}};
   static const std::unordered_map<std::string, Type> memory_read = {
-      {"source_id", Type::String}, {"payload", Type::String}, {"query", Type::String},
+      {"source_id", Type::String}, {"payload", Type::String}, {"query", Type::String}, {"match", Type::String},
       {"event_id", Type::String}, {"limit", Type::UnsignedInteger},
       {"max_bytes", Type::UnsignedInteger}, {"view", Type::String},
       {"fact_id", Type::String}, {"predicate", Type::String}, {"include_history", Type::Boolean},

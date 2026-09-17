@@ -157,7 +157,7 @@ void print_help() {
       "  fact lifecycle [--id ID] [--predicate KEY] [--stale-after-days N] [--limit N] [--max-bytes N]\n"
       "  fact conflicts [--source id] [--id ID] [--predicate NAME] [--limit N] [--max-bytes N]\n"
       "  fact promote --event ID [--source id]  (local extracted event; complete quotes, no model)\n"
-      "  fact recall --query <literal> [--predicate KEY] [--limit N] [--max-bytes N] [--source id]\n"
+      "  fact recall --query <text> [--match literal|all_terms|any_terms] [--predicate KEY] [--limit N] [--max-bytes N] [--source id]\n"
       "  memory capture|extract|drain|read|status|forget [--source id]\n"
       "  session-capture [--automatic] [--session-id id] [--fragment-id id]\n"
       "  version\n"
@@ -432,6 +432,7 @@ int cmd_fact(const std::vector<std::string>& args) {
       values.insert({"--predicate","--limit","--max-bytes"});
       if(candidates)values.insert({"--operation","--after-id"});
       else values.insert(recall?"--query":"--id");
+      if(recall) values.insert("--match");
       if(lifecycle || candidates) values.insert("--stale-after-days");
       if(!conflicts && !recall && !lifecycle && !candidates) flags.insert("--history");
     }
@@ -453,7 +454,7 @@ int cmd_fact(const std::vector<std::string>& args) {
       } else if(reading) {
         c.args["view"]=candidates?"lifecycle_candidates":lifecycle?"lifecycle":(recall?"recall":(conflicts?"conflicts":"facts"));
         if(candidates) {c.args["operation"]=opt(args,"--operation");c.args["after_id"]=opt(args,"--after-id");}
-        else if(recall) c.args["query"]=opt(args,"--query");
+        else if(recall) { c.args["query"]=opt(args,"--query"); c.args["match"]=opt(args,"--match","literal"); }
         else c.args["fact_id"]=opt(args,"--id");
         c.args["predicate"]=opt(args,"--predicate"); c.args["limit"]=opt(args,"--limit","10");
         c.args["max_bytes"]=opt(args,"--max-bytes","8192");
