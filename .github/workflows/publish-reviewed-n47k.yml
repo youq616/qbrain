@@ -1,0 +1,119 @@
+name: Publish exact reviewed N47K candidate
+on:
+  push:
+    branches: ['delivery/n47k-reviewed-a23800df']
+    paths: ['.github/workflows/publish-reviewed-n47k.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deliver-n47k-a23800df
+  cancel-in-progress: false
+jobs:
+  publish-approved-bytes:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47k-reviewed-a23800df'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: a23800df3709ac9ef73a51d150b64d2d20d7d21f
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 1400018ab494617128487a2d4a59c07d1bfe594a
+          path: review
+          persist-credentials: false
+      - name: Validate reviewed merge and publish original tested package
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          import hashlib,importlib.util,json,os,subprocess
+          from pathlib import Path
+          repo='youq616/qbrain';source='a23800df3709ac9ef73a51d150b64d2d20d7d21f'
+          tree='b95af421ea5ebb756a127fe8cc519b5b62e17cf6'
+          review='1400018ab494617128487a2d4a59c07d1bfe594a';review_tree='f551b4a9e5d18f84a92d36696b4f564dd66e3a45'
+          merge='bff8bff5a45f71b857e363bf6d50fda3e3473f4a';run=35186099196
+          tag='diagnostics-preview-a23800df'
+          root=Path(os.environ['RUNNER_TEMP'])/('n47k-delivery-'+os.environ['GITHUB_RUN_ID']);root.mkdir(exist_ok=False)
+          def need(ok,msg):
+              if not ok:raise RuntimeError(msg)
+          def sha(b):return hashlib.sha256(b).hexdigest()
+          def gh(*args):return subprocess.check_output(['gh',*args],stderr=subprocess.PIPE,timeout=120)
+          def api(path):return json.loads(gh('api',f'repos/{repo}/{path}'))
+          def git(path,ref):return subprocess.check_output(['git','-C',path,'rev-parse',ref],text=True).strip()
+          need(git('candidate','HEAD')==source and git('candidate','HEAD^{tree}')==tree,'wrong source checkout')
+          need(git('review','HEAD')==review and git('review','HEAD^{tree}')==review_tree,'wrong review checkout')
+          pr=api('pulls/27')
+          need(pr['merged'] is True and pr['head']['sha']==review and pr['merge_commit_sha']==merge,'wrong reviewed merge')
+          delta=api(f'compare/{source}...{review}')
+          need(len(delta['files'])==8 and all(f['filename'].startswith('docs/') for f in delta['files']),'post-test runtime changes')
+          need(api(f'compare/{review}...{merge}')['files']==[],'merge changed reviewed files')
+          audit=json.loads(Path('review/docs/nodes/n47k-evidence/SUMMARY.json').read_text(encoding='utf-8'))
+          need(audit['source_commit']==source and audit['source_tree']==tree and audit['scoped_result']=='PASS_SCOPED' and audit['unresolved_scoped_p0_p1']==0,'outcome gate')
+          need(audit['readback']['checks']==318 and audit['independent_subagent_or_third_party_claimed'] is False,'outcome scope')
+          for rid in (run,35186099174):
+              r=api(f'actions/runs/{rid}')
+              need(r['head_sha']==source and r['status']=='completed' and r['conclusion']=='success','original workflow not successful')
+          jobs=api(f'actions/runs/{run}/jobs?per_page=100')['jobs']
+          for name in ('source','windows','windows-http-2022','portable','batch-sanitized'):
+              found=[j for j in jobs if j['name']==name]
+              need(len(found)==1 and found[0]['status']=='completed' and found[0]['conclusion']=='success','required job '+name)
+          verifier=Path('review/docs/nodes/n47k-evidence/verify_candidate.py')
+          need(sha(verifier.read_bytes())=='8e8e227746d8d3726b7fa53685477a8c46fd37c30a720ccbd5d990ee8b6fde56','verifier bytes')
+          spec=importlib.util.spec_from_file_location('n47k_readback',verifier)
+          v=importlib.util.module_from_spec(spec);spec.loader.exec_module(v)
+          artifacts=root/'artifacts';artifacts.mkdir()
+          for name,(ident,digest) in v.PINS.items():
+              m=api(f'actions/artifacts/{ident}')
+              need(not m['expired'] and m['workflow_run']['id']==run and m['workflow_run']['head_sha']==source,'artifact source')
+              need(m['digest']=='sha256:'+digest and 0<m['size_in_bytes']<=v.CAP,'artifact metadata')
+              path=artifacts/(name+'.zip')
+              with path.open('xb') as output:
+                  subprocess.run(['gh','api',f'repos/{repo}/actions/artifacts/{ident}/zip'],stdout=output,stderr=subprocess.PIPE,check=True,timeout=120)
+              need(path.stat().st_size==m['size_in_bytes'] and sha(path.read_bytes())==digest,'artifact bytes')
+          result=v.verify(Path('candidate').resolve(),artifacts)
+          need(result['result']=='PASS' and result['check_count']==318,'full candidate readback')
+          evidence=Path('evidence');evidence.mkdir()
+          (evidence/'readback.json').write_text(json.dumps(result,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          raw=v.unzip((artifacts/'package.zip').read_bytes())['qbrain-windows-x64-development.zip']
+          need(len(raw)==2091494 and sha(raw)==v.PACKAGE_SHA,'exact original inner ZIP')
+          provenance={'repository':repo,'source_commit':source,'source_tree':tree,'review_commit':review,'merge_commit':merge,
+              'product_run':run,'n42_run':35186099174,'delivery_run':int(os.environ['GITHUB_RUN_ID']),
+              'delivery_commit':os.environ['GITHUB_SHA'],'readback_checks':318,'package_bytes':len(raw),'package_sha256':sha(raw),
+              'exe_bytes':4064256,'exe_sha256':v.EXE_SHA,'native_registered_groups':59,'diagnostic_unit':[11,107],
+              'diagnostic_process':[60,68],'review_type':'Owner-authorized separate engineering self-review; not third party/subagent',
+              'signed':False,'rebuilt_or_repacked':False,'diagnostic_probe_binaries_separately_downloaded':False,
+              'new_live_host_acceptance':False,'whole_project_complete':False}
+          release=root/'release';release.mkdir();product='qbrain-windows-x64-diagnostics.zip'
+          (release/product).write_bytes(raw)
+          (release/'SHA256SUMS.txt').write_text(sha(raw)+'  '+product+'\n',encoding='ascii')
+          (release/'PROVENANCE.json').write_text(json.dumps(provenance,indent=2)+'\n',encoding='utf-8')
+          assets=[product,'SHA256SUMS.txt','PROVENANCE.json']
+          notes=('N47K unsigned development preview. Exact original CI package; no rebuild/repack. '
+              'Local hook diagnostics reads five known event checkpoints without opening a brain or triggering a Hook. '
+              'Strict bounded validation; invalid records do not echo raw contents. INSPECTED is not proof of model consumption or authenticity. '
+              'Both native MSVC link targets repaired,59 registered groups,11 unit scenarios/107 assertions and60 CLI checks/68 expected exits passed. '
+              'Server2022,portable and Linux ASan/UBSan verified. Read HOOK-DIAGNOSTIC-INSPECTION.zh-CN.md. ZIP SHA256 '+sha(raw))
+          gh('release','create',tag,*(str(release/n) for n in assets),'--repo',repo,'--target',source,
+             '--draft','--prerelease','--latest=false','--title','Qbrain N47K read-only diagnostic inspection (a23800df)','--notes',notes)
+          downloaded=root/'release-readback';gh('release','download',tag,'--repo',repo,'--dir',str(downloaded))
+          need({p.name for p in downloaded.iterdir()}==set(assets),'release member list')
+          for name in assets:need((release/name).read_bytes()==(downloaded/name).read_bytes(),'release readback '+name)
+          gh('release','edit',tag,'--repo',repo,'--draft=false','--prerelease','--latest=false')
+          receipt={'result':'PUBLISHED','tag':tag,**provenance}
+          (evidence/'publication.json').write_text(json.dumps(receipt,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(receipt))
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47k-reviewed-delivery
+          path: evidence/
+          retention-days: 14
