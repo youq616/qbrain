@@ -4,20 +4,43 @@ Windows 原生 C++20 / PowerShell Agent 记忆与知识库，默认 SQLite + FTS
 不要求 Docker、WSL 或 Python 服务。由 Lordakee/qbrain 的 MIT 代码继续开发；
 gbrain / OpenViking 是设计参考，不表示完整功能等价。
 
-## 当前开发预览：N47J
+## 当前开发预览：N47K
 
-[仓库 Release：trace-preview-2ec0c3da](https://github.com/youq616/qbrain/releases/tag/trace-preview-2ec0c3da)
-选择 `qbrain-windows-x64-hook-trace.zip` 并完整解压。ZIP SHA256：
-`778ddfde895a3f6a48b8b7d007d8a94f2b93a41639054b8c920687438444d0df`。
+[仓库 Release：diagnostics-preview-a23800df](https://github.com/youq616/qbrain/releases/tag/diagnostics-preview-a23800df)
+选择 `qbrain-windows-x64-diagnostics.zip` 并完整解压。ZIP SHA256：
+`6f35d1cb1eccb4cdab727963ae45ba805dbc9edfa0c5867472aa62b992b35bb3`。
 原CI测试字节、未重打包、未签名，不是整个项目的最终发行。实际产品源码
-`2ec0c3daaa6d324bcc9f16a1ebacc88c63abe561`，
-[PR #26](https://github.com/youq616/qbrain/pull/26) 已合并。
+`a23800df3709ac9ef73a51d150b64d2d20d7d21f`，
+[PR #27](https://github.com/youq616/qbrain/pull/27) 已合并。
 用MANIFEST、完整源码SHA和外部摘要识别版本，不以旧dist或旧固定哈希入口替代。
 
-[当前状态](CURRENT-STATUS.md) · [阶段审核](docs/nodes/N47J-HARD-AUDIT.md) ·
-[测试摘要](docs/nodes/n47j-evidence/SUMMARY.json) · [发布记录](docs/nodes/n47j-evidence/RELEASE.json)
+[当前状态](CURRENT-STATUS.md) · [阶段审核](docs/nodes/N47K-HARD-AUDIT.md) ·
+[测试摘要](docs/nodes/n47k-evidence/SUMMARY.json) · [发布记录](docs/nodes/n47k-evidence/RELEASE.json)
 
-## N47J：保留输入阶段的诊断，不记录原始聊天
+## N47K：只读查看诊断，区分记录状态
+
+```powershell
+.\qbrain.exe hook diagnostics --config "C:\absolute\installed\config.json"
+.\qbrain.exe hook diagnostics --config "C:\absolute\installed\config.json" --event UserPromptSubmit
+```
+
+示例路径需换成实际安装配置的绝对路径。只读该host的五个固定分事件文件，可按
+事件或已有session-key筛选，不打开脑库、不触发Hook、不创建文件或锁、不调用模型，
+也没有新增MCP本地文件读取入口。无效、缺失、不可读、过大、不安全或会话不匹配
+的记录逐项标记，不回显无效内容或路径、不回退last-trace或临时文件。
+
+`INSPECTED`/`present`是格式检查结果，不证明真实性、安装健康或模型消费；disabled
+配置也可检查历史记录。配置64KiB、记录4096字节、最多五槽、完整JSON32KiB。各文件
+独立观察，不是原子快照或抵御敌对目录竞争/硬链接的防御。
+[完整格式、错误状态和限制](docs/integration/HOOK-DIAGNOSTIC-INSPECTION.zh-CN.md)。
+
+两处MSVC链接清单遗漏已修复并加入默认源/对象检查。原生35186099196与35186099174
+通过59注册组、诊断11场景107断言及60项CLI检查68预期退出，两Windows/portable/
+Linux ASan/UBSan有对应证据。单独工程自审又重新GCC编译，执行诊断及旧Hook专项、
+204报告测试、40命令160断言独立检查与318项原始工件回读。未发现本阶段未解决
+P0/P1，不是绝对无缺陷、第三方/子代理或新增已登录客户端验收。
+
+## 保留的 N47J：分事件诊断，不记录原始聊天
 
 保留last-trace兼容文件，同时为两个固定宿主的五种事件分别保留最近一次已接受
 处理记录。后续SessionEnd不会覆盖独立的UserPromptSubmit槽，最多十个事件文件，
@@ -30,12 +53,6 @@ gbrain / OpenViking 是设计参考，不表示完整功能等价。
 不产生新记录；检查event/session_key/time，不能用文件存在或processed证明模型消费。
 host_consumption_confirmed仍false，采集与事实权限、安装默认开关没有改变。
 [完整诊断格式和范围](docs/integration/HOOK-DIAGNOSTIC-CHECKPOINTS.zh-CN.md)。
-
-原生35163779907及35163779904通过：Windows58注册组；诊断9场景169断言在两Windows、
-portable及Linux ASan/UBSan通过，实际Hook66检查80命令通过。阶段单独工程自审再次
-GCC14.2构建并执行同套诊断测试、175报告/注册校验和292原始工件/包回读。
-审核后未改动生产代码或原测试；未发现本阶段未解决P0/P1，不是绝对无缺陷、第三方
-审核或新的已登录客户端验收。原始测试包经上传下载比对后发布。
 
 N47I的严格JSON输入保护保留：重复解码键、错误类型和不合法输入不能静默改写
 写入含义。六工具名称与来源限制不变。以下为原有生命周期与记忆能力。
@@ -121,7 +138,7 @@ HTTP/队列/CJK及双PowerShell门槛在新产品CI中保留。真实PG DSN仍SK
 哈希不是签名。数量和证据限额不保证SQL或备份I/O耗时，候选及预检可能过时。
 
 通用语义合并／冲突推断、使用确认计数、自动衰减、画像、百万事件性能、PG对等、
-完整ACL/DLP、模型质量费用和正式签名仍未完成。N47J完成不等于整个项目完成。
+完整ACL/DLP、模型质量费用和正式签名仍未完成。N47K完成不等于整个项目完成。
 
 ## 从源码构建与数据
 
