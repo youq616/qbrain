@@ -1,7 +1,9 @@
 # N47K — bounded read-only inspection of Hook checkpoints
 
 Baseline main: 03665e99865069a13212d84357b938c8e9cc662d.
-Status: approved after N47K-PLAN-AUDIT.md; implementation/outcome pending.
+Status: done for scoped implementation after N47K-HARD-AUDIT.md.
+Tested product: a23800df3709ac9ef73a51d150b64d2d20d7d21f.
+Required native evidence:35186099196 and35186099174. Publication is separate.
 Windows-native youq616/qbrain only. The owner authorizes separate engineering
 self-review; do not invent an independent subagent or a third-party PASS.
 
