@@ -1,0 +1,20 @@
+{
+  "template_sha256": "aad1e079a252ce58dff3decebf95f040c46979530da75af3c9236d73cd7e651a",
+  "python_blocks": 2,
+  "result": "PASS_UNRESOLVED_PINS_REFUSED",
+  "network_or_actual_publication": false,
+  "results": [
+    {
+      "block": 1,
+      "exit_code": 1,
+      "last_error": "RuntimeError: Unresolved publication pin: REVIEW_SHA",
+      "no_side_effect_attempt": true
+    },
+    {
+      "block": 2,
+      "exit_code": 1,
+      "last_error": "ValueError: invalid literal for int() with base 10: 'REPLACE_EXACT_READBACK_CHECK_COUNT'",
+      "no_side_effect_attempt": true
+    }
+  ]
+}

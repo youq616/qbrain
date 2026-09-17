@@ -1,0 +1,3617 @@
+{
+  "result": "PASS",
+  "checks": [
+    {
+      "name": "lazy_multi_term_read",
+      "status": "PASS"
+    },
+    {
+      "name": "lazy_read_no_schema",
+      "status": "PASS"
+    },
+    {
+      "name": "default_stays_continuous_literal",
+      "status": "PASS"
+    },
+    {
+      "name": "explicit_literal_exact_default",
+      "status": "PASS"
+    },
+    {
+      "name": "all_terms_one_anchor",
+      "status": "PASS"
+    },
+    {
+      "name": "any_terms_union",
+      "status": "PASS"
+    },
+    {
+      "name": "mode_explicit_not_query_echo",
+      "status": "PASS"
+    },
+    {
+      "name": "stable_created_id_order",
+      "status": "PASS"
+    },
+    {
+      "name": "ASCII_whitespace_and_term_order",
+      "status": "PASS"
+    },
+    {
+      "name": "duplicates_not_duplicate_anchors",
+      "status": "PASS"
+    },
+    {
+      "name": "mixed_CJK_and_ASCII",
+      "status": "PASS"
+    },
+    {
+      "name": "whole_negation_and_real_evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "no_inferred_truth",
+      "status": "PASS"
+    },
+    {
+      "name": "no_inferred_conflict",
+      "status": "PASS"
+    },
+    {
+      "name": "write_default_denied",
+      "status": "PASS"
+    },
+    {
+      "name": "archived_nonmatching_counterclaim_complete",
+      "status": "PASS"
+    },
+    {
+      "name": "explicit_conflict_retained",
+      "status": "PASS"
+    },
+    {
+      "name": "archive_suppresses_anchor",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_literal_matches_cli",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_all_terms_matches_cli",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_any_terms_matches_cli",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_foreign_source_denied",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_foreign_source_isolated",
+      "status": "PASS"
+    },
+    {
+      "name": "predicate_intersection",
+      "status": "PASS"
+    },
+    {
+      "name": "matching_predicate",
+      "status": "PASS"
+    },
+    {
+      "name": "wrong_view_memories_rejects_match",
+      "status": "PASS"
+    },
+    {
+      "name": "wrong_view_facts_rejects_match",
+      "status": "PASS"
+    },
+    {
+      "name": "wrong_view_conflicts_rejects_match",
+      "status": "PASS"
+    },
+    {
+      "name": "wrong_view_lifecycle_rejects_match",
+      "status": "PASS"
+    },
+    {
+      "name": "wrong_view_lifecycle_candidates_rejects_match",
+      "status": "PASS"
+    },
+    {
+      "name": "wrong_view_lifecycle_batch_rejects_match",
+      "status": "PASS"
+    },
+    {
+      "name": "write_view_rejects_match",
+      "status": "PASS"
+    },
+    {
+      "name": "strict_match_null",
+      "status": "PASS"
+    },
+    {
+      "name": "strict_match_boolean",
+      "status": "PASS"
+    },
+    {
+      "name": "strict_match_number",
+      "status": "PASS"
+    },
+    {
+      "name": "strict_match_array",
+      "status": "PASS"
+    },
+    {
+      "name": "strict_match_object",
+      "status": "PASS"
+    },
+    {
+      "name": "strict_match_enum",
+      "status": "PASS"
+    },
+    {
+      "name": "strict_match_empty",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_query_required",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_duplicate_mode",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_wrong_action_mode",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_invalid_mode",
+      "status": "PASS"
+    },
+    {
+      "name": "nine_terms_rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "eight_repeated_terms_allowed",
+      "status": "PASS"
+    },
+    {
+      "name": "whitespace_counts_in_bytes",
+      "status": "PASS"
+    },
+    {
+      "name": "exact_1024_bytes",
+      "status": "PASS"
+    },
+    {
+      "name": "UTF8_not_character_cap",
+      "status": "PASS"
+    },
+    {
+      "name": "NUL_query_rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "whole_sensitive_before_split",
+      "status": "PASS"
+    },
+    {
+      "name": "whole_assignment_before_split",
+      "status": "PASS"
+    },
+    {
+      "name": "nonASCII_whitespace_literal",
+      "status": "PASS"
+    },
+    {
+      "name": "wildcards_not_operators",
+      "status": "PASS"
+    },
+    {
+      "name": "six_tools_unchanged",
+      "status": "PASS"
+    },
+    {
+      "name": "old_fact_view",
+      "status": "PASS"
+    },
+    {
+      "name": "old_conflict_view",
+      "status": "PASS"
+    },
+    {
+      "name": "whole_group_byte_budget",
+      "status": "PASS"
+    },
+    {
+      "name": "reads_no_revisions_or_jobs",
+      "status": "PASS"
+    },
+    {
+      "name": "forget_counterclaim_updates_recall",
+      "status": "PASS"
+    },
+    {
+      "name": "no_cross_fact_AND_after_forget",
+      "status": "PASS"
+    },
+    {
+      "name": "old_ordinary_memory",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_seed_complete_evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_match_query_first_default",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_match_query_first_literal",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_match_query_first_all_terms",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_match_query_first_any_terms",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_match_raw_literal_query_first",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_match_options_first_default",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_match_options_first_literal",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_match_options_first_all_terms",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_match_options_first_any_terms",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_match_raw_literal_options_first",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_match_option_order_invariant",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_flag_match_default",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_flag_match_literal",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_flag_match_all_terms",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_flag_match_any_terms",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_source_query_first",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_source_options_first",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_source_option_order",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_flag_source",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_brain_query_first",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_brain_options_first",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_brain_option_order",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_flag_brain",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_history_query_first",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_history_options_first",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_history_option_order",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_flag_history",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_limit_query_first",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_limit_options_first",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_limit_option_order",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_flag_limit",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_predicate_query_first",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_predicate_options_first",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_predicate_option_order",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp_flag_predicate",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_missing_query_value",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_missing_match_value",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_missing_source_value",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_missing_brain_value",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_missing_limit_value",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_missing_predicate_value",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_missing_max-bytes_value",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_duplicate_query_after_flag_query",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_duplicate_match_after_flag_query",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_duplicate_source_after_flag_query",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_duplicate_brain_after_flag_query",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_duplicate_limit_after_flag_query",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_duplicate_predicate_after_flag_query",
+      "status": "PASS"
+    },
+    {
+      "name": "cli_duplicate_max-bytes_after_flag_query",
+      "status": "PASS"
+    },
+    {
+      "name": "flag_reads_no_other_brain",
+      "status": "PASS"
+    }
+  ],
+  "commands": [
+    {
+      "name": "init",
+      "args": [
+        "init",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "lazy-all-terms",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-a-capture",
+      "args": [
+        "memory",
+        "capture",
+        "--source",
+        "alpha",
+        "--manual",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "session_id": "multiterm-real-process",
+          "fragment_id": "a",
+          "messages": [
+            {
+              "role": "user",
+              "content": "我偏好不使用 red，而选择 blue 命令行。😀"
+            }
+          ]
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-a-extract",
+      "args": [
+        "memory",
+        "extract",
+        "--source",
+        "alpha",
+        "--event",
+        "88c0bf93e9126296779c4d9e62dc712bf8f3bfe17d572ada0235e7199e878263",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-a-create",
+      "args": [
+        "fact",
+        "create",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "item_id": "d0a1d8cac54c085d9ac2c9aa6acb037013cf7ee49f8aaa1748c2f30b415f9478",
+          "predicate": "interface.preference"
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-b-capture",
+      "args": [
+        "memory",
+        "capture",
+        "--source",
+        "alpha",
+        "--manual",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "session_id": "multiterm-real-process",
+          "fragment_id": "b",
+          "messages": [
+            {
+              "role": "user",
+              "content": "I prefer blue before red."
+            }
+          ]
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-b-extract",
+      "args": [
+        "memory",
+        "extract",
+        "--source",
+        "alpha",
+        "--event",
+        "2b3656536090c4c3e70a2d25c0c6157af19848f2bc49c1759ae7df592aba45af",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-b-create",
+      "args": [
+        "fact",
+        "create",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "item_id": "a34e245f50f8d3cd8c079e5f0e4d4a1174119ea0d4617565f0fce55d3d3c2c71",
+          "predicate": "interface.preference"
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-r-capture",
+      "args": [
+        "memory",
+        "capture",
+        "--source",
+        "alpha",
+        "--manual",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "session_id": "multiterm-real-process",
+          "fragment_id": "r",
+          "messages": [
+            {
+              "role": "user",
+              "content": "I prefer red alone."
+            }
+          ]
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-r-extract",
+      "args": [
+        "memory",
+        "extract",
+        "--source",
+        "alpha",
+        "--event",
+        "be2d9faa3fedadd18bde9e8333a05391c9895796da5ee2b3211c320d3a138102",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-r-create",
+      "args": [
+        "fact",
+        "create",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "item_id": "c9f84ab52ae7e775df40560822116f220a361e4c162ff8c9ecf40f341093db57",
+          "predicate": "interface.preference"
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-z-capture",
+      "args": [
+        "memory",
+        "capture",
+        "--source",
+        "alpha",
+        "--manual",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "session_id": "multiterm-real-process",
+          "fragment_id": "z",
+          "messages": [
+            {
+              "role": "user",
+              "content": "I prefer blue alone."
+            }
+          ]
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-z-extract",
+      "args": [
+        "memory",
+        "extract",
+        "--source",
+        "alpha",
+        "--event",
+        "e1419a639931ea3e1980f39d6b6c557b82652ed1c949a269a5fec6869d344dfa",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-z-create",
+      "args": [
+        "fact",
+        "create",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "item_id": "4c7a6a522e74b16313a014f4f28624f5ecf27d094a68cb93785e8f80f218b638",
+          "predicate": "interface.preference"
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-c-capture",
+      "args": [
+        "memory",
+        "capture",
+        "--source",
+        "alpha",
+        "--manual",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "session_id": "multiterm-real-process",
+          "fragment_id": "c",
+          "messages": [
+            {
+              "role": "user",
+              "content": "I prefer graphical menus."
+            }
+          ]
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-c-extract",
+      "args": [
+        "memory",
+        "extract",
+        "--source",
+        "alpha",
+        "--event",
+        "3df2fafa1a290fb7ecb0fdabb7ab1db1a65c6eea89ef6aefd5ac95621437567d",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-c-create",
+      "args": [
+        "fact",
+        "create",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "item_id": "cee9b288f96cf14a986f05c30813b74514a9bfd17789e7435a092d6bf613b0e5",
+          "predicate": "interface.preference"
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "continuous-default",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "literal-byte-default",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "literal-byte-explicit",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "literal",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "all-terms-anchors",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "any-terms-anchors",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "any_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "ascii-separators",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        " blue\tred\r\n",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "repeated-terms",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red red",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "any_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mixed-script",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "命令行 red",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "write-default-denied",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_write",
+            "arguments": {
+              "source_id": "alpha",
+              "action": "fact_contradict",
+              "payload": "{\"fact_id\":\"9c9582a55f6a2e541d035d3ee937fadee2bc4cb916fb07528f7def5b8e996bd0\",\"other_id\":\"0c35fe122cb8eb269c23fa6d6fe89a40afc25587c7ae057a910694413459a444\"}"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "record-conflict",
+      "args": [
+        "fact",
+        "contradict",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "fact_id": "9c9582a55f6a2e541d035d3ee937fadee2bc4cb916fb07528f7def5b8e996bd0",
+          "other_id": "0c35fe122cb8eb269c23fa6d6fe89a40afc25587c7ae057a910694413459a444"
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "archive-counterclaim",
+      "args": [
+        "fact",
+        "archive",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "fact_id": "0c35fe122cb8eb269c23fa6d6fe89a40afc25587c7ae057a910694413459a444",
+          "expected_revision": 2
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "archived-counterclaim-recall",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "archived-anchor-absent",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "graphical",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "any_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-literal",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "red blue",
+              "match": "literal",
+              "limit": 50,
+              "max_bytes": 32768
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "cli-literal-parity",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "literal",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-all_terms",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "red blue",
+              "match": "all_terms",
+              "limit": 50,
+              "max_bytes": 32768
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "cli-all_terms-parity",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-any_terms",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "red blue",
+              "match": "any_terms",
+              "limit": 50,
+              "max_bytes": 32768
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "cli-any_terms-parity",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "any_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-foreign-source",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "beta",
+              "view": "recall",
+              "query": "red blue",
+              "match": "any_terms"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "cli-foreign-source",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "beta",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "any_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "predicate-mismatch",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--predicate",
+        "other",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "predicate-match",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--predicate",
+        "interface.preference",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "wrong-view-memories",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "memories",
+              "match": "all_terms"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "wrong-view-facts",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "facts",
+              "match": "all_terms"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "wrong-view-conflicts",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "conflicts",
+              "match": "all_terms"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "wrong-view-lifecycle",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "lifecycle",
+              "match": "all_terms"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "wrong-view-lifecycle_candidates",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "lifecycle_candidates",
+              "match": "all_terms"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "wrong-view-lifecycle_batch",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "lifecycle_batch",
+              "match": "all_terms"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "write-view-match",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--allow-write",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_write",
+            "arguments": {
+              "source_id": "alpha",
+              "action": "forget",
+              "event_id": "88c0bf93e9126296779c4d9e62dc712bf8f3bfe17d572ada0235e7199e878263",
+              "match": "any_terms"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "strict-match-null",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "red",
+              "match": null
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "strict-match-boolean",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "red",
+              "match": true
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "strict-match-number",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "red",
+              "match": 1
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "strict-match-array",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "red",
+              "match": []
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "strict-match-object",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "red",
+              "match": {}
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "strict-match-enum",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "red",
+              "match": "OR"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "strict-match-empty",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "red",
+              "match": ""
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-query-required",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "match": "all_terms"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "cli-duplicate-mode",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red",
+        "--match",
+        "all_terms",
+        "--match",
+        "any_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "cli-wrong-action-mode",
+      "args": [
+        "fact",
+        "read",
+        "--source",
+        "alpha",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "cli-invalid-mode",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "invalid",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "nine-terms",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red red red red red red red red red ",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "eight-terms",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red red red red red red red red ",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "any_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "whitespace-over-budget",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                r",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "exact-byte-budget",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               r",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "utf8-byte-budget",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界",
+              "match": "all_terms"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "nul-query",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "red\u0000blue",
+              "match": "all_terms"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "whole-sensitive",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "Bearer harmlessFixture",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "whole-assignment",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "api key = harmlessFixture",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "any_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "nonascii-space",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "any_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "literal-wildcards",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "% _",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "tool-list",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/list",
+          "params": {}
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "old-fact-read",
+      "args": [
+        "fact",
+        "read",
+        "--source",
+        "alpha",
+        "--id",
+        "9c9582a55f6a2e541d035d3ee937fadee2bc4cb916fb07528f7def5b8e996bd0",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "old-conflicts",
+      "args": [
+        "fact",
+        "conflicts",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "full-group",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "命令行 red",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "under-group-budget",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "命令行 red",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "2243",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "read-no-revisions",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "forget-counterclaim",
+      "args": [
+        "memory",
+        "forget",
+        "--source",
+        "alpha",
+        "--event",
+        "3df2fafa1a290fb7ecb0fdabb7ab1db1a65c6eea89ef6aefd5ac95621437567d",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "forgotten-counterclaim-recall",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "命令行 red",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "forget-a",
+      "args": [
+        "memory",
+        "forget",
+        "--source",
+        "alpha",
+        "--event",
+        "88c0bf93e9126296779c4d9e62dc712bf8f3bfe17d572ada0235e7199e878263",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "forget-b",
+      "args": [
+        "memory",
+        "forget",
+        "--source",
+        "alpha",
+        "--event",
+        "2b3656536090c4c3e70a2d25c0c6157af19848f2bc49c1759ae7df592aba45af",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "no-cross-fact-all",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "all_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "remaining-any",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "red blue",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--match",
+        "any_terms",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "old-memory-read",
+      "args": [
+        "memory",
+        "read",
+        "--source",
+        "alpha",
+        "--query",
+        "red alone",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-flags-capture",
+      "args": [
+        "memory",
+        "capture",
+        "--source",
+        "alpha",
+        "--manual",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "session_id": "multiterm-real-process",
+          "fragment_id": "flags",
+          "messages": [
+            {
+              "role": "user",
+              "content": "I prefer literal --match --source --brain --history --limit --predicate tokens for this fixture."
+            }
+          ]
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-flags-extract",
+      "args": [
+        "memory",
+        "extract",
+        "--source",
+        "alpha",
+        "--event",
+        "d1f10b4ca3e4e48154134164d08bb0bbc983cd29e8a8e5d4f35be92ab2dc7f03",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "seed-flags-create",
+      "args": [
+        "fact",
+        "create",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "item_id": "b491cae99ae171b30d0371a217de591ae342d274557fb3cfae23ca4467c69700",
+          "predicate": "interface.preference"
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-seed-read",
+      "args": [
+        "fact",
+        "read",
+        "--source",
+        "alpha",
+        "--id",
+        "eb5947aa66913099a11fe4057b17a973bd11f7d964270675f3191b77004d2d24",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-match-query_first-default",
+      "args": [
+        "fact",
+        "recall",
+        "--query",
+        "--match",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-match-query_first-literal",
+      "args": [
+        "fact",
+        "recall",
+        "--query",
+        "--match",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference",
+        "--match",
+        "literal"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-match-query_first-all_terms",
+      "args": [
+        "fact",
+        "recall",
+        "--query",
+        "--match",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference",
+        "--match",
+        "all_terms"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-match-query_first-any_terms",
+      "args": [
+        "fact",
+        "recall",
+        "--query",
+        "--match",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference",
+        "--match",
+        "any_terms"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-match-options_first-default",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference",
+        "--query",
+        "--match"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-match-options_first-literal",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference",
+        "--match",
+        "literal",
+        "--query",
+        "--match"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-match-options_first-all_terms",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference",
+        "--match",
+        "all_terms",
+        "--query",
+        "--match"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-match-options_first-any_terms",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference",
+        "--match",
+        "any_terms",
+        "--query",
+        "--match"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-flag-match-default",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "--match",
+              "limit": 50,
+              "max_bytes": 32768,
+              "predicate": "interface.preference"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-flag-match-literal",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "--match",
+              "limit": 50,
+              "max_bytes": 32768,
+              "predicate": "interface.preference",
+              "match": "literal"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-flag-match-all_terms",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "--match",
+              "limit": 50,
+              "max_bytes": 32768,
+              "predicate": "interface.preference",
+              "match": "all_terms"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-flag-match-any_terms",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "--match",
+              "limit": 50,
+              "max_bytes": 32768,
+              "predicate": "interface.preference",
+              "match": "any_terms"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-source-query_first",
+      "args": [
+        "fact",
+        "recall",
+        "--query",
+        "--source",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-source-options_first",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference",
+        "--query",
+        "--source"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-flag-source",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "--source",
+              "limit": 50,
+              "max_bytes": 32768,
+              "predicate": "interface.preference"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-brain-query_first",
+      "args": [
+        "fact",
+        "recall",
+        "--query",
+        "--brain",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-brain-options_first",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference",
+        "--query",
+        "--brain"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-flag-brain",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "--brain",
+              "limit": 50,
+              "max_bytes": 32768,
+              "predicate": "interface.preference"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-history-query_first",
+      "args": [
+        "fact",
+        "recall",
+        "--query",
+        "--history",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-history-options_first",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference",
+        "--query",
+        "--history"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-flag-history",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "--history",
+              "limit": 50,
+              "max_bytes": 32768,
+              "predicate": "interface.preference"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-limit-query_first",
+      "args": [
+        "fact",
+        "recall",
+        "--query",
+        "--limit",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-limit-options_first",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference",
+        "--query",
+        "--limit"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-flag-limit",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "--limit",
+              "limit": 50,
+              "max_bytes": 32768,
+              "predicate": "interface.preference"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-predicate-query_first",
+      "args": [
+        "fact",
+        "recall",
+        "--query",
+        "--predicate",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "flag-predicate-options_first",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--brain",
+        "terms-ci",
+        "--limit",
+        "50",
+        "--max-bytes",
+        "32768",
+        "--predicate",
+        "interface.preference",
+        "--query",
+        "--predicate"
+      ],
+      "stdin_json": [],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "mcp-flag-predicate",
+      "args": [
+        "serve",
+        "--tool-profile",
+        "memory",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "initialize",
+          "params": {}
+        },
+        {
+          "jsonrpc": "2.0",
+          "method": "notifications/initialized"
+        },
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/call",
+          "params": {
+            "name": "memory_read",
+            "arguments": {
+              "source_id": "alpha",
+              "view": "recall",
+              "query": "--predicate",
+              "limit": 50,
+              "max_bytes": 32768,
+              "predicate": "interface.preference"
+            }
+          }
+        }
+      ],
+      "exit_code": 0,
+      "expected_exit": 0
+    },
+    {
+      "name": "missing-query-value",
+      "args": [
+        "fact",
+        "recall",
+        "--brain",
+        "terms-ci",
+        "--source",
+        "alpha",
+        "--query"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "missing-match-value",
+      "args": [
+        "fact",
+        "recall",
+        "--brain",
+        "terms-ci",
+        "--source",
+        "alpha",
+        "--query",
+        "--match",
+        "--match"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "missing-source-value",
+      "args": [
+        "fact",
+        "recall",
+        "--brain",
+        "terms-ci",
+        "--query",
+        "--match",
+        "--source"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "missing-brain-value",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "--match",
+        "--brain"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "missing-limit-value",
+      "args": [
+        "fact",
+        "recall",
+        "--brain",
+        "terms-ci",
+        "--source",
+        "alpha",
+        "--query",
+        "--match",
+        "--limit"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "missing-predicate-value",
+      "args": [
+        "fact",
+        "recall",
+        "--brain",
+        "terms-ci",
+        "--source",
+        "alpha",
+        "--query",
+        "--match",
+        "--predicate"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "missing-max-bytes-value",
+      "args": [
+        "fact",
+        "recall",
+        "--brain",
+        "terms-ci",
+        "--source",
+        "alpha",
+        "--query",
+        "--match",
+        "--max-bytes"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "duplicate-query-after-flag-query",
+      "args": [
+        "fact",
+        "recall",
+        "--brain",
+        "terms-ci",
+        "--source",
+        "alpha",
+        "--query",
+        "--match",
+        "--query",
+        "--match"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "duplicate-match-after-flag-query",
+      "args": [
+        "fact",
+        "recall",
+        "--brain",
+        "terms-ci",
+        "--source",
+        "alpha",
+        "--query",
+        "--match",
+        "--match",
+        "literal",
+        "--match",
+        "literal"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "duplicate-source-after-flag-query",
+      "args": [
+        "fact",
+        "recall",
+        "--brain",
+        "terms-ci",
+        "--query",
+        "--match",
+        "--source",
+        "alpha",
+        "--source",
+        "alpha"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "duplicate-brain-after-flag-query",
+      "args": [
+        "fact",
+        "recall",
+        "--source",
+        "alpha",
+        "--query",
+        "--match",
+        "--brain",
+        "terms-ci",
+        "--brain",
+        "terms-ci"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "duplicate-limit-after-flag-query",
+      "args": [
+        "fact",
+        "recall",
+        "--brain",
+        "terms-ci",
+        "--source",
+        "alpha",
+        "--query",
+        "--match",
+        "--limit",
+        "50",
+        "--limit",
+        "50"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "duplicate-predicate-after-flag-query",
+      "args": [
+        "fact",
+        "recall",
+        "--brain",
+        "terms-ci",
+        "--source",
+        "alpha",
+        "--query",
+        "--match",
+        "--predicate",
+        "interface.preference",
+        "--predicate",
+        "interface.preference"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    },
+    {
+      "name": "duplicate-max-bytes-after-flag-query",
+      "args": [
+        "fact",
+        "recall",
+        "--brain",
+        "terms-ci",
+        "--source",
+        "alpha",
+        "--query",
+        "--match",
+        "--max-bytes",
+        "32768",
+        "--max-bytes",
+        "32768"
+      ],
+      "stdin_json": [],
+      "exit_code": 1,
+      "expected_exit": 1
+    }
+  ],
+  "native_windows": false,
+  "scope": "synthetic real CLI/MCP; not signed-in host or measured provider egress",
+  "binary_sha256": "030b4b0a86431e301f3e83d0184c19d5a5ee4f0f6a11ccf024a1da2c399cfe3c",
+  "script_sha256": "5d8562bc3923794b33093d7e8509e104bbf028107e5f7356e0ffbaba012c684e",
+  "counts": {
+    "total": 112,
+    "pass": 112,
+    "fail": 0
+  },
+  "check_count": 112,
+  "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "tracked_tree_clean": true,
+  "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a"
+}

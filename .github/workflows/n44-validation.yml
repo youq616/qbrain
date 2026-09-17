@@ -1,7 +1,7 @@
 name: Native project memory and context validation
 on:
   push:
-    branches: ['optimization/n44-context-release','optimization/n46b-http-boundaries','optimization/n46c-exact-retrieval','optimization/n46d-embedding-contracts','optimization/n46f-cjk-recall','optimization/n47a-evidence-facts','optimization/n47b-conflict-reads','optimization/n47c-conflict-aware-recall','optimization/n47d-opt-in-hook-recall','optimization/n47e-local-fact-promotion','optimization/n47f-lifecycle-archive','optimization/n47g-atomic-lifecycle-batch','optimization/n47h-lifecycle-candidates','optimization/n47i-unambiguous-json','optimization/n47j-event-trace-checkpoints','optimization/n47k-diagnostic-inspection','main']
+    branches: ['optimization/n44-context-release','optimization/n46b-http-boundaries','optimization/n46c-exact-retrieval','optimization/n46d-embedding-contracts','optimization/n46f-cjk-recall','optimization/n47a-evidence-facts','optimization/n47b-conflict-reads','optimization/n47c-conflict-aware-recall','optimization/n47d-opt-in-hook-recall','optimization/n47e-local-fact-promotion','optimization/n47f-lifecycle-archive','optimization/n47g-atomic-lifecycle-batch','optimization/n47h-lifecycle-candidates','optimization/n47i-unambiguous-json','optimization/n47j-event-trace-checkpoints','optimization/n47k-diagnostic-inspection','optimization/n47l-multi-term-recall','main']
     paths: ['src/**','include/**','tests/**','scripts/**','.ci/**','CMakeLists.txt','.github/workflows/n44-validation.yml']
   workflow_dispatch:
 permissions:
@@ -47,9 +47,10 @@ jobs:
           python3 .ci/test_hook_diagnostic_report.py 2>&1 | tee evidence/hook-diagnostic-report-gate-tests.log
           python3 .ci/test_fact_report.py 2>&1 | tee evidence/fact-report-gate-tests.log
           python3 .ci/test_recall_report.py 2>&1 | tee evidence/recall-report-gate-tests.log
+          python3 .ci/test_multiterm_report.py 2>&1 | tee evidence/multiterm-report-gate-tests.log
           python3 .ci/test_conflict_report.py 2>&1 | tee evidence/conflict-report-gate-tests.log
           cmake -S . -B build/portable -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
-          cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_http_tests qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests qbrain_promotion_tests qbrain_lifecycle_tests qbrain_lifecycle_batch_tests qbrain_lifecycle_candidate_tests qbrain_strict_json_tests qbrain_hook_trace_tests qbrain_hook_diagnostic_tests --parallel 2 2>&1 | tee evidence/build.log
+          cmake --build build/portable --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_http_tests qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests qbrain_promotion_tests qbrain_lifecycle_tests qbrain_lifecycle_batch_tests qbrain_lifecycle_candidate_tests qbrain_strict_json_tests qbrain_hook_trace_tests qbrain_hook_diagnostic_tests qbrain_multiterm_tests --parallel 2 2>&1 | tee evidence/build.log
           python3 .ci/test_retrieval_benchmark.py --binary build/portable/qbrain_retrieval_tests --report evidence/retrieval-benchmark.json | tee evidence/retrieval.log
           cmake -S tests/n42 -B build/n42 -DQBRAIN_N42_SQLITE_ADAPTER_TEST=ON
           cmake --build build/n42 --parallel 2
@@ -74,7 +75,9 @@ jobs:
           python3 .ci/test_promotion_unit.py --binary build/portable/qbrain_promotion_tests --report evidence/promotion-unit.json | tee evidence/promotion-unit.log
           python3 .ci/test_promotion_process.py --binary build/portable/qbrain --report evidence/promotion-process.json | tee evidence/promotion-process.log
           python3 .ci/test_recall_unit.py --binary build/portable/qbrain_recall_tests --report evidence/recall-unit.json | tee evidence/recall-unit.log
+          python3 .ci/test_multiterm_unit.py --binary build/portable/qbrain_multiterm_tests --report evidence/multiterm-unit.json | tee evidence/multiterm-unit.log
           python3 .ci/test_recall_process.py --binary build/portable/qbrain --report evidence/recall-process.json | tee evidence/recall-process.log
+          python3 .ci/test_multiterm_process.py --binary build/portable/qbrain --report evidence/multiterm-process.json | tee evidence/multiterm-process.log
           python3 .ci/test_conflict_unit.py --binary build/portable/qbrain_conflict_tests --report evidence/conflict-unit.json | tee evidence/conflict-unit.log
           python3 .ci/test_conflict_process.py --binary build/portable/qbrain --report evidence/conflict-process.json | tee evidence/conflict-process.log
           build/portable/qbrain_cjk_tests | tee evidence/cjk-unit.log
@@ -113,7 +116,7 @@ jobs:
         run: |
           cmake -S . -B build/http -DQBRAIN_WITH_PG=OFF
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build/http --config Release --target qbrain_http_tests qbrain_http_probe qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests qbrain_promotion_tests qbrain_lifecycle_tests qbrain_lifecycle_batch_tests qbrain_lifecycle_candidate_tests qbrain_strict_json_tests qbrain_hook_trace_tests qbrain_hook_diagnostic_tests --parallel 2 2>&1 | Tee-Object evidence/http-build.log
+          cmake --build build/http --config Release --target qbrain_http_tests qbrain_http_probe qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests qbrain_promotion_tests qbrain_lifecycle_tests qbrain_lifecycle_batch_tests qbrain_lifecycle_candidate_tests qbrain_strict_json_tests qbrain_hook_trace_tests qbrain_hook_diagnostic_tests qbrain_multiterm_tests --parallel 2 2>&1 | Tee-Object evidence/http-build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & build/http/Release/qbrain_http_tests.exe 2>&1 | Tee-Object evidence/http-input.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -212,7 +215,11 @@ jobs:
         run: |
           python .ci/test_recall_unit.py --binary build/http/Release/qbrain_recall_tests.exe --report evidence/recall-unit.json --require-windows 2>&1 | Tee-Object evidence/recall-unit.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_multiterm_unit.py --binary build/http/Release/qbrain_multiterm_tests.exe --report evidence/multiterm-unit.json --require-windows 2>&1 | Tee-Object evidence/multiterm-unit.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_recall_process.py --binary build/cl/qbrain.exe --report evidence/recall-process.json 2>&1 | Tee-Object evidence/recall-process.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_multiterm_process.py --binary build/cl/qbrain.exe --report evidence/multiterm-process.json 2>&1 | Tee-Object evidence/multiterm-process.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Paired conflict inspection and source boundaries
         shell: pwsh
@@ -281,7 +288,7 @@ jobs:
           [Environment]::OSVersion.VersionString | Set-Content evidence/platform.txt
           cmake -S . -B build/http -DQBRAIN_WITH_PG=OFF
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build/http --config Release --target qbrain_http_probe qbrain_http_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests qbrain_promotion_tests qbrain_lifecycle_tests qbrain_lifecycle_batch_tests qbrain_lifecycle_candidate_tests qbrain_strict_json_tests qbrain_hook_trace_tests qbrain_hook_diagnostic_tests --parallel 2 2>&1 | Tee-Object evidence/build.log
+          cmake --build build/http --config Release --target qbrain_http_probe qbrain_http_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests qbrain_promotion_tests qbrain_lifecycle_tests qbrain_lifecycle_batch_tests qbrain_lifecycle_candidate_tests qbrain_strict_json_tests qbrain_hook_trace_tests qbrain_hook_diagnostic_tests qbrain_multiterm_tests --parallel 2 2>&1 | Tee-Object evidence/build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake -S tests/http_lifecycle -B build/http-lifecycle
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -313,6 +320,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_recall_unit.py --binary build/http/Release/qbrain_recall_tests.exe --report evidence/recall-unit.json --require-windows 2>&1 | Tee-Object evidence/recall-unit.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_multiterm_unit.py --binary build/http/Release/qbrain_multiterm_tests.exe --report evidence/multiterm-unit.json --require-windows 2>&1 | Tee-Object evidence/multiterm-unit.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_conflict_unit.py --binary build/http/Release/qbrain_conflict_tests.exe --report evidence/conflict-unit.json --require-windows 2>&1 | Tee-Object evidence/conflict-unit.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -342,16 +351,18 @@ jobs:
           git rev-parse HEAD > evidence/source.txt
           clang --version > evidence/compiler.txt
           cmake -S . -B build/sanitized -G Ninja -DQBRAIN_WITH_PG=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined' 2>&1 | tee evidence/configure.log
-          cmake --build build/sanitized --target qbrain qbrain_lifecycle_batch_tests qbrain_recall_tests qbrain_lifecycle_candidate_tests qbrain_strict_json_tests qbrain_hook_trace_tests qbrain_hook_diagnostic_tests --parallel 2 2>&1 | tee evidence/build.log
+          cmake --build build/sanitized --target qbrain qbrain_lifecycle_batch_tests qbrain_recall_tests qbrain_lifecycle_candidate_tests qbrain_strict_json_tests qbrain_hook_trace_tests qbrain_hook_diagnostic_tests qbrain_multiterm_tests --parallel 2 2>&1 | tee evidence/build.log
           python -B .ci/test_strict_json_unit.py --binary build/sanitized/qbrain_strict_json_tests --report evidence/strict-json-unit.json 2>&1 | tee evidence/strict-json-unit.log
           python -B .ci/test_hook_trace_unit.py --binary build/sanitized/qbrain_hook_trace_tests --report evidence/hook-trace-unit.json 2>&1 | tee evidence/hook-trace-unit.log
           python -B .ci/test_hook_diagnostic_unit.py --binary build/sanitized/qbrain_hook_diagnostic_tests --report evidence/hook-diagnostic-unit.json 2>&1 | tee evidence/hook-diagnostic-unit.log
+          python -B .ci/test_multiterm_unit.py --binary build/sanitized/qbrain_multiterm_tests --report evidence/multiterm-unit.json 2>&1 | tee evidence/multiterm-unit.log
           python -B .ci/test_lifecycle_candidate_unit.py --binary build/sanitized/qbrain_lifecycle_candidate_tests --report evidence/candidate-unit.json 2>&1 | tee evidence/candidate-unit.log
           python -B .ci/test_lifecycle_batch_unit.py --binary build/sanitized/qbrain_lifecycle_batch_tests --report evidence/batch-unit.json 2>&1 | tee evidence/batch-unit.log
           build/sanitized/qbrain_recall_tests 2>&1 | tee evidence/prior-recall.log
           python -B .ci/test_strict_json_process.py --binary build/sanitized/qbrain --report evidence/strict-json-process.json 2>&1 | tee evidence/strict-json-process.log
           python -B .ci/test_hook_trace_process.py --binary build/sanitized/qbrain --report evidence/hook-trace-process.json 2>&1 | tee evidence/hook-trace-process.log
           python -B .ci/test_hook_diagnostic_process.py --binary build/sanitized/qbrain --report evidence/hook-diagnostic-process.json 2>&1 | tee evidence/hook-diagnostic-process.log
+          python -B .ci/test_multiterm_process.py --binary build/sanitized/qbrain --report evidence/multiterm-process.json 2>&1 | tee evidence/multiterm-process.log
           python -B .ci/test_lifecycle_candidate_process.py --binary build/sanitized/qbrain --report evidence/candidate-process.json 2>&1 | tee evidence/candidate-process.log
           python -B .ci/test_lifecycle_batch_process.py --binary build/sanitized/qbrain --report evidence/batch-process.json 2>&1 | tee evidence/batch-process.log
           python -B .ci/test_lifecycle_candidate_report.py 2>&1 | tee evidence/candidate-report-tests.log

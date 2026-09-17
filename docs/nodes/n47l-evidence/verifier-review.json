@@ -1,0 +1,30 @@
+{
+  "reviewer": "/root/ci_handoff_audit/verifier_inventory_review",
+  "verdict": "PASS within offline verifier scope",
+  "verified_script_sha256": "5a8f793b4f0054d55ffff0a134b013c770f3c686974c47dd46d57fd951ee80c6",
+  "closed_findings": [
+    "Reject overflow floats 1e999/-1e999 as nonfinite JSON",
+    "Require positive integer retrieval retention <= 50",
+    "Reject native Windows ZIP path aliases"
+  ],
+  "independent_checks": [
+    "metadata/run/job/artifact links",
+    "isolated authenticated-source imports",
+    "dynamic source-defined 73-member inventory compatibility",
+    "source/evidence byte identity",
+    "legacy schema compatibility",
+    "actual validator result counts"
+  ],
+  "limits": [
+    "No product execution by reviewer",
+    "No rerun of full verifier fixture by reviewer",
+    "No new candidate CI pass asserted by this review"
+  ],
+  "regression_test_run": {
+    "executor": "/root/ci_handoff_audit",
+    "fixture_source_commit": "1118e0faf5b7acdd3f27f933c801b4a2b1278d41",
+    "tests": 14,
+    "result": "PASS",
+    "scope": "Historical fixture verifier test only"
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "template_sha256": "aad1e079a252ce58dff3decebf95f040c46979530da75af3c9236d73cd7e651a",
+  "network_or_actual_publication": false,
+  "scope": "Original publication tail with offline remote-state doubles; no CI gates or live service executed",
+  "expectation": "fixed",
+  "case_count": 11,
+  "result": "PASS_EXPECTED_OUTCOMES",
+  "results": [
+    {
+      "case": "existing_correct_tag",
+      "failure": null,
+      "publication_patch_calls": 1,
+      "release_create_calls": 1,
+      "published": true,
+      "retained_draft": false,
+      "original_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "remote_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "receipt_result": "PUBLISHED",
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "new_tag",
+      "failure": null,
+      "publication_patch_calls": 1,
+      "release_create_calls": 1,
+      "published": true,
+      "retained_draft": false,
+      "original_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "remote_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "receipt_result": "PUBLISHED",
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "replacement_after_download",
+      "failure": "RuntimeError: Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip",
+      "publication_patch_calls": 0,
+      "release_create_calls": 1,
+      "published": false,
+      "retained_draft": true,
+      "original_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "remote_package_sha256": "aeb8ff5bf3c0e2755ea9b08806295a296da5f657cc3f82e2c7b1a46407335f6a",
+      "receipt_result": null,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "same_bytes_new_asset_id",
+      "failure": "RuntimeError: Release assets changed after the initial upload was pinned",
+      "publication_patch_calls": 0,
+      "release_create_calls": 1,
+      "published": false,
+      "retained_draft": true,
+      "original_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "remote_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "receipt_result": null,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "missing_digest",
+      "failure": "RuntimeError: Release asset size/digest differs from the fixed local bytes: qbrain-windows-x64-multiterm.zip",
+      "publication_patch_calls": 0,
+      "release_create_calls": 1,
+      "published": false,
+      "retained_draft": true,
+      "original_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "remote_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "receipt_result": null,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "duplicate_asset_id",
+      "failure": "RuntimeError: Release asset IDs are missing, invalid or duplicated",
+      "publication_patch_calls": 0,
+      "release_create_calls": 1,
+      "published": false,
+      "retained_draft": true,
+      "original_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "remote_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "receipt_result": null,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "corrupt_download",
+      "failure": "RuntimeError: Release asset byte mismatch: qbrain-windows-x64-multiterm.zip",
+      "publication_patch_calls": 0,
+      "release_create_calls": 1,
+      "published": false,
+      "retained_draft": true,
+      "original_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "remote_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "receipt_result": null,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "preexisting_release",
+      "failure": "RuntimeError: Release appeared during verification; refusing overwrite",
+      "publication_patch_calls": 0,
+      "release_create_calls": 0,
+      "published": false,
+      "retained_draft": true,
+      "original_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "remote_package_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "receipt_result": null,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "changed_tag_before_patch",
+      "failure": "RuntimeError: Release/tag changed before publication",
+      "publication_patch_calls": 0,
+      "release_create_calls": 1,
+      "published": false,
+      "retained_draft": true,
+      "original_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "remote_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "receipt_result": null,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "api_error_before_patch",
+      "failure": "RuntimeError: Injected GET failure before publication",
+      "publication_patch_calls": 0,
+      "release_create_calls": 1,
+      "published": false,
+      "retained_draft": true,
+      "original_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "remote_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "receipt_result": null,
+      "expected_outcome_observed": true
+    },
+    {
+      "case": "post_patch_api_error",
+      "failure": "RuntimeError: Injected connection failure after remote PATCH committed",
+      "publication_patch_calls": 1,
+      "release_create_calls": 1,
+      "published": true,
+      "retained_draft": false,
+      "original_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "remote_package_sha256": "b5f1af8e2626437ba05ae13ef1f99b9a6479e4cedddf0efdf9404ad0ee96af41",
+      "receipt_result": null,
+      "expected_outcome_observed": true
+    }
+  ]
+}

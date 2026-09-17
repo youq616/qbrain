@@ -1,0 +1,515 @@
+{
+  "result": "PASS",
+  "checks": [
+    {
+      "name": "mode_type_enum_0",
+      "status": "PASS",
+      "detail": {
+        "mode": null,
+        "error": {
+          "code": "invalid_argument",
+          "field": "match",
+          "message": "string value required"
+        }
+      }
+    },
+    {
+      "name": "mode_type_enum_1",
+      "status": "PASS",
+      "detail": {
+        "mode": true,
+        "error": {
+          "code": "invalid_argument",
+          "field": "match",
+          "message": "string value required"
+        }
+      }
+    },
+    {
+      "name": "mode_type_enum_2",
+      "status": "PASS",
+      "detail": {
+        "mode": false,
+        "error": {
+          "code": "invalid_argument",
+          "field": "match",
+          "message": "string value required"
+        }
+      }
+    },
+    {
+      "name": "mode_type_enum_3",
+      "status": "PASS",
+      "detail": {
+        "mode": 0,
+        "error": {
+          "code": "invalid_argument",
+          "field": "match",
+          "message": "string value required"
+        }
+      }
+    },
+    {
+      "name": "mode_type_enum_4",
+      "status": "PASS",
+      "detail": {
+        "mode": 1.5,
+        "error": {
+          "code": "invalid_argument",
+          "field": "match",
+          "message": "string value required"
+        }
+      }
+    },
+    {
+      "name": "mode_type_enum_5",
+      "status": "PASS",
+      "detail": {
+        "mode": [],
+        "error": {
+          "code": "invalid_argument",
+          "field": "match",
+          "message": "string value required"
+        }
+      }
+    },
+    {
+      "name": "mode_type_enum_6",
+      "status": "PASS",
+      "detail": {
+        "mode": {},
+        "error": {
+          "code": "invalid_argument",
+          "field": "match",
+          "message": "string value required"
+        }
+      }
+    },
+    {
+      "name": "mode_type_enum_7",
+      "status": "PASS",
+      "detail": {
+        "mode": "",
+        "error": {
+          "code": "fact_invalid_match"
+        }
+      }
+    },
+    {
+      "name": "mode_type_enum_8",
+      "status": "PASS",
+      "detail": {
+        "mode": "LITERAL",
+        "error": {
+          "code": "fact_invalid_match"
+        }
+      }
+    },
+    {
+      "name": "mode_type_enum_9",
+      "status": "PASS",
+      "detail": {
+        "mode": "literal_substring",
+        "error": {
+          "code": "fact_invalid_match"
+        }
+      }
+    },
+    {
+      "name": "mode_type_enum_10",
+      "status": "PASS",
+      "detail": {
+        "mode": "all_terms ",
+        "error": {
+          "code": "fact_invalid_match"
+        }
+      }
+    },
+    {
+      "name": "mode_type_enum_11",
+      "status": "PASS",
+      "detail": {
+        "mode": "\u0000literal",
+        "error": {
+          "code": "fact_invalid_match"
+        }
+      }
+    },
+    {
+      "name": "wrong_read_view_None",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "name": "wrong_read_view_memories",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "name": "wrong_read_view_facts",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "name": "wrong_read_view_conflicts",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "name": "wrong_read_view_lifecycle",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "name": "wrong_read_view_lifecycle_candidates",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "name": "wrong_read_view_lifecycle_batch",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "name": "wrong_read_view_unknown",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "name": "wrong_read_view_",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_unexpected_argument"
+      }
+    },
+    {
+      "name": "wrong_write_view_capture",
+      "status": "PASS",
+      "detail": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "name": "wrong_write_view_extract",
+      "status": "PASS",
+      "detail": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "name": "wrong_write_view_forget",
+      "status": "PASS",
+      "detail": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "name": "wrong_write_view_fact_create",
+      "status": "PASS",
+      "detail": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "name": "wrong_write_view_fact_archive",
+      "status": "PASS",
+      "detail": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "name": "wrong_write_view_fact_lifecycle_batch",
+      "status": "PASS",
+      "detail": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "name": "wrong_write_view_fact_promote",
+      "status": "PASS",
+      "detail": {
+        "code": "invalid_argument",
+        "field": "match",
+        "message": "unexpected argument"
+      }
+    },
+    {
+      "name": "query_rejection_literal_0",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_literal_1",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_literal_2",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_literal_3",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_literal_4",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_literal_5",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_literal_6",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_literal_7",
+      "status": "PASS",
+      "detail": {
+        "code": "sensitive_material_rejected"
+      }
+    },
+    {
+      "name": "query_rejection_all_terms_0",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_all_terms_1",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_all_terms_2",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_all_terms_3",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_all_terms_4",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_all_terms_5",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_all_terms_6",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_all_terms_7",
+      "status": "PASS",
+      "detail": {
+        "code": "sensitive_material_rejected"
+      }
+    },
+    {
+      "name": "query_rejection_any_terms_0",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_any_terms_1",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_any_terms_2",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_any_terms_3",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_any_terms_4",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_any_terms_5",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_any_terms_6",
+      "status": "PASS",
+      "detail": {
+        "code": "fact_invalid_query"
+      }
+    },
+    {
+      "name": "query_rejection_any_terms_7",
+      "status": "PASS",
+      "detail": {
+        "code": "sensitive_material_rejected"
+      }
+    },
+    {
+      "name": "config_fallback",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "environment_precedes_config",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "explicit_precedes_environment",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "empty_env_uses_config",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "empty_brain",
+      "status": "PASS",
+      "detail": {
+        "exit_code": 2,
+        "stdout": "",
+        "stderr": "error: invalid brain id\n"
+      }
+    },
+    {
+      "name": "missing_match",
+      "status": "PASS",
+      "detail": {
+        "exit_code": 1,
+        "stdout": "{\"error\":{\"code\":\"invalid_cli_argument\"}}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "name": "missing_query",
+      "status": "PASS",
+      "detail": {
+        "exit_code": 1,
+        "stdout": "{\"error\":{\"code\":\"fact_invalid_query\"}}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "name": "duplicate_match",
+      "status": "PASS",
+      "detail": {
+        "exit_code": 1,
+        "stdout": "{\"error\":{\"code\":\"duplicate_argument\"}}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "name": "duplicate_brain",
+      "status": "PASS",
+      "detail": {
+        "exit_code": 1,
+        "stdout": "{\"error\":{\"code\":\"duplicate_argument\"}}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "name": "duplicate_query",
+      "status": "PASS",
+      "detail": {
+        "exit_code": 1,
+        "stdout": "{\"error\":{\"code\":\"duplicate_argument\"}}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "name": "query_not_used_as_brain",
+      "status": "PASS",
+      "detail": null
+    }
+  ],
+  "binary_sha256": "030b4b0a86431e301f3e83d0184c19d5a5ee4f0f6a11ccf024a1da2c399cfe3c",
+  "scope": "Independent Linux synthetic CLI/MCP boundary tests; not native Windows acceptance",
+  "check_count": 63
+}

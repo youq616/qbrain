@@ -1,0 +1,97 @@
+{
+  "result": "PASS",
+  "native_windows": false,
+  "scope": "synthetic C++ multiterm tests; no live host acceptance",
+  "binary_sha256": "86984bbe63f75deea7b49c44715e9f58b278205e1b27226234a5655f3fe473d7",
+  "script_sha256": "39926748ceb9dc4478889a21b3ff8d159389b553abe03afbf21a9ec08b343884",
+  "test_sha256": "163009077ed8e1ce9dfdd1d950f1e2310b7398f77fe8ec4828771bc20270611f",
+  "exit_code": 0,
+  "scenarios": [
+    {
+      "assertions": 35,
+      "name": "explicit modes validate before lazy schema initialization",
+      "status": "PASS"
+    },
+    {
+      "assertions": 20,
+      "name": "default and explicit literal retain exact legacy output bytes",
+      "status": "PASS"
+    },
+    {
+      "assertions": 10,
+      "name": "all terms match one anchor and never combine separate facts",
+      "status": "PASS"
+    },
+    {
+      "assertions": 10,
+      "name": "any terms use union without duplicate anchors and preserve ordering",
+      "status": "PASS"
+    },
+    {
+      "assertions": 14,
+      "name": "ASCII separators and duplicate term bounds are explicit",
+      "status": "PASS"
+    },
+    {
+      "assertions": 14,
+      "name": "mixed scripts and negation preserve full user evidence",
+      "status": "PASS"
+    },
+    {
+      "assertions": 18,
+      "name": "original query bytes include all whitespace before splitting",
+      "status": "PASS"
+    },
+    {
+      "assertions": 20,
+      "name": "whole sensitive input is rejected before token boundaries",
+      "status": "PASS"
+    },
+    {
+      "assertions": 14,
+      "name": "SQL and wildcard text stay literal bound values",
+      "status": "PASS"
+    },
+    {
+      "assertions": 10,
+      "name": "matching precedes candidate cap and source predicate filters",
+      "status": "PASS"
+    },
+    {
+      "assertions": 14,
+      "name": "archived nonmatching counterclaims remain complete",
+      "status": "PASS"
+    },
+    {
+      "assertions": 14,
+      "name": "matching neighbors keep independent one-hop counter-evidence",
+      "status": "PASS"
+    },
+    {
+      "assertions": 22,
+      "name": "forget expiry and tamper invalidate both modes without revival",
+      "status": "PASS"
+    },
+    {
+      "assertions": 16,
+      "name": "byte and result bounds preserve entire multi-term groups",
+      "status": "PASS"
+    },
+    {
+      "assertions": 11,
+      "name": "term recall does not write or control caller transactions",
+      "status": "PASS"
+    },
+    {
+      "assertions": 16,
+      "name": "multi-term anchors and neighbors share one actual WAL snapshot",
+      "status": "PASS"
+    }
+  ],
+  "scenario_count": 16,
+  "checks": 258,
+  "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "tracked_tree_clean": true,
+  "head_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a"
+}

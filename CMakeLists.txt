@@ -255,6 +255,7 @@ add_executable(qbrain_tests
   tests/test_n47i.cpp
   tests/test_n47j.cpp
   tests/test_n47k.cpp
+  tests/test_n47l.cpp
   tests/test_n46f.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
@@ -417,3 +418,9 @@ add_executable(qbrain_hook_diagnostic_tests tests/test_n47k.cpp)
 target_compile_definitions(qbrain_hook_diagnostic_tests PRIVATE QBRAIN_DIAGNOSTIC_STANDALONE=1)
 target_link_libraries(qbrain_hook_diagnostic_tests PRIVATE qbrain_memory)
 add_test(NAME qbrain_hook_diagnostic_unit COMMAND qbrain_hook_diagnostic_tests)
+
+# N47L: reuse the production fact-store dependency closure.
+add_executable(qbrain_multiterm_tests tests/test_n47l.cpp)
+target_compile_definitions(qbrain_multiterm_tests PRIVATE QBRAIN_MULTITERM_STANDALONE=1)
+target_link_libraries(qbrain_multiterm_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
+add_test(NAME qbrain_multiterm_unit COMMAND qbrain_multiterm_tests)

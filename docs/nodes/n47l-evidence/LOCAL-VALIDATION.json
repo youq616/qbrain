@@ -1,0 +1,131 @@
+{
+  "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a",
+  "compiler": "GCC 13.3 Release, CMake/Ninja, QBRAIN_WITH_PG=OFF",
+  "platform": "Linux",
+  "binary_sha256": "030b4b0a86431e301f3e83d0184c19d5a5ee4f0f6a11ccf024a1da2c399cfe3c",
+  "multiterm_unit": {
+    "scenarios": 16,
+    "assertions": 258
+  },
+  "multiterm_process": {
+    "checks": 112,
+    "commands": 126
+  },
+  "report_validator_tests": 193,
+  "registry_and_native_manifest_tests": 32,
+  "prior_process_regressions": [
+    {
+      "script": "test_fact_process.py",
+      "exit_code": 0,
+      "script_sha256": "8cd08f1c5a4c01fb5b1caa6fcf1484d180d90522563c056208a3d15a80dc3f05",
+      "log_sha256": "7cf2b2722884fe913de1409b7e6b5b6a26cf0aae9fa444426754e0482b33673b"
+    },
+    {
+      "script": "test_conflict_process.py",
+      "exit_code": 0,
+      "script_sha256": "cdc06f8694dfece2d02ffdd2dc942769dfc779ee26d935df027756a8813f7912",
+      "log_sha256": "c53c12d16732f0b7e747995d855f372ca17ac0b55114c9b5270b694a4f187ecd"
+    },
+    {
+      "script": "test_recall_process.py",
+      "exit_code": 0,
+      "script_sha256": "694bbef6d70ea780adb25c1fb536a560495a73d0e251fc6f34ea1d6e3ca29583",
+      "log_sha256": "bc6552d65f2238ab3ec6c98f064365c2ef7eb2dcaa0dee4ae451302ee85fac14"
+    },
+    {
+      "script": "test_hook_fact_process.py",
+      "exit_code": 0,
+      "script_sha256": "786260faa690f38d5e86f0e880f6bd3318c5f119f32a0af201b51ea04f02f228",
+      "log_sha256": "98dcb756d1ae57cbd74515c7aabeab4d48be42387e76ea53ac856fe36748db9e"
+    },
+    {
+      "script": "test_promotion_process.py",
+      "exit_code": 0,
+      "script_sha256": "e13e0c524bd23754a4ed2df38351e334dd21b683ddb6f312d28eae5d849b3648",
+      "log_sha256": "c2b29cd4ec43706df2a672aca0daff861575e98e769b5fd86372dba141b913b9"
+    },
+    {
+      "script": "test_lifecycle_process.py",
+      "exit_code": 0,
+      "script_sha256": "bb59f983237e212073e1dcca23ee63edd08f01b9ab9c3766d7f7434e85432f59",
+      "log_sha256": "00bcb3d00c51e50d1aba462eb69556af15957417fddbf0e8bbe0fbf656e091cf"
+    },
+    {
+      "script": "test_lifecycle_batch_process.py",
+      "exit_code": 0,
+      "script_sha256": "a04cfc79ca9fd4556503f76a4055ea6965196a3be40f1ac8b421a0e4f67d8933",
+      "log_sha256": "b7bb6f00d0b19d8122d7bf80ec54cd1d3cdd65997fcf71d1709ab7f5dd940f96"
+    },
+    {
+      "script": "test_lifecycle_candidate_process.py",
+      "exit_code": 0,
+      "script_sha256": "fc6ca571ff3f7b314cb70ab683254da9aa99ba896bf00f04c56a70fe35de768c",
+      "log_sha256": "858bb573ce465d986f86191767d2b900e5a4243f12a5884435b104492d10bd8d"
+    },
+    {
+      "script": "test_strict_json_process.py",
+      "exit_code": 0,
+      "script_sha256": "138f7914d21187b618b2a65ba38e786a2aadf29df59a20d74752cd33be240f1c",
+      "log_sha256": "cb7376dae471da98c054addb4f453e4a79582af0c29cefef4442db199b2b5664"
+    },
+    {
+      "script": "test_hook_trace_process.py",
+      "exit_code": 0,
+      "script_sha256": "20e7c67e259d1fb309de9cd9714ae0c53ae21d7161fe052f247997431a9f5101",
+      "log_sha256": "2e4b11eff28bbed21558523f1428ec26871830414163cf3d6b78b3095f5720cb"
+    },
+    {
+      "script": "test_hook_diagnostic_process.py",
+      "exit_code": 0,
+      "script_sha256": "b821a1c4415b45d00669159c0dc9d9c6e9aa81f591de3acb0f8303b87d5a81d2",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "script": "test_cjk_recall.py",
+      "exit_code": 0,
+      "script_sha256": "497dad9edea48f98232f2e8359fa39d70fe243142bbd846d4f7ee6f795bf3da2",
+      "log_sha256": "ea72092ae27961b32877e4164d6ba80383229b6a75cc04381c7c38c32728dbfc"
+    },
+    {
+      "script": "test_embedding_search.py",
+      "exit_code": 0,
+      "script_sha256": "dc3e557df505c0248c46b1899ecfd3351538b264621f30e9af8b9dc3becec26d",
+      "log_sha256": "2002f9925c37c4609d150de2dc92c0a860f32629420bf3b50a365bf2b3101fc1"
+    },
+    {
+      "script": "test_local_config.py",
+      "exit_code": 0,
+      "script_sha256": "e76a942ee478d79e8ec36e76ffd75071c62d79c3e0db3e4267d6cce71cc95bf7",
+      "log_sha256": "cce21d827c32ad30a5208e5ee97ad691b0013eadf2af7cbf8a7ae9ae0a5d5e06"
+    },
+    {
+      "script": "test_memory_cycle.py",
+      "exit_code": 0,
+      "script_sha256": "6a0b360a9c2c13e522e79e514d926f7e44a1ab88e09e5e53d5aa76157b325d73",
+      "log_sha256": "12dd0a38b84ba1e8de71505938311e3a5dcf0914e6119676386b0f6876c46aba"
+    },
+    {
+      "script": "test_mcp_boundaries.py",
+      "exit_code": 0,
+      "script_sha256": "247b16590b6b7faaae66a493868a303af4dabf852518806339a27e629bc831d7",
+      "log_sha256": "edc3fa9b0dab4b33b746b9697020906d0729d5d50828c4c48dcd0641190bf0ab"
+    },
+    {
+      "script": "test_hooks.py",
+      "exit_code": 0,
+      "script_sha256": "0d32edfc194bea1f58341aefaa9c95ccf92ed53cf72d59b30ab097c0f991fc27",
+      "log_sha256": "666402031e001594d6f9f873c6f34a5034ab249171261b3ee902b79c137a9671"
+    },
+    {
+      "script": "test_context_process.py",
+      "exit_code": 0,
+      "script_sha256": "133b3c2baba8100184a66a34eb2c0519d8cc5ab93183469d99dea68fc9bbbac3",
+      "log_sha256": "5ca3f64d31ad198999c9e29e5a2e6d3ed564a684c4746e16d6c36e088e05bb78"
+    }
+  ],
+  "prior_process_execution_note": "Executed on the repaired C++ binary before final source commit; existing process scripts were unchanged. The two multiterm reports were rerun on the clean committed source and bind that source explicitly.",
+  "native_windows_claimed": false,
+  "live_host_acceptance_claimed": false,
+  "whole_project_complete": false
+}

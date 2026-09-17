@@ -1,0 +1,38 @@
+{
+  "repository": "youq616/qbrain",
+  "source_commit": "1118e0faf5b7acdd3f27f933c801b4a2b1278d41",
+  "source_tree": "64723ca5ba7496051b70615127d4c1bb264bcd9d",
+  "status": "BLOCKED_BY_INDEPENDENT_REVIEW",
+  "n44_run": 35223387750,
+  "n42_run": 35223387784,
+  "original_required_ci_jobs": "completed/success",
+  "native_registry_groups": 60,
+  "original_multiterm_unit": {
+    "scenarios": 16,
+    "assertions": 258
+  },
+  "original_multiterm_process": {
+    "checks": 61,
+    "commands": 81
+  },
+  "initial_findings": [
+    {
+      "severity": "P2",
+      "scope": "CLI",
+      "finding": "Literal --match query reparsed as option by flat opt() lookup; rejected despite legacy literal behavior."
+    },
+    {
+      "severity": "P2",
+      "scope": "Evidence validator",
+      "finding": "Command identity/order and fixed expected exits were not checked; substituted command histories accepted."
+    }
+  ],
+  "ci_does_not_establish_absence_of_defects": true,
+  "original_package_sha256": "f9171c4c322d774dace0214770d1ddccd593b8fdee62230393b8a89ac85a0c72",
+  "original_exe_sha256": "b967b3c241d0ab2b14137c9a210e23f852117a7b0c048ab4ec7b6b2706dd258a",
+  "merge_or_release_authorized_by_this_record": false,
+  "real_postgresql_integration": "SKIP-PG",
+  "signed": false,
+  "real_host_model_consumption_verified": false,
+  "independent_ci_reviewer": "/root/ci_handoff_audit"
+}

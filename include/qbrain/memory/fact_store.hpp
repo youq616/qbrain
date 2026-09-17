@@ -35,10 +35,11 @@ class FactStore {
   // this neither infers conflict nor decides which claim is true.
   Json conflicts(const std::string& fact_id = "", const std::string& predicate = "",
                  int limit = 10, int max_bytes = 8192);
-  // Literal active-quote recall. Every item includes all valid direct explicit
-  // counterclaims. No transitive expansion, semantic inference or winner.
+  // Explicit public literal/all_terms/any_terms active-quote recall. Terms are
+  // ASCII whitespace-delimited literals; all_terms applies to one anchor only.
+  // Every item retains its valid direct counterclaims, regardless of matching.
   Json recall(const std::string& query, const std::string& predicate = "",
-              int limit = 10, int max_bytes = 8192);
+              int limit = 10, int max_bytes = 8192, const std::string& match = "literal");
   // Internal integration entry: empty queries select recent active facts.
   // Prompt callers must not pass empty terms as a substitute for an empty query.
   Json recall_for_hook(const std::vector<std::string>& queries, int limit = 10,
@@ -46,7 +47,7 @@ class FactStore {
  private:
   Json set_archived(const Json& payload, bool archived);
   Json recall_queries(const std::vector<std::string>& queries, const std::string& predicate,
-                      int limit, int max_bytes);
+                      int limit, int max_bytes, const std::string& match = "");
   void validate() const;
   Brain& brain_;
   std::string source_;

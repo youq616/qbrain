@@ -1,0 +1,42 @@
+#include "qbrain/memory/fact_store.hpp"
+#include "qbrain/util/paths.hpp"
+#include <chrono>
+#include <filesystem>
+#include <iostream>
+#include <random>
+#include <set>
+#include <vector>
+using namespace qbrain;
+using J=nlohmann::json;
+int assertions=0;
+void verify(bool v,const std::string& msg){if(!v)throw std::runtime_error(msg);++assertions;}
+void setup(Brain& b,const std::string& path=":memory:"){b.open_at(path);b.ensure_source("alpha");b.ensure_source("beta");b.save_config_value("memory.writeback","salient");}
+struct Support{std::string event,item;};
+Support support(Brain& b,const std::string& source,const std::string& tag,const std::string& quote){
+ auto r=memory::capture(b,source,{{"session_id","storage-review"},{"fragment_id",tag},{"expires_at",0},{"messages",J::array({{{"role","user"},{"content",quote}}})}},true);
+ auto id=r.at("event_id").get<std::string>();auto extracted=memory::extract(b,source,id);verify(extracted.at("item_count")==1,"fixture extraction");
+ auto row=b.db().prepare("SELECT item_id FROM memory_items WHERE event_id=?");row.bind_text(1,id);verify(row.step(),"fixture support row");return{id,row.column_text(0)};
+}
+J fact(Brain& b,memory::FactStore& s,const std::string& source,const std::string& tag,const std::string& text,const std::string& pred="preference.editor"){return s.create({{"item_id",support(b,source,tag,text).item},{"predicate",pred}});}
+std::string fold(std::string s){for(auto& ch:s)if(ch>='A'&&ch<='Z')ch=static_cast<char>(ch-'A'+'a');return s;}
+std::vector<std::string> tokenize(const std::string& q){std::vector<std::string> v;std::string t;for(char c:q){if(c==' '||c=='\t'||c=='\r'||c=='\n'){if(!t.empty()){v.push_back(t);t.clear();}}else t+=c;}if(!t.empty())v.push_back(t);return v;}
+void differential(){
+ Brain b;setup(b);memory::FactStore a(b,"alpha"),z(b,"beta");
+ struct Record{std::string id,source,pred,quote;bool active,archived;};std::vector<Record> data;
+ std::vector<std::string> quote={"I prefer RED coral.","I prefer BLUE red.","I prefer coral red BLUE.","I prefer 命令 blue.","I prefer % _ ; '","I prefer none.","I prefer prefixredsuffix.","I prefer 红蓝.","I prefer ÉCOLE 😀","I prefer 日本語 coral.","I prefer low\\path.","I prefer red\tBLUE."};
+ for(int i=0;i<12;++i){std::string src=i%4==0?"beta":"alpha",pred=i%3==0?"preference.theme":"preference.editor";auto& store=src=="alpha"?a:z;auto r=fact(b,store,src,"d"+std::to_string(i),quote[i],pred);bool archived=i==6,active=i!=11;if(archived)store.archive({{"fact_id",r["fact_id"]},{"expected_revision",1}});if(!active)store.retract({{"fact_id",r["fact_id"]},{"expected_revision",1}});data.push_back({r["fact_id"],src,pred,quote[i],active,archived});}
+ b.db().exec("UPDATE memory_facts SET created_at=100");
+ std::vector<std::string> pool={"red","BLUE","coral","命令","%","_",";","'","prefix","红蓝","ÉCOLE","école","😀","日本語","absent","low\\path"};
+ std::vector<std::string> ws={" ","\t","\r\n","  "};std::mt19937 rng(47601);
+ for(int trial=0;trial<300;++trial){std::string q=trial%2?"\t":"";int count=1+rng()%8;for(int n=0;n<count;++n){if(n)q+=ws[rng()%ws.size()];q+=pool[rng()%pool.size()];}if(trial%3==0)q+=" \r";auto terms=tokenize(q);std::string src=trial%4==0?"beta":"alpha",pred=trial%3==0?"preference.theme":"";auto& store=src=="alpha"?a:z;
+  for(const std::string mode:{"all_terms","any_terms"}){std::set<std::string> wanted;for(const auto& r:data){if(!r.active||r.archived||r.source!=src||(!pred.empty()&&pred!=r.pred))continue;bool matches=mode=="all_terms";auto text=fold(r.quote);for(const auto& t:terms){bool contains=text.find(fold(t))!=std::string::npos;if(mode=="all_terms")matches=matches&&contains;else matches=matches||contains;}if(matches)wanted.insert(r.id);}auto got=store.recall(q,pred,50,32768,mode);std::set<std::string> observed;std::string prior;for(const auto& x:got["items"]){auto id=x.at("match_fact_id").get<std::string>();verify(prior.empty()||prior<id,"deterministic binary order");prior=id;observed.insert(id);}verify(wanted==observed,"differential set trial "+std::to_string(trial));verify(!got["truncated"].get<bool>()&&!got["work_limited"].get<bool>(),"small oracle corpus untruncated");verify(got["match_mode"]==mode,"explicit metadata");}
+ }
+ std::cout<<"differential: 600 query/mode cases passed\n";
+}
+void candidate_cap(){Brain b;setup(b);memory::FactStore s(b,"alpha");auto old=fact(b,s,"alpha","old","I prefer onlyRed and onlyBlue.");b.db().exec("UPDATE memory_facts SET created_at=1");auto noise=support(b,"alpha","noise","I prefer onlyRed noise.");for(int i=0;i<101;++i)s.create({{"item_id",noise.item},{"predicate","noise"+std::to_string(i)}});auto both=s.recall("onlyRed onlyBlue","",50,32768,"all_terms");verify(both["items"].size()==1&&both["items"][0]["match_fact_id"]==old["fact_id"],"AND before candidate cap with 101 partial matches");b.db().exec("UPDATE memory_fact_evidence SET quote_hash='corrupt' WHERE fact_id IN (SELECT fact_id FROM memory_facts WHERE predicate LIKE 'noise%')");auto any=s.recall("onlyRed onlyBlue","",50,32768,"any_terms");verify(any["items"].empty()&&any["truncated"]==true&&any["work_limited"]==false,"100 matching invalid candidates still consume scan limit");std::cout<<"candidate cap: AND before cap and bounded invalid OR candidates passed\n";}
+void work_limit(){Brain b;setup(b);memory::FactStore s(b,"alpha");std::vector<J> claims;for(int n=0;n<33;++n){std::string text=n==0?"I prefer matchedRed matchedBlue.":"I prefer other option "+std::to_string(n)+".";auto c=fact(b,s,"alpha","w"+std::to_string(n)+"-0",text);for(int e=1;e<16;++e)s.attach({{"fact_id",c["fact_id"]},{"item_id",support(b,"alpha","w"+std::to_string(n)+"-"+std::to_string(e),text).item}});claims.push_back(c);if(n)s.contradict({{"fact_id",claims[0]["fact_id"]},{"other_id",c["fact_id"]}});}
+ for(const std::string mode:{"all_terms","any_terms"}){auto r=s.recall("matchedRed matchedBlue","",50,32768,mode);verify(r["items"].empty()&&r["truncated"]==true&&r["work_limited"]==true,"512 check cap discards all incomplete star");verify(sqlite3_txn_state(b.db().handle(),"main")==SQLITE_TXN_NONE,"work limit releases snapshot");}
+ auto tiny=fact(b,s,"alpha","fresh","I prefer fresh single.","preference.small");auto r=s.recall("fresh single","",50,32768,"all_terms");verify(r["items"].size()==1&&r["items"][0]["match_fact_id"]==tiny["fact_id"]&&r["work_limited"]==false,"work budget is call-local after exhaustion");std::cout<<"evidence budget: 528-support neighborhoods discard on 512 bound, next call resets\n";
+}
+void snapshot_schema(){for(const std::string mode:{"all_terms","any_terms"}){auto dir=std::filesystem::temp_directory_path()/("qbrain-storage-review-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));std::filesystem::create_directories(dir);{Brain r;setup(r,util::path_to_utf8(dir/"brain.db"));memory::FactStore s(r,"alpha");auto claim=fact(r,s,"alpha","snap","I prefer oldRed oldBlue.");Brain w;w.open_at(util::path_to_utf8(dir/"brain.db"));struct State{Brain* writer;J claim;bool fired=false,committed=false;}state{&w,claim};sqlite3_trace_v2(r.db().handle(),SQLITE_TRACE_STMT,[](unsigned,void* context,void* raw,void*)->int{auto& state=*static_cast<State*>(context);auto sql=sqlite3_sql(static_cast<sqlite3_stmt*>(raw));if(!state.fired&&sql&&std::string(sql)=="SELECT 1 FROM sqlite_master WHERE type=? AND name=?"){state.fired=true;try{memory::FactStore writer(*state.writer,"alpha");writer.archive({{"fact_id",state.claim["fact_id"]},{"expected_revision",1}});state.committed=true;}catch(const std::exception& e){std::cerr<<"snapshot writer error: "<<e.what()<<'\n';}}return 0;},&state);auto first=s.recall("oldRed oldBlue","",50,32768,mode);sqlite3_trace_v2(r.db().handle(),0,nullptr,nullptr);verify(state.fired&&state.committed,"archive schema commits before reader schema probe");verify(first["items"].size()==1,"snapshot pins absent lifecycle schema and original anchor");verify(s.recall("oldRed oldBlue","",50,32768,mode)["items"].empty(),"next call sees archived anchor");verify(sqlite3_txn_state(r.db().handle(),"main")==SQLITE_TXN_NONE,"no implicit read transaction leak");}std::filesystem::remove_all(dir);}std::cout<<"snapshot: archive schema created between initial snapshot and schema detection passed\n";}
+int main(){try{differential();candidate_cap();work_limit();snapshot_schema();std::cout<<"Independent storage probe PASS, assertions="<<assertions<<'\n';return 0;}catch(const std::exception& e){std::cerr<<"FAIL: "<<e.what()<<'\n';return 1;}}

@@ -1,0 +1,16 @@
+{
+  "executor": "/root/ci_handoff_audit",
+  "command": "python -B test_verify_candidate.py --metadata new-candidate/candidate-metadata.json --source source --artifacts new-candidate/artifacts",
+  "working_directory": "/workspace/scratch/8ee4dd18bee0/n47l-evidence-tool",
+  "candidate_source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "candidate_source_tree": "f9d42819772df53dd8c6337c3cb19c8940d7023a",
+  "metadata_sha256": "e3d4ebcf21131b6cfa891b0af2c3a72f10343986a142f2de5cd8a9f95b0832df",
+  "verifier_sha256": "5a8f793b4f0054d55ffff0a134b013c770f3c686974c47dd46d57fd951ee80c6",
+  "test_script_sha256": "61f889972e91b254ba8a7b9729ef7830574ada762799671a93205ec1ad6cece8",
+  "output_sha256": "1cafff551fd8c157fa9fb083373d2db62ca0f8fb77734ef26b839378150c099b",
+  "output_last_modified_utc": "2026-09-17T14:07:40.268945+00:00",
+  "exit_code": 0,
+  "test_count": 14,
+  "result": "PASS",
+  "fixture_kind": "actual repaired candidate artifacts; no qbrain execution"
+}

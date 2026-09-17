@@ -1,0 +1,121 @@
+{
+  "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+  "binary_sha256": "030b4b0a86431e301f3e83d0184c19d5a5ee4f0f6a11ccf024a1da2c399cfe3c",
+  "scope": "Independent Linux synthetic fixtures; existing parser defects, not N47L regressions",
+  "cases": [
+    {
+      "args": [
+        "memory",
+        "read",
+        "--brain",
+        "intended",
+        "--source",
+        "alpha",
+        "--query",
+        "--source",
+        "--limit",
+        "5"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"candidate_limit\":200,\"initialized\":true,\"items\":[{\"category\":\"preference\",\"event_id\":\"2fc8e30cb44da111ddda7d541e9d0b3d6f6f11402930104040328dfb956f1a20\",\"evidence_slug\":\"sessions/2fc8e30cb44da111ddda7d541e9d0b3d6f6f11402930104040328dfb956f1a20\",\"expires_at\":0,\"item_id\":\"d63069f90ea139e71cdd5c5231795534dbf8da7a48998333fce59bf61e7e8810\",\"message_index\":0,\"method\":\"explicit-markers-v1\",\"quote\":\"I prefer ALPHASOURCE --source --brain --limit.\",\"session_id\":\"next-stage\",\"source_id\":\"alpha\"}],\"source_id\":\"alpha\",\"truncated\":false,\"truth_status\":\"caller_attested_user_statement\",\"untrusted_data\":true}\n",
+      "stderr": "",
+      "name": "memory_source_control",
+      "new_brain_directories": []
+    },
+    {
+      "args": [
+        "memory",
+        "read",
+        "--brain",
+        "intended",
+        "--query",
+        "--source",
+        "--limit",
+        "5",
+        "--source",
+        "alpha"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"candidate_limit\":200,\"initialized\":true,\"items\":[{\"category\":\"preference\",\"event_id\":\"dd2a067b2229794afb5201e9cd3d2b39b6a63d81f74118c7abab5c7c2831889c\",\"evidence_slug\":\"sessions/dd2a067b2229794afb5201e9cd3d2b39b6a63d81f74118c7abab5c7c2831889c\",\"expires_at\":0,\"item_id\":\"d7c08b3d7d8d924c5c6a97e8e1014e7e864ea490c0e3af8e910a5d82153a84c2\",\"message_index\":0,\"method\":\"explicit-markers-v1\",\"quote\":\"I prefer SHADOWSOURCE --source.\",\"session_id\":\"next-stage\",\"source_id\":\"--limit\"}],\"source_id\":\"--limit\",\"truncated\":false,\"truth_status\":\"caller_attested_user_statement\",\"untrusted_data\":true}\n",
+      "stderr": "",
+      "name": "memory_source_shadow",
+      "new_brain_directories": []
+    },
+    {
+      "args": [
+        "memory",
+        "read",
+        "--brain",
+        "intended",
+        "--source",
+        "alpha",
+        "--query",
+        "--brain"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"candidate_limit\":200,\"initialized\":true,\"items\":[{\"category\":\"preference\",\"event_id\":\"2fc8e30cb44da111ddda7d541e9d0b3d6f6f11402930104040328dfb956f1a20\",\"evidence_slug\":\"sessions/2fc8e30cb44da111ddda7d541e9d0b3d6f6f11402930104040328dfb956f1a20\",\"expires_at\":0,\"item_id\":\"d63069f90ea139e71cdd5c5231795534dbf8da7a48998333fce59bf61e7e8810\",\"message_index\":0,\"method\":\"explicit-markers-v1\",\"quote\":\"I prefer ALPHASOURCE --source --brain --limit.\",\"session_id\":\"next-stage\",\"source_id\":\"alpha\"}],\"source_id\":\"alpha\",\"truncated\":false,\"truth_status\":\"caller_attested_user_statement\",\"untrusted_data\":true}\n",
+      "stderr": "",
+      "name": "memory_brain_control",
+      "new_brain_directories": []
+    },
+    {
+      "args": [
+        "memory",
+        "read",
+        "--query",
+        "--brain",
+        "--source",
+        "alpha",
+        "--brain",
+        "intended"
+      ],
+      "exit_code": 1,
+      "stdout": "{\"error\":{\"code\":\"source_not_found\",\"field\":\"source_id\",\"message\":\"source_id is not registered\"}}\n",
+      "stderr": "",
+      "name": "memory_brain_shadow",
+      "new_brain_directories": [
+        "--source"
+      ]
+    },
+    {
+      "args": [
+        "context",
+        "read",
+        "--brain",
+        "intended",
+        "--source",
+        "--brain",
+        "--uri",
+        "qbrain://--brain/resources/docs/first",
+        "--layer",
+        "L2"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"content\":\"EXPECTED_CONTEXT_BODY\",\"layer\":\"L2\",\"method\":\"raw\",\"next_offset\":null,\"offset\":0,\"page_id\":1,\"provider_calls\":0,\"revision\":\"a90761f174c1ccd1664732b04b9650dfd74faf3d6a5f8423c26129c317911ea3\",\"source_id\":\"--brain\",\"truncated\":false,\"untrusted_data\":true,\"uri\":\"qbrain://--brain/resources/docs/first\"}\n",
+      "stderr": "",
+      "name": "context_brain_control",
+      "new_brain_directories": []
+    },
+    {
+      "args": [
+        "context",
+        "read",
+        "--source",
+        "--brain",
+        "--uri",
+        "qbrain://--brain/resources/docs/first",
+        "--layer",
+        "L2",
+        "--brain",
+        "intended"
+      ],
+      "exit_code": 1,
+      "stdout": "{\"error\":{\"code\":\"source_not_found\",\"field\":\"source_id\",\"message\":\"source_id is not registered\"}}\n",
+      "stderr": "",
+      "name": "context_brain_shadow",
+      "new_brain_directories": [
+        "--uri"
+      ]
+    }
+  ]
+}

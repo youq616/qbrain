@@ -674,8 +674,26 @@ Json FactStore::conflicts(const std::string& id, const std::string& pred, int li
   return out;
 }
 
-Json FactStore::recall(const std::string& query, const std::string& pred, int limit, int budget) {
-  return recall_queries({query}, pred, limit, budget);
+Json FactStore::recall(const std::string& query, const std::string& pred, int limit, int budget,
+                       const std::string& match) {
+  // Validate the COMPLETE input before splitting: token boundaries must not
+  // defeat sensitive-input checks or hide bytes outside the aggregate term cap.
+  validate();
+  require(match == "literal" || match == "all_terms" || match == "any_terms", "fact_invalid_match");
+  require(!query.empty() && query.size() <= 1024 && query.find('\0') == std::string::npos &&
+      util::valid_utf8(query) && query.find_first_not_of(" \t\r\n") != std::string::npos,
+      "fact_invalid_query");
+  require(!contains_sensitive_material(query), "sensitive_material_rejected");
+  if (match == "literal") return recall_queries({query}, pred, limit, budget);
+  std::vector<std::string> terms;
+  for (std::size_t start = query.find_first_not_of(" \t\r\n"); start != std::string::npos;) {
+    const auto end = query.find_first_of(" \t\r\n", start);
+    terms.push_back(query.substr(start, end == std::string::npos ? end : end - start));
+    require(terms.size() <= 8, "fact_invalid_query"); // duplicates still count
+    if (end == std::string::npos) break;
+    start = query.find_first_not_of(" \t\r\n", end);
+  }
+  return recall_queries(terms, pred, limit, budget, match);
 }
 
 Json FactStore::recall_for_hook(const std::vector<std::string>& queries, int limit, int budget) {
@@ -683,8 +701,9 @@ Json FactStore::recall_for_hook(const std::vector<std::string>& queries, int lim
 }
 
 Json FactStore::recall_queries(const std::vector<std::string>& queries, const std::string& pred,
-                              int limit, int budget) {
+                              int limit, int budget, const std::string& match) {
   validate();
+  require(match.empty() || match == "all_terms" || match == "any_terms", "fact_invalid_match");
   require(queries.size() <= 8, "fact_invalid_query");
   std::size_t query_bytes = 0;
   for (const auto& query : queries) {
@@ -701,7 +720,7 @@ Json FactStore::recall_queries(const std::vector<std::string>& queries, const st
   ReadSnapshot snapshot(db);
   const bool has_archive = archive_ready(db);
   Json out = {{"source_id",source_},{"view","recall"},{"items",Json::array()},
-      {"untrusted_data",true},{"match_mode",queries.empty()?"recent_active":(queries.size()==1?"literal_substring":"any_literal_term")},
+      {"untrusted_data",true},{"match_mode",match.empty() ? (queries.empty()?"recent_active":(queries.size()==1?"literal_substring":"any_literal_term")) : match},
       {"conflict_scope","direct_active_assertions"},{"neighbors_recursively_expanded",false},
       {"order","created_desc_id"},{"truncated",false},{"work_limited",false},
       {"candidate_limit",max_candidates},{"initialized",ready(db)}};
@@ -716,7 +735,8 @@ Json FactStore::recall_queries(const std::vector<std::string>& queries, const st
   if (!queries.empty()) {
     sql += " AND (";
     for (std::size_t i=0;i<queries.size();++i)
-      sql += (i?" OR ":"") + std::string("instr(lower(object),lower(?))>0");
+      sql += (i ? (match == "all_terms" ? " AND " : " OR ") : "") +
+          std::string("instr(lower(object),lower(?))>0");
     sql += ")";
   }
   if (!pred.empty()) sql += " AND predicate=?";
