@@ -1,3 +1,4 @@
+#include "qbrain/integration/diagnostics.hpp"
 #include "qbrain/integration/hook.hpp"
 #include "qbrain/cli/app.hpp"
 #include "qbrain/memory/session_memory.hpp"
@@ -142,6 +143,7 @@ void print_help() {
       "  delete <slug> [--source default]\n"
       "  embed --all | --slug s | --drain   (drain: process embed jobs queue)\n"
       "  context list|read|summary [--uri qbrain://source/resources/] [--layer L0|L1|L2]\n"
+      "  hook diagnostics --config <absolute config> [--event <event>] [--session-key <hex>] (read only)\n"
       "  hook --config <absolute project config> (JSON stdin; fail-open)\n"
       "  serve [--brain id] [--tool-profile full|memory] [--allow-write] [--http] [--port N]\n"
       "  inbox [--watch]                     process %LOCALAPPDATA%\\Qbrain\\inbox\n"
@@ -754,6 +756,8 @@ int run(int argc, char** argv) {
     const auto& cmd = args[0];
     std::vector<std::string> rest(args.begin() + 1, args.end());
     if (cmd == "context") return cmd_context(rest);
+    if (cmd == "hook" && !rest.empty() && rest[0] == "diagnostics")
+      return integration::run_hook_diagnostics(std::vector<std::string>(rest.begin()+1,rest.end()));
     if (cmd == "hook") return integration::run_hook(rest);
     if (cmd == "init") return cmd_init(rest);
     if (cmd == "doctor") return cmd_doctor(rest);

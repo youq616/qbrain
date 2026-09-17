@@ -112,6 +112,7 @@ $productionSources = @(
   "src\qbrain\memory\session_memory.cpp",
   "src\qbrain\memory\fact_store.cpp",
   "src\qbrain\integration\hook.cpp",
+  "src\qbrain\integration\diagnostics.cpp",
   "src\qbrain\context\context.cpp",
   "src\qbrain\ops\context_ops.cpp",
   "src\qbrain\service\inbox_watch.cpp",

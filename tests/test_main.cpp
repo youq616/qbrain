@@ -43,6 +43,7 @@ void test_n47g();
 void test_n47h();
 void test_n47i();
 void test_n47j();
+void test_n47k();
 void test_n46f();
 void test_n42_foundation();
 void test_vector();
@@ -108,6 +109,7 @@ int main() {
       {"n47h_lifecycle_candidates", test_n47h},
       {"n47i_strict_json", test_n47i},
       {"n47j_hook_checkpoints", test_n47j},
+      {"n47k_hook_diagnostics", test_n47k},
       {"n46f_cjk", test_n46f},
       {"n42_foundation", test_n42_foundation},
       {"vector", test_vector},
