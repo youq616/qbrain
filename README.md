@@ -4,18 +4,41 @@ Windows 原生 C++20 / PowerShell Agent 记忆与知识库，默认 SQLite + FTS
 不要求 Docker、WSL 或 Python 服务。由 Lordakee/qbrain 的 MIT 代码继续开发；
 gbrain / OpenViking 是设计参考，不表示完整功能等价。
 
-## 当前开发预览：N47H
+## 当前开发预览：N47J
 
-[仓库 Release：candidates-preview-80fe1b9d](https://github.com/youq616/qbrain/releases/tag/candidates-preview-80fe1b9d)
-选择 `qbrain-windows-x64-candidates.zip` 并完整解压。ZIP SHA256：
-`6d4747d0332fc39e45a5ca4b2e815ee01e135959b97722ae92287dbaa14508cd`。
+[仓库 Release：trace-preview-2ec0c3da](https://github.com/youq616/qbrain/releases/tag/trace-preview-2ec0c3da)
+选择 `qbrain-windows-x64-hook-trace.zip` 并完整解压。ZIP SHA256：
+`778ddfde895a3f6a48b8b7d007d8a94f2b93a41639054b8c920687438444d0df`。
 原CI测试字节、未重打包、未签名，不是整个项目的最终发行。实际产品源码
-`80fe1b9d31de6cc41d06be6db0e1035c1a747eb7`，
-[PR #24](https://github.com/youq616/qbrain/pull/24) 已合并。
+`2ec0c3daaa6d324bcc9f16a1ebacc88c63abe561`，
+[PR #26](https://github.com/youq616/qbrain/pull/26) 已合并。
 用MANIFEST、完整源码SHA和外部摘要识别版本，不以旧dist或旧固定哈希入口替代。
 
-[当前状态](CURRENT-STATUS.md) · [阶段审核](docs/nodes/N47H-HARD-AUDIT.md) ·
-[测试摘要](docs/nodes/n47h-evidence/SUMMARY.json) · [发布记录](docs/nodes/n47h-evidence/RELEASE.json)
+[当前状态](CURRENT-STATUS.md) · [阶段审核](docs/nodes/N47J-HARD-AUDIT.md) ·
+[测试摘要](docs/nodes/n47j-evidence/SUMMARY.json) · [发布记录](docs/nodes/n47j-evidence/RELEASE.json)
+
+## N47J：保留输入阶段的诊断，不记录原始聊天
+
+保留last-trace兼容文件，同时为两个固定宿主的五种事件分别保留最近一次已接受
+处理记录。后续SessionEnd不会覆盖独立的UserPromptSubmit槽，最多十个事件文件，
+每条不超过4096字节。只记录有限状态/阶段/计数/时间与session_key，不复制原话、
+回答、上下文、异常消息、原始会话标识或凭据。
+
+遗忘事件重放的诊断修复已包含：capture_status保留forgotten，不再留下上一次成功
+记录；local为failed/extract，deferred可完成但不表示重新提取或记忆复活。
+这是尽力写入的诊断，不是完整持久审计日志。锁忙、禁用、前置拒绝和I/O故障可能
+不产生新记录；检查event/session_key/time，不能用文件存在或processed证明模型消费。
+host_consumption_confirmed仍false，采集与事实权限、安装默认开关没有改变。
+[完整诊断格式和范围](docs/integration/HOOK-DIAGNOSTIC-CHECKPOINTS.zh-CN.md)。
+
+原生35163779907及35163779904通过：Windows58注册组；诊断9场景169断言在两Windows、
+portable及Linux ASan/UBSan通过，实际Hook66检查80命令通过。阶段单独工程自审再次
+GCC14.2构建并执行同套诊断测试、175报告/注册校验和292原始工件/包回读。
+审核后未改动生产代码或原测试；未发现本阶段未解决P0/P1，不是绝对无缺陷、第三方
+审核或新的已登录客户端验收。原始测试包经上传下载比对后发布。
+
+N47I的严格JSON输入保护保留：重复解码键、错误类型和不合法输入不能静默改写
+写入含义。六工具名称与来源限制不变。以下为原有生命周期与记忆能力。
 
 ## N47H：分页发现候选，再明确决定如何整理
 
@@ -86,16 +109,11 @@ N47A证据生命周期、N47B成对冲突、N47C含直接反证召回保持。�
 缓存失效、六工具MCP、CJK子串、精确向量候选、Embedding标签隔离、批量队列与过期
 结果拒绝保持。系统代理设置改变后须重启使用HTTP的进程。
 
-## 验证和限制
+## 通用验证边界和未完成项
 
-原生35111907426／35111907432通过：Windows56注册组；候选17场景647断言在两Windows、
-portable和Linux ASan+UBSan通过；实际CLI/MCP43检查63次预期退出。原N47A-G、HTTP、
-队列、CJK、记忆、Hook、上下文和双PowerShell保留；真实PG DSN仍明确SKIP-PG。
-
-阶段单独工程自审重新GCC构建并执行候选和旧批量／生命周期，141报告／注册门槛及
-254原始源码／日志／包回读通过。独立参考模型覆盖288混合状态事实、46遍历／695页；
-错误推进游标的临时副本准确触发失败。证据归档在n47h-evidence，未改变产品字节。
-本阶段无未解决P0/P1，不是绝对无bug承诺、第三方审核或新的真实客户端验收。
+全部旧事实、冲突、召回、promotion、Hook、生命周期、batch、candidate、严格JSON、
+HTTP/队列/CJK及双PowerShell门槛在新产品CI中保留。真实PG DSN仍SKIP-PG，不能用
+包围它的组PASS声称PG集成验收完成。Linux sanitizer不等于Windows内存检查。
 
 用户转交N47E Claude自动链路通过摘要，与本轮程序测试分开；不用Claude结果替代
 仍受认证阻塞的Codex。**Hook上下文交给已授权客户端，客户端可能发送给模型。**
@@ -103,7 +121,7 @@ portable和Linux ASan+UBSan通过；实际CLI/MCP43检查63次预期退出。原
 哈希不是签名。数量和证据限额不保证SQL或备份I/O耗时，候选及预检可能过时。
 
 通用语义合并／冲突推断、使用确认计数、自动衰减、画像、百万事件性能、PG对等、
-完整ACL/DLP、模型质量费用和正式签名仍未完成。候选发现不等于自动维护或项目完成。
+完整ACL/DLP、模型质量费用和正式签名仍未完成。N47J完成不等于整个项目完成。
 
 ## 从源码构建与数据
 
