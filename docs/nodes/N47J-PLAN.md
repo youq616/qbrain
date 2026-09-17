@@ -1,7 +1,9 @@
 # N47J — bounded per-event Hook diagnostic checkpoints
 
 Baseline: 487711c03ceb2ed7a15e1c3e2ac4f205f9642cef (merged N47I).
-Status: approved after N47J-PLAN-AUDIT.md; implementation/outcome pending.
+Status: done for the scoped implementation after N47J-HARD-AUDIT.md.
+Tested product: 2ec0c3daaa6d324bcc9f16a1ebacc88c63abe561.
+Native evidence: 35163779907 and 35163779904. Publication recorded separately.
 Only Windows-native youq616/qbrain. Owner permits a separate coordinator
 engineering self-review; do not call it a third-party or subagent audit.
 
