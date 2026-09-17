@@ -94,6 +94,7 @@ $defaultTestSources = @(
   "tests\test_n47h.cpp",
   "tests\test_n47i.cpp",
   "tests\test_n47j.cpp",
+  "tests\test_n47k.cpp",
   "tests\test_n46f.cpp",
   "tests\test_rrf.cpp",
   "tests\test_vector.cpp",
@@ -155,7 +156,7 @@ $testObjList = ($selected | ForEach-Object { [IO.Path]::GetFileNameWithoutExtens
 $prodObjs = @(
   "paths","hash","log","string_util","time_util","database","migrate","pg_backend","types","brain",
   "extract","traverse","analytics","scan","astlite","packs","lint","store","image_meta","vector","rrf","hybrid","rerank","minions","embedding_queue","dream",
-  "chunker","markdown","import","http_client","embed","chat","registry","handlers","memory_ops","session_memory","fact_store","hook","context","context_ops",
+  "chunker","markdown","import","http_client","embed","chat","registry","handlers","memory_ops","session_memory","fact_store","hook","diagnostics","context","context_ops",
   "inbox_watch","live_sync","jsonrpc","server","auth","http_server","commands","sqlite3"
 ) | ForEach-Object { "`"$ObjDir\$_.obj`"" }
 $prodObjList = $prodObjs -join " "

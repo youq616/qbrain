@@ -198,7 +198,7 @@ qbrain_lib(files
   src/qbrain/files/image_meta.cpp
 )
 
-qbrain_lib(memory src/qbrain/memory/fact_store.cpp src/qbrain/memory/session_memory.cpp src/qbrain/integration/hook.cpp src/qbrain/context/context.cpp)
+qbrain_lib(memory src/qbrain/memory/fact_store.cpp src/qbrain/memory/session_memory.cpp src/qbrain/integration/hook.cpp src/qbrain/integration/diagnostics.cpp src/qbrain/context/context.cpp)
 target_link_libraries(qbrain_memory PUBLIC qbrain_core qbrain_ai qbrain_util)
 
 qbrain_lib(ops
@@ -254,6 +254,7 @@ add_executable(qbrain_tests
   tests/test_n47h.cpp
   tests/test_n47i.cpp
   tests/test_n47j.cpp
+  tests/test_n47k.cpp
   tests/test_n46f.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
@@ -410,3 +411,9 @@ add_executable(qbrain_hook_trace_tests tests/test_n47j.cpp)
 target_compile_definitions(qbrain_hook_trace_tests PRIVATE QBRAIN_HOOK_TRACE_STANDALONE=1)
 target_link_libraries(qbrain_hook_trace_tests PRIVATE qbrain_util)
 add_test(NAME qbrain_hook_trace_unit COMMAND qbrain_hook_trace_tests)
+
+# N47K local-only bounded checkpoint inspection.
+add_executable(qbrain_hook_diagnostic_tests tests/test_n47k.cpp)
+target_compile_definitions(qbrain_hook_diagnostic_tests PRIVATE QBRAIN_DIAGNOSTIC_STANDALONE=1)
+target_link_libraries(qbrain_hook_diagnostic_tests PRIVATE qbrain_memory)
+add_test(NAME qbrain_hook_diagnostic_unit COMMAND qbrain_hook_diagnostic_tests)
