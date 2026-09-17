@@ -253,6 +253,7 @@ add_executable(qbrain_tests
   tests/test_n47g.cpp
   tests/test_n47h.cpp
   tests/test_n47i.cpp
+  tests/test_n47j.cpp
   tests/test_n46f.cpp
   tests/test_rrf.cpp
   tests/n42/test_foundation.cpp
@@ -403,3 +404,9 @@ add_executable(qbrain_strict_json_tests tests/test_n47i.cpp)
 target_compile_definitions(qbrain_strict_json_tests PRIVATE QBRAIN_STRICT_JSON_STANDALONE=1)
 target_link_libraries(qbrain_strict_json_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
 add_test(NAME qbrain_strict_json_unit COMMAND qbrain_strict_json_tests)
+
+# N47J metadata projection is header-only; filesystem behavior is tested with the real Hook process.
+add_executable(qbrain_hook_trace_tests tests/test_n47j.cpp)
+target_compile_definitions(qbrain_hook_trace_tests PRIVATE QBRAIN_HOOK_TRACE_STANDALONE=1)
+target_link_libraries(qbrain_hook_trace_tests PRIVATE qbrain_util)
+add_test(NAME qbrain_hook_trace_unit COMMAND qbrain_hook_trace_tests)
