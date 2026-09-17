@@ -14,9 +14,13 @@ Add diagnostics to both explicit native link lists. Keep current source selectio
 compiler flags, clean-object policy and all existing runtime semantics unchanged.
 Add a fail-closed static test of the default production/test source and object
 closures, including no duplicate stems, missing/extra objects, test/production
-collisions and unknown list expressions. Exercise it before native compilation
-and in portable checks in both validation workflows; it is not a substitute for
-actual MSVC linking or native regression. No new runtime dependency.
+collisions and unknown list expressions. No new runtime dependency.
+
+Integration detail: the ten new static tests are imported into the existing
+registry test entry point. They execute in the portable pre-build gate and the
+native final-package gate, instead of adding Python as a required dependency of
+the standalone MSVC scripts. Both native workflows still perform real application
+and full-test linking. Static checks are not a substitute for those native builds.
 
 Falsify the new check against unchanged e9d8f3e1 and with synthetic omissions of
 production or test objects. Rerun the new tests on the patch, rebuild Linux, then

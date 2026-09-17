@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 import re
 from validate_native_log import verified_groups
+from test_msvc_link_manifest import MsvcLinkManifestTests
 
 
 class NativeEvidenceTests(unittest.TestCase):

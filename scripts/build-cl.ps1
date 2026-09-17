@@ -135,7 +135,7 @@ $sqliteC = Join-Path $sqlite "sqlite3.c"
 $prodObjNames = @(
   "paths","hash","log","string_util","time_util","database","migrate","pg_backend","types","brain",
   "extract","traverse","analytics","scan","astlite","packs","lint","store","image_meta","vector","rrf","hybrid","rerank","minions","embedding_queue","dream",
-  "chunker","markdown","import","http_client","embed","chat","registry","handlers","memory_ops","session_memory","fact_store","hook","context","context_ops",
+  "chunker","markdown","import","http_client","embed","chat","registry","handlers","memory_ops","session_memory","fact_store","hook","diagnostics","context","context_ops",
   "inbox_watch","live_sync","jsonrpc","server","auth","http_server","app","commands","main"
 )
 $prodObjList = ($prodObjNames | ForEach-Object { "$_.obj" }) -join " "
