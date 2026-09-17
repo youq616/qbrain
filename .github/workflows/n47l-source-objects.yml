@@ -1,0 +1,78 @@
+name: N47L reconstructed fixed source-object transfer
+on:
+  push:
+    branches: ['delivery/n47l-reconstructed-source']
+    paths: ['.github/workflows/n47l-source-objects.yml']
+permissions:
+  contents: read
+jobs:
+  source-objects:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47l-reconstructed-source'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: transport
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 5c962c45f4499fdd14689184491573f365421eaa
+          path: candidate
+          persist-credentials: false
+      - name: Validate fixed patch and create immutable blobs only
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          import base64,hashlib,json,lzma,os,re,subprocess
+          from pathlib import Path
+          base='5c962c45f4499fdd14689184491573f365421eaa'
+          tree='982922b8079525daa3523500080cf2d199b9ea70'
+          root=Path('candidate').resolve()
+          scratch=Path(os.environ['RUNNER_TEMP'])/'n47l-fixed-patch';scratch.mkdir(exist_ok=False)
+          def need(ok,label):
+              if not ok:raise ValueError(label)
+          def git(*args):return subprocess.check_output(['git','-C',str(root),*args],stderr=subprocess.PIPE,timeout=30).decode().strip()
+          encoded=''.join(Path(f'transport/transfer/n47l.{i}').read_text(encoding='ascii').strip() for i in range(5))
+          need(len(encoded)==31740,'encoded length')
+          packed=base64.b64decode(encoded,validate=True)
+          need(len(packed)==23804 and hashlib.sha256(packed).hexdigest()=='1db98cf532ca32b9470b7d5442f71029f1e36322e798f3d971ed63b937c2907c','fixed patch digest')
+          dec=lzma.LZMADecompressor(memlimit=128*1024*1024)
+          raw=dec.decompress(packed,max_length=512*1024)
+          need(dec.eof and not dec.unused_data and len(raw)==115528,'bounded patch document')
+          data=json.loads(raw.decode('utf-8'))
+          need(data['base']==base and data['base_tree']==tree and git('rev-parse','HEAD')==base and git('rev-parse','HEAD^{tree}')==tree,'base identity')
+          paths={'.ci/package_n44_development.py','.ci/test_multiterm_process.py','.ci/test_multiterm_report.py','.ci/test_multiterm_unit.py','.ci/test_validate_native_log.py','.ci/validate_multiterm_report.py','.github/workflows/n42-validation.yml','.github/workflows/n44-validation.yml','CMakeLists.txt','docs/integration/MULTI-TERM-RECALL.zh-CN.md','include/qbrain/memory/fact_store.hpp','scripts/build-tests-cl.ps1','src/qbrain/cli/commands.cpp','src/qbrain/mcp/server.cpp','src/qbrain/memory/fact_store.cpp','src/qbrain/ops/memory_ops.cpp','tests/test_main.cpp','tests/test_n47l.cpp'}
+          need(len(data['files'])==18 and {e['path'] for e in data['files']}==paths,'path whitelist')
+          for e in data['files']:
+              need(re.fullmatch('[0-9a-f]{40}',e['sha']) is not None,'new SHA')
+              if e['old_sha'] is None:
+                  status=subprocess.run(['git','-C',str(root),'cat-file','-e','HEAD:'+e['path']],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
+                  need(status.returncode!=0,'new path already exists')
+              else:need(git('rev-parse','HEAD:'+e['path'])==e['old_sha'],'original blob')
+          patch=scratch/'change.patch';patch.write_text(data['patch'],encoding='utf-8',newline='')
+          subprocess.run(['git','-C',str(root),'apply','--index',str(patch)],check=True,timeout=30)
+          need(set(git('diff','--cached','--name-only').splitlines())==paths,'actual changed paths')
+          rows=[]
+          for e in data['files']:
+              b=(root/e['path']).read_bytes()
+              digest=hashlib.sha1(b'blob '+str(len(b)).encode()+b'\0'+b).hexdigest()
+              need(digest==e['sha']==git('rev-parse',':'+e['path']),'new source identity')
+              request=scratch/'request.json';request.write_text(json.dumps({'encoding':'utf-8','content':b.decode('utf-8')}),encoding='utf-8')
+              response=json.loads(subprocess.check_output(['gh','api','--method','POST','repos/youq616/qbrain/git/blobs','--input',str(request)],stderr=subprocess.PIPE,timeout=60))
+              need(response['sha']==digest,'created blob identity')
+              rows.append({'path':e['path'],'mode':'100644','type':'blob','sha':digest})
+          result={'result':'SOURCE_OBJECTS_UPLOADED','base_commit':base,'base_tree':tree,'candidate_tree':git('write-tree'),'files':rows,'product_ref_changed':False,'product_code_executed':False,'native_tests_run_here':False}
+          evidence=Path('evidence');evidence.mkdir()
+          (evidence/'source-objects.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(result))
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: n47l-reconstructed-source-objects
+          path: evidence/source-objects.json
+          retention-days: 14
