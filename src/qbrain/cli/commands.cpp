@@ -1,6 +1,7 @@
 #include "qbrain/integration/diagnostics.hpp"
 #include "qbrain/integration/hook.hpp"
 #include "qbrain/cli/app.hpp"
+#include "qbrain/cli/search_arguments.hpp"
 #include "qbrain/memory/session_memory.hpp"
 #include "qbrain/util/hash.hpp"
 #include <map>
@@ -139,6 +140,7 @@ void print_help() {
       "  capture \"text\" | --file f | --stdin\n"
       "  import <path>\n"
       "  search \"query\" [--limit N] [--json] [--no-vector] [--mode m] [--rerank]\n"
+      "  search [options] --query <text> | search [options] -- <literal words>\n"
       "  think \"question\" [--json] [--save]\n"
       "  graph <slug> [--depth N]\n"
       "  delete <slug> [--source default]\n"
@@ -528,20 +530,31 @@ int cmd_context(const std::vector<std::string>& args) {
 }
 
 int cmd_search(const std::vector<std::string>& args) {
-  return with_brain(args, [&](Brain& b) {
+  const auto parsed = parse_search_arguments(args);
+  const auto value = [&](const std::string& key, const std::string& fallback = std::string{}) {
+    const auto it = parsed.values.find(key);
+    return it == parsed.values.end() ? fallback : it->second;
+  };
+  const bool json_output = parsed.flags.count("--json") != 0;
+  // Validate syntax and empty queries before any brain can be created/opened.
+  if (util::trim(parsed.query).empty()) {
+    if (!json_output) std::cout << "query required";
+    return 1;
+  }
+  std::vector<std::string> brain_args;
+  if (parsed.values.count("--brain")) brain_args = {"--brain", value("--brain")};
+  return with_brain(brain_args, [&](Brain& b) {
     ops::OpContext ctx;
     ctx.brain = &b;
-    ctx.args["query"] =
-        join_positional(args, {"--brain", "--limit", "--json", "--no-vector", "--mode", "--rerank",
-                               "--rerank-llm"});
-    ctx.args["limit"] = opt(args, "--limit", std::to_string(b.config().search_default_limit));
-    if (flag(args, "--no-vector")) ctx.args["no_vector"] = "1";
-    auto mode = opt(args, "--mode");
+    ctx.args["query"] = parsed.query;
+    ctx.args["limit"] = value("--limit", std::to_string(b.config().search_default_limit));
+    if (parsed.flags.count("--no-vector")) ctx.args["no_vector"] = "1";
+    const auto mode = value("--mode");
     if (!mode.empty()) ctx.args["mode"] = mode;
-    if (flag(args, "--rerank")) ctx.args["rerank"] = "1";
-    if (flag(args, "--rerank-llm")) ctx.args["rerank_llm"] = "1";
+    if (parsed.flags.count("--rerank")) ctx.args["rerank"] = "1";
+    if (parsed.flags.count("--rerank-llm")) ctx.args["rerank_llm"] = "1";
     auto r = ops::global_registry().call("search", ctx);
-    std::cout << (flag(args, "--json") ? r.json : r.text);
+    std::cout << (json_output ? r.json : r.text);
     return r.ok ? 0 : r.exit_code;
   });
 }
