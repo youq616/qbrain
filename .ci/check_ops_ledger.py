@@ -116,8 +116,8 @@ def main() -> int:
     parser.add_argument('--root', type=Path, default=ROOT)
     args = parser.parse_args()
     try:
-        result = validate((args.root / LEDGER).read_bytes().decode('utf-8-sig'),
-                          (args.root / INVENTORY).read_bytes().decode('utf-8-sig'))
+        result = validate((args.root / LEDGER).read_bytes().decode('utf-8'),
+                          (args.root / INVENTORY).read_bytes().decode('utf-8'))
     except (OSError, ValueError, TypeError) as error:
         print(json.dumps({'status': 'FAIL', 'error': str(error)}, ensure_ascii=False), file=sys.stderr)
         return 1

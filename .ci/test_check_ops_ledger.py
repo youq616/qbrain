@@ -45,6 +45,19 @@ class LedgerTests(unittest.TestCase):
                                             '--root', str(root)], capture_output=True)
                         self.assertEqual(p.returncode, 1, p.stdout)
 
+    def test_bom_does_not_expose_a_hidden_table_header(self):
+        with tempfile.TemporaryDirectory(prefix='qbrain-bom-') as folder:
+            root = Path(folder)
+            (root / INVENTORY).parent.mkdir(parents=True, exist_ok=True)
+            (root / INVENTORY).write_bytes(self.inventory.encode('utf-8'))
+            # Native binary reading does not strip BOM before the header.
+            text = '\ufeff' + self.ledger[self.ledger.index('| upstream_op |'):]
+            (root / LEDGER).write_bytes(text.encode('utf-8'))
+            for optimized in ([], ['-O']):
+                p = subprocess.run([sys.executable, *optimized, str(ROOT / '.ci/check_ops_ledger.py'),
+                                    '--root', str(root)], capture_output=True)
+                self.assertEqual(p.returncode, 1, p.stdout)
+
     def test_exact_rejected_closure(self):
         rejected = ROOT / 'docs/nodes/n47n-evidence/REJECTED-LEDGER.md'
         self.reject(rejected.read_text(encoding='utf-8'))
