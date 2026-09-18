@@ -1,0 +1,38 @@
+name: Static ops ledger contract
+on:
+  push:
+    branches: [main, 'optimization/n47n-search-literal-arguments']
+    paths: ['docs/OPS-PARITY-LEDGER.md', 'docs/nodes/n31-evidence/OPS-INVENTORY.json', 'docs/nodes/n47n-evidence/REJECTED-LEDGER.md', 'tests/test_n31.cpp', '.ci/check_ops_ledger.py', '.ci/test_check_ops_ledger.py', '.github/workflows/ops-ledger-validation.yml']
+  pull_request:
+    paths: ['docs/OPS-PARITY-LEDGER.md', 'docs/nodes/n31-evidence/OPS-INVENTORY.json', 'docs/nodes/n47n-evidence/REJECTED-LEDGER.md', 'tests/test_n31.cpp', '.ci/check_ops_ledger.py', '.ci/test_check_ops_ledger.py', '.github/workflows/ops-ledger-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ledger:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Check actual tables and negative fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/source.txt
+          python .ci/check_ops_ledger.py | tee evidence/ledger.log
+          python .ci/test_check_ops_ledger.py -v 2>&1 | tee evidence/tests.log
+          python -O .ci/check_ops_ledger.py | tee evidence/optimized.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-ledger-${{ matrix.os }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 14
