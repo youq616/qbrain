@@ -1,0 +1,18 @@
+[
+  {"file":"CI-METADATA.json","bytes":20426,"sha256":"1d04fe3542d0fe0145e26608412bc6e5ddc4b8b7be42726868f3075477d2de9b"},
+  {"file":"READBACK.json","bytes":88859,"sha256":"5bcb10f1f6479794f943aa43ea970e6cfb6c47602c91a2149614ce1bcfe9efad"},
+  {"file":"search-process-initial.json","bytes":475377,"sha256":"8e024f4bbaf8328f7b81cb607d9a41f0866ee336999e7e9932ee78616e8b7358"},
+  {"file":"search-process.json","bytes":475212,"sha256":"c3b17547949edc00a1a32facb21e5152b757fd53f6152177816c77c660cc8b77"},
+  {"file":"search-process-no-baseline.json","bytes":414660,"sha256":"72b50712d46ef4c944582070edcf286d5696fee39caec5be5da0298f518bdca8"},
+  {"file":"search-baseline.json","bytes":214080,"sha256":"c25b732914ef33447ffc7cda174a91832b8fbf4b62571719d235a72896dae0d1"},
+  {"file":"generative-review.json","bytes":1042,"sha256":"48571aa6a6a7d91c53208c3e6cd17ba8af999a529c1982993ff2bf0836887e7f"},
+  {"file":"generative-gcc.json","bytes":1042,"sha256":"7f53562bb58385987ab072720bb721efa5b87225cad35b77301aeeedec2e7d1f"},
+  {"file":"process-readback-windows.json","bytes":672,"sha256":"24c73de437de0f937ffdc3cfd6d8b3c6d8c9bb7090d18b5b21f479e58e89f157"},
+  {"file":"process-readback-portable.json","bytes":672,"sha256":"fe77f48fda2fcf1d9be028c5fdc41b888fe2fd9d4d6cfd1dc81dc0cf0eef5b3a"},
+  {"file":"native-summary.json","bytes":1515,"sha256":"b472f26ca3b90fc1939a7e2aa51ccdcb751802b7ee006d5711e5fd258a705a6a"},
+  {"file":"INITIAL-CI-FAILURE.json","bytes":733,"sha256":"a1450e4d7b67b1654bf31746e7a33fd83155369cad88ec8790c88ca94ad4fccc"},
+  {"file":"regression-results.json","bytes":2034,"sha256":"cabe60e53319f821e008b10f0380481c47596bf9cbd92796ecd8372a22876ebf"},
+  {"file":"report-tests/SUMMARY.json","bytes":2068,"sha256":"4bc2860818c174db73bbff08122bc6ec4e3e99525e0d954a53d19fa6a8de7105"},
+  {"file":"auxiliary-tests.json","bytes":213,"sha256":"2ea4e3f30b59f9621f686cdc415667b332c94f9f60dd5cce91e62aafbaf47e3c"},
+  {"file":"mutations/SUMMARY.json","bytes":8258,"sha256":"9eb40efd588cc55488055e2a6ddc2853e7c74d0ab432edf62f32bdafa3db8bb9"}
+]
