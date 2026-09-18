@@ -1,7 +1,7 @@
 name: Native project memory and context validation
 on:
   push:
-    branches: ['optimization/n44-context-release','optimization/n46b-http-boundaries','optimization/n46c-exact-retrieval','optimization/n46d-embedding-contracts','optimization/n46f-cjk-recall','optimization/n47a-evidence-facts','optimization/n47b-conflict-reads','optimization/n47c-conflict-aware-recall','optimization/n47d-opt-in-hook-recall','optimization/n47e-local-fact-promotion','optimization/n47f-lifecycle-archive','optimization/n47g-atomic-lifecycle-batch','optimization/n47h-lifecycle-candidates','optimization/n47i-unambiguous-json','optimization/n47j-event-trace-checkpoints','optimization/n47k-diagnostic-inspection','optimization/n47l-multi-term-recall','optimization/n47m-memory-context-arguments','main']
+    branches: ['optimization/n44-context-release','optimization/n46b-http-boundaries','optimization/n46c-exact-retrieval','optimization/n46d-embedding-contracts','optimization/n46f-cjk-recall','optimization/n47a-evidence-facts','optimization/n47b-conflict-reads','optimization/n47c-conflict-aware-recall','optimization/n47d-opt-in-hook-recall','optimization/n47e-local-fact-promotion','optimization/n47f-lifecycle-archive','optimization/n47g-atomic-lifecycle-batch','optimization/n47h-lifecycle-candidates','optimization/n47i-unambiguous-json','optimization/n47j-event-trace-checkpoints','optimization/n47k-diagnostic-inspection','optimization/n47l-multi-term-recall','optimization/n47m-memory-context-arguments','optimization/n47n-search-arguments','main']
     paths: ['src/**','include/**','tests/**','scripts/**','.ci/**','CMakeLists.txt','.github/workflows/n44-validation.yml']
   workflow_dispatch:
 permissions:

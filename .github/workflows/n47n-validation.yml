@@ -1,0 +1,75 @@
+name: N47N search argument boundary
+on:
+  push:
+    branches: [main, 'optimization/n47n-search-arguments']
+    paths: ['src/**', 'include/**', 'tests/**', '.ci/**', '.github/workflows/n47n-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qbrain-n47n-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONIOENCODING: utf-8
+jobs:
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build and verify search arguments and legacy routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/source.txt
+          cmake -S tests/search_arguments -B build/parser -DCMAKE_BUILD_TYPE=Release 2>&1 | tee evidence/parser-configure.log
+          cmake --build build/parser --parallel 2 2>&1 | tee evidence/parser-build.log
+          build/parser/qbrain_search_arguments_tests 2>&1 | tee evidence/parser-tests.log
+          cmake -S . -B build/product -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF 2>&1 | tee evidence/configure.log
+          cmake --build build/product --target qbrain --parallel 2 2>&1 | tee evidence/build.log
+          python .ci/test_search_arguments.py --binary build/product/qbrain --source-commit "$GITHUB_SHA" --report evidence/search-arguments.json 2>&1 | tee evidence/search-arguments.log
+          python .ci/test_named_arguments.py --binary build/product/qbrain --source-commit "$GITHUB_SHA" --report evidence/named-arguments.json 2>&1 | tee evidence/named-arguments.log
+          python .ci/test_cjk_recall.py --binary build/product/qbrain --report evidence/cjk.json 2>&1 | tee evidence/cjk.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47n-portable
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 14
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Native parser and real search process checks
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          cmake -S tests/search_arguments -B build/parser -A x64 2>&1 | Tee-Object evidence/parser-configure.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/parser --config Release 2>&1 | Tee-Object evidence/parser-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & build/parser/Release/qbrain_search_arguments_tests.exe 2>&1 | Tee-Object evidence/parser-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-cl.ps1 2>&1 | Tee-Object evidence/build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_search_arguments.py --binary build/cl/qbrain.exe --source-commit $env:GITHUB_SHA --report evidence/search-arguments.json 2>&1 | Tee-Object evidence/search-arguments.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_named_arguments.py --binary build/cl/qbrain.exe --source-commit $env:GITHUB_SHA --report evidence/named-arguments.json 2>&1 | Tee-Object evidence/named-arguments.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_cjk_recall.py --binary build/cl/qbrain.exe --report evidence/cjk.json 2>&1 | Tee-Object evidence/cjk.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47n-windows
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 14
