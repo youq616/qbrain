@@ -74,7 +74,11 @@ jobs:
       - name: Native parser and existing process regressions
         shell: pwsh
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 -SkipProductionBuild -TestSources .ci/search_arguments_unit.cpp 2>&1 | Tee-Object evidence/search-unit.log
+          cmake -S .ci/search_arguments -B build/search-unit 2>&1 | Tee-Object evidence/search-unit-configure.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/search-unit --config Release --parallel 2 2>&1 | Tee-Object evidence/search-unit-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build/search-unit -C Release --output-on-failure -V 2>&1 | Tee-Object evidence/search-unit.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python .ci/test_search_arguments.py --binary build/cl/qbrain.exe --report evidence/search-process.json 2>&1 | Tee-Object evidence/search-process.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
