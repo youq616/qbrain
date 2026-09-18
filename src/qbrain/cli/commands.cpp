@@ -379,32 +379,39 @@ int cmd_memory(const std::vector<std::string>& args) {
   else if(action=="read") { values.insert("--query"); values.insert("--limit"); values.insert("--max-bytes"); }
   else throw memory::Error("invalid_action");
   std::set<std::string> seen;
+  std::map<std::string,std::string> parsed;
   for(std::size_t i=1;i<args.size();++i) {
     if(!seen.insert(args[i]).second) throw memory::Error("duplicate_argument");
     if(flags.count(args[i])) continue;
     if(!values.count(args[i]) || i+1>=args.size()) throw memory::Error("invalid_cli_argument");
+    parsed.emplace(args[i],args[i+1]);
     ++i;
   }
-  if((action=="extract" || action=="forget" || action=="status") && opt(args,"--event").empty())
+  // Only validated option positions are keys; option-shaped values are data.
+  const auto value=[&](const std::string& key,const std::string& fallback=std::string{}) {
+    const auto it=parsed.find(key);return it==parsed.end()?fallback:it->second;
+  };
+  std::vector<std::string> brain_args;
+  if(parsed.count("--brain")) brain_args={"--brain",value("--brain")};
+  if((action=="extract" || action=="forget" || action=="status") && value("--event").empty())
     throw memory::Error("event_id_required");
-  return with_brain(args,[&](Brain& b) {
-    if(action=="drain") { std::cout << memory::drain(b,opt(args,"--source","default"),opt(args,"--method","local")).dump() << "\n"; return 0; }
+  return with_brain(brain_args,[&](Brain& b) {
+    if(action=="drain") { std::cout << memory::drain(b,value("--source","default"),value("--method","local")).dump() << "\n"; return 0; }
     ops::OpContext ctx; ctx.brain=&b;
-    ctx.args["source_id"]=opt(args,"--source","default");
-    const auto& action=args[0];
+    ctx.args["source_id"]=value("--source","default");
     const bool reading=action=="read" || action=="status";
     if(reading) {
-      ctx.args["query"]=opt(args,"--query"); ctx.args["limit"]=opt(args,"--limit","10");
-      ctx.args["max_bytes"]=opt(args,"--max-bytes","8192");
-      if(action=="status") ctx.args["event_id"]=opt(args,"--event");
+      ctx.args["query"]=value("--query"); ctx.args["limit"]=value("--limit","10");
+      ctx.args["max_bytes"]=value("--max-bytes","8192");
+      if(action=="status") ctx.args["event_id"]=value("--event");
     } else {
       ctx.args["action"]=action;
       if(action=="capture") {
         ctx.args["payload"]=bounded_stdin();
-        if(flag(args,"--manual")) ctx.args["manual"]="true";
+        if(seen.count("--manual")) ctx.args["manual"]="true";
       } else {
-        ctx.args["event_id"]=opt(args,"--event");
-        if(action=="extract") ctx.args["method"]=opt(args,"--method","local");
+        ctx.args["event_id"]=value("--event");
+        if(action=="extract") ctx.args["method"]=value("--method","local");
       }
     }
     auto r=ops::global_registry().call(reading?"memory_read":"memory_write",ctx);
@@ -502,10 +509,20 @@ int cmd_context(const std::vector<std::string>& args) {
     const std::set<std::string> allowed=write?std::set<std::string>{"--brain","--source","--uri","--method"}:
       std::set<std::string>{"--brain","--source","--uri","--layer","--max-bytes","--offset","--revision"};
     std::set<std::string> seen;
-    for(std::size_t i=1;i<args.size();i+=2)if(!allowed.count(args[i])||!seen.insert(args[i]).second||i+1>=args.size())throw memory::Error("invalid_cli_argument");
-    return with_brain(args,[&](Brain& b){ops::OpContext c;c.brain=&b;c.args["source_id"]=opt(args,"--source","default");
+    std::map<std::string,std::string> parsed;
+    for(std::size_t i=1;i<args.size();i+=2) {
+      if(!allowed.count(args[i])||!seen.insert(args[i]).second||i+1>=args.size())throw memory::Error("invalid_cli_argument");
+      parsed.emplace(args[i],args[i+1]);
+    }
+    // Resolve only the real brain option, preserving environment/config fallbacks.
+    const auto value=[&](const std::string& key,const std::string& fallback=std::string{}) {
+      const auto it=parsed.find(key);return it==parsed.end()?fallback:it->second;
+    };
+    std::vector<std::string> brain_args;
+    if(parsed.count("--brain")) brain_args={"--brain",value("--brain")};
+    return with_brain(brain_args,[&](Brain& b){ops::OpContext c;c.brain=&b;c.args["source_id"]=value("--source","default");
       for(const auto& [flag,key]:std::vector<std::pair<std::string,std::string>>{{"--uri","uri"},{"--layer","layer"},{"--max-bytes","max_bytes"},{"--offset","offset"},{"--revision","revision"},{"--method","method"}})
-        if(seen.count(flag))c.args[key]=opt(args,flag);
+        if(seen.count(flag))c.args[key]=value(flag);
       auto result=ops::global_registry().call(write?"context_write":"context_read",c);std::cout<<result.json<<"\n";return result.ok?0:1;});
   }catch(const memory::Error& e){std::cout<<nlohmann::json({{"error",{{"code",e.what()}}}}).dump()<<"\n";return 1;}
 }
