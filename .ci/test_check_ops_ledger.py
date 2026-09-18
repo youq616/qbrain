@@ -29,6 +29,22 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(validate(self.ledger.replace('**implemented**', 'implemented').replace('\n', '\r\n'),
                                   self.inventory)['extension'], 4)
 
+    def test_non_native_line_separators_are_rejected(self):
+        # Native getline splits on LF only, not Python's other Unicode separators.
+        with tempfile.TemporaryDirectory(prefix='qbrain-newlines-') as folder:
+            root = Path(folder)
+            (root / INVENTORY).parent.mkdir(parents=True, exist_ok=True)
+            (root / INVENTORY).write_bytes(self.inventory.encode('utf-8'))
+            for separator in ('\r', '\v', '\f', '\u0085', '\u2028', '\u2029'):
+                text = self.ledger.replace('\n', separator)
+                with self.subTest(separator=repr(separator)):
+                    self.reject(text)
+                    (root / LEDGER).write_bytes(text.encode('utf-8'))
+                    for optimized in ([], ['-O']):
+                        p = subprocess.run([sys.executable, *optimized, str(ROOT / '.ci/check_ops_ledger.py'),
+                                            '--root', str(root)], capture_output=True)
+                        self.assertEqual(p.returncode, 1, p.stdout)
+
     def test_exact_rejected_closure(self):
         rejected = ROOT / 'docs/nodes/n47n-evidence/REJECTED-LEDGER.md'
         self.reject(rejected.read_text(encoding='utf-8'))

@@ -75,7 +75,7 @@ def ledger_names(markdown: str) -> dict[str, set[str]]:
     section: str | None = None
     # Match the native test's canonical section boundaries. Additional duplicate
     # and id/status checks fail closed; an archive link is never a substitute.
-    for line_number, line in enumerate(markdown.splitlines(), 1):
+    for line_number, line in enumerate(markdown.split('\n'), 1):
         if line.startswith('## '):
             section = None
         if line.startswith('| upstream_op |'):
@@ -116,8 +116,8 @@ def main() -> int:
     parser.add_argument('--root', type=Path, default=ROOT)
     args = parser.parse_args()
     try:
-        result = validate((args.root / LEDGER).read_text(encoding='utf-8-sig'),
-                          (args.root / INVENTORY).read_text(encoding='utf-8-sig'))
+        result = validate((args.root / LEDGER).read_bytes().decode('utf-8-sig'),
+                          (args.root / INVENTORY).read_bytes().decode('utf-8-sig'))
     except (OSError, ValueError, TypeError) as error:
         print(json.dumps({'status': 'FAIL', 'error': str(error)}, ensure_ascii=False), file=sys.stderr)
         return 1
