@@ -1,16 +1,24 @@
-# N47M ops delta — draft candidate
+# N47M ops delta — scoped source acceptance
 
-Existing operations only: `memory_read`, `memory_write`, local memory drain,
-`context_read`, `context_write`. No added tool, migration, external permission,
-Hook default or semantic capability.
+Accepted 2026-09-18; final review: [N47M-FINAL-AUDIT.md](nodes/N47M-FINAL-AUDIT.md).
+Existing operations only: memory_read, memory_write, local memory drain,
+context_read and context_write. No new tool, migration, external permission,
+Hook default, semantic capability or ops-count increase.
 
-The candidate repairs CLI named-value and manual-flag routing in memory/context.
-The CLI must pass the intended source and brain to the existing operations even
-when query/source values equal switch names. Existing operation authorization and
-consent checks remain the authority. No claim is made that all CLI handlers share
-a strict grammar; search remains a separate documented issue.
+The memory/context CLI now reads named values and flags only from validated
+option positions. Option-shaped query/source/brain contents cannot override
+actual arguments or grant manual capture consent. Existing operation/source
+permission and provider-consent checks remain authoritative. Explicit empty
+values, default values, existing errors and brain precedence are preserved.
 
-Status: local implementation/tests passed in the recorded scope; native and real
-independent outcome gates remain pending. Main ledger completion is not advanced
-by this delta. See `nodes/N47M-PLAN.md`, `nodes/N47M-HARD-AUDIT.md` and
-`nodes/n47m-evidence/LOCAL-VALIDATION.md`. Do not use this draft as release approval.
+Full N42/N44 native gates on 15f6f396, 1,177 checks over seven fixed artifacts,
+67 original process checks with baseline comparisons and 937 separately authored
+black-box self-review checks passed. The latter two were executed on Linux;
+N47M's original Windows process run independently records 60 checks/113 commands.
+See the final audit for source equivalence and distinct executable identities.
+
+Reviewer: coordinating ChatGPT in a separate engineering self-review explicitly
+authorized by the owner on September 18. Not a separate agent or third party.
+No known unresolved blocking issue remains in this node's reviewed scope.
+No new public release is created; the N47L download does not contain this fix.
+Search grammar and real PostgreSQL acceptance remain outside this node.

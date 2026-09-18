@@ -1,13 +1,9 @@
 # N47M — Preserve parsed memory/context option values
 
-Status: done — scoped source acceptance, 2026-09-18; no new public release.
-Plan review: `N47M-PLAN-AUDIT.md` and `N47M-CONTINUATION-PLAN.md`.
-Outcome: `N47M-FINAL-AUDIT.md` (owner-authorized separate self-review).
+Status: approved for implementation; outcome/native gates pending.
+Plan review: `N47M-PLAN-AUDIT.md` (owner-authorized coordinator self-review).
 Base: `182e1c3ee64b56f4b114bb08ec1f4ba536f8752d`.
-Native candidate: `15f6f3962984cb9a9d20c3b6a2790a9b768f119e`.
 Scope: Windows-native qbrain only; no Ultrabrain changes.
-The original plan is preserved byte-for-byte in `n47m-evidence/INITIAL-PLAN.md`;
-relative links in that historical snapshot refer to its original nodes location.
 
 ## Goal and constraints
 
@@ -45,12 +41,12 @@ In particular a source named `--manual` is data, not capture consent.
 
 ## Review gates
 
-The September 18 owner authorization recorded in the continuation plan permits
-this node's outcome review by the coordinator in a separate engineering pass.
-It supersedes the initial pending separate-subagent gate for N47M only. It does
-not authorize fabricating a subagent, waiving native evidence or changing safety
-requirements. Final acceptance is documented against the unchanged criteria above.
-Source approval and merge do not themselves publish a new application release.
+The September 12 owner waiver allows a coordinator plan review; record it
+as self-review, not Claude Code or an independent reviewer. The September 17
+real independent outcome-subagent requirement remains. Do not mark this node
+done, merge the candidate, or publish an application release until that review
+and required native evidence actually exist. A missing capability is a reported
+blocker, never a fabricated PASS. Use a draft PR for incomplete gates.
 
 ## Security, dependencies and rollback
 
@@ -59,4 +55,4 @@ variables from subprocesses. Do not access real local clients, live PostgreSQL,
 real brain stores, provider credentials or networks from tests. Python is a
 CI/test dependency only, not a product runtime dependency. No new dependencies.
 Rollback is reverting the scoped candidate commit; no data migration is needed.
-The ops ledger describes parser hardening only, not new memory capabilities.
+The ops ledger must describe only parser hardening, not new memory capabilities.

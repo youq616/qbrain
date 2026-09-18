@@ -1,0 +1,62 @@
+{
+  "schema": "qbrain-n47m-final-review-v1",
+  "date": "2026-09-18",
+  "verdict": "PASS-scoped-source-acceptance",
+  "reviewer": "coordinating ChatGPT, owner-authorized separate engineering self-review; not a subagent or third party",
+  "base": "182e1c3ee64b56f4b114bb08ec1f4ba536f8752d",
+  "product_repair": "c510e60ec935dcf756e7e29315908af060be999f",
+  "native_source": "15f6f3962984cb9a9d20c3b6a2790a9b768f119e",
+  "native_tree": "571c24873615aa867fe037b0fb2f83975307371c",
+  "c510_to_15f_changes": ["continuation plan", "N42/N44 branch trigger allowlists only"],
+  "runs": {"n47m_push": 35290029136, "n42": 35292424658, "n44": 35292424683},
+  "checks": {
+    "n47m_native": {"passed": 60, "failed": 0, "commands": 113, "source": "c510e60ec935dcf756e7e29315908af060be999f"},
+    "named_arguments_local": {"passed": 67, "failed": 0, "commands": 127, "ordinary_byte_comparisons_included": 7},
+    "separate_probe_fixed_linux": {"passed": 937, "failed": 0, "commands": 967, "exit": 0},
+    "separate_probe_baseline_linux": {"passed": 653, "failed": 284, "commands": 965, "exit": 1, "expected_rejection": true},
+    "artifact_readback": {"result": "PASS", "checks": 1177, "artifacts": 7, "source_files": 966, "manifest_entries": 73},
+    "registered_groups_each_n42_n44_windows": 60,
+    "existing_process_checks": {"memory": 44, "context": 65, "fact": 34, "multiterm": 112, "mcp_boundaries": 17, "local_config": 6},
+    "focused_ctest_groups": 4,
+    "report_validator_tests": 193,
+    "msvc_manifest_tests": 10,
+    "native_log_validator_tests": 32
+  },
+  "artifacts": [
+    {"label": "source", "id": 10526112886, "run": 35292424683, "bytes": 11701859, "sha256": "41f911cef1046c49144407c4c1455056523e4f6f25e3b4acb0b2868469055ed0"},
+    {"label": "windows", "id": 10527004782, "run": 35292424683, "bytes": 120451, "sha256": "a668ebfd7ce1ca266bd03ffdca1c950fb2a1e6516c3e66f0fc7d5139244a03ae"},
+    {"label": "package", "id": 10527004786, "run": 35292424683, "bytes": 2109021, "sha256": "680e3c67bac53dda29de49b802da693d26a024881528e2684ab41a639d32cd5c"},
+    {"label": "server2022", "id": 10526568902, "run": 35292424683, "bytes": 20925, "sha256": "2fc2923b099c1d1e2a0cc391e78d681a4093acee769066e47906c2f984bffb96"},
+    {"label": "portable", "id": 10526312901, "run": 35292424683, "bytes": 73033, "sha256": "96f4376fd5142759b6ed5de5c6161812eaccc5ca6eab89ba26e3eb21b51d3b93"},
+    {"label": "sanitizer", "id": 10526663199, "run": 35292424683, "bytes": 26429, "sha256": "f6cdd23b287f8e4dace41ae4266181442ba9a8bf269d54bf92678eac4cab2ca3"},
+    {"label": "n42-windows", "id": 10526128757, "run": 35292424658, "bytes": 30623, "sha256": "f07387e7e135dbe46f51cae02efff97ca82b17e9b9f653ed73bbfb1f68195f17"},
+    {"label": "n47m-native-process", "id": 10525864463, "run": 35290029136, "bytes": 53635, "sha256": "0659e302577efa4dce19bb554cdd5274170d2261ae6f89c1cc56f460f676b6c3", "separate_from_seven_artifact_readback": true}
+  ],
+  "binaries_sha256": {
+    "linux_fixed": "ee78fc6666c35e031ebad5158bbf73ba5892478c0cf8016a5af8c6505a46a9f5",
+    "linux_baseline": "88b3fefe192935684e658b830b040178d448d9507af5e55e443948e0a3cf1565",
+    "n47m_c510_windows": "677dabb700c244c47e3abf04b0aaf6163fc30cd4bdbeb33b76b268df1f1b9caf",
+    "n44_15f_windows": "c455a082d4ee55c9ff61688919e39ba0b0a3a54f63a4de696285e5f7ecdb0faa",
+    "n44_inner_zip": "9072c0ae4cae517cc6b759b17d1657fac7dd46265eece04461b757771f308ee3"
+  },
+  "local_raw_reports_not_embedded_in_git": [
+    {"name": "CI-METADATA.json", "bytes": 20426, "sha256": "8ed6850b8b6dc45a83986215021ec45cc84357f522368a31784df48355c3bf4a"},
+    {"name": "READBACK.json", "bytes": 87807, "sha256": "de021f09ccb7a11b535019318f455fa56417bbdb76a0b9e1af0bd0bb7fe7baac"},
+    {"name": "PROBE-CANDIDATE.json", "bytes": 602881, "sha256": "7e7c03ef7a019f03197755b461eafcf99621e288adc79fa3e053bb8da206ef43"},
+    {"name": "PROBE-BASELINE.json", "bytes": 627528, "sha256": "16cd3b21b00584d232347cefa27ad3fa051dc5c196794262d11895ff23cc8b41"},
+    {"name": "NAMED-ARGUMENTS.json", "bytes": 107792, "sha256": "fd293e5bc95158109fa32752090cfaaaf1d8f818da317d9077cb0d2c689b31f9"}
+  ],
+  "new_probe_sha256": "a21db54dc353363decb900111eb0065974c7c31dc68b1f822d61905775c2a755",
+  "limits": [
+    "No new public release or tag; published N47L package still lacks the fix",
+    "No actual separate subagent or third-party certification",
+    "Live PostgreSQL remains SKIP-PG",
+    "Final additional probes ran on Linux, not Windows",
+    "c510 native process EXE and 15f packaged EXE have identical product source but different bytes",
+    "Packaged Windows executable was not run by the local verifier",
+    "Probe executables were not separately downloaded",
+    "Normalized metadata is not a raw signed GitHub response; offline verifier did not requery GitHub",
+    "No new logged-in client, model-consumption, provider-egress or signing acceptance",
+    "Search grammar and full-project completion remain outside scope"
+  ]
+}
