@@ -4,7 +4,13 @@ Windows 原生 C++20 / PowerShell Agent 记忆与知识库，默认 SQLite + FTS
 不要求 Docker、WSL 或 Python 服务。由 Lordakee/qbrain 的 MIT 代码继续开发；
 gbrain / OpenViking 是设计参考，不表示完整功能等价。
 
-## 当前开发预览：N47L
+## 当前源码阶段：N47M
+
+`memory` / `context` 参数二次解析修复已通过限定范围验收，见 [PR #29](https://github.com/youq616/qbrain/pull/29)、[当前状态](CURRENT-STATUS.md)与[最终工程自审](docs/nodes/N47M-FINAL-AUDIT.md)。查询或来源中的选项文字不再改写脑库、来源和实际参数；来源名或脑库名 `--manual` 不再授予采集权限。
+
+完整 N42/N44 原生与跨平台验收、7 个工件的 1,177 项回读检查及单独编写的 937 项边界探测通过。审核人为协调者本人，属于用户授权的分离工程自审，不是独立子代理或第三方认证。**本次没有发布新 Windows Release；下面的 N47L 下载包不含 N47M 修复。**
+
+## 已发布开发预览：N47L
 
 **交付状态：已合并并发布，公开预览包已完成回读核验。** [N47L 预览 Release：multiterm-preview-17e9a435](https://github.com/youq616/qbrain/releases/tag/multiterm-preview-17e9a435) 的产品文件为 `qbrain-windows-x64-multiterm.zip`，大小 `2114341` 字节，SHA-256：
 
@@ -50,7 +56,7 @@ MCP 调用示例：
 
 真实独立子代理发现并复验关闭了两个产品 P2：查询内容被二次当作选项，以及报告可用重复命令或自报退出码绕过覆盖检查。发布代码独立审核还关闭了一个资产 P2，现在上传后以固定 ID / size / digest 和下载字节核验同一组资产。审核为真实分别运行的工程子代理审查，不冒称第三方认证。
 
-**已知下一阶段：旧 `memory` / `context` 路由仍存在参数二次解析问题，已实测可误选来源或误建脑库，尚未修复。** 下一节点将限定修复这两个处理器；`search` 的字面查询语法另行处理。[已确认的最小下一阶段](docs/nodes/n47l-evidence/NEXT-STAGE.md)。
+**N47L 下载包边界：其中的旧 `memory` / `context` 参数问题已在 N47M 源码修复，但本次没有替换该下载包。** `search` 的字面查询语法仍单独待办；[原始缺陷记录](docs/nodes/n47l-evidence/NEXT-STAGE.md)保留为历史证据。
 
 当前无需本机补验或本地 Agent，没有新增 localhost、已登录客户端、PostgreSQL 或 provider-egress 验收。N47L 是限定范围的开发阶段，不代表整个项目完成。下面的 N47K 及更早能力继续保留。
 

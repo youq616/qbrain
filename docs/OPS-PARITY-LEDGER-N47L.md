@@ -1,21 +1,9 @@
 # Ops Parity Ledger
 
-Updated: 2026-09-18
+Updated: 2026-09-17
 Qbrain implemented MCP/CLI ops: **104**
 
-**Current reviewed stage (N47M, 2026-09-18)**: existing memory/context CLI
-handlers consume validated option values and flags once. Option-shaped data
-cannot retarget source/brain or grant manual capture consent. No new operation,
-schema, authorization, Hook default or parity-count change. N42/N44 source
-`15f6f396` passed the retained native/cross-platform gates and 1,177 artifact
-readback checks. Additional separate self-review: 937/937 black-box checks; the
-baseline is rejected by 284 overlapping cases. Review is owner-authorized
-coordinator self-review, not a separate subagent. See [N47M delta](OPS-PARITY-DELTA-N47M.md),
-[final audit](nodes/N47M-FINAL-AUDIT.md) and [current status](../CURRENT-STATUS.md).
-N47L remains the published preview; this node does not publish a new release.
-Search grammar and live PostgreSQL acceptance remain outside this closure.
-
-**Historical reviewed stage (N47L, 2026-09-17)**: explicit `fact recall` / existing
+**Current reviewed stage (N47L, 2026-09-17)**: explicit `fact recall` / existing
 `memory_read(view=recall)` modes `literal`, `all_terms`, `any_terms`; complete
 valid direct counter-evidence retained. No new MCP tool names or ops-count claim.
 Repaired product `17e9a435` passed both Windows 60-group registries, N47L 16/258
@@ -25,7 +13,7 @@ findings; seven original CI artifacts passed 1094 identity/readback checks.
 See [N47L capability delta](OPS-PARITY-DELTA-N47L.md),
 [outcome review](nodes/N47L-HARD-AUDIT.md) and
 [exact evidence summary](nodes/n47l-evidence/SUMMARY.json).
-The original memory/context/search findings are retained as [historical next-stage evidence](nodes/n47l-evidence/NEXT-STAGE.md); N47M closes memory/context only.
+Preexisting memory/context/search parser issues remain [separate next-stage work](nodes/n47l-evidence/NEXT-STAGE.md).
 Historical inventory and parity claims below retain their original scope; live
 PG checks remain skipped in this N47L run and full project completion is not claimed.
 
@@ -103,7 +91,7 @@ PG checks remain skipped in this N47L run and full project completion is not cla
 | put_raw_data | **implemented** | N33: image metadata persisted in meta_json | N26-N27 |
 | query | **implemented** | |
 | recall | **implemented** | N13 conservative search alias |
-| reload_schema_pack | **implemented** | |
+| reload_schema_pack | **implemented** | N20 |
 | remove_link | **implemented** | |
 | remove_tag | **implemented** | |
 | replay_job | **implemented** | N17: strict positive id, terminal `failed`/`completed` source only, atomic fresh `waiting` clone; fresh PASS 2026-08-04 |
@@ -169,7 +157,7 @@ PG checks remain skipped in this N47L run and full project completion is not cla
 
 ## N18 notes
 - `find_anomalies`: selected-source active-origin missing/deleted targets plus stored-row `high_out_degree > 20`, with deterministic bounded output.
-- `find_contradictions`: selected-source active page-owned syntactic fact-pair heuristics only.
+- `find_contradictions`: selected-source active page-owned facts, exact same-predicate/opposing-predicate/prefix syntactic rules, deterministic bounded detail.
 - `find_experts`: selected-source stored inbound-link counts between live endpoints, ranked by count then bytewise slug.
 - Fresh evidence: 25/25 native tests PASS, 70/70 selected/decoy before-after snapshot pairs match, and Claude Code hard-audit PASS 2026-08-04 (`f09971ecf44ab66129f33ee3b7dad91515aac39d6d330b725916983fcb408053`).
 
@@ -209,7 +197,7 @@ PG checks remain skipped in this N47L run and full project completion is not cla
 
 ## Wave 6 / N11 quality closeout notes
 - N11 plan audit PASS; outcome audit PASS.
-- `run_doctor` returns structured `OK`/`FAIL` checks, is MCP Read, and CLI `doctor` route.
-- `doctor_remediate` remains the separate local-only Write path.
+- `run_doctor` returns structured `OK`/`FAIL` checks, is MCP Read, and does not require allow-write; `doctor_remediate` remains the separate local-only Write path.
 - Windows direct MSVC path verified with `scripts\build-tests-cl.ps1`: **18/18 PASS** after adding doctor-specific tests.
+
 
