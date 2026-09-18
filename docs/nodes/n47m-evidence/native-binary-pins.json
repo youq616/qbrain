@@ -1,0 +1,22 @@
+{
+  "candidate": {
+    "artifact_id": 10527004786,
+    "artifact_bytes": 2109021,
+    "artifact_sha256": "680e3c67bac53dda29de49b802da693d26a024881528e2684ab41a639d32cd5c",
+    "run_id": 35292424683,
+    "source_commit": "15f6f3962984cb9a9d20c3b6a2790a9b768f119e",
+    "package_sha256": "9072c0ae4cae517cc6b759b17d1657fac7dd46265eece04461b757771f308ee3",
+    "exe_bytes": 4070912,
+    "exe_sha256": "c455a082d4ee55c9ff61688919e39ba0b0a3a54f63a4de696285e5f7ecdb0faa"
+  },
+  "baseline": {
+    "artifact_id": 10500874382,
+    "artifact_bytes": 2107667,
+    "artifact_sha256": "7d597734fdd87c861bb6d5cbaf4b7dec20f8c00aa912753d18f7db55ba0b72b2",
+    "run_id": 35228307025,
+    "source_commit": "17e9a435f94e45b3ca22d3da062ba4683c135c4b",
+    "package_sha256": "ed44a43d79e1e76efa768e74872223cd5d867dfb92881fe67aab129789cd4408",
+    "exe_bytes": 4068864,
+    "exe_sha256": "0bf0a19edcc672b750790016ed0979e001529a46d91def8f7d8b9bdffd8aae69"
+  }
+}

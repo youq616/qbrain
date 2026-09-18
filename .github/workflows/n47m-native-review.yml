@@ -1,0 +1,46 @@
+name: N47M pinned native binary self-review
+on:
+  push:
+    branches: ['verification/n47m-native-binary-review']
+    paths: ['docs/nodes/n47m-evidence/**', '.github/workflows/n47m-native-review.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: n47m-pinned-review-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-review:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify review-only source boundary
+        shell: pwsh
+        run: |
+          $expected = @('.github/workflows/n47m-native-review.yml', 'docs/nodes/n47m-evidence/independent_parser_probe.py', 'docs/nodes/n47m-evidence/run_pinned_native_review.py', 'docs/nodes/n47m-evidence/native-binary-pins.json')
+          $actual = @(git diff --name-only 15f6f3962984cb9a9d20c3b6a2790a9b768f119e HEAD)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (Compare-Object ($expected | Sort-Object) ($actual | Sort-Object)) { throw 'Unexpected source change outside the reviewed four files' }
+      - name: Verify original package bytes and run separate native review
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          python -B docs/nodes/n47m-evidence/run_pinned_native_review.py --pins docs/nodes/n47m-evidence/native-binary-pins.json --output evidence/details 2>&1 | Tee-Object evidence/native-review.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47m-pinned-native-review
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 14
