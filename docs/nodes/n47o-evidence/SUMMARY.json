@@ -1,0 +1,28 @@
+{
+  "schema": "qbrain-n47o-final-review-v1",
+  "date": "2026-09-19",
+  "timezone": "Asia/Seoul",
+  "verdict": "PASS-scoped-preview-delivery",
+  "reviewer": "coordinating ChatGPT, separate engineering self-review; not subagent or third party",
+  "base_main": "b099c7fb7c8bcd29b5ad40e78a113bbbe82d920a",
+  "product_source": "c26ec5e512d9ba960b86c9ced5b9b4976b031f2c",
+  "product_tree": "2beda65c13421a995826c147aad606ea48d7f694",
+  "publisher_reviewed_commit": "4c1362aee78a3f08dec902ac2e0dad77230c6f2e",
+  "publication_commit": "5ec33dd5fefc06a393c0f101139380c0b47ff1f9",
+  "runs": {"failed_readonly": 35410588581, "passed_readonly": 35410946324, "published": 35411136813},
+  "published_artifact": {"id": 10574137747, "bytes": 2513491, "sha256": "816a1288b40f66865863d328f501cba57ad969c9cc893371ce8c6432281cf0ed"},
+  "readonly_artifact": {"id": 10574067584, "bytes": 2509641, "sha256": "aac533db8bcfeb001599cd93e0d4d5b4af0246dd472bbb049737b184f9afeb04"},
+  "checks": {"original_artifacts": 11, "inherited_artifact_readback": 1216, "search_report_readback_each_platform": 1746, "publisher_test_methods": 14, "transport_test_methods": 2, "test_modes": ["normal", "optimized"], "additional_mock_anonymous_step_cases": 4, "public_assets": 6, "anonymous_downloads_verified": 6},
+  "source_changes": "Delivery-only; product, installer, native tests, schema, canonical ledger unchanged",
+  "release_receipt": "RELEASE.json",
+  "anonymous_receipt": "PUBLIC-READBACK.json",
+  "package_sha256": "ec681a4599bf1b2a90f3848f5bf65b6d6a32e37254f32392d0709c43080b356c",
+  "exe_sha256": "c35fadde8c8356b7243bf0b34cfd5c836bda27bb46da87eddcc79c1031bf05b5",
+  "limits": ["No new native application execution in delivery node", "No new live-host, model-consumption, egress or PostgreSQL acceptance", "Unsigned, non-latest prerelease; hashes are not signatures", "No atomic guarantee against concurrent administrator replacement", "Roadmap round counts are estimates, not time promises or completed work", "Final branch workflow restored to previously successful read-only mode"],
+  "retained_small_receipts": {
+    "PUBLIC-READBACK.json": {"bytes": 1035, "sha256": "5aac0d2d6f1ed2f051672d017b58bd58aa3bf98c483096a3ba451e1f9eba80d1"},
+    "RELEASE-PROVENANCE.json": {"bytes": 1806, "sha256": "2d008ce15d895a9f07a483de4752d6ef81ee7159756f50398defc3c7977ed749"},
+    "RELEASE-SHA256SUMS.txt": {"bytes": 448, "sha256": "773427aeb7274af5c9f160698802f92f981b457ad5511cd30481de511fddd0bb"},
+    "RELEASE.json": {"bytes": 1427, "sha256": "72dc6de59324a71d6b10984c23f55f059a7abe7c84d51ca8fbc8d639db384428"}
+  }
+}

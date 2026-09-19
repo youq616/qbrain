@@ -1,0 +1,37 @@
+{
+  "result": "PASS",
+  "authenticated": false,
+  "release_id": 391866783,
+  "assets": [
+    {
+      "name": "qbrain-windows-x64-reviewed.zip",
+      "bytes": 2117939,
+      "sha256": "ec681a4599bf1b2a90f3848f5bf65b6d6a32e37254f32392d0709c43080b356c"
+    },
+    {
+      "name": "PROVENANCE.json",
+      "bytes": 1806,
+      "sha256": "2d008ce15d895a9f07a483de4752d6ef81ee7159756f50398defc3c7977ed749"
+    },
+    {
+      "name": "START-HERE.zh-CN.md",
+      "bytes": 5994,
+      "sha256": "6c89e88f55cd5fcf9bf687572e8631e6204c33172b5ad3a9efa34292efd728d3"
+    },
+    {
+      "name": "SEARCH-ARGUMENTS.zh-CN.md",
+      "bytes": 3981,
+      "sha256": "6d06e0e3662579d51032cb8f6540bb0809afc97dc5048e75f27b9faa6b28601f"
+    },
+    {
+      "name": "VALIDATION-EVIDENCE.zip",
+      "bytes": 370568,
+      "sha256": "cc6c68be1cffa7a7a176697ca0e210602ba3a3f2aa7c9889864ff242d186470e"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 448,
+      "sha256": "773427aeb7274af5c9f160698802f92f981b457ad5511cd30481de511fddd0bb"
+    }
+  ]
+}

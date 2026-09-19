@@ -1,0 +1,43 @@
+{
+  "result": "PUBLISHED",
+  "release_id": 391866783,
+  "tag": "windows-preview-c26ec5e5",
+  "url": "https://github.com/youq616/qbrain/releases/tag/windows-preview-c26ec5e5",
+  "source_commit": "c26ec5e512d9ba960b86c9ced5b9b4976b031f2c",
+  "asset_pins": {
+    "qbrain-windows-x64-reviewed.zip": {
+      "id": 573791294,
+      "size": 2117939,
+      "digest": "sha256:ec681a4599bf1b2a90f3848f5bf65b6d6a32e37254f32392d0709c43080b356c"
+    },
+    "PROVENANCE.json": {
+      "id": 573791299,
+      "size": 1806,
+      "digest": "sha256:2d008ce15d895a9f07a483de4752d6ef81ee7159756f50398defc3c7977ed749"
+    },
+    "START-HERE.zh-CN.md": {
+      "id": 573791417,
+      "size": 5994,
+      "digest": "sha256:6c89e88f55cd5fcf9bf687572e8631e6204c33172b5ad3a9efa34292efd728d3"
+    },
+    "SEARCH-ARGUMENTS.zh-CN.md": {
+      "id": 573791498,
+      "size": 3981,
+      "digest": "sha256:6d06e0e3662579d51032cb8f6540bb0809afc97dc5048e75f27b9faa6b28601f"
+    },
+    "VALIDATION-EVIDENCE.zip": {
+      "id": 573791516,
+      "size": 370568,
+      "digest": "sha256:cc6c68be1cffa7a7a176697ca0e210602ba3a3f2aa7c9889864ff242d186470e"
+    },
+    "SHA256SUMS.txt": {
+      "id": 573791524,
+      "size": 448,
+      "digest": "sha256:773427aeb7274af5c9f160698802f92f981b457ad5511cd30481de511fddd0bb"
+    }
+  },
+  "downloaded_before_and_after_publication": true,
+  "new_product_build": false,
+  "signed": false,
+  "whole_project_complete": false
+}
