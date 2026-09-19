@@ -1,0 +1,59 @@
+name: N47R verified delivery
+on:
+  push:
+    branches: ['delivery/n47r-integrated-preview']
+    paths: ['tools/delivery/publish_n47r.py', 'tools/delivery/verify_n47r_evidence.py', 'tools/delivery/test_n47r_release.py', '.github/workflows/n47r-delivery.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: n47r-fixed-delivery
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  delivery:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47r-integrated-preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Pin reviewed delivery sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'e07daa3f5f14757ab661938397cc0c82d13f7090a316acf6953601c1265ab97d  tools/delivery/verify_n47r_evidence.py' | sha256sum -c -
+          echo 'f887515dd78d8d2c28b1a1acdf11c72a880ab697cbf0cfc57ba10e7c930a884c  tools/delivery/publish_n47r.py' | sha256sum -c -
+          echo 'bfd745d3419cb763af649a497bc7d69b2b391fd3657bd9e5582ce6534d2bd2dc  tools/delivery/test_n47r_release.py' | sha256sum -c -
+          echo 'c01890e7b941cb25718e479d8f5ded0576210df709ad3b5fcdd96b713a6f263a  tools/delivery/publish_reviewed_n47o.py' | sha256sum -c -
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/delivery-source.zip HEAD
+      - name: New and retained publication regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd tools/delivery && python -m unittest test_n47r_release test_reviewed_n47o test_transport_n47o -v) 2>&1 | tee evidence/tests.log
+          (cd tools/delivery && python -O -m unittest test_n47r_release test_reviewed_n47o test_transport_n47o -v) 2>&1 | tee evidence/tests-optimized.log
+      - name: Authenticate and read back fixed native artifacts (read-only)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python tools/delivery/publish_n47r.py --output evidence/run 2>&1 | tee evidence/delivery.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47r-delivery-evidence
+          path: |
+            evidence/
+            !evidence/run/original-artifacts/**
+            !evidence/run/baseline.zip
+          retention-days: 14
+          if-no-files-found: error

@@ -1,0 +1,134 @@
+name: N47R integrated candidate validation
+on:
+  push:
+    branches: [main, 'delivery/n47r-integrated-preview']
+    paths: ['tools/delivery/*integrated_n47r.py', 'docs/integration/INTEGRATED-PREVIEW.zh-CN.md', '.github/workflows/n47r-validation.yml']
+  pull_request:
+    paths: ['tools/delivery/*integrated_n47r.py', 'docs/integration/INTEGRATED-PREVIEW.zh-CN.md', '.github/workflows/n47r-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n47r-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Fetch only the pinned public baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          from urllib.request import urlopen
+          url = 'https://github.com/youq616/qbrain/releases/download/windows-preview-c26ec5e5/qbrain-windows-x64-reviewed.zip'
+          with urlopen(url, timeout=60) as response:
+              raw = response.read(32 * 1024 * 1024 + 1)
+          if len(raw) != 2117939 or hashlib.sha256(raw).hexdigest() != 'ec681a4599bf1b2a90f3848f5bf65b6d6a32e37254f32392d0709c43080b356c':
+              raise ValueError('Baseline identity mismatch')
+          Path('baseline.zip').write_bytes(raw)
+          PY
+      - name: Test builder and reproduce the exact candidate twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/delivery/test_integrated_n47r.py --base baseline.zip --source . --support . 2>&1 | tee evidence/builder-tests.log
+          python -O tools/delivery/test_integrated_n47r.py --base baseline.zip --source . --support . 2>&1 | tee evidence/builder-tests-optimized.log
+          python tools/delivery/build_integrated_n47r.py --base baseline.zip --source . --support . --output evidence/one 2>&1 | tee evidence/build-one.log
+          python tools/delivery/build_integrated_n47r.py --base baseline.zip --source . --support . --output evidence/two 2>&1 | tee evidence/build-two.log
+          python - <<'PY'
+          import hashlib, sys, shutil
+          from pathlib import Path
+          sys.path.insert(0, 'tools/delivery')
+          import build_integrated_n47r as b
+          first = Path('evidence/one', b.NAME).read_bytes()
+          if first != Path('evidence/two', b.NAME).read_bytes(): raise ValueError('Rebuild differs')
+          if hashlib.sha256(first).hexdigest() != 'e7158949d805a0a25157bfb720561e4b21e80a433a6c7f031c60ee3bbaa746c5':
+              raise ValueError('Candidate differs from locally reviewed bytes')
+          b.verify(first, b.expected_files(Path('baseline.zip'), Path('.'), Path('.')))
+          root = Path('native-under-test'); root.mkdir()
+          for name, raw in b.archive_files(first).items():
+              p = root/name; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(raw)
+          # Unchanged tests execute sibling scripts from the extracted bundle.
+          shutil.copytree('.ci', root/'.ci')
+          PY
+          python -m unittest discover -s native-under-test/tools/acceptance -p 'test_memory*.py' -v 2>&1 | tee evidence/bundled-tools.log
+          python -O -m unittest discover -s native-under-test/tools/acceptance -p 'test_memory*.py' -v 2>&1 | tee evidence/bundled-tools-optimized.log
+      - name: Actual extracted Windows installer and task gates
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Resolve-Path native-under-test/qbrain.exe).Path
+          $installer = (Resolve-Path native-under-test/scripts/Install-QbrainMemory.ps1).Path
+          foreach ($shell in @('powershell','pwsh')) {
+            $major = if ($shell -eq 'powershell') { 5 } else { 7 }
+            & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .ci/test_installer_snapshot.ps1 -Installer $installer -Binary $exe -Report "evidence/snapshot-$shell.json" 2>&1 | Tee-Object "evidence/snapshot-$shell.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            python .ci/check_installer_snapshot_report.py --report "evidence/snapshot-$shell.json" --installer $installer --test .ci/test_installer_snapshot.ps1 --binary $exe --source $env:GITHUB_SHA --shell $major
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .ci/test_installer_recovery.ps1 -Installer $installer -Binary $exe -Report "evidence/recovery-$shell.json" 2>&1 | Tee-Object "evidence/recovery-$shell.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            python .ci/check_recovery_report.py --report "evidence/recovery-$shell.json" --installer $installer --binary $exe
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            foreach ($test in @('test_install_hooks','test_install_consent','test_windows_transport')) {
+              & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "native-under-test/.ci/$test.ps1" -Binary $exe 2>&1 | Tee-Object "evidence/$test-$shell.log"
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+            foreach ($test in @('test_hook_fact_install','test_promotion_install')) {
+              & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "native-under-test/.ci/$test.ps1" -Binary $exe -Report "evidence/$test-$shell.json" 2>&1 | Tee-Object "evidence/$test-$shell.log"
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+          }
+          foreach ($format in @('claude','codex')) {
+            python native-under-test/tools/acceptance/run_memory_tasks.py --binary $exe --host $format --output "evidence/tasks-$format" 2>&1 | Tee-Object "evidence/tasks-$format.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            python native-under-test/tools/acceptance/check_memory_task_run.py --directory "evidence/tasks-$format" --binary $exe --report "evidence/tasks-$format-readback.json"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47r-${{ matrix.os }}
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
+  full-native:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Unchanged full native unit suite
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/native.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/native.log').read_text(encoding='utf-8-sig'),60)))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47r-full-native
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error

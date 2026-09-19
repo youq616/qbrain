@@ -1,0 +1,58 @@
+name: N47R old preview upgrade and guide validation
+on:
+  push:
+    branches: ['delivery/n47r-integrated-preview', main]
+    paths: ['tools/delivery/test_n47r_upgrade.ps1', '.github/workflows/n47r-upgrade-validation.yml']
+  pull_request:
+    paths: ['tools/delivery/test_n47r_upgrade.ps1', '.github/workflows/n47r-upgrade-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n47r-upgrade-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  upgrade:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Prepare independently pinned packages
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-preview-c26ec5e5/qbrain-windows-x64-reviewed.zip' -OutFile baseline.zip
+          python tools/delivery/build_integrated_n47r.py --base baseline.zip --source . --support . --output evidence/bundle 2>&1 | Tee-Object evidence/build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((Get-FileHash evidence/bundle/qbrain-windows-x64-n47r-candidate.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'e7158949d805a0a25157bfb720561e4b21e80a433a6c7f031c60ee3bbaa746c5') { throw 'Unexpected integrated candidate' }
+      - name: Actual guide extraction and old-to-new upgrade
+        shell: pwsh
+        env:
+          TEST_SHELL: ${{ matrix.shell }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & $env:TEST_SHELL -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tools/delivery/test_n47r_upgrade.ps1 -BaselineZip baseline.zip -CandidateZip evidence/bundle/qbrain-windows-x64-n47r-candidate.zip -Guide docs/integration/INTEGRATED-PREVIEW.zh-CN.md -Report evidence/upgrade.json 2>&1 | Tee-Object evidence/upgrade.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $r = Get-Content evidence/upgrade.json -Raw | ConvertFrom-Json
+          $major = if ($env:TEST_SHELL -eq 'powershell') { 5 } else { 7 }
+          if ($r.result -cne 'PASS' -or $r.count -ne 37 -or $r.checks.Count -ne 37 -or @($r.checks | Where-Object {-not $_.passed}).Count -ne 0 -or $r.shell_major -ne $major -or $r.source_commit -cne $env:GITHUB_SHA -or $r.real_client_verified -ne $false) { throw 'Incomplete or wrong-scope upgrade result' }
+          if ($r.script_sha256 -cne (Get-FileHash tools/delivery/test_n47r_upgrade.ps1 -Algorithm SHA256).Hash.ToLowerInvariant()) { throw 'Upgrade test identity mismatch' }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47r-upgrade-${{ matrix.shell }}
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error

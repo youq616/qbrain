@@ -1,0 +1,68 @@
+{
+  "artifact_pins": {
+    "native": {
+      "linux": {
+        "bytes": 16223888,
+        "file": "linux.zip",
+        "id": 10579304715,
+        "sha256": "2799de41e488d75186015e591afaef4ffd19ba883a239378a669150a73c7418f"
+      },
+      "native": {
+        "bytes": 29624,
+        "file": "native.zip",
+        "id": 10580126897,
+        "sha256": "4ad5839d0aa048a496bd13cfa3a841f3f89e7f5d4cce25909e12d74b9acbcc1c"
+      },
+      "windows": {
+        "bytes": 17338465,
+        "file": "windows.zip",
+        "id": 10579886985,
+        "sha256": "90ce92026b23c7b37edbc8ad3f47e7a6e891905a8916596221fbad02a2f91c35"
+      }
+    },
+    "upgrade": {
+      "upgrade5": {
+        "bytes": 14123173,
+        "file": "upgrade5.zip",
+        "id": 10579509829,
+        "sha256": "1cf15ce7751ccb47216363c0ed1e78fc7525370dc4cd7065c339a8e9451645ba"
+      },
+      "upgrade7": {
+        "bytes": 14123144,
+        "file": "upgrade7.zip",
+        "id": 10580057003,
+        "sha256": "eddfc42d2cca2858b06f25ccc3ee9af8ec6dfa84bc7d141b09d000f444d6ead2"
+      }
+    }
+  },
+  "bundle_bytes": 4858530,
+  "bundle_sha256": "e7158949d805a0a25157bfb720561e4b21e80a433a6c7f031c60ee3bbaa746c5",
+  "components": {
+    "evaluation": "11c7da219ee65d6aa387acbad6e07c0fb8acf090",
+    "installer": "9feed7c74926d53a7b2a7b21391af02275799f51",
+    "runtime": "c26ec5e512d9ba960b86c9ced5b9b4976b031f2c"
+  },
+  "delivery_attempt": 1,
+  "delivery_run": 35430794301,
+  "delivery_source": "be5d84e223633608929c55bb9dd487ec80f8a699",
+  "evidence_retention": "Includes all five exact original artifact ZIPs",
+  "evidence_zip_sha256": "bb84ac9c20f522f78cc4eba6c0cf9d4c73e6b161d597f984a073e1895f2dbec9",
+  "exe_recompiled": false,
+  "integration_source": "9e9a92b0e0e68ee1b07deafc1085bb01849d08a7",
+  "integration_tree": "957e322e3bbd9105574cf7ce9487fb07f4b78480",
+  "manifest_status_scope": "The immutable internal manifest describes construction time; this external receipt binds later native acceptance to the exact ZIP digest.",
+  "model_answers": "NOT_RUN",
+  "native_bundle_evidence": "VERIFIED",
+  "native_validation_run": 35428968503,
+  "provider_cost": null,
+  "real_client_acceptance": "NOT_RUN",
+  "repackaged": true,
+  "repository": "youq616/qbrain",
+  "reviewer": "Owner-authorized coordinator separate self-review, not a subagent or third party",
+  "schema": "qbrain-n47r-release-provenance-v1",
+  "signed": false,
+  "stable_v1": false,
+  "upgrade_test_source": "b7e1b60a40f421c13e494733efbf8ce0420f2aaa",
+  "upgrade_test_tree": "4b1a0405ceb9c88f0a219223910c7febc6a59119",
+  "upgrade_validation_run": 35429293475
+}
