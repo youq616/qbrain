@@ -37,7 +37,7 @@ def endpoint(value: str, test: bool) -> tuple[str, str, int, str]:
         c.require(u.scheme == 'http' and u.hostname in ('127.0.0.1', '::1'), 'test_requires_numeric_loopback')
     else:
         c.require(u.scheme == 'https', 'https_required')
-    port = u.port or (443 if u.scheme == 'https' else 80)
+    port = u.port if u.port is not None else (443 if u.scheme == 'https' else 80)
     c.require(1 <= port <= 65535, 'invalid_port')
     return u.scheme, u.hostname, port, u.path
 
@@ -128,6 +128,20 @@ def post(p: dict, body: bytes, key: str) -> tuple[int, bytes]:
             return response.status, b''
         if response.getheader('Content-Encoding', 'identity').lower() != 'identity':
             raise TransferError('encoded_response_rejected')
+        headers_received = response.getheaders()
+        lengths = [val for name, val in headers_received if name.lower() == 'content-length']
+        transfers = [val for name, val in headers_received if name.lower() == 'transfer-encoding']
+        if len(lengths) > 1 or len(transfers) > 1:
+            raise TransferError('duplicate_message_framing')
+        length = lengths[0] if lengths else None
+        expected_length = None
+        if length is not None:
+            if re.fullmatch(r'[0-9]{1,10}', length) is None or int(length) > RESPONSE_CAP:
+                raise TransferError('invalid_content_length')
+            expected_length = int(length)
+        transfer = transfers[0] if transfers else None
+        if transfer is not None and (transfer.lower() != 'chunked' or length is not None):
+            raise TransferError('ambiguous_transfer_framing')
         parts, total = [], 0
         while True:
             remaining = deadline - time.monotonic()
@@ -141,6 +155,8 @@ def post(p: dict, body: bytes, key: str) -> tuple[int, bytes]:
             parts.append(chunk); total += len(chunk)
             if total > RESPONSE_CAP:
                 raise TransferError('response_too_large')
+        if expected_length is not None and total != expected_length:
+            raise TransferError('incomplete_response_body')
         return response.status, b''.join(parts)
     except (OSError, http.client.HTTPException) as error:
         raise TransferError('network_error') from error
@@ -261,7 +277,7 @@ def score_run(directory: Path, key_path: Path) -> dict:
     plan_raw = c.read(directory / 'plan.json'); p = c.decode(plan_raw)
     packets = validate_plan(p)
     report = c.decode(c.read(directory / 'run.json'))
-    c.require(report.get('schema') == 'qbrain-model-run-v1' and report.get('plan_sha256') == c.digest(plan_raw), 'run_binding')
+    c.require(isinstance(report, dict) and report.get('schema') == 'qbrain-model-run-v1' and report.get('plan_sha256') == c.digest(plan_raw), 'run_binding')
     kind = 'LOOPBACK_TEST' if p['loopback_test'] else 'PROVIDER_ENDPOINT_RUN'
     c.require(report.get('execution_kind') == kind and report.get('planned') == COUNT
               and isinstance(report.get('rows'), list) and len(report['rows']) == COUNT, 'run_shape')

@@ -34,8 +34,8 @@ jobs:
           git rev-parse HEAD > evidence/source.txt
           git archive --format=zip --output=evidence/qbrain-source.zip HEAD
           python --version > evidence/python.txt
-          (cd tools/acceptance && python -m unittest test_model_ab test_memory_tasks test_memory_metrics -v) 2>&1 | tee evidence/tests.log
-          (cd tools/acceptance && python -O -m unittest test_model_ab test_memory_tasks test_memory_metrics -v) 2>&1 | tee evidence/tests-optimized.log
+          (cd tools/acceptance && python -m unittest test_model_ab test_model_framing test_memory_tasks test_memory_metrics -v) 2>&1 | tee evidence/tests.log
+          (cd tools/acceptance && python -O -m unittest test_model_ab test_model_framing test_memory_tasks test_memory_metrics -v) 2>&1 | tee evidence/tests-optimized.log
       - name: Actual native engine into new HTTP workflow (test responder, not a model)
         if: runner.os == 'Windows'
         shell: pwsh
