@@ -108,9 +108,13 @@ function Check-Current($pending){
   if($now -cne $c.before -and $now -cne $c.after){throw 'External edit prevents recovery; no files changed.'}
  }
 }
-function Matching($o){
+function Input-Image($images,[string]$p){
+ if($null -ne $images){return $images[$p]}
+ return Raw $p
+}
+function Matching($o,$images=$null){
  try {
-  $current=Parse (Raw $target)
+  $current=Parse (Input-Image $images $target)
   if(-not (Has $current 'hooks')){return $false}
   foreach($e in $o.entries){
    if(-not (Has $current.hooks $e.event)){return $false}
@@ -118,9 +122,9 @@ function Matching($o){
    if($matches.Count -ne 1){return $false}
   }
   if($hostKey -eq 'claude'){
-   $m=Parse (Raw $mcpPath);return (Has $m 'mcpServers') -and (Has $m.mcpServers $o.mcp.name) -and (Same $m.mcpServers.($o.mcp.name) $o.mcp.definition)
+   $m=Parse (Input-Image $images $mcpPath);return (Has $m 'mcpServers') -and (Has $m.mcpServers $o.mcp.name) -and (Same $m.mcpServers.($o.mcp.name) $o.mcp.definition)
   }
-  return ([string](Raw $mcpPath)).Contains([string]$o.mcp.block)
+  return ([string](Input-Image $images $mcpPath)).Contains([string]$o.mcp.block)
  }catch{return $false}
 }
 if($Action -eq 'Status'){
@@ -151,18 +155,22 @@ try {
   foreach($c in $pending.changes){Write-Atomic $c.path $c.before}
   [IO.File]::Delete($journal)
  }
- $owner=if([IO.File]::Exists($ownerPath)){Parse (Raw $ownerPath)}else{$null}
+ # Bind parsed input, journal before images and backup to the same reads.
+ # A later Raw() inside Change would incorrectly bless an intervening edit.
+ $initial=@{};$initial[$ownerPath]=Raw $ownerPath
+ $owner=if($null -ne $initial[$ownerPath]){Parse $initial[$ownerPath]}else{$null}
  $active=$null -ne $owner -and (Has $owner 'active') -and $owner.active
- if($active -and -not (Matching $owner)){throw 'An owned hook or MCP definition was edited; refusing to overwrite.'}
  if($Action -eq 'Uninstall' -and -not $active){return}
- $rawTarget=Raw $target
- if([IO.File]::Exists($target) -and [string]::IsNullOrWhiteSpace($rawTarget)){throw 'Existing JSON settings are empty.'}
+ foreach($p in $allowed){if($p -cne $ownerPath){$initial[$p]=Raw $p}}
+ if($active -and -not (Matching $owner $initial)){throw 'An owned hook or MCP definition was edited; refusing to overwrite.'}
+ $rawTarget=$initial[$target]
+ if($null -ne $rawTarget -and [string]::IsNullOrWhiteSpace($rawTarget)){throw 'Existing JSON settings are empty.'}
  $settings=Parse $rawTarget
  if(-not (Has $settings 'hooks')){Set-Key $settings 'hooks' ([pscustomobject]@{})}
  if($settings.hooks -isnot [pscustomobject]){throw 'hooks must be an object.'}
- $rawMcp=Raw $mcpPath
+ $rawMcp=$initial[$mcpPath]
  if($hostKey -eq 'claude'){
-  if([IO.File]::Exists($mcpPath) -and [string]::IsNullOrWhiteSpace($rawMcp)){throw 'Existing MCP settings are empty.'}
+  if($null -ne $rawMcp -and [string]::IsNullOrWhiteSpace($rawMcp)){throw 'Existing MCP settings are empty.'}
   $mcp=Parse $rawMcp
   if(-not (Has $mcp 'mcpServers')){Set-Key $mcp 'mcpServers' ([pscustomobject]@{})}
   if($mcp.mcpServers -isnot [pscustomobject]){throw 'mcpServers must be an object.'}
@@ -177,7 +185,7 @@ try {
   else{$rawMcp=$rawMcp.Replace([string]$owner.mcp.block,'')}
  }
  $changes=New-Object System.Collections.ArrayList
- function Change([string]$p,[AllowNull()]$s){[void]$changes.Add([pscustomobject]@{path=$p;before=(Raw $p);after=$s})}
+ function Change([string]$p,[AllowNull()]$s){[void]$changes.Add([pscustomobject]@{path=$p;before=$initial[$p];after=$s})}
  if($Action -eq 'Install'){
   if(-not $Binary){throw 'Binary is required for Install.'}
   $exe=Safe ((Resolve-Path -LiteralPath $Binary).ProviderPath)
@@ -216,7 +224,7 @@ try {
   $newOwner=[pscustomobject]@{version=1;active=$true;host=$hostKey;project_root=$project;entries=$entries;mcp=$mcpOwner}
   Change $bridgePath (Raw $bridgeSource);Change $cfgPath (Json $cfg);Change $ownerPath (Json $newOwner)
  }else{
-  $cfg=Parse (Raw $cfgPath);Set-Key $cfg 'enabled' $false;$owner.active=$false
+  $cfg=Parse $initial[$cfgPath];Set-Key $cfg 'enabled' $false;$owner.active=$false
   Change $cfgPath (Json $cfg);Change $ownerPath (Json $owner)
  }
  Change $target (Json $settings)
@@ -240,9 +248,9 @@ try {
    if($result.ExitCode -ne 0){throw 'Capture opt-in failed.'}
   }
  }
- Write-Atomic $backupPath (Json ([pscustomobject]@{settings=$rawTarget;mcp=(Raw $mcpPath)}))
- # Recheck after brain initialization as well; external edits never authorize overwrite.
+ # Recheck after brain initialization, before producing any backup/journal.
  foreach($c in $changes){if((Raw $c.path) -cne $c.before){throw 'Configuration changed during install.'}}
+ Write-Atomic $backupPath (Json ([pscustomobject]@{settings=$initial[$target];mcp=$initial[$mcpPath]}))
  Write-Atomic $journal $pendingText
  foreach($c in $changes){Write-Atomic $c.path $c.after}
  [IO.File]::Delete($journal)

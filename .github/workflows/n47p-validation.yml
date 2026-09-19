@@ -2,9 +2,9 @@ name: N47P installer recovery validation
 on:
   push:
     branches: ['optimization/n47p-installer-recovery', main]
-    paths: ['scripts/Install-QbrainMemory.ps1', '.ci/test_installer_recovery.ps1', '.ci/check_recovery_report.py', '.github/workflows/n47p-validation.yml']
+    paths: ['scripts/Install-QbrainMemory.ps1', '.ci/test_installer_recovery.ps1', '.ci/check_recovery_report.py', '.ci/test_installer_snapshot.ps1', '.ci/check_installer_snapshot_report.py', '.ci/test_check_installer_snapshot_report.py', '.github/workflows/n47p-validation.yml']
   pull_request:
-    paths: ['scripts/Install-QbrainMemory.ps1', '.ci/test_installer_recovery.ps1', '.ci/check_recovery_report.py', '.github/workflows/n47p-validation.yml']
+    paths: ['scripts/Install-QbrainMemory.ps1', '.ci/test_installer_recovery.ps1', '.ci/check_recovery_report.py', '.ci/test_installer_snapshot.ps1', '.ci/check_installer_snapshot_report.py', '.ci/test_check_installer_snapshot_report.py', '.github/workflows/n47p-validation.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -14,6 +14,23 @@ concurrency:
 env:
   PYTHONIOENCODING: utf-8
 jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Archive exact reviewed inputs
+        shell: bash
+        run: |
+          git archive --format=zip --output=qbrain-source.zip HEAD
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qbrain-n47p-source
+          path: qbrain-source.zip
+          retention-days: 14
+          if-no-files-found: error
   recovery:
     runs-on: windows-latest
     timeout-minutes: 15
@@ -24,6 +41,11 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 3ebecf26946ae6ddd04fb018085ffc023b5fcab0
+          path: prior
           persist-credentials: false
       - name: Obtain the fixed previously released executable and baseline installer
         shell: pwsh
@@ -36,6 +58,25 @@ jobs:
           Expand-Archive baseline.zip baseline
           if ((Get-FileHash baseline/qbrain.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'c35fadde8c8356b7243bf0b34cfd5c836bda27bb46da87eddcc79c1031bf05b5') { throw 'EXE identity mismatch' }
           if ((Get-FileHash baseline/scripts/Install-QbrainMemory.ps1 -Algorithm SHA256).Hash.ToLowerInvariant() -ne '99d864bf1e87c75a2b7c22a7f2c27d3b25210a153ef10516e9fff366313a22a6') { throw 'Baseline installer identity mismatch' }
+      - name: Snapshot consistency and exact-prior counterexample
+        shell: pwsh
+        env:
+          TEST_SHELL: ${{ matrix.shell }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $major = if ($env:TEST_SHELL -eq 'powershell') { 5 } else { 7 }
+          & $env:TEST_SHELL -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .ci/test_installer_snapshot.ps1 -Binary baseline/qbrain.exe -Report evidence/snapshot.json 2>&1 | Tee-Object evidence/snapshot.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/check_installer_snapshot_report.py --report evidence/snapshot.json --installer scripts/Install-QbrainMemory.ps1 --test .ci/test_installer_snapshot.ps1 --binary baseline/qbrain.exe --source $env:GITHUB_SHA --shell $major 2>&1 | Tee-Object evidence/snapshot-check.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $env:TEST_SHELL -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .ci/test_installer_snapshot.ps1 -Installer prior/scripts/Install-QbrainMemory.ps1 -Binary baseline/qbrain.exe -Report evidence/snapshot-prior.json 2>&1 | Tee-Object evidence/snapshot-prior.log
+          if ($LASTEXITCODE -ne 1) { throw 'Expected prior snapshot regression exit 1' }
+          python .ci/check_installer_snapshot_report.py --report evidence/snapshot-prior.json --installer prior/scripts/Install-QbrainMemory.ps1 --test .ci/test_installer_snapshot.ps1 --binary baseline/qbrain.exe --source $env:GITHUB_SHA --shell $major --baseline 2>&1 | Tee-Object evidence/snapshot-prior-check.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_check_installer_snapshot_report.py 2>&1 | Tee-Object evidence/snapshot-check-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O .ci/test_check_installer_snapshot_report.py 2>&1 | Tee-Object evidence/snapshot-check-tests-optimized.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Fixed installer recovery and original regressions
         shell: pwsh
         env:
