@@ -4,7 +4,16 @@ Windows 原生 C++20 / PowerShell Agent 记忆与知识库，默认 SQLite + FTS
 运行预编译包不需要编译器、Docker、WSL 或 Python 服务。gbrain / OpenViking
 是设计参考，不表示完整功能等价。MIT；保留 LICENSE 和第三方说明。
 
-## 当前阶段：N47O 集成 Windows 预览已发布
+## 当前源码阶段：N47P 安装可靠性修复已验收
+
+安装器已修复聚合恢复日志大小不一致、回滚前置校验和规划期间外部配置修改保护。
+Windows PowerShell5.1/7 各24项快照测试、60项恢复测试及原有安装回归通过；
+完整原生60组通过。审核为协调者本人分离工程自审，不是独立子代理或第三方认证。
+**本轮仅源码修复，下面N47O下载包内的安装脚本仍不含N47P修复。**
+[当前状态](CURRENT-STATUS.md) · [审核](docs/nodes/N47P-HARD-AUDIT.md) ·
+[恢复说明](docs/integration/INSTALLER-RECOVERY.zh-CN.md)。
+
+## 当前公开下载：N47O 集成 Windows 预览
 
 2026-09-19：N47M/N47N 已审核修复现在有对应公开下载，不再只有源码。
 **[下载 Windows 预览 windows-preview-c26ec5e5](https://github.com/youq616/qbrain/releases/tag/windows-preview-c26ec5e5)**。
@@ -42,7 +51,7 @@ N47O 只交付这些已审核修复，不增加数据库迁移、新模型请求
 ## 剩余路线与验收
 
 核心工程预览已交付，下一步是日常使用验收和产品收口，而非继续只报告节点号。
-当前工程估计：本次交付之后，**日常可用 v1 还需约 4–6 个实质回合**；
+N47P验收后，**日常可用 v1 还需约 3–5 个实质回合**（含后续集成交付）；
 **当前完整扩展路线约 15–25 个回合，包含上述 v1**。这是条件性规划，不是固定
 日历或次数承诺。真实宿主、模型、PG、签名条件及新增阻断问题会影响估计。
 [详细完成标准、剩余工作和回合估计](docs/COMPLETION-ROADMAP.md)。
@@ -50,8 +59,8 @@ N47O 只交付这些已审核修复，不增加数据库迁移、新模型请求
 真实 PG、完整 ACL/DLP、通用语义合并/冲突推断、使用确认/衰减/画像、更多宿主、
 模型质量/费用、实际消费/外发和正式签名仍有未完成项。不要将已有规则当通用
 语义理解，将测试工件回读当新真实客户端验收，或将哈希当签名。
-[当前状态](CURRENT-STATUS.md) · [N47O 自审](docs/nodes/N47O-HARD-AUDIT.md) ·
-[规范操作清单](docs/OPS-PARITY-LEDGER.md) · [PR #32](https://github.com/youq616/qbrain/pull/32)。
+[当前状态](CURRENT-STATUS.md) · [N47P 自审](docs/nodes/N47P-HARD-AUDIT.md) ·
+[规范操作清单](docs/OPS-PARITY-LEDGER.md) · [PR #33](https://github.com/youq616/qbrain/pull/33)。
 
 ## 源码构建与历史
 

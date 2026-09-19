@@ -1,0 +1,41 @@
+{
+  "schema":"qbrain-n47p-acceptance-v1",
+  "date":"2026-09-19",
+  "timezone":"Asia/Seoul",
+  "verdict":"PASS-scoped-installer-recovery-and-snapshot-repair",
+  "reviewer":"coordinating ChatGPT, separate engineering self-review under owner authorization; not independent subagent or third party",
+  "base_main":"4734fe840081bc2215485e43031fc967b5a93c9d",
+  "prior_candidate":"3ebecf26946ae6ddd04fb018085ffc023b5fcab0",
+  "snapshot_plan_commit":"c11b7b34598efc75179a138816eb40659e1965b6",
+  "accepted_candidate":"9feed7c74926d53a7b2a7b21391af02275799f51",
+  "accepted_tree":"d396b6170866b83db89e54e26f44685ebcd5c276",
+  "run_id":35415626607,
+  "run_attempt":1,
+  "event":"push",
+  "artifact_metadata":"ARTIFACT-PINS.json",
+  "source_files":1040,
+  "inherited_prod_test_script_files_compared_to_c26":259,
+  "only_changed_inherited_runtime_file":"scripts/Install-QbrainMemory.ps1",
+  "results":{
+    "each_native_shell":{"snapshot_passed":24,"snapshot_failed":0,"exact_prior_passed":4,"exact_prior_expected_failures":20,"recovery_passed":60,"recovery_failed":0,"published_baseline_passed":26,"published_baseline_expected_failures":34,"old_installer_checks":69,"old_consent_checks":16,"old_transport_checks":8,"old_fact_install_checks":33,"old_promotion_install_checks":33},
+    "fresh_native_registered_groups":60,
+    "postgres":"SKIP-PG",
+    "local_snapshot_checker_methods_each_normal_optimized":5,
+    "local_snapshot_checker_subcases":{"positive":4,"negative":21},
+    "local_native_log_checker_methods_each_normal_optimized":32,
+    "local_msvc_manifest_methods":10,
+    "additional_offline_readback_negative_cases":4
+  },
+  "native_shell_versions":["5.1.26100.33296","7.6.5"],
+  "installer_sha256":{
+    "git_lf":"bde21f5c1aabb7b517a1324f3fb076b482a5652387eaab26a1050bb0feb97dd2",
+    "windows_crlf":"d802c230d2e5b0938b81baa115d5cf5b475aa855fce0df28f0305f00575fcc51",
+    "prior_windows_crlf":"f0af9ec30a22fcdafaf1bcadbb6a5f6e6d5249db7e0ccff92512910e56adee77",
+    "published_baseline":"99d864bf1e87c75a2b7c22a7f2c27d3b25210a153ef10516e9fff366313a22a6"
+  },
+  "installer_test_exe_sha256":"c35fadde8c8356b7243bf0b34cfd5c836bda27bb46da87eddcc79c1031bf05b5",
+  "local_readback_record":{"bytes":5075,"sha256":"595ac72f86abe5ffa1352990a9c8b2de91aacd46a3c0e221f04c6dcef6ba30b3","metadata_note":"Original local metadata and this committed equivalent have different JSON whitespace; rerun with committed pins produces a different metadata hash."},
+  "readback_helper_sha256":"740c27c29702d5bfb9a7378b590f59f8eb3a9270b88a9aedb42300207e02caf6",
+  "public_release_changed":false,
+  "limits":["Public N47O package does not contain this installer repair","Fresh native build EXE bytes were not downloaded or equated with fixed installer-test EXE","Synthetic Windows filesystem tests are not signed-in client acceptance","Deliberate serialization interleaving is not concurrent stress testing","Decoded text is not binary BOM/encoding preservation","Not a cross-file atomic transaction or hostile-administrator defense","Brain initialization is not rolled back after later conflicts","Offline connector-normalized metadata is not a signed API response","No new PostgreSQL/model quality/consumption/egress/signing acceptance"]
+}

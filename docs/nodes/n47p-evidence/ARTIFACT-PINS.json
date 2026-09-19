@@ -1,0 +1,16 @@
+{
+  "schema": "qbrain-n47p-artifact-pins-v1",
+  "source_commit": "9feed7c74926d53a7b2a7b21391af02275799f51",
+  "run_id": 35415626607,
+  "run_attempt": 1,
+  "event": "push",
+  "artifacts": {
+    "source": {"id":10575985273,"file":"source.zip","bytes":11855455,"sha256":"8c5f78ef946b8ce62cf24155d85c38ed979042f5b99a5db8e3b633debaade851"},
+    "powershell": {"id":10575632678,"file":"powershell.zip","bytes":11817,"sha256":"6b6d7cabf59a023102fe22904c57d50d89ad9dc587b06f9221fd978ef9f18f3f"},
+    "pwsh": {"id":10576220376,"file":"pwsh.zip","bytes":11683,"sha256":"eabe4b1e5aa5845dabb0a270acd7e987e8c7c3ae5989ad0002abd2f5c3ada959"},
+    "full-native": {"id":10576480518,"file":"full-native.zip","bytes":29754,"sha256":"9722e0890f91552dbdb4db051c3e46a374d74058c4e132b77e4092f1d92d2f91"}
+  },
+  "origin": "Normalized from GitHub connector artifact metadata on 2026-09-19; not a signed/raw API response.",
+  "required_jobs": {"source":105823613064,"recovery (powershell)":105823613055,"recovery (pwsh)":105823613114,"full-native":105823613013},
+  "required_jobs_conclusion": "completed/success (individually reread from connector)"
+}

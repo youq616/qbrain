@@ -26,10 +26,10 @@ function Safe([string]$p){
  }
  return $p
 }
-function Raw([string]$p){
+function Raw([string]$p,[int]$limit=2097152){
  $null=Safe $p
  if(-not [IO.File]::Exists($p)){return $null}
- if((Get-Item -LiteralPath $p).Length -gt 2097152){throw 'Configuration exceeds the 2 MiB limit.'}
+ if((Get-Item -LiteralPath $p).Length -gt $limit){throw 'Configuration exceeds its byte limit.'}
  $text=[IO.File]::ReadAllText($p,$utf8)
  return $text
 }
@@ -62,9 +62,59 @@ $target=if($hostKey -eq 'claude'){Join-Path $project '.claude\settings.local.jso
 $mcpPath=if($hostKey -eq 'claude'){Join-Path $project '.mcp.json'}else{Join-Path $project '.codex\config.toml'}
 $allowed=@($target,$mcpPath,$ownerPath,$cfgPath,$bridgePath)
 foreach($p in $allowed){$null=Safe $p}
-function Matching($o){
+# Version 1 stores multiple text images; its envelope is not one config file.
+$journalLimit=33554432
+function Exact-Fields($o,[string[]]$names){
+ if($null -eq $o -or $o -isnot [pscustomobject]){throw 'Invalid recovery journal object.'}
+ $actual=@($o.PSObject.Properties.Name)
+ if($actual.Count -ne $names.Count){throw 'Invalid recovery journal fields.'}
+ foreach($name in $actual){if($name -cnotin $names){throw 'Invalid recovery journal fields.'}}
+}
+function Check-Destination([string]$p){
+ foreach($q in @($p,($p+'.tmp'))){
+  $null=Safe $q
+  if([IO.Directory]::Exists($q)){throw 'A transaction destination is a directory.'}
+ }
+ $parent=Split-Path -Parent $p
+ while($parent){
+  if([IO.File]::Exists($parent)){throw 'A transaction parent is a file.'}
+  $next=Split-Path -Parent $parent;if($next -eq $parent){break};$parent=$next
+ }
+}
+function Validate-Journal($pending){
+ Exact-Fields $pending @('version','changes')
+ if(($pending.version -isnot [int] -and $pending.version -isnot [long]) -or $pending.version -ne 1){throw 'Invalid recovery journal version.'}
+ if($pending.changes -isnot [Array] -or $pending.changes.Count -lt 1 -or $pending.changes.Count -gt $allowed.Count){throw 'Invalid recovery journal changes.'}
+ $seen=@()
+ foreach($c in $pending.changes){
+  Exact-Fields $c @('path','before','after')
+  if($c.path -isnot [string] -or $c.path -cnotin $allowed){throw 'Recovery journal contains an unowned path.'}
+  if($c.path -in $seen){throw 'Recovery journal repeats a path.'};$seen+=,$c.path
+  foreach($key in @('before','after')){
+   $image=$c.$key
+   if($null -ne $image){
+    if($image -isnot [string]){throw 'Recovery images must be strings or null.'}
+    # Strict UTF-8 encoding rejects invalid surrogates before the first write.
+    if($utf8.GetByteCount($image) -gt 2097152){throw 'Recovery image exceeds the 2 MiB limit.'}
+   }
+  }
+ }
+ # All schema/image checks finish before destination checks or rollback writes.
+ foreach($c in $pending.changes){Check-Destination $c.path}
+}
+function Check-Current($pending){
+ foreach($c in $pending.changes){
+  $now=Raw $c.path
+  if($now -cne $c.before -and $now -cne $c.after){throw 'External edit prevents recovery; no files changed.'}
+ }
+}
+function Input-Image($images,[string]$p){
+ if($null -ne $images){return $images[$p]}
+ return Raw $p
+}
+function Matching($o,$images=$null){
  try {
-  $current=Parse (Raw $target)
+  $current=Parse (Input-Image $images $target)
   if(-not (Has $current 'hooks')){return $false}
   foreach($e in $o.entries){
    if(-not (Has $current.hooks $e.event)){return $false}
@@ -72,9 +122,9 @@ function Matching($o){
    if($matches.Count -ne 1){return $false}
   }
   if($hostKey -eq 'claude'){
-   $m=Parse (Raw $mcpPath);return (Has $m 'mcpServers') -and (Has $m.mcpServers $o.mcp.name) -and (Same $m.mcpServers.($o.mcp.name) $o.mcp.definition)
+   $m=Parse (Input-Image $images $mcpPath);return (Has $m 'mcpServers') -and (Has $m.mcpServers $o.mcp.name) -and (Same $m.mcpServers.($o.mcp.name) $o.mcp.definition)
   }
-  return ([string](Raw $mcpPath)).Contains([string]$o.mcp.block)
+  return ([string](Input-Image $images $mcpPath)).Contains([string]$o.mcp.block)
  }catch{return $false}
 }
 if($Action -eq 'Status'){
@@ -96,28 +146,31 @@ $lockPath=Join-Path $owned 'install.lock';$null=Safe $lockPath
 $lock=[IO.File]::Open($lockPath,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
 try {
  if([IO.File]::Exists($journal)){
-  $pending=Parse (Raw $journal)
-  if($pending.version -ne 1 -or @($pending.changes).Count -gt 8){throw 'Invalid recovery journal.'}
-  foreach($c in $pending.changes){
-   if($c.path -cnotin $allowed){throw 'Recovery journal contains an unowned path.'}
-   $now=Raw $c.path
-   if($now -cne $c.before -and $now -cne $c.after){throw 'External edit prevents recovery; no files changed.'}
-  }
+  $pendingText=Raw $journal $journalLimit
+  # PowerShell 7 may enumerate a one-element JSON array into an object.
+  if([string]::IsNullOrWhiteSpace($pendingText) -or -not $pendingText.TrimStart().StartsWith('{')){throw 'Recovery journal must be a JSON object.'}
+  $pending=Parse $pendingText
+  Validate-Journal $pending
+  Check-Current $pending
   foreach($c in $pending.changes){Write-Atomic $c.path $c.before}
   [IO.File]::Delete($journal)
  }
- $owner=if([IO.File]::Exists($ownerPath)){Parse (Raw $ownerPath)}else{$null}
+ # Bind parsed input, journal before images and backup to the same reads.
+ # A later Raw() inside Change would incorrectly bless an intervening edit.
+ $initial=@{};$initial[$ownerPath]=Raw $ownerPath
+ $owner=if($null -ne $initial[$ownerPath]){Parse $initial[$ownerPath]}else{$null}
  $active=$null -ne $owner -and (Has $owner 'active') -and $owner.active
- if($active -and -not (Matching $owner)){throw 'An owned hook or MCP definition was edited; refusing to overwrite.'}
  if($Action -eq 'Uninstall' -and -not $active){return}
- $rawTarget=Raw $target
- if([IO.File]::Exists($target) -and [string]::IsNullOrWhiteSpace($rawTarget)){throw 'Existing JSON settings are empty.'}
+ foreach($p in $allowed){if($p -cne $ownerPath){$initial[$p]=Raw $p}}
+ if($active -and -not (Matching $owner $initial)){throw 'An owned hook or MCP definition was edited; refusing to overwrite.'}
+ $rawTarget=$initial[$target]
+ if($null -ne $rawTarget -and [string]::IsNullOrWhiteSpace($rawTarget)){throw 'Existing JSON settings are empty.'}
  $settings=Parse $rawTarget
  if(-not (Has $settings 'hooks')){Set-Key $settings 'hooks' ([pscustomobject]@{})}
  if($settings.hooks -isnot [pscustomobject]){throw 'hooks must be an object.'}
- $rawMcp=Raw $mcpPath
+ $rawMcp=$initial[$mcpPath]
  if($hostKey -eq 'claude'){
-  if([IO.File]::Exists($mcpPath) -and [string]::IsNullOrWhiteSpace($rawMcp)){throw 'Existing MCP settings are empty.'}
+  if($null -ne $rawMcp -and [string]::IsNullOrWhiteSpace($rawMcp)){throw 'Existing MCP settings are empty.'}
   $mcp=Parse $rawMcp
   if(-not (Has $mcp 'mcpServers')){Set-Key $mcp 'mcpServers' ([pscustomobject]@{})}
   if($mcp.mcpServers -isnot [pscustomobject]){throw 'mcpServers must be an object.'}
@@ -132,7 +185,7 @@ try {
   else{$rawMcp=$rawMcp.Replace([string]$owner.mcp.block,'')}
  }
  $changes=New-Object System.Collections.ArrayList
- function Change([string]$p,[AllowNull()]$s){[void]$changes.Add([pscustomobject]@{path=$p;before=(Raw $p);after=$s})}
+ function Change([string]$p,[AllowNull()]$s){[void]$changes.Add([pscustomobject]@{path=$p;before=$initial[$p];after=$s})}
  if($Action -eq 'Install'){
   if(-not $Binary){throw 'Binary is required for Install.'}
   $exe=Safe ((Resolve-Path -LiteralPath $Binary).ProviderPath)
@@ -169,6 +222,23 @@ try {
    $mcpOwner.block=$block;$rawMcp=[string]$rawMcp+$block
   }
   $newOwner=[pscustomobject]@{version=1;active=$true;host=$hostKey;project_root=$project;entries=$entries;mcp=$mcpOwner}
+  Change $bridgePath (Raw $bridgeSource);Change $cfgPath (Json $cfg);Change $ownerPath (Json $newOwner)
+ }else{
+  $cfg=Parse $initial[$cfgPath];Set-Key $cfg 'enabled' $false;$owner.active=$false
+  Change $cfgPath (Json $cfg);Change $ownerPath (Json $owner)
+ }
+ Change $target (Json $settings)
+ if($hostKey -eq 'claude'){Change $mcpPath (Json $mcp)}else{Change $mcpPath $rawMcp}
+ # Preflight the actual journal before brain initialization or backup creation.
+ $pending=[pscustomobject]@{version=1;changes=@($changes)}
+ Validate-Journal $pending
+ $pendingText=Json $pending
+ if($utf8.GetByteCount($pendingText) -gt $journalLimit){throw 'Recovery journal exceeds the 32 MiB limit.'}
+ $stamp=[Guid]::NewGuid().ToString('N')
+ $backupPath=Join-Path $owned ('settings-backup-'+$stamp+'.json')
+ Check-Destination $journal;Check-Destination $backupPath
+ foreach($c in $changes){if((Raw $c.path) -cne $c.before){throw 'Configuration changed during install.'}}
+ if($Action -eq 'Install'){
   # All external file validation above precedes brain creation. Installation never
   # selects this brain globally. Capture remains inert until separately opted in.
   $result=& $bridgeSource -FilePath $exe -ArgumentList @('init','--brain',$BrainId,'--no-default')
@@ -177,18 +247,11 @@ try {
    $result=& $bridgeSource -FilePath $exe -ArgumentList @('config','set','memory.writeback','salient','--brain',$BrainId,'--local')
    if($result.ExitCode -ne 0){throw 'Capture opt-in failed.'}
   }
-  Change $bridgePath (Raw $bridgeSource);Change $cfgPath (Json $cfg);Change $ownerPath (Json $newOwner)
- }else{
-  $cfg=Parse (Raw $cfgPath);Set-Key $cfg 'enabled' $false;$owner.active=$false
-  Change $cfgPath (Json $cfg);Change $ownerPath (Json $owner)
  }
- Change $target (Json $settings)
- if($hostKey -eq 'claude'){Change $mcpPath (Json $mcp)}else{Change $mcpPath $rawMcp}
- $stamp=[Guid]::NewGuid().ToString('N')
- Write-Atomic (Join-Path $owned ('settings-backup-'+$stamp+'.json')) (Json ([pscustomobject]@{settings=$rawTarget;mcp=(Raw $mcpPath)}))
- # Compare-before-write to catch edits occurring after initial validation.
+ # Recheck after brain initialization, before producing any backup/journal.
  foreach($c in $changes){if((Raw $c.path) -cne $c.before){throw 'Configuration changed during install.'}}
- Write-Atomic $journal (Json ([pscustomobject]@{version=1;changes=@($changes)}))
+ Write-Atomic $backupPath (Json ([pscustomobject]@{settings=$initial[$target];mcp=$initial[$mcpPath]}))
+ Write-Atomic $journal $pendingText
  foreach($c in $changes){Write-Atomic $c.path $c.after}
  [IO.File]::Delete($journal)
  Json ([pscustomobject]@{action=$Action;project=$project;host=$hostKey;host_consumption_confirmed=$false})
