@@ -71,7 +71,7 @@ function Flag([string]$path,[bool]$enabled){
  if($value -ne [int]$enabled){throw 'NTFS flag did not take effect.'}
  [void]$flagsLog.Add([pscustomobject]@{path=$path;flags=$value;fsutil_output=($text -join "`n")})
 }
-function Dir([string]$name){$p=Join-Path $top $name;[void][IO.Directory]::CreateDirectory($p);return $p}
+function New-N47VDirectory([string]$name){$p=Join-Path $top $name;[void][IO.Directory]::CreateDirectory($p);return $p}
 function Hash([byte[]]$bytes){$h=[Security.Cryptography.SHA256]::Create();try{return ([BitConverter]::ToString($h.ComputeHash($bytes))).Replace('-','').ToLowerInvariant()}finally{$h.Dispose()}}
 function Snap{
  $rows=New-Object 'System.Collections.Generic.List[string]'
@@ -92,7 +92,7 @@ function Own([string]$project,[string]$hostName){
 }
 try {
  foreach($hostName in @('Claude','Codex')){
-  $parent=Dir ($hostName+' case parent');Flag $parent $true
+  $parent=New-N47VDirectory ($hostName+' case parent');Flag $parent $true
   $upper=Join-Path $parent 'Project';$lower=Join-Path $parent 'project'
   [N47VFixture]::Make($upper);[N47VFixture]::Make($lower)
   Flag $upper $false;Flag $lower $false
@@ -110,9 +110,9 @@ try {
    }
   }
   Need ([N47VFixture]::Flags($parent) -eq 1 -and [N47VFixture]::Flags($upper) -eq 0 -and [N47VFixture]::Flags($lower) -eq 0) ($hostName+' guard never changes case flags')
-  $sensitive=Dir ($hostName+' sensitive self');Flag $sensitive $true
+  $sensitive=New-N47VDirectory ($hostName+' sensitive self');Flag $sensitive $true
   foreach($action in @('Install','Uninstall','Status')){Reject {& $installerPath -Action $action -HostName $hostName -ProjectPath $sensitive -Binary $exe} ($hostName+'/self/'+$action)}
-  $normal=Dir ($hostName+' config parent')
+  $normal=New-N47VDirectory ($hostName+' config parent')
   $cfg=Join-Path $normal $(if($hostName -eq 'Claude'){'.claude'}else{'.codex'})
   [void][IO.Directory]::CreateDirectory($cfg);Flag $cfg $true
   foreach($action in @('Install','Uninstall','Status')){Reject {& $installerPath -Action $action -HostName $hostName -ProjectPath $normal -Binary $exe} ($hostName+'/config/'+$action)}
@@ -123,7 +123,7 @@ try {
   $pending=[pscustomobject]@{version=1;changes=@([pscustomobject]@{path=$dest;before='before-sentinel';after='after-sentinel'})}
   [IO.File]::WriteAllText((Join-Path $owned 'pending.json'),(ConvertTo-Json -InputObject $pending -Depth 6),$utf8)
   Reject {& $installerPath -Action Uninstall -HostName $hostName -ProjectPath $normal} ($hostName+'/pending-recovery')
-  $ordinary=Dir ($hostName+' Ordinary '+[char]0x4E2D+" ' space")
+  $ordinary=New-N47VDirectory ($hostName+' Ordinary '+[char]0x4E2D+" ' space")
   $null=& $installerPath -HostName $hostName -ProjectPath $ordinary -Binary $exe
   $expected=Own $ordinary $hostName
   Need ([IO.File]::Exists((Join-Path $expected 'installation.json'))) ($hostName+' ordinary legacy ID unchanged')
@@ -137,19 +137,19 @@ try {
   $status=(& $installerPath -Action Status -HostName $hostName -ProjectPath $ordinary)|ConvertFrom-Json
   Need (-not $status.installed) ($hostName+' ordinary reinstall and uninstall succeed')
  }
- $binaryDir=Dir 'sensitive binary';Flag $binaryDir $true
+ $binaryDir=New-N47VDirectory 'sensitive binary';Flag $binaryDir $true
  $sensitiveExe=Join-Path $binaryDir 'qbrain.exe';[IO.File]::Copy($exe,$sensitiveExe)
- $ordinary=Dir 'normal binary project'
+ $ordinary=New-N47VDirectory 'normal binary project'
  Reject {& $installerPath -HostName Claude -ProjectPath $ordinary -Binary $sensitiveExe} 'sensitive binary parent before owned creation'
- $sensitiveData=Dir 'sensitive appdata';Flag $sensitiveData $true
+ $sensitiveData=New-N47VDirectory 'sensitive appdata';Flag $sensitiveData $true
  $env:LOCALAPPDATA=$sensitiveData
  foreach($action in @('Install','Uninstall','Status')){Reject {& $installerPath -Action $action -HostName Claude -ProjectPath $ordinary -Binary $exe} ('sensitive appdata/'+$action)}
  $env:LOCALAPPDATA=$data
- $change=Dir 'flag changes between reads'
+ $change=New-N47VDirectory 'flag changes between reads'
  $null=& $installerPath -Action Status -HostName Claude -ProjectPath $change
  Flag $change $true
  Reject {& $installerPath -Action Status -HostName Claude -ProjectPath $change} 'no stale directory flag cache'
- $blocked=Dir 'blocked metadata';$before=Snap;$handle=[N47VFixture]::Hold($blocked);$errorText=''
+ $blocked=New-N47VDirectory 'blocked metadata';$before=Snap;$handle=[N47VFixture]::Hold($blocked);$errorText=''
  try{try{$null=& $installerPath -Action Status -HostName Claude -ProjectPath $blocked}catch{$errorText=$_.Exception.ToString()}}finally{$handle.Dispose()}
  Need ($errorText.Contains('Cannot verify directory')) 'metadata sharing failure rejected explicitly'
  Need ((Snap) -ceq $before) 'metadata sharing failure preserves fixture bytes and directories'
