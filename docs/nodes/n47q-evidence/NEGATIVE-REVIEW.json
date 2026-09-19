@@ -1,0 +1,13 @@
+{
+  "schema": "qbrain-n47q-negative-review-summary-v1",
+  "source_run_id": "a84d86dea8d918cf03d0bf3da18556eb",
+  "positive_control_verified": true,
+  "restored_control_equal": true,
+  "negative_cases": 12,
+  "rejected": 12,
+  "case_names": ["false-total", "duplicate-case", "missing-command", "wrong-exit", "boolean-exit", "changed-output", "wrong-trace-count", "model-pass-claim", "packet-changed-with-new-hash", "contaminated-control", "wrong-key-id", "changed-instructions"],
+  "script": "review_task_files.py",
+  "script_sha256": "0773550686c3d67ba87d0b55e0dde6c651463b27d0968cbda9d684a2b315417c",
+  "full_local_report": {"bytes": 1668, "sha256": "8b37ee2fd14c2abdfe7e11365d7f37fbd57d04b08ba83f1d791cfed44eeab271", "embedded_here": false},
+  "scope": "Offline supplied-file consistency only; no model/client or authenticity acceptance"
+}

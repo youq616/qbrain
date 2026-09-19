@@ -1,0 +1,65 @@
+{
+  "schema": "qbrain-n47q-ci-readback-v1",
+  "workflow_run": 35419130373,
+  "task_results": [
+    {
+      "platform": "windows",
+      "event_format": "claude",
+      "run_id": "0748d07f8bbf58dcfc02effdf95a9d66",
+      "tasks": 50,
+      "commands": 520,
+      "engine_report_sha256": "9b41124e0aff09a08f03a595cfb736a21c9a21c16a4ce313cb82baf91cf68d3a",
+      "binary_sha256": "c35fadde8c8356b7243bf0b34cfd5c836bda27bb46da87eddcc79c1031bf05b5",
+      "source_commit": "11c7da219ee65d6aa387acbad6e07c0fb8acf090",
+      "raw_streams_hash_checked": 1560,
+      "recorded_ci_checker_matched": true,
+      "new_model_run": false
+    },
+    {
+      "platform": "windows",
+      "event_format": "codex",
+      "run_id": "5be610ebdad5fa0ab46421152bf76f86",
+      "tasks": 50,
+      "commands": 520,
+      "engine_report_sha256": "2a326702399a4cbd6b54c43f26720d186a36e300783141794103222cf4a664c9",
+      "binary_sha256": "c35fadde8c8356b7243bf0b34cfd5c836bda27bb46da87eddcc79c1031bf05b5",
+      "source_commit": "11c7da219ee65d6aa387acbad6e07c0fb8acf090",
+      "raw_streams_hash_checked": 1560,
+      "recorded_ci_checker_matched": true,
+      "new_model_run": false
+    },
+    {
+      "platform": "portable",
+      "event_format": "claude",
+      "run_id": "1add9a43a6e90aa40ce5fcd3d4cb2066",
+      "tasks": 50,
+      "commands": 520,
+      "engine_report_sha256": "d5e81a8efcd898fe571ac50b568a5838ffb0534bcb694c151e5bce927c57c657",
+      "binary_sha256": "a36fff1f52975fd8906f58891f91ec225ca523188c020dfd63c23f5f3c471033",
+      "source_commit": "11c7da219ee65d6aa387acbad6e07c0fb8acf090",
+      "raw_streams_hash_checked": 1560,
+      "recorded_ci_checker_matched": true,
+      "new_model_run": false
+    },
+    {
+      "platform": "portable",
+      "event_format": "codex",
+      "run_id": "ad2560a5f700c1284504c5e6aea9d7ae",
+      "tasks": 50,
+      "commands": 520,
+      "engine_report_sha256": "23b762838f542f643ec200075085667d6308871c3e12680668c5b010477bfeb8",
+      "binary_sha256": "a36fff1f52975fd8906f58891f91ec225ca523188c020dfd63c23f5f3c471033",
+      "source_commit": "11c7da219ee65d6aa387acbad6e07c0fb8acf090",
+      "raw_streams_hash_checked": 1560,
+      "recorded_ci_checker_matched": true,
+      "new_model_run": false
+    }
+  ],
+  "tool_tests_each_platform_mode": 24,
+  "fresh_portable_ctest": 4,
+  "limits": [
+    "Portable EXE bytes were not downloaded; its recorded hash and CI checker receipt are matched, not locally executed",
+    "Native EXE independently verified against fixed public package; no new local execution",
+    "Raw file identity is within fixed authenticated Actions artifact, not independent client/model proof"
+  ]
+}

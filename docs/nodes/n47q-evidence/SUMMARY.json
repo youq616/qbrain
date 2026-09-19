@@ -1,0 +1,107 @@
+{
+  "schema": "qbrain-n47q-summary-v1",
+  "date": "2026-09-19",
+  "timezone": "Asia/Seoul",
+  "verdict": "PASS-evaluation-tooling-and-synthetic-engine-only",
+  "reviewer": "coordinating ChatGPT; owner-authorized separate engineering self-review, not another agent or third party",
+  "base_main": "38b05106ea5843dcf463e2abfb16cce2850c208e",
+  "plan_commit": "7e52f0d759f82441c52ef770629e602708a38bb3",
+  "accepted_candidate": "11c7da219ee65d6aa387acbad6e07c0fb8acf090",
+  "accepted_tree": "b0f6b33b585abaa9a7f15a7dc1fbf3baca893f22",
+  "fixed_ci_run": 35419130373,
+  "ci_event": "push",
+  "ci_attempt": 1,
+  "required_jobs": {
+    "windows": 105833357189,
+    "portable": 105833357065
+  },
+  "artifacts": {
+    "windows": {
+      "id": 10577225758,
+      "bytes": 1025398,
+      "sha256": "1bea56d5ff03d98080ef6102b84a8021d6c60cfa061f17bff4c269d271661d33",
+      "members": 3481
+    },
+    "portable": {
+      "id": 10577600178,
+      "bytes": 12913452,
+      "sha256": "e9ed3f990cce2059e17ab9c12d054cb851f289b2c2d1fada13846dfccd547c04",
+      "members": 3485
+    }
+  },
+  "results": {
+    "task_families": 10,
+    "subjects_per_family": 5,
+    "tasks_each_platform_event_format": 50,
+    "commands_each_platform_event_format": 520,
+    "platforms": [
+      "native Windows with fixed released EXE",
+      "Linux fresh CMake build"
+    ],
+    "event_formats": [
+      "claude",
+      "codex"
+    ],
+    "ci_task_commands_total": 2080,
+    "tool_unit_methods_each_normal_and_optimized": 24,
+    "unchanged_focused_ctest_groups": 4,
+    "additional_local_tasks_each_format": 50,
+    "additional_local_commands_each_format": 520,
+    "additional_negative_file_cases": 12,
+    "negative_file_cases_rejected": 12,
+    "source_archive_files": 1061,
+    "unchanged_inherited_runtime_test_script_files": 259
+  },
+  "tool_sha256": {
+    "run_memory_tasks.py": "f8a18fa7a63c7afb4eeb4bb2b05c0c49add7f40ed5399cdbd599592fd56355dc",
+    "memory_task_contract.py": "7d89bd2843c077a67dcb9651d8336931d3cc3ed5564ae2bc4810ca0fa5f73b63",
+    "score_memory_tasks.py": "f55ff1085b54353f57fd514f23a56884fff654224af2da331f6241538279c6a5",
+    "check_memory_task_run.py": "b0047f21c06078be0558b153fcff9c49b08f95749982f285a18b16f6a0bf7a9e",
+    "test_memory_tasks.py": "ed3916c5748ccb9cea867437f87769a59e1350d596ebe9740053869bf9f23d55",
+    "test_memory_metrics.py": "9833987b2cb7f62523a22aac50802c478b7bab29861e6e566ca67e4bf54e229a"
+  },
+  "metrics": {
+    "packet_grounded_response_denominator": 50,
+    "answerable_resolution_denominator": 25,
+    "oracle_fixture_scores_are_model_results": false
+  },
+  "runtime_sha256": {
+    "windows": "c35fadde8c8356b7243bf0b34cfd5c836bda27bb46da87eddcc79c1031bf05b5",
+    "portable_ci_reported": "a36fff1f52975fd8906f58891f91ec225ca523188c020dfd63c23f5f3c471033",
+    "local_linux": "4aeafbc4b468bce4d0cbb95e58602186f4972a1b372f1a11160a60d67d541c4c"
+  },
+  "local_context": "Extracted 9feed source plus exact new tool bytes; no .git; reports honestly use source_commit:null",
+  "model_answers": "NOT_RUN",
+  "host_consumption": "NOT_RUN",
+  "provider_tokens": null,
+  "provider_cost": null,
+  "public_release_changed": false,
+  "record_hashes": {
+    "CI-READBACK.json": {
+      "bytes": 2654,
+      "sha256": "608d2ba125c69a5c57ffe4711ca10f656b3d2bac70796ae78f83c01f5d0a67fe"
+    },
+    "SOURCE-REVIEW.json": {
+      "bytes": 626,
+      "sha256": "a69e1fa50a8085d784901aef06f87ad129fcb8127158c48098c35f97daf8cf14"
+    },
+    "WINDOWS-READBACK.json": {
+      "bytes": 1527,
+      "sha256": "7ec586fffd05b4f1c0b933ca24053de76aca5534b3b7989ed3bcc8e481fc0968"
+    },
+    "negative-file-review.json": {
+      "bytes": 1668,
+      "sha256": "8b37ee2fd14c2abdfe7e11365d7f37fbd57d04b08ba83f1d791cfed44eeab271"
+    }
+  },
+  "limits": [
+    "Synthetic tasks and manual lifecycle operations, not broad semantic inference or large-scale performance",
+    "No new signed-in Claude/Codex or model A/B; prior live-client evidence retains its original scope",
+    "Portable CI EXE not downloaded; reported binary hash and pre-upload CI checker matched; Windows EXE bytes independently checked",
+    "Output file hashes bind consistency, not independent source/host/model authenticity",
+    "Public CI answer keys are test fixtures; real blinded evaluation must generate fresh isolated packets",
+    "Current public N47O installer still lacks N47P fix",
+    "No production, installer, schema, canonical ledger, native test or old workflow changes",
+    "Remaining v1 and broad-roadmap estimates are not reduced merely by tooling completion"
+  ]
+}
