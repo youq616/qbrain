@@ -6,7 +6,7 @@ gbrain / OpenViking 为设计参考，不表示完整功能等价。
 
 ## 当前源码阶段：N47N
 
-`search` 现在支持明确的字面查询边界；查询中的 `--brain` 等文字不会再次变成
+`search` 支持明确的字面查询边界；查询中的 `--brain` 等文字不会再次变成
 选项。无效参数在打开脑库前拒绝。N47M 的 memory/context 参数与采集授权修复
 继续保留。本次只做源码验收，不创建或替换 Release/tag。
 
@@ -16,15 +16,17 @@ gbrain / OpenViking 为设计参考，不表示完整功能等价。
 ```
 
 将 `my-brain` 换成实际脑库。`--query` 保留一个参数的原文；分隔符后的参数作为
-查询词连接。“字面”不改变后端分词或排名，也不是精确字串搜索模式。未知、重复、
+查询词连接。字面边界不改变后端分词或排名，也不是精确字串搜索模式。未知、重复、
 缺值、混合形式、空查询和错误数字/模式会报错，不再沿用旧版的静默宽松解析。
 [完整语法与兼容边界](docs/integration/SEARCH-ARGUMENTS.zh-CN.md)。
 
-固定 a587e175 源码的 N47N、N42、N44 验收已通过；Windows/Linux 专项各为
-361 项解析检查、226 项进程检查（302 次调用）。另外的生成式检查、旧版反向
-验证和工件回读详见[最终工程自审](docs/nodes/N47N-HARD-AUDIT.md)。审核由协调者
-本人另行进行，不是独立子代理或第三方认证，也不保证整个项目无缺陷。
-[当前状态与版本身份](CURRENT-STATUS.md) · [PR #31](https://github.com/youq616/qbrain/pull/31)。
+最终验收源码为 `c26ec5e512d9ba960b86c9ced5b9b4976b031f2c`。N47N、N42、N44
+和清单预检均通过；Windows/Linux 搜索专项各为 361 项解析检查、226 项进程检查
+（302 次调用）。之前的文档清单回归已恢复并重验，旧 a587/f2ba 收尾记录不再
+作为最终依据。新增 356 种 C++/Python 字节读取对照未发现错误放行。
+审核由协调者本人另行进行，不是独立子代理或第三方认证，也不保证项目绝对无缺陷。
+[当前状态](CURRENT-STATUS.md) · [最终自审](docs/nodes/N47N-HARD-AUDIT.md) ·
+[PR #31](https://github.com/youq616/qbrain/pull/31)。
 
 ## 已发布下载与源码不是同一版本
 
@@ -40,7 +42,7 @@ gbrain / OpenViking 为设计参考，不表示完整功能等价。
 示例、历史证据和限制保留于 [N47M README 归档](README-N47M.md)，内容未改写。
 [快速接入](docs/integration/QUICKSTART.zh-CN.md) ·
 [Windows 接入](docs/integration/WINDOWS-MEMORY.md) ·
-[操作清单](docs/OPS-PARITY-LEDGER.md)。
+[规范操作清单](docs/OPS-PARITY-LEDGER.md)。规范清单保留原表，不由归档链接替代。
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-cl.ps1
