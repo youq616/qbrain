@@ -1,0 +1,56 @@
+name: N47S controlled model comparison
+on:
+  push:
+    branches: [main, 'evaluation/n47s-model-comparison']
+    paths: ['tools/acceptance/**', '.github/workflows/n47s-validation.yml']
+  pull_request:
+    paths: ['tools/acceptance/**', '.github/workflows/n47s-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n47s-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Source identity and loopback transport tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          python --version > evidence/python.txt
+          (cd tools/acceptance && python -m unittest test_model_ab test_memory_tasks test_memory_metrics -v) 2>&1 | tee evidence/tests.log
+          (cd tools/acceptance && python -O -m unittest test_model_ab test_memory_tasks test_memory_metrics -v) 2>&1 | tee evidence/tests-optimized.log
+      - name: Actual native engine into new HTTP workflow (test responder, not a model)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-integrated-preview-9e9a92b0/qbrain-windows-x64-n47r-preview.zip' -OutFile runtime.zip
+          if ((Get-FileHash runtime.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'e7158949d805a0a25157bfb720561e4b21e80a433a6c7f031c60ee3bbaa746c5') { throw 'Wrong runtime package' }
+          Expand-Archive runtime.zip runtime
+          if ((Get-FileHash runtime/qbrain.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'c35fadde8c8356b7243bf0b34cfd5c836bda27bb46da87eddcc79c1031bf05b5') { throw 'Wrong runtime EXE' }
+          python tools/acceptance/integration_model_ab.py --binary runtime/qbrain.exe --output evidence/pipeline 2>&1 | Tee-Object evidence/pipeline.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47s-${{ matrix.os }}
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
