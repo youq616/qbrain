@@ -149,13 +149,46 @@ try {
  $null=& $installerPath -Action Status -HostName Claude -ProjectPath $change
  Flag $change $true
  Reject {& $installerPath -Action Status -HostName Claude -ProjectPath $change} 'no stale directory flag cache'
- $blocked=New-N47VDirectory 'blocked metadata';$before=Snap;$handle=[N47VFixture]::Hold($blocked);$errorText=''
- try{try{$null=& $installerPath -Action Status -HostName Claude -ProjectPath $blocked}catch{$errorText=$_.Exception.ToString()}}finally{$handle.Dispose()}
- Need ($errorText.Contains('Cannot verify directory')) 'metadata sharing failure rejected explicitly'
- Need ((Snap) -ceq $before) 'metadata sharing failure preserves fixture bytes and directories'
- $null=& $installerPath -Action Status -HostName Claude -ProjectPath $blocked
- Need $true 'metadata query recovers after sharing handle is disposed'
- $success=$true
+ # Included by the native case-path harness only, never by the product installer.
+ $shared=New-N47VDirectory 'shared metadata'
+ $before=Snap;$handle=[N47VFixture]::Hold($shared)
+ try {
+  $status=(& $installerPath -Action Status -HostName Claude -ProjectPath $shared)|ConvertFrom-Json
+  Need (-not $status.installed) 'metadata-only query works with deny-sharing handle'
+ }finally{$handle.Dispose()}
+ Need ((Snap) -ceq $before) 'metadata-only shared query preserves fixture bytes and directories'
+ 
+ $disappearing=New-N47VDirectory 'disappearing metadata'
+ $before=Snap
+ $global:N47VDisappear=[pscustomobject]@{path=$disappearing;armed=$true;hits=0}
+ function Get-Item {
+  [CmdletBinding()]
+  param([string]$LiteralPath,[switch]$Force)
+  $item=Microsoft.PowerShell.Management\Get-Item -LiteralPath $LiteralPath -Force:$Force
+  if($global:N47VDisappear.armed -and $LiteralPath -ceq $global:N47VDisappear.path){
+   # Retain the actual prior observation, then cause the native open to fail.
+   $attributes=$item.Attributes;$container=$item.PSIsContainer
+   $global:N47VDisappear.armed=$false;$global:N47VDisappear.hits++
+   [IO.Directory]::Delete($LiteralPath)
+   return [pscustomobject]@{Attributes=$attributes;PSIsContainer=$container}
+  }
+  return $item
+ }
+ $errorText='';$hits=0;$gone=$false
+ try {
+  try{$null=& $installerPath -Action Status -HostName Claude -ProjectPath $disappearing}catch{$errorText=$_.Exception.ToString()}
+  $hits=$global:N47VDisappear.hits;$gone=-not [IO.Directory]::Exists($disappearing)
+ }finally {
+  Remove-Item Function:Get-Item -ErrorAction SilentlyContinue
+  Remove-Variable N47VDisappear -Scope Global -ErrorAction SilentlyContinue
+  [void][IO.Directory]::CreateDirectory($disappearing)
+ }
+ Need ($hits -eq 1 -and $gone) 'directory disappearance occurred at the intended metadata boundary'
+ Need ($errorText.Contains('Cannot verify directory case sensitivity')) 'missing metadata handle rejected explicitly'
+ Need ((Snap) -ceq $before) 'metadata disappearance preserves application state after fixture restoration'
+ $status=(& $installerPath -Action Status -HostName Claude -ProjectPath $disappearing)|ConvertFrom-Json
+ Need (-not $status.installed) 'metadata query works after external directory restoration'
+  $success=$true
 }finally{
  Set-Location $starting
  if(-not $success -and @($results|Where-Object {-not $_.passed}).Count -eq 0){[void]$results.Add([pscustomobject]@{name='execution interrupted';passed=$false})}

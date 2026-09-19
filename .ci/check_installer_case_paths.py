@@ -23,8 +23,12 @@ def names():
     reject('sensitive binary parent before owned creation')
     for action in ('Install', 'Uninstall', 'Status'): reject('sensitive appdata/'+action)
     reject('no stale directory flag cache')
-    rows += ['metadata sharing failure rejected explicitly', 'metadata sharing failure preserves fixture bytes and directories',
-             'metadata query recovers after sharing handle is disposed']
+    rows += ['metadata-only query works with deny-sharing handle',
+             'metadata-only shared query preserves fixture bytes and directories',
+             'directory disappearance occurred at the intended metadata boundary',
+             'missing metadata handle rejected explicitly',
+             'metadata disappearance preserves application state after fixture restoration',
+             'metadata query works after external directory restoration']
     return rows
 
 

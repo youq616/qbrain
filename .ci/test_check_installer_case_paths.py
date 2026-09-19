@@ -21,9 +21,9 @@ def fixture():
 class Checks(unittest.TestCase):
     def test_exact_coverage(self):
         r, log = fixture()
-        self.assertEqual(len(c.names()), 81)
-        self.assertEqual(len(set(c.names())), 81)
-        self.assertEqual(c.validate(r, *RAW, SOURCE, 5, log)['checks'], 81)
+        self.assertEqual(len(c.names()), 84)
+        self.assertEqual(len(set(c.names())), 84)
+        self.assertEqual(c.validate(r, *RAW, SOURCE, 5, log)['checks'], 84)
         r['shell_major'] = 7
         self.assertEqual(c.validate(r, *RAW, SOURCE, 7, log)['shell_major'], 7)
 
