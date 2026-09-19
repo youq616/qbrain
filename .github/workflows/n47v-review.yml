@@ -1,0 +1,46 @@
+name: N47V separate native boundary review
+on:
+  push:
+    branches: ['fix/n47v-case-sensitive-installer']
+    paths: ['.ci/test_n47v_review.ps1', '.github/workflows/n47v-review.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n47v-separate-review-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  review:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Read-only native metadata and deliberate type-substitution checks
+        shell: pwsh
+        env:
+          TEST_SHELL: ${{ matrix.shell }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          & $env:TEST_SHELL -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .ci/test_n47v_review.ps1 -Installer scripts/Install-QbrainMemory.ps1 -Report evidence/review.json 2>&1 | Tee-Object evidence/review.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $r = Get-Content evidence/review.json -Raw | ConvertFrom-Json
+          $major = if ($env:TEST_SHELL -eq 'powershell') { 5 } else { 7 }
+          if ($r.result -cne 'PASS' -or $r.count -ne 22 -or $r.checks.Count -ne 22 -or @($r.checks | Where-Object {-not $_.passed}).Count -ne 0 -or $r.shell_major -ne $major -or $r.source_commit -cne $env:GITHUB_SHA -or $r.real_client_verified -ne $false) { throw 'Incomplete boundary review' }
+          if ($r.installer_sha256 -cne (Get-FileHash scripts/Install-QbrainMemory.ps1 -Algorithm SHA256).Hash.ToLowerInvariant()) { throw 'Installer identity mismatch' }
+          if ($r.script_sha256 -cne (Get-FileHash .ci/test_n47v_review.ps1 -Algorithm SHA256).Hash.ToLowerInvariant()) { throw 'Review identity mismatch' }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47v-review-${{ matrix.shell }}
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error

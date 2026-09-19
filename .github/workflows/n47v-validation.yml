@@ -1,0 +1,130 @@
+name: N47V case-sensitive installation path guards
+on:
+  push:
+    branches: [main, 'fix/n47v-case-sensitive-installer']
+    paths: ['scripts/Install-QbrainMemory.ps1', '.ci/*installer_case_paths*', '.github/workflows/n47v-validation.yml']
+  pull_request:
+    paths: ['scripts/Install-QbrainMemory.ps1', '.ci/*installer_case_paths*', '.github/workflows/n47v-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n47v-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Exact source and evidence-validator tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          python .ci/test_check_installer_case_paths.py 2>&1 | tee evidence/checker.log
+          python -O .ci/test_check_installer_case_paths.py 2>&1 | tee evidence/checker-optimized.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qbrain-n47v-source
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
+  paths:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 98b45d264696a23552ca14d12218555c57087528
+          path: prior
+          persist-credentials: false
+      - name: Fixed original executable and installer identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-integrated-preview-9e9a92b0/qbrain-windows-x64-n47r-preview.zip' -OutFile runtime.zip
+          if ((Get-FileHash runtime.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'e7158949d805a0a25157bfb720561e4b21e80a433a6c7f031c60ee3bbaa746c5') { throw 'Wrong original package' }
+          Expand-Archive runtime.zip runtime
+          if ((Get-FileHash runtime/qbrain.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'c35fadde8c8356b7243bf0b34cfd5c836bda27bb46da87eddcc79c1031bf05b5') { throw 'Wrong original EXE' }
+          if ((Get-FileHash prior/scripts/Install-QbrainMemory.ps1 -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'd802c230d2e5b0938b81baa115d5cf5b475aa855fce0df28f0305f00575fcc51') { throw 'Wrong baseline installer' }
+      - name: Actual case-sensitive NTFS and baseline collision
+        shell: pwsh
+        env:
+          TEST_SHELL: ${{ matrix.shell }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $major = if ($env:TEST_SHELL -eq 'powershell') { 5 } else { 7 }
+          & $env:TEST_SHELL -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .ci/test_installer_case_paths.ps1 -Binary runtime/qbrain.exe -BaselineInstaller prior/scripts/Install-QbrainMemory.ps1 -Report evidence/case-paths.json 2>&1 | Tee-Object evidence/case-paths.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/check_installer_case_paths.py --report evidence/case-paths.json --installer scripts/Install-QbrainMemory.ps1 --prior prior/scripts/Install-QbrainMemory.ps1 --test .ci/test_installer_case_paths.ps1 --binary runtime/qbrain.exe --source $env:GITHUB_SHA --shell $major --log evidence/case-paths.log 2>&1 | Tee-Object evidence/case-readback.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Unchanged snapshot recovery and all five installation suites
+        shell: pwsh
+        env:
+          TEST_SHELL: ${{ matrix.shell }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $major = if ($env:TEST_SHELL -eq 'powershell') { 5 } else { 7 }
+          & $env:TEST_SHELL -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .ci/test_installer_snapshot.ps1 -Binary runtime/qbrain.exe -Report evidence/snapshot.json 2>&1 | Tee-Object evidence/snapshot.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/check_installer_snapshot_report.py --report evidence/snapshot.json --installer scripts/Install-QbrainMemory.ps1 --test .ci/test_installer_snapshot.ps1 --binary runtime/qbrain.exe --source $env:GITHUB_SHA --shell $major 2>&1 | Tee-Object evidence/snapshot-readback.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $env:TEST_SHELL -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .ci/test_installer_recovery.ps1 -Binary runtime/qbrain.exe -Report evidence/recovery.json 2>&1 | Tee-Object evidence/recovery.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/check_recovery_report.py --report evidence/recovery.json --installer scripts/Install-QbrainMemory.ps1 --binary runtime/qbrain.exe 2>&1 | Tee-Object evidence/recovery-readback.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($test in @('test_install_hooks','test_install_consent','test_windows_transport')) {
+            & $env:TEST_SHELL -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".ci/$test.ps1" -Binary runtime/qbrain.exe 2>&1 | Tee-Object "evidence/$test.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          foreach ($test in @('test_hook_fact_install','test_promotion_install')) {
+            & $env:TEST_SHELL -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".ci/$test.ps1" -Binary runtime/qbrain.exe -Report "evidence/$test.json" 2>&1 | Tee-Object "evidence/$test.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47v-${{ matrix.shell }}
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
+  full-native:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Full unchanged native application and unit suite
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/native.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/native.log').read_text(encoding='utf-8-sig'),60)))" 2>&1 | Tee-Object evidence/native-groups.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47v-full-native
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
