@@ -1,0 +1,65 @@
+name: N47O reviewed Windows delivery
+on:
+  push:
+    branches: ['delivery/n47o-reviewed-c26']
+    paths: ['tools/delivery/publish_reviewed_n47o.py', 'tools/delivery/test_reviewed_n47o.py', 'docs/integration/REVIEWED-PREVIEW.zh-CN.md', '.github/workflows/n47o-delivery.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: n47o-reviewed-c26-delivery
+  cancel-in-progress: false
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONIOENCODING: utf-8
+jobs:
+  verify-reviewed-bytes:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47o-reviewed-c26'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: delivery
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: c26ec5e512d9ba960b86c9ced5b9b4976b031f2c
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 65b118542187f2c61895a62f3753d268fab423bf
+          path: review
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: b099c7fb7c8bcd29b5ad40e78a113bbbe82d920a
+          path: merged
+          persist-credentials: false
+      - name: Publisher negative tests, ordinary and optimized Python
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python delivery/tools/delivery/test_reviewed_n47o.py 2>&1 | tee evidence/tests.log
+          python -O delivery/tools/delivery/test_reviewed_n47o.py 2>&1 | tee evidence/tests-optimized.log
+      - name: Verify exact original artifacts (no release mutations)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python delivery/tools/delivery/publish_reviewed_n47o.py --workspace "$GITHUB_WORKSPACE" --output "$GITHUB_WORKSPACE/evidence/run" 2>&1 | tee evidence/delivery.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47o-delivery-evidence
+          path: |
+            evidence/
+            !evidence/run/artifacts/**
+          if-no-files-found: error
+          retention-days: 14
