@@ -1,0 +1,139 @@
+{
+  "schema": "qbrain-n47v-acceptance-v1",
+  "recorded_utc_date": "2026-09-19",
+  "local_closure_date_asia_seoul": "2026-09-20",
+  "verdict": "PASS-scoped-path-guard-with-open-P2-observation",
+  "reviewer": "coordinating ChatGPT; owner-authorized separate engineering self-review, not a subagent or third party",
+  "base_main": "98b45d264696a23552ca14d12218555c57087528",
+  "product_source": "192cdec2c3a39b6f35e7f6521d779425e61fee17",
+  "product_tree": "92ff4e582c49d92839614f3ef903fee6e9effaf0",
+  "supplementary_source": "b28a6378b7e5ceb3b4ea785317905a891d363da0",
+  "supplementary_tree": "c1c59d1a1c31b6402136d6ed410bc70e8e02764b",
+  "runs": {
+    "core": {
+      "id": 35450108456,
+      "event": "push",
+      "initial_attempt": 1,
+      "initial_ps7_failed_job": 105915664586,
+      "ps7_retry_attempt": 2,
+      "ps7_retry_job": 105920556280,
+      "ps5_accepted_job_attempt1": 105915664584,
+      "native_accepted_job_attempt1": 105915664505,
+      "source_accepted_job_attempt1": 105915664609
+    },
+    "supplementary": {
+      "id": 35452314972,
+      "event": "push",
+      "attempt": 1,
+      "ps5_job": 105921493365,
+      "ps7_job": 105921493179
+    }
+  },
+  "artifacts": {
+    "source": {
+      "file": "n47v-source-192c.zip",
+      "id": 10585563556,
+      "bytes": 12113907,
+      "sha256": "b8f5e27f7f030b501e6d36af2fd94606d960875f3c1578c94712161b975384bf",
+      "files": 4
+    },
+    "ps5": {
+      "file": "n47v-ps5-attempt1.zip",
+      "id": 10585959849,
+      "bytes": 10952,
+      "sha256": "0b610a777ee25d145fa2df667945bf48f26cb5e874a51a3e3f7b875c62b31e16",
+      "files": 17
+    },
+    "native": {
+      "file": "n47v-full-native-attempt1.zip",
+      "id": 10585943470,
+      "bytes": 29766,
+      "sha256": "844ff4f32b67090edf9f4f0deb444bb250849e44f7045c2bc8739b17289f580a",
+      "files": 3
+    },
+    "failure": {
+      "file": "n47v-ps7-failure-attempt1.zip",
+      "id": 10586419412,
+      "bytes": 7057,
+      "sha256": "25fcd2d5e5fb95fa51a5bc655127d4a7be0ed8f8b68c1c81451a11a9fe7ba5c9",
+      "files": 11
+    },
+    "ps7": {
+      "file": "n47v-ps7-attempt2.zip",
+      "id": 10587301974,
+      "bytes": 10812,
+      "sha256": "54844a52e07e2152b93ea1b064b948c77d8f2fe6c20a524b46a5c0fc2025a9aa",
+      "files": 17
+    },
+    "review5": {
+      "file": "n47v-review-ps5-b28a.zip",
+      "id": 10587027462,
+      "bytes": 12155891,
+      "sha256": "0f58c540b61b1ec8e82265f1f3bdd439513c99c663361b44eab11c4b4f12cadf",
+      "files": 4
+    },
+    "review7": {
+      "file": "n47v-review-ps7-b28a.zip",
+      "id": 10586907625,
+      "bytes": 12155869,
+      "sha256": "14ee01ad7fbf91f9c03bbe89fb3d92be0ecb01496be79aebd2b2812ed4e45ece",
+      "files": 4
+    }
+  },
+  "results": {
+    "each_native_shell": {
+      "case_path_checks": 84,
+      "directory_flag_observations": 13,
+      "supplementary_type_checks": 22,
+      "original_snapshot": 24,
+      "original_recovery": 60,
+      "original_installer": 69,
+      "original_consent": 16,
+      "original_transport": 8,
+      "original_fact_install": 33,
+      "original_promotion_install": 33
+    },
+    "full_native_registered_groups": 60,
+    "live_pg": "SKIP-PG",
+    "local_checker_unit_methods_each_normal_optimized": 3,
+    "negative_checker_subcases": 18,
+    "duplicate_json_key_rejection": true
+  },
+  "source_review": {
+    "product_source_files": 1155,
+    "supplementary_source_files": 1158,
+    "exact_crlf_inherited_files": 1141,
+    "protected_inherited_code_test_workflow_files": 373,
+    "only_changed_inherited_file": "scripts/Install-QbrainMemory.ps1",
+    "installer_blob": "64fb3962e5bdd4c2ac3ba262c43af4adef0ec3a4",
+    "installer_lf_sha256": "b2c6b64a4ad33adb9ab7b4d436c2a3427191fec7965482cfa97c2a824f6da64b",
+    "installer_crlf_sha256": "8800b24d1eda8f4aefc85e64c9ded46406983c03271f2365acb9014ccbb2d860",
+    "installer_test_exe_sha256": "c35fadde8c8356b7243bf0b34cfd5c836bda27bb46da87eddcc79c1031bf05b5",
+    "supplementary_script_lf_sha256": "a5f50e1fb213878de395787e933deee6e40e410fa5012efe54ccd67945bc166d",
+    "supplementary_script_tested_sha256": "35a3253e0c91de24e10a968d482cdfda1b74b3f69060cdbd13dfdc898f26fd8d"
+  },
+  "unresolved_observation": {
+    "issue": 40,
+    "severity_for_scoped_review": "P2",
+    "description": "One unchanged Codex Hook invocation timed out after original10s; one identical-source retry passed",
+    "cause_established": false,
+    "fixed": false,
+    "timeout_increased": false
+  },
+  "local_readback_record": {
+    "bytes": 8012,
+    "sha256": "0e53733b03bc3e6d49ae1a68279e629be39bee6aa813baea0c7a0d84844aecf1",
+    "raw_record_embedded": false
+  },
+  "public_release_changed": false,
+  "local_windows_execution": false,
+  "real_client_verified": false,
+  "limits": [
+    "Refusal of unsupported sensitive paths, not full case-sensitive support or automatic migration",
+    "Metadata checks do not close arbitrary TOCTOU or hostile-administrator gaps",
+    "Core source/PS5/native evidence is attempt1; PS7 completion is attempt2",
+    "The successful retry is not a repair of Issue40",
+    "Raw Actions archives follow retention; this is a derived pin/acceptance record",
+    "No model/provider/PG/signing or stable-v1 acceptance"
+  ]
+}
