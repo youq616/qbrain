@@ -1,0 +1,45 @@
+{
+  "schema":"qbrain-n47t-acceptance-v1",
+  "date":"2026-09-19",
+  "timezone":"Asia/Seoul",
+  "verdict":"PASS-scoped-explicit-use-receipts",
+  "reviewer":"coordinating ChatGPT, owner-authorized separate engineering self-review; not another agent or third party",
+  "base_main":"9694ffed4ab2c8f73377c469c9031087c830b94d",
+  "plan_commit":"45a0dd724270c9bef9910231fd6d4325b151d2e1",
+  "accepted_source":"6e6ca6e8c136fbfd81ee8671c42cfc172a350db7",
+  "accepted_tree":"ff094b291f9c5177dc250be6c09ab6acf4b64409",
+  "run_id":35440959490,
+  "event":"push",
+  "run_attempt":1,
+  "jobs":{"windows":105891540938,"portable":105891541030},
+  "required_jobs_and_steps":"completed/success, individually reread",
+  "artifacts":{
+    "windows":{"id":10583269479,"bytes":14153333,"sha256":"050f3625594bf9c52c3d677c715e7d43fe773f9d7e15920d09e977330602fc2c","members":24},
+    "portable":{"id":10584171527,"bytes":14547730,"sha256":"4bd5f4f12dab1ed5499c83f3f787d7e36dcc029ca31a600930b1b4d2299b6506","members":25}
+  },
+  "source_review":{"files":1127,"exact_windows_lf_to_crlf_files":1113,"inherited_runtime_test_script_files":259,"changed_inherited_files":["src/qbrain/cli/commands.cpp","src/qbrain/ops/memory_ops.cpp"],"new_module":"include/qbrain/memory/fact_usage.hpp","canonical_ledger_unchanged":true,"frozen_inventory_unchanged":true},
+  "results":{
+    "each_platform_new_suite":{"passed":75,"failed":0,"commands":118},
+    "each_platform_retained_checks":{"facts":34,"context":65,"multiterm":112,"named_arguments":60,"search_arguments":226,"hook_facts":52,"lifecycle_batch":40,"memory":44,"mcp_boundaries":17},
+    "windows_full_native_groups":60,
+    "live_pg":"SKIP-PG",
+    "portable_focused_ctest_groups":4,
+    "separate_linux_probes_each_local_and_downloaded_binary":{"passed":12,"failed":0,"commands":24},
+    "negative_report_mutations_rejected":14
+  },
+  "binary_sha256":{
+    "windows_ci":"7b5d8eda7af757724b6441d60b72020d8a1c8c16c758906ff037f1ddc9a0d93d",
+    "portable_ci":"dbcbbbba1124feea8597ef8f837ac2da0d375e182192da8b2500bf481a1eb482",
+    "local_linux":"00a580de3ba6a136f027ab7e67958cfa1ff97b7481ce0025dffb042b8fd67ef7"
+  },
+  "process_test_sha256":{"git_lf":"34185ef3e0cbcea6c0880c5e2fd7d1186ec0d45ce6ec1b5c081ea964621f7f30","windows_crlf":"1ca9d32eab9ab82718208704609938ae45f8b5a9db650301c4c64842c70591f4"},
+  "product_blobs":{"usage_module":"fb33a0fc6916a37f27851a72e04103c57927bf10","memory_ops":"837e60e67399463d0f62b9a6ed2c280ee97234a2","cli":"effe0f3c27b9c58aeb48adf4b954ef2937c8b369"},
+  "local_raw_reports_not_embedded_here":{
+    "final-usage.json":{"bytes":64530,"sha256":"84f01eedfde0498eeb74c52fb42a0181f2663991f0c5daeca63c56f9e8faf751"},
+    "extra-local.json":{"bytes":16307,"sha256":"24d7fbe4c6a07c1a660890a9264d95f933342a34e213f37aa52ebbc186ba8ba6"},
+    "extra-portable-ci.json":{"bytes":16307,"sha256":"ebf3f80dd2da3ce3a08680222ac0d56e5e39b1811b7375b64cb54f7da0ccdf93"},
+    "initial-harness-failure.json":{"bytes":4193,"sha256":"91ef1913f290450c62811de00f786031d6d18227d3d2eff28f9aa907578e757e"}
+  },
+  "extra_review_script_sha256":"ecfe1661747858bc5b997a00da9ce7e2daaed590b6857770c7b11c4230acc43f",
+  "limits":["Caller attestation, not external consumption or truth verification","New optional SQLite tables, not global version migration or PostgreSQL parity","4096 retained rows per fact include irreversible tombstones; no global quota","Module preparation and insertion are separate transactions","No automatic Hook/read counting, ranking, decay or profile changes","No secure backup/WAL erasure or hostile-administrator defense","New process harness retains output hashes, not all individual stdout bodies","Additional self-review probes ran on Linux; native conclusions use original Windows CI","Public N47R assets unchanged; new feature is source-only in this stage","External v1 gates and conditional roadmap estimates are not automatically closed"]
+}
