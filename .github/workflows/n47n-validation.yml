@@ -1,0 +1,107 @@
+name: N47N literal search validation
+
+on:
+  push:
+    branches: [main, 'optimization/n47n-search-literal-arguments']
+    paths: ['src/**', 'include/**', 'tests/**', 'scripts/**', '.ci/**', 'CMakeLists.txt', '.github/workflows/n47n-validation.yml']
+  pull_request:
+    paths: ['src/qbrain/cli/commands.cpp', 'include/qbrain/cli/search_arguments.hpp', '.ci/test_search_arguments.py', '.ci/search_arguments_unit.cpp', '.github/workflows/n47n-validation.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qbrain-n47n-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build product and focused unit targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/source.txt
+          cmake -S . -B build/n47n -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF 2>&1 | tee evidence/configure.log
+          cmake --build build/n47n --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_fact_tests qbrain_multiterm_tests --parallel 2 2>&1 | tee evidence/build.log
+          ctest --test-dir build/n47n -R 'qbrain_(memory|context|fact|multiterm)_unit' --output-on-failure 2>&1 | tee evidence/unit.log
+      - name: Real process parser and existing regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -Iinclude .ci/search_arguments_unit.cpp src/qbrain/util/string_util.cpp -o build/n47n/search-arguments-unit
+          build/n47n/search-arguments-unit 2>&1 | tee evidence/search-unit.log
+          python .ci/test_search_arguments.py --binary build/n47n/qbrain --report evidence/search-process.json 2>&1 | tee evidence/search-process.log
+          python .ci/test_named_arguments.py --binary build/n47n/qbrain --source-commit "$GITHUB_SHA" --report evidence/named-arguments.json 2>&1 | tee evidence/named-arguments.log
+          python .ci/test_memory_cycle.py --binary build/n47n/qbrain 2>&1 | tee evidence/memory.log
+          python .ci/test_context_process.py --binary build/n47n/qbrain 2>&1 | tee evidence/context.log
+          python .ci/test_fact_process.py --binary build/n47n/qbrain --report evidence/fact.json 2>&1 | tee evidence/fact.log
+          python .ci/test_multiterm_process.py --binary build/n47n/qbrain --report evidence/multiterm.json 2>&1 | tee evidence/multiterm.log
+          python .ci/test_mcp_boundaries.py --binary build/n47n/qbrain 2>&1 | tee evidence/mcp.log
+          python .ci/test_local_config.py --binary build/n47n/qbrain 2>&1 | tee evidence/config.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47n-portable-evidence
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Native MSVC application build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-cl.ps1 2>&1 | Tee-Object evidence/windows-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Native parser and existing process regressions
+        shell: pwsh
+        run: |
+          cmake -S .ci/search_arguments -B build/search-unit 2>&1 | Tee-Object evidence/search-unit-configure.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/search-unit --config Release --parallel 2 2>&1 | Tee-Object evidence/search-unit-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build/search-unit -C Release --output-on-failure -V 2>&1 | Tee-Object evidence/search-unit.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_search_arguments.py --binary build/cl/qbrain.exe --report evidence/search-process.json 2>&1 | Tee-Object evidence/search-process.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_named_arguments.py --binary build/cl/qbrain.exe --source-commit $env:GITHUB_SHA --report evidence/named-arguments.json 2>&1 | Tee-Object evidence/named-arguments.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($test in @('test_memory_cycle', 'test_context_process', 'test_mcp_boundaries', 'test_local_config')) {
+            python ".ci/$test.py" --binary build/cl/qbrain.exe 2>&1 | Tee-Object "evidence/$test.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          python .ci/test_fact_process.py --binary build/cl/qbrain.exe --report evidence/fact.json 2>&1 | Tee-Object evidence/fact.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_multiterm_process.py --binary build/cl/qbrain.exe --report evidence/multiterm.json 2>&1 | Tee-Object evidence/multiterm.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Original full native regression suite
+        shell: pwsh
+        run: |
+          # Only objects freshly built in this same clean job may be reused.
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 -SkipProductionBuild 2>&1 | Tee-Object evidence/windows-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47n-windows-evidence
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 14

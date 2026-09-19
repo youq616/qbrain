@@ -1,77 +1,71 @@
 # Qbrain 当前交付状态
 
-## N47M：源码修复与限定范围验收完成
+## N47N：Search 字面查询与收尾修复已通过源码验收
 
-2026-09-18：`memory` / `context` 命名参数二次解析修复通过本阶段验收。
-[PR #29](https://github.com/youq616/qbrain/pull/29)记录合并状态和最终提交身份。
-**源码验收不等于发布新安装包；本次没有创建、覆盖或移动任何 Release / tag。**
+2026-09-19（Asia/Seoul）。本次以修正后的 `c26ec5e512d9ba960b86c9ced5b9b4976b031f2c`
+为验收对象；[PR #31](https://github.com/youq616/qbrain/pull/31)记录实际合并状态。
+**不新建或替换 Release/tag；旧 N47L 下载包仍不含 N47M/N47N 修复。**
 
-查询文字、来源或脑库名称中的 `--brain`、`--source` 等只作为数据处理，
-不会再次改写实际选项。来源名或脑库名 `--manual` 不再被当作手动采集授权。
-真正的选项、原始证据、显式空值/缺省值语义、脑库选择优先级和写入许可保留。
-生产代码只修改 `cmd_memory` / `cmd_context`，没有全 CLI 重写、schema 迁移、
-新 MCP 工具、模型请求或默认采集开关变更。
+支持 `search --query VALUE`、`--query=VALUE` 和 `[options] -- literal words`。
+查询中的选项文字不会改写脑库、输出标志或重排参数。未知、重复、缺值、混合形式、
+空查询、错误 limit/mode 在开库前拒绝；普通合法输入保留原行为。字面边界不改变
+底层分词、排名、来源权限或模型许可，也不保证纯标点必有命中。
+[完整语法](docs/integration/SEARCH-ARGUMENTS.zh-CN.md)。
 
-## 固定源码与实际验证
+## 已修正的收尾问题
 
-| 身份 | 值 |
+之前 f2ba 的文档收尾将规范操作清单替换为归档链接，导致后续完整 Windows
+测试失败；a587 的旧通过结果不能覆盖这个新失败。现已恢复原清单精确字节，
+保留失败版本，并补上静态预检和换行/BOM 回归。原生断言与冻结清单未削弱。
+状态页及审核索引现统一引用 c26 的新证据，不再引用旧候选作为最终结论。
+
+## 固定源码与实际验收
+
+| 对象 | 身份 |
 | --- | --- |
-| 原始产品修复提交 | `c510e60ec935dcf756e7e29315908af060be999f` |
-| 完整原生验收源码 | `15f6f3962984cb9a9d20c3b6a2790a9b768f119e` |
-| 完整验收源树 | `571c24873615aa867fe037b0fb2f83975307371c` |
-| N47M 固定 push 验证 | [35290029136](https://github.com/youq616/qbrain/actions/runs/35290029136) |
-| N42 完整验证 | [35292424658](https://github.com/youq616/qbrain/actions/runs/35292424658) |
-| N44 完整验证 | [35292424683](https://github.com/youq616/qbrain/actions/runs/35292424683) |
+| 基线 main | `b530f361dc9c36cf23127cc2f3c584f3215fb890` |
+| 验收源码 | `c26ec5e512d9ba960b86c9ced5b9b4976b031f2c` |
+| 验收源树 | `2beda65c13421a995826c147aad606ea48d7f694` |
+| N47N 专项 | [35368994138](https://github.com/youq616/qbrain/actions/runs/35368994138) |
+| N42 完整验证 | [35368994139](https://github.com/youq616/qbrain/actions/runs/35368994139) |
+| N44 完整验证 | [35368994091](https://github.com/youq616/qbrain/actions/runs/35368994091) |
+| 静态清单验证 | [35368994105](https://github.com/youq616/qbrain/actions/runs/35368994105) |
 
-c510 到 15f 只增加接续计划和两个既有 CI 的分支触发条件；产品和测试源码相同。
-最后的审核/状态归档提交不改变产品、测试、构建脚本或工作流，不能替代上述实际
-构建身份。以 PR 的最终合并回执核对审核源树与合并源树。
+四条固定 push 运行通过；N44 两个发布任务按原条件跳过。最终审核归档不是
+构建提交，不能替代上述身份，也不预先宣称合并后新触发的 CI 已完成。
 
-| 验证 | 已执行结果 |
+| 验证 | 实际结果 |
 | --- | --- |
-| N47M Windows 原生真实进程回归 | 60/60 检查，113 次命令；原有完整单元套件通过 |
-| N42 / N44 完整原生与跨平台门槛 | 全部必需任务成功；两份 Windows 日志各核对 60 个注册组 |
-| 原始 CI 工件回读 | 7 个工件、966 个源码文件、1,177 项核验通过 |
-| 本轮原 N47M 回归与普通输入兼容 | 67/67，127 次命令；含 7 组退出码/stdout/stderr 字节对比 |
-| 单独编写的工程自审探测 | 修复版 937/937，967 次命令；旧版 284 个重叠用例失败，证明能识别原缺陷 |
-| 原有进程回归 | memory 44、context 65、fact 34、multiterm 112、MCP 边界 17、配置 6 全通过 |
-| 本轮辅助工程验证 | 4/4 focused CTest；193 项报告验证器、10 项 MSVC 清单、32 项原生日志验证器测试通过 |
+| Windows/Linux 搜索专项 | 各 361 项解析检查、226 项进程检查、302 次命令通过 |
+| 原有完整 Windows 套件 | N47N/N42/N44 各完整核对 60 个注册组，含已修复的 N31；PG 为 SKIP-PG |
+| N42/N44 工件核验 | 7 工件、1,005 个源码文件、73 个包成员，1,216 项检查通过 |
+| 专项报告核验 | Windows/Linux 各 1,746 项，各拒绝 8 种篡改报告 |
+| 清单预检 | Windows/Ubuntu 各 19 组；本地普通及优化 Python 各 19 组通过 |
+| 本轮额外清单对照 | 356 种合成输入，未发现 Python 通过而原生读取漏项的情况 |
+| 搜索兼容与反向验证 | 248/248，含 22 组字节对比；旧版有 206 项重叠用例失败，符合预期 |
+| 生成式与故障注入 | GCC、Clang ASan/UBSan 各 18,768 项通过；4 种故意破坏均被检出 |
+| 原回归 | N47M 67/67、记忆/上下文/事实/召回/MCP/配置、4 个 CTest 组及 193/10/32 项验证器测试通过 |
 
-本轮附加探测和辅助测试在 Linux 执行，不冒充 Windows 运行。937 项包含 912 种
-参数排列及额外边界，不是 937 个独立功能。284 项旧版失败也不是 284 个独立漏洞。
-Windows 注册组含明确的 `SKIP-PG`；不能用组 PASS 宣称真实 PostgreSQL 已验收。
+额外本地检查在 Linux 执行，不能冒充 Windows 内存检查或真实客户端验收。
+356 种对照中有 108 种重复行被 Python 更严格地拒绝，这是预期行为。
+生成排列和失败用例不是等量独立功能或漏洞。
 
-## 审核结论和边界
+**结论：本阶段限定范围 PASS，未发现未解决的阻断项。** 审核由协调者本人
+在开发之后另行进行，属于用户授权的分离工程自审，不是独立子代理或第三方认证，
+也不保证绝对无缺陷。[完整审核](docs/nodes/N47N-HARD-AUDIT.md) ·
+[精确证据](docs/nodes/n47n-evidence/FINAL-SUMMARY.json)。
 
-**结论：N47M 限定范围 PASS，未发现未解决的阻断项。** 审核由协调者本人另行进行
-代码复核、重新编译、黑盒探测、旧版反向验证和工件回读。用户在 9 月 18 日明确
-授权由本人审核；这不是另一个子代理、Claude Code 或第三方认证，也不保证绝对无缺陷。
+## 交付与后续边界
 
-详细证据、命令、失败记录、二进制区别和限制见
-[最终自审](docs/nodes/N47M-FINAL-AUDIT.md)、
-[证据索引](docs/nodes/n47m-evidence/FINAL-SUMMARY.json)和
-[能力差异](docs/OPS-PARITY-DELTA-N47M.md)。
-初始待验收记录保留，没有将当时的 pending 改写成历史 PASS。
+c26 的 N44 inner ZIP 为 2,117,939 字节，SHA-256
+`ec681a4599bf1b2a90f3848f5bf65b6d6a32e37254f32392d0709c43080b356c`；包内 EXE
+SHA-256 `c35fadde8c8356b7243bf0b34cfd5c836bda27bb46da87eddcc79c1031bf05b5`。
+它仍是测试工件，不是新公开发行。N47N 专项使用另一次编译，EXE 字节不同。
 
-## 当前公开下载仍为 N47L
+下一交付待办是将已审核修复整合到新的 Windows 预览和安装入口，本阶段没有启动
+发布。其他 CLI 入口、真实 PG、完整 ACL/DLP、通用语义推断、衰减/画像、模型质量
+费用、客户端消费/外发和正式签名仍有未完成项。本阶段通过不等于整个项目完成。
+当前不需要用户本机操作或本地 Agent。
 
-[N47L Release：multiterm-preview-17e9a435](https://github.com/youq616/qbrain/releases/tag/multiterm-preview-17e9a435)
-的 `qbrain-windows-x64-multiterm.zip` 为 2,114,341 字节，SHA-256
-`ed44a43d79e1e76efa768e74872223cd5d867dfb92881fe67aab129789cd4408`。
-**该旧下载包不包含 N47M 修复。** 它仍是未签名、非 latest 的开发预览；
-原始发布状态完整保留于 [N47L 状态归档](CURRENT-STATUS-N47L.md)。
-
-N47M 的 N44 测试工件已验证，但没有作为新公开 Release 发布：inner ZIP 为
-2,115,638 字节，SHA-256 `9072c0ae4cae517cc6b759b17d1657fac7dd46265eece04461b757771f308ee3`；
-其中 EXE SHA-256 `c455a082d4ee55c9ff61688919e39ba0b0a3a54f63a4de696285e5f7ecdb0faa`。
-不要将它和 N47M 专项 native 报告里的另一次构建 EXE 混为相同二进制。
-
-## 下一阶段
-
-`search` 的选项前缀与字面查询语法仍需单独定义和修复，未包含在 N47M；原始复现
-见 [历史记录](docs/nodes/n47l-evidence/NEXT-STAGE.md)。真实 PG、完整 ACL/DLP、
-通用语义合并/冲突推断、使用确认与自动衰减、画像、模型质量/费用及正式签名
-仍未完成。本阶段通过不等于整个项目完成。
-
-当前不需要用户本机操作或本地 Agent；没有新增已登录客户端、模型消费或外发验收。
-以后确需本机任务时，仍使用仓库文件加一个完整可复制提示词的交接方式。
+[N47M 原状态](CURRENT-STATUS-N47M.md)、[N47L 发布状态](CURRENT-STATUS-N47L.md)
+和 [N47N 旧收尾状态](docs/nodes/n47n-evidence/PRE-CLOSURE-CURRENT-STATUS.md)保留为历史记录。

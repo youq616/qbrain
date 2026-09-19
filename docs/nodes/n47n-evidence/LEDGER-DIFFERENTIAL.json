@@ -1,0 +1,18 @@
+{
+  "schema": "qbrain-n47n-ledger-differential-summary-v1",
+  "date": "2026-09-19",
+  "cases": 356,
+  "false_approvals": 0,
+  "canonical_pass": true,
+  "rejected_closure_fails_both": true,
+  "stricter_rejections": 108,
+  "native_source_sha256": "98cb4b7587fe751dcb0845bccee57e640b357ba754ff8eeb63213e3c721e4e9f",
+  "checker_sha256": "e9c55db82ff4c1599cd58b4e13943db183b7c8473ea36349ae56003610064a85",
+  "inventory_sha256": "fa772160a16f7aa1f413056e4430da6885855ea1f6403ca51a9225f088b3268b",
+  "ledger_sha256": "ead8f12691745b14386038541b8087decb7bce65a3a0446dc86fe2d0e22b37d5",
+  "native_function_sha256": "3792d4d0aaf10f753fe6e9474672b95aa472e83972be88baf200b8e1b82b2025",
+  "script_sha256": "e16a752a9e67319cd12dfce35a77aa663948b15219476930171fe82760aa6779",
+  "full_local_report": {"bytes": 85725, "sha256": "2d222e2b2747d3cd699426299a2787991bc55bb6392089cb0cdec44c14f68457", "embedded_here": false},
+  "reproduction": "python docs/nodes/n47n-evidence/crosscheck_ledger.py --root . --report ledger-differential.json",
+  "scope": "Linux byte-parser comparison using exact native test function; same coordinator self-review, not full runtime or third-party certification"
+}
