@@ -1,0 +1,124 @@
+{
+  "schema": "qbrain-n47r-closure-v1",
+  "date": "2026-09-19",
+  "timezone": "Asia/Seoul",
+  "verdict": "PASS-scoped-integrated-preview-delivery",
+  "reviewer": "coordinating ChatGPT, separate owner-authorized engineering self-review; not independent subagent or third party",
+  "base_main": "c4d0d73931e5bb96f8ae4a6041c3c34477734e56",
+  "integration_source": "9e9a92b0e0e68ee1b07deafc1085bb01849d08a7",
+  "integration_tree": "957e322e3bbd9105574cf7ce9487fb07f4b78480",
+  "upgrade_source": "b7e1b60a40f421c13e494733efbf8ce0420f2aaa",
+  "upgrade_tree": "4b1a0405ceb9c88f0a219223910c7febc6a59119",
+  "readonly_source": "c67e7799adae86929917ad0faffe99842d77a372",
+  "publication_source": "be5d84e223633608929c55bb9dd487ec80f8a699",
+  "runs": {
+    "native": 35428968503,
+    "upgrade": 35429293475,
+    "readonly": 35430160564,
+    "publication": 35430794301
+  },
+  "checks": {
+    "native_registered_groups": 60,
+    "each_shell": {
+      "snapshot": 24,
+      "recovery": 60,
+      "installer": 69,
+      "consent": 16,
+      "transport": 8,
+      "fact_install": 33,
+      "promotion_install": 33,
+      "old_to_new_upgrade": 37
+    },
+    "task_formats": 2,
+    "tasks_each_format": 50,
+    "commands_each_format": 520,
+    "builder_methods": 22,
+    "bundled_tool_methods": 24,
+    "publication_verifier_methods": 27,
+    "published_assets": 5,
+    "anonymous_downloaded_assets": 5
+  },
+  "components": {
+    "evaluation": "11c7da219ee65d6aa387acbad6e07c0fb8acf090",
+    "installer": "9feed7c74926d53a7b2a7b21391af02275799f51",
+    "runtime": "c26ec5e512d9ba960b86c9ced5b9b4976b031f2c"
+  },
+  "bundle_sha256": "e7158949d805a0a25157bfb720561e4b21e80a433a6c7f031c60ee3bbaa746c5",
+  "bundle_bytes": 4858530,
+  "bundle_members": 85,
+  "repackaged": true,
+  "exe_recompiled": false,
+  "release_id": 391991518,
+  "tag": "windows-integrated-preview-9e9a92b0",
+  "original_artifacts_retained": 5,
+  "original_artifact_pins": {
+    "native": {
+      "linux": {
+        "bytes": 16223888,
+        "file": "linux.zip",
+        "id": 10579304715,
+        "sha256": "2799de41e488d75186015e591afaef4ffd19ba883a239378a669150a73c7418f"
+      },
+      "native": {
+        "bytes": 29624,
+        "file": "native.zip",
+        "id": 10580126897,
+        "sha256": "4ad5839d0aa048a496bd13cfa3a841f3f89e7f5d4cce25909e12d74b9acbcc1c"
+      },
+      "windows": {
+        "bytes": 17338465,
+        "file": "windows.zip",
+        "id": 10579886985,
+        "sha256": "90ce92026b23c7b37edbc8ad3f47e7a6e891905a8916596221fbad02a2f91c35"
+      }
+    },
+    "upgrade": {
+      "upgrade5": {
+        "bytes": 14123173,
+        "file": "upgrade5.zip",
+        "id": 10579509829,
+        "sha256": "1cf15ce7751ccb47216363c0ed1e78fc7525370dc4cd7065c339a8e9451645ba"
+      },
+      "upgrade7": {
+        "bytes": 14123144,
+        "file": "upgrade7.zip",
+        "id": 10580057003,
+        "sha256": "eddfc42d2cca2858b06f25ccc3ee9af8ec6dfa84bc7d141b09d000f444d6ead2"
+      }
+    }
+  },
+  "published_delivery_artifact": {
+    "id": 10580288457,
+    "bytes": 75397307,
+    "sha256": "2399d38bfed74cd3d8ed9a106614392a90165c1d9f5206a616a46e07b285e19a",
+    "source_files": 1087,
+    "outer_members": 19
+  },
+  "signed": false,
+  "stable_v1": false,
+  "limits": [
+    "Native Windows CI and synthetic data, not new authenticated client/model acceptance",
+    "PG remains skipped without live DSN",
+    "Hashes are not code signatures or atomic hostile-administrator protection",
+    "Internal manifest records construction-time status; external receipt proves later acceptance of fixed bytes",
+    "Original N47O assets remain unchanged"
+  ],
+  "receipt_hashes": {
+    "RELEASE-PROVENANCE.json": {
+      "bytes": 2588,
+      "sha256": "fd154df09b61e7e6934b77873244830fb7666b44fd4ddd2aacffcff1f5251254"
+    },
+    "PUBLIC-READBACK.json": {
+      "bytes": 881,
+      "sha256": "3ce95c64170bb74d9a29dbe94f06e82fa25430e8d0055a6b4f3605c2ea6bf107"
+    },
+    "RELEASE.json": {
+      "bytes": 1376,
+      "sha256": "6603d27b86168b799bba87642a42fbb1a6ca364029b7f96ff857ce7637d176ff"
+    },
+    "RELEASE-SHA256SUMS.txt": {
+      "bytes": 360,
+      "sha256": "1b6dc161d38ab15611e0794c684238c6f60e0382c0cd3794ef3c78bd1307b84d"
+    }
+  }
+}

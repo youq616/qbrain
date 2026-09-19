@@ -1,0 +1,40 @@
+{
+  "asset_pins": {
+    "PROVENANCE.json": {
+      "digest": "sha256:fd154df09b61e7e6934b77873244830fb7666b44fd4ddd2aacffcff1f5251254",
+      "id": 574356664,
+      "size": 2588
+    },
+    "SHA256SUMS.txt": {
+      "digest": "sha256:1b6dc161d38ab15611e0794c684238c6f60e0382c0cd3794ef3c78bd1307b84d",
+      "id": 574356803,
+      "size": 360
+    },
+    "START-HERE.zh-CN.md": {
+      "digest": "sha256:7db4673720d68d902555f72bbe778b0da3045c4c3b02cefa3717e3843b9e9b46",
+      "id": 574356645,
+      "size": 6143
+    },
+    "VALIDATION-EVIDENCE.zip": {
+      "digest": "sha256:bb84ac9c20f522f78cc4eba6c0cf9d4c73e6b161d597f984a073e1895f2dbec9",
+      "id": 574356677,
+      "size": 61254828
+    },
+    "qbrain-windows-x64-n47r-preview.zip": {
+      "digest": "sha256:e7158949d805a0a25157bfb720561e4b21e80a433a6c7f031c60ee3bbaa746c5",
+      "id": 574356615,
+      "size": 4858530
+    }
+  },
+  "before_and_after_publication_byte_readback": true,
+  "bundle_sha256": "e7158949d805a0a25157bfb720561e4b21e80a433a6c7f031c60ee3bbaa746c5",
+  "exe_recompiled": false,
+  "release_id": 391991518,
+  "repackaged": true,
+  "result": "PUBLISHED",
+  "signed": false,
+  "source_commit": "9e9a92b0e0e68ee1b07deafc1085bb01849d08a7",
+  "stable_v1": false,
+  "tag": "windows-integrated-preview-9e9a92b0",
+  "url": "https://github.com/youq616/qbrain/releases/tag/windows-integrated-preview-9e9a92b0"
+}
