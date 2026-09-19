@@ -1,0 +1,17 @@
+{
+  "schema": "qbrain-n47p-source-review-v1",
+  "source_commit": "9feed7c74926d53a7b2a7b21391af02275799f51",
+  "tree": "d396b6170866b83db89e54e26f44685ebcd5c276",
+  "source_files": 1040,
+  "locally_equal_files": 1040,
+  "archive_bytes": 11855455,
+  "archive_sha256": "8c5f78ef946b8ce62cf24155d85c38ed979042f5b99a5db8e3b633debaade851",
+  "inherited_prod_test_script_files_compared_to_c26": 259,
+  "changed_inherited_files": [
+    "scripts/Install-QbrainMemory.ps1"
+  ],
+  "removed_inherited_files": [],
+  "installer_sha256": "bde21f5c1aabb7b517a1324f3fb076b482a5652387eaab26a1050bb0feb97dd2",
+  "canonical_ledger_unchanged_from_c26": true,
+  "frozen_inventory_unchanged_from_c26": true
+}

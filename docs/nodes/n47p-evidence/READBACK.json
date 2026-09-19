@@ -1,0 +1,207 @@
+{
+  "schema": "qbrain-n47p-readback-v1",
+  "source_commit": "9feed7c74926d53a7b2a7b21391af02275799f51",
+  "tree": "d396b6170866b83db89e54e26f44685ebcd5c276",
+  "source_files": 1040,
+  "run_id": 35415626607,
+  "metadata_sha256": "00cc1730c4bc8b88788f9bb1e25e00ed718013fb4b87f04955911d31c6e67adb",
+  "artifacts": {
+    "source": {
+      "id": 10575985273,
+      "file": "source.zip",
+      "bytes": 11855455,
+      "sha256": "8c5f78ef946b8ce62cf24155d85c38ed979042f5b99a5db8e3b633debaade851"
+    },
+    "powershell": {
+      "id": 10575632678,
+      "file": "powershell.zip",
+      "bytes": 11817,
+      "sha256": "6b6d7cabf59a023102fe22904c57d50d89ad9dc587b06f9221fd978ef9f18f3f"
+    },
+    "pwsh": {
+      "id": 10576220376,
+      "file": "pwsh.zip",
+      "bytes": 11683,
+      "sha256": "eabe4b1e5aa5845dabb0a270acd7e987e8c7c3ae5989ad0002abd2f5c3ada959"
+    },
+    "full-native": {
+      "id": 10576480518,
+      "file": "full-native.zip",
+      "bytes": 29754,
+      "sha256": "9722e0890f91552dbdb4db051c3e46a374d74058c4e132b77e4092f1d92d2f91"
+    }
+  },
+  "native_registered_groups": [
+    "rrf",
+    "n43_memory",
+    "n45_context",
+    "n46b_http",
+    "n46c_retrieval",
+    "n46d_embedding",
+    "n47a_facts",
+    "n47b_conflicts",
+    "n47c_recall",
+    "n47d_hook_facts",
+    "n47e_local_fact_promotion",
+    "n47f_lifecycle",
+    "n47g_lifecycle_batch",
+    "n47h_lifecycle_candidates",
+    "n47i_strict_json",
+    "n47j_hook_checkpoints",
+    "n47k_hook_diagnostics",
+    "n47l_multiterm_recall",
+    "n46f_cjk",
+    "n42_foundation",
+    "vector",
+    "chunker",
+    "extract",
+    "storage",
+    "mcp",
+    "rerank",
+    "minions",
+    "migration_v6",
+    "n12_dream",
+    "live_sync",
+    "n13",
+    "codeintel",
+    "analytics",
+    "n19",
+    "n20",
+    "n22",
+    "n23",
+    "n20_23",
+    "n24_25",
+    "n26_27",
+    "wave4",
+    "wave5",
+    "doctor",
+    "n14",
+    "n15",
+    "n16",
+    "n17",
+    "n18",
+    "n30_c_routing_storage",
+    "n30_b_auth_redaction",
+    "n31_c_negatives",
+    "n31_a_counts_mapping",
+    "n32_scan_integration",
+    "n34",
+    "n33_multimodal",
+    "n35_contract_suite",
+    "n36_token_scope",
+    "n37_packaging",
+    "n38_pg_backend",
+    "n39_rerank_config"
+  ],
+  "native_pg_skipped": true,
+  "shells": {
+    "powershell": {
+      "snapshot": {
+        "verified": true,
+        "source_commit": "9feed7c74926d53a7b2a7b21391af02275799f51",
+        "shell_major": 5,
+        "passed": 24,
+        "failed": 0,
+        "expected_baseline_rejection": false
+      },
+      "snapshot-prior": {
+        "verified": true,
+        "source_commit": "9feed7c74926d53a7b2a7b21391af02275799f51",
+        "shell_major": 5,
+        "passed": 4,
+        "failed": 20,
+        "expected_baseline_rejection": true
+      },
+      "recovery": {
+        "verified": true,
+        "cases": 60,
+        "passed": 60,
+        "failed": 0,
+        "baseline_expected_rejection": false,
+        "powershell": "5.1.26100.33296"
+      },
+      "baseline": {
+        "verified": true,
+        "cases": 60,
+        "passed": 26,
+        "failed": 34,
+        "baseline_expected_rejection": true,
+        "powershell": "5.1.26100.33296"
+      },
+      "test_install_hooks": {
+        "checks": 69
+      },
+      "test_install_consent": {
+        "checks": 16
+      },
+      "test_windows_transport": {
+        "checks": 8
+      },
+      "test_hook_fact_install": {
+        "checks": 33,
+        "shell_major": 5
+      },
+      "test_promotion_install": {
+        "checks": 33,
+        "shell_major": 5
+      }
+    },
+    "pwsh": {
+      "snapshot": {
+        "verified": true,
+        "source_commit": "9feed7c74926d53a7b2a7b21391af02275799f51",
+        "shell_major": 7,
+        "passed": 24,
+        "failed": 0,
+        "expected_baseline_rejection": false
+      },
+      "snapshot-prior": {
+        "verified": true,
+        "source_commit": "9feed7c74926d53a7b2a7b21391af02275799f51",
+        "shell_major": 7,
+        "passed": 4,
+        "failed": 20,
+        "expected_baseline_rejection": true
+      },
+      "recovery": {
+        "verified": true,
+        "cases": 60,
+        "passed": 60,
+        "failed": 0,
+        "baseline_expected_rejection": false,
+        "powershell": "7.6.5"
+      },
+      "baseline": {
+        "verified": true,
+        "cases": 60,
+        "passed": 26,
+        "failed": 34,
+        "baseline_expected_rejection": true,
+        "powershell": "7.6.5"
+      },
+      "test_install_hooks": {
+        "checks": 69
+      },
+      "test_install_consent": {
+        "checks": 16
+      },
+      "test_windows_transport": {
+        "checks": 8
+      },
+      "test_hook_fact_install": {
+        "checks": 33,
+        "shell_major": 7
+      },
+      "test_promotion_install": {
+        "checks": 33,
+        "shell_major": 7
+      }
+    }
+  },
+  "new_product_execution": false,
+  "limits": [
+    "Offline pins supplied from connector, not online authentication",
+    "Temporary test filesystem assertions were executed by CI; not observed after deletion",
+    "Not real client acceptance or cross-file atomicity"
+  ]
+}
