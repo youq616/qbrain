@@ -3,10 +3,11 @@
 param(
  [Parameter(Mandatory=$true)][string]$Binary,
  [Parameter(Mandatory=$true)][string]$Report,
- [string]$Installer=(Join-Path $PSScriptRoot '..\scripts\Install-QbrainMemory.ps1')
+ [string]$Installer=''
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
+if(-not $Installer){$Installer=Join-Path $PSScriptRoot '..\scripts\Install-QbrainMemory.ps1'}
 $exe=(Resolve-Path -LiteralPath $Binary).ProviderPath
 $installerPath=(Resolve-Path -LiteralPath $Installer).ProviderPath
 $reportPath=[IO.Path]::GetFullPath($Report)
@@ -66,12 +67,13 @@ function Unchanged-Rejection($f,$pending){
 }
 try{
  foreach($hostName in @('Claude','Codex')){
-  foreach($kind in @('version-string','version-bool','version-float','zero-changes','scalar-changes','duplicate-path','extra-change-field','extra-root-field','missing-before','bad-before','bad-after','bad-path','unowned-late-path','too-many-changes')){
+  foreach($kind in @('top-array','version-string','version-bool','version-float','zero-changes','scalar-changes','duplicate-path','extra-change-field','extra-root-field','missing-before','bad-before','bad-after','bad-path','unowned-late-path','too-many-changes')){
    Case ($hostName+'/'+$kind) {
     $f=Fixture $hostName
     $one=Entry $f.target 'before-one' 'after-one';$two=Entry $f.mcp 'before-two' 'after-two'
     $j=Journal $f @($one,$two)
     switch($kind){
+     'top-array' {$j=@($j)}
      'version-string' {$j.version='1'}
      'version-bool' {$j.version=$true}
      'version-float' {$j.version=1.5}

@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 
-CASES = ('version-string version-bool version-float zero-changes scalar-changes duplicate-path '
+CASES = ('top-array version-string version-bool version-float zero-changes scalar-changes duplicate-path '
          'extra-change-field extra-root-field missing-before bad-before bad-after bad-path '
          'unowned-late-path too-many-changes late-temp-directory late-temp-junction external-late-edit '
          'oversized-unicode-image journal-envelope-cap absent-before empty-before text-before already-before '

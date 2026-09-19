@@ -142,7 +142,10 @@ $lockPath=Join-Path $owned 'install.lock';$null=Safe $lockPath
 $lock=[IO.File]::Open($lockPath,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
 try {
  if([IO.File]::Exists($journal)){
-  $pending=Parse (Raw $journal $journalLimit)
+  $pendingText=Raw $journal $journalLimit
+  # PowerShell 7 may enumerate a one-element JSON array into an object.
+  if([string]::IsNullOrWhiteSpace($pendingText) -or -not $pendingText.TrimStart().StartsWith('{')){throw 'Recovery journal must be a JSON object.'}
+  $pending=Parse $pendingText
   Validate-Journal $pending
   Check-Current $pending
   foreach($c in $pending.changes){Write-Atomic $c.path $c.before}
