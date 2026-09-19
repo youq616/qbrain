@@ -5,7 +5,7 @@ on:
     paths: ['tools/delivery/publish_reviewed_n47o.py', 'tools/delivery/test_reviewed_n47o.py', 'tools/delivery/test_transport_n47o.py', 'docs/integration/REVIEWED-PREVIEW.zh-CN.md', '.github/workflows/n47o-delivery.yml']
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
   actions: read
 concurrency:
   group: n47o-reviewed-c26-delivery
@@ -40,6 +40,14 @@ jobs:
           ref: b099c7fb7c8bcd29b5ad40e78a113bbbe82d920a
           path: merged
           persist-credentials: false
+      - name: Verify publisher source against successful read-only review
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'c01890e7b941cb25718e479d8f5ded0576210df709ad3b5fcdd96b713a6f263a  delivery/tools/delivery/publish_reviewed_n47o.py' | sha256sum -c -
+          echo 'f480de90df3be5cd2c8b695f31610c8ca9bffe9adcae5edea57e2ae60d53c9da  delivery/tools/delivery/test_reviewed_n47o.py' | sha256sum -c -
+          echo '38e0f4860f79c166f0cdfd6e6832eced033a88847e35f550c28b1f1f6d9d567d  delivery/tools/delivery/test_transport_n47o.py' | sha256sum -c -
+          echo '6c89e88f55cd5fcf9bf687572e8631e6204c33172b5ad3a9efa34292efd728d3  delivery/docs/integration/REVIEWED-PREVIEW.zh-CN.md' | sha256sum -c -
       - name: Publisher negative tests, ordinary and optimized Python
         shell: bash
         run: |
@@ -49,13 +57,38 @@ jobs:
           python -O delivery/tools/delivery/test_reviewed_n47o.py 2>&1 | tee evidence/tests-optimized.log
           python delivery/tools/delivery/test_transport_n47o.py 2>&1 | tee evidence/transport.log
           python -O delivery/tools/delivery/test_transport_n47o.py 2>&1 | tee evidence/transport-optimized.log
-      - name: Verify exact original artifacts (no release mutations)
+      - name: Verify again and publish the separately reviewed bytes
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python delivery/tools/delivery/publish_reviewed_n47o.py --workspace "$GITHUB_WORKSPACE" --output "$GITHUB_WORKSPACE/evidence/run" 2>&1 | tee evidence/delivery.log
+          python delivery/tools/delivery/publish_reviewed_n47o.py --publish --workspace "$GITHUB_WORKSPACE" --output "$GITHUB_WORKSPACE/evidence/run" 2>&1 | tee evidence/delivery.log
+      - name: Anonymous public download readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PYCODE'
+          import hashlib, json
+          from pathlib import Path
+          from urllib.parse import quote
+          from urllib.request import urlopen
+          root = Path('evidence/run')
+          metadata = json.loads((root / 'verification.json').read_text())
+          receipt = json.loads((root / 'publication.json').read_text())
+          if receipt['result'] != 'PUBLISHED': raise ValueError('No successful publication receipt')
+          results = []
+          for name, item in metadata['assets'].items():
+              url = 'https://github.com/youq616/qbrain/releases/download/windows-preview-c26ec5e5/' + quote(name, safe='')
+              with urlopen(url, timeout=60) as response:
+                  data = response.read(128 * 1024 * 1024 + 1)
+              digest = hashlib.sha256(data).hexdigest()
+              if len(data) != item['bytes'] or digest != item['sha256']:
+                  raise ValueError('Anonymous download mismatch: ' + name)
+              results.append({'name': name, 'bytes': len(data), 'sha256': digest})
+          (root / 'public-readback.json').write_text(json.dumps({'result': 'PASS', 'authenticated': False, 'release_id': receipt['release_id'], 'assets': results}, indent=2) + '\n')
+          print('Anonymous downloads verified:', len(results))
+          PYCODE
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
