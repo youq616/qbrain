@@ -1,9 +1,11 @@
 # N47O — Reviewed Windows preview delivery
 
-Date: 2026-09-19 (Asia/Seoul). Status: approved for implementation; delivery pending.
+Date: 2026-09-19 (Asia/Seoul). Status: done for scoped preview delivery.
 Base main: b099c7fb7c8bcd29b5ad40e78a113bbbe82d920a.
 Owner requests continued development and a separate coordinator outcome review.
 This node closes the gap between accepted N47M/N47N sources and public binaries.
+Original approved plan is retained in commit d8258ae88b9d5c0c7c654964655a77e6a2939a5e.
+Final acceptance: N47O-HARD-AUDIT.md; release391866783, run35411136813.
 
 ## Fixed scope and acceptance
 
@@ -43,3 +45,5 @@ no external secret. Tests simulate GitHub; live mutation is explicit in CI.
 A failed pre-publication run leaves a draft for inspected recovery; do not invent
 success or auto-retry destructive steps. Rolling back source changes does not
 retract a release; any such mutation needs an explicit separately reviewed task.
+After completed publication, the branch workflow is restored to the successful
+read-only version. The actual publication workflow remains in its fixed commit.
