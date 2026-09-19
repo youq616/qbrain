@@ -1,0 +1,33 @@
+{
+  "cases": [
+    {
+      "case": "projection-disabled",
+      "rejected": true
+    },
+    {
+      "case": "loopback-promoted",
+      "rejected": true
+    },
+    {
+      "case": "request-rehashed",
+      "rejected": true
+    },
+    {
+      "case": "response-changed",
+      "rejected": true
+    },
+    {
+      "case": "missing-row",
+      "rejected": true
+    },
+    {
+      "case": "changed-answer-key",
+      "rejected": true
+    }
+  ],
+  "execution": "offline, copies of downloaded actual CI output; no network/model/client calls",
+  "rejected": 6,
+  "restored_control_equal": true,
+  "schema": "qbrain-n47s-final-adverse-readback-v1",
+  "source_commit": "b88698bd041d960edcc2a4a2e9beb6fa407ffc47"
+}

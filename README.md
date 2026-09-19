@@ -4,6 +4,16 @@ Windows 原生 C++20 / PowerShell 记忆与知识库，默认 SQLite + FTS5。
 预编译应用不需要编译器、Docker、WSL 或 Python 服务。Python 仅用于可选评测
 和开发工具。gbrain / OpenViking 是设计参考，不表示所有功能完全等价。
 
+## 最新源码工具：N47S 受控模型对照
+
+新增离线计划、明确授权的独立HTTP请求和原始回答评分，支持固定任务对照，无需
+手工复制答案。最终48方法及Windows引擎→回环HTTP流程已验证；回环响应并非真实
+模型效果，账号/客户端验收仍待完成。v2计划隐藏测试会话元数据，保留原话与证据。
+[使用说明](docs/integration/MODEL-COMPARISON.zh-CN.md) ·
+[本阶段自审](docs/nodes/N47S-HARD-AUDIT.md) · [当前状态](CURRENT-STATUS.md)。
+另有新鲜MSVC完整原生回归60组通过，真实PG仍跳过。
+本工具在仓库源码中，未修改下方N47R发行包；应用无需重新安装。
+
 ## 当前下载：N47R 集成 Windows 开发预览
 
 **[下载 windows-integrated-preview-9e9a92b0](https://github.com/youq616/qbrain/releases/tag/windows-integrated-preview-9e9a92b0)**。

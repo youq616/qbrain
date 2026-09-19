@@ -1,0 +1,57 @@
+{
+  "artifacts": {
+    "linux": {
+      "bytes": 12010066,
+      "id": 10581356655,
+      "members": 5,
+      "python": "Python 3.12.3",
+      "sha256": "97d12e8e333f00ba3bd4af73ce5cdc6edfab0829189a3d3065b53278a3e44c52"
+    },
+    "windows": {
+      "bytes": 12877650,
+      "id": 10581891745,
+      "members": 2150,
+      "python": "Python 3.12.10",
+      "sha256": "6bb0fbdb31cd31a73fa83f66f23cec12dc1b1e19036d3d82de3efcfdaf6ca357"
+    }
+  },
+  "attempt": 1,
+  "execution_kind": "LOOPBACK_TEST",
+  "http_receipt_files": 402,
+  "http_requests": 100,
+  "limits": [
+    "Pins originated from separate GitHub metadata reads; this local script checks bytes, not origin authentication",
+    "Native Windows CI uses a fixed released EXE and synthetic data, not a newly built runtime or signed-in client",
+    "HTTP replies and token values are test fixtures, not real provider/model results or measured provider charges"
+  ],
+  "native_binary_sha256": "c35fadde8c8356b7243bf0b34cfd5c836bda27bb46da87eddcc79c1031bf05b5",
+  "native_engine_commands": 520,
+  "native_engine_tasks": 50,
+  "new_local_windows_execution": false,
+  "nonempty_contexts_structurally_compared": 30,
+  "offline_comparison_reproduced": true,
+  "offline_engine_checker_reproduced": true,
+  "original_packets_retained": true,
+  "provider_cost_usd": null,
+  "quotes_and_evidence_ids_preserved": true,
+  "real_client_consumption": "NOT_RUN",
+  "real_model_answers": "NOT_RUN",
+  "record_sha256": {
+    "comparison.json": "4d5e3218a593de3045e5401d9ca1aad29de45a965b72c75d4030ce58a1fa00a9",
+    "engine/engine-report.json": "015ca1bdc2bd4827ac71f1d992d9642e2f2eff166eedc78ce929e5b4cdb2064e",
+    "http-run/run.json": "d233eb3815cb34247155a6d7819c575f27f412409313e93fe08f91c2335af499",
+    "pipeline.json": "2a5ee4c1ec74f49bc710aacf9005d11a92d917930873316f746810712c49de9d",
+    "plan.json": "73db0b69afaf45bdf599f406953b9d9415e91361326dfbdcb7304ca2ec40ed98"
+  },
+  "result": "SCOPED_EVIDENCE_VERIFIED",
+  "run_id": 35433697805,
+  "schema": "qbrain-n47s-reviewed-evidence-v1",
+  "session_fields_verified": 40,
+  "source_commit": "b88698bd041d960edcc2a4a2e9beb6fa407ffc47",
+  "source_files": 1109,
+  "source_tree": "69e581bcd68b6c1e2170b729abc0b0228d577f17",
+  "tests_each_platform_and_mode": 48,
+  "unchanged_inherited_runtime_test_script_files": 259,
+  "windows_exact_lf_to_crlf_files": 1095,
+  "wire_requests_without_scenario_labels": 100
+}
