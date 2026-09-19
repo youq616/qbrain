@@ -2,7 +2,7 @@ name: N47O reviewed Windows delivery
 on:
   push:
     branches: ['delivery/n47o-reviewed-c26']
-    paths: ['tools/delivery/publish_reviewed_n47o.py', 'tools/delivery/test_reviewed_n47o.py', 'docs/integration/REVIEWED-PREVIEW.zh-CN.md', '.github/workflows/n47o-delivery.yml']
+    paths: ['tools/delivery/publish_reviewed_n47o.py', 'tools/delivery/test_reviewed_n47o.py', 'tools/delivery/test_transport_n47o.py', 'docs/integration/REVIEWED-PREVIEW.zh-CN.md', '.github/workflows/n47o-delivery.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -47,6 +47,8 @@ jobs:
           mkdir -p evidence
           python delivery/tools/delivery/test_reviewed_n47o.py 2>&1 | tee evidence/tests.log
           python -O delivery/tools/delivery/test_reviewed_n47o.py 2>&1 | tee evidence/tests-optimized.log
+          python delivery/tools/delivery/test_transport_n47o.py 2>&1 | tee evidence/transport.log
+          python -O delivery/tools/delivery/test_transport_n47o.py 2>&1 | tee evidence/transport-optimized.log
       - name: Verify exact original artifacts (no release mutations)
         shell: bash
         env:

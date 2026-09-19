@@ -10,6 +10,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -93,7 +94,9 @@ class GitHub:
     def raw(self, endpoint, *, method='GET', body=None, binary=False, optional=False, upload=None):
         target = endpoint if endpoint.startswith('https://uploads.github.com/') else f'repos/{REPO}/{endpoint}'
         args = ['gh', 'api', target, '--method', method]
-        if binary:
+        # Actions ZIP endpoints negotiate a redirect with the normal REST accept.
+        # Only release assets select their binary representation via this header.
+        if binary and endpoint.startswith('releases/assets/'):
             args += ['-H', 'Accept: application/octet-stream']
         if upload is not None:
             args += ['-H', 'Content-Type: application/octet-stream', '--input', str(upload)]
@@ -115,7 +118,9 @@ class GitHub:
             if (isinstance(error, dict) and str(error.get('status')) == '404'
                     and error.get('message') == 'Not Found' and b'(HTTP 404)' in r.stderr):
                 return None
-        raise RuntimeError('GitHub request failed: ' + endpoint)
+        status = re.search(rb'\(HTTP ([0-9]{3})\)', r.stderr)
+        code = status.group(1).decode('ascii') if status else 'unknown'
+        raise RuntimeError('GitHub request failed (HTTP ' + code + '): ' + endpoint)
 
     def api(self, endpoint, **kwargs):
         raw = self.raw(endpoint, **kwargs)
