@@ -35,10 +35,14 @@ def main():
         (a.output / 'execute.stdout').write_bytes(result.stdout)
         (a.output / 'execute.stderr').write_bytes(result.stderr)
         c.require(result.returncode == 0 and len(calls) == 100, 'transport_execution_failed')
+        for call in calls:
+            wire = c.encode(call['body'])
+            c.require(all(cid.encode() not in wire for cid in c.CASE_IDS), 'scenario_label_in_wire')
     comparison = model_ab.score_run(a.output / 'http-run', packets / 'evaluator-key.DO-NOT-SEND-TO-MODEL.json')
     c.require(comparison['execution_kind'] == 'LOOPBACK_TEST' and comparison['complete_pair'], 'fixture_scope')
     c.write_new(a.output / 'comparison.json', comparison)
     receipt = {'schema': 'qbrain-n47s-loopback-pipeline-v1', 'result': 'PASS',
+               'context_projection': model_ab.CONTEXT_PROJECTION, 'wire_scenario_labels_checked': True,
                'engine_tasks': 50, 'engine_commands': engine['command_count'], 'http_requests': len(calls),
                'source_commit': engine['provenance']['source_commit'], 'binary_sha256': engine['binary_sha256'],
                'plan_sha256': c.digest(raw), 'comparison_sha256': c.digest(c.encode(comparison)),

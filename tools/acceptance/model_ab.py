@@ -20,9 +20,11 @@ import time
 from urllib.parse import urlsplit
 
 import memory_task_contract as c
+from run_memory_tasks import CONTEXT_PREFIX, parse_context
 
 MODES = ('with-context', 'without-context')
 COUNT = 2 * len(c.CASES)
+CONTEXT_PROJECTION = 'opaque-session-ids-v1'
 RESPONSE_CAP = 1024 * 1024
 PROMPT = c.INSTRUCTIONS + ' 返回一个JSON对象，不要Markdown。case_id必须原样返回给定的不透明任务编号。'
 
@@ -54,12 +56,41 @@ def schedule(plan_id: str) -> list[dict]:
     return rows
 
 
+def projected_context(text: str, plan_id: str) -> str:
+    """Hide synthetic session labels without editing quotes or evidence IDs.
+
+    The original packet remains byte-exact in the plan. This model-facing
+    metadata projection is explicit and versioned, not raw Hook-byte replay.
+    """
+    if not text:
+        return ''
+    _, payload = parse_context({'hookSpecificOutput': {
+        'hookEventName': 'SessionStart', 'additionalContext': text}})
+
+    def project(value):
+        if isinstance(value, dict):
+            result = {}
+            for key, item in value.items():
+                if key == 'session_id':
+                    c.require(isinstance(item, str) and 0 < len(item) <= 256, 'invalid_session_metadata')
+                    result[key] = 'session-' + c.digest((plan_id + '\0' + item).encode())[:32]
+                else:
+                    result[key] = project(item)
+            return result
+        if isinstance(value, list):
+            return [project(item) for item in value]
+        return value
+
+    return CONTEXT_PREFIX + c.encode(project(payload)).decode('utf-8')
+
+
 def validate_plan(p: dict) -> dict[str, dict]:
     fields = {'schema', 'plan_id', 'run_id', 'endpoint', 'loopback_test', 'model',
-              'max_completion_tokens', 'token_field', 'timeout_seconds', 'packet_text', 'rows'}
-    c.require(isinstance(p, dict) and set(p) == fields and p['schema'] == 'qbrain-model-plan-v1', 'plan_shape')
+              'max_completion_tokens', 'token_field', 'timeout_seconds', 'packet_text', 'rows', 'context_projection'}
+    c.require(isinstance(p, dict) and set(p) == fields and p['schema'] == 'qbrain-model-plan-v2', 'plan_shape')
     for field in ('plan_id', 'run_id'):
         c.require(isinstance(p[field], str) and re.fullmatch('[0-9a-f]{32}', p[field]) is not None, 'plan_id')
+    c.require(p['context_projection'] == CONTEXT_PROJECTION, 'context_projection')
     c.require(type(p['loopback_test']) is bool, 'transport_type')
     endpoint(p['endpoint'], p['loopback_test'])
     c.require(isinstance(p['model'], str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:/-]{0,191}', p['model']), 'model_id')
@@ -74,6 +105,8 @@ def validate_plan(p: dict) -> dict[str, dict]:
         raw = p['packet_text'][mode].encode('utf-8')
         packets[mode] = c.decode(raw)
         c.validate_packet(packets[mode], mode, p['run_id'])
+        for task in packets[mode]['tasks']:
+            projected_context(task['context'], p['plan_id'])
     return packets
 
 
@@ -87,7 +120,8 @@ def prepare(directory: Path, url: str, model: str, *, test=False, tokens=512,
         template = {'schema': 'qbrain-memory-task-answers-v1', 'run_id': key['run_id'],
                     'packet_sha256': c.digest(raw), 'answers': [], 'usage': None}
         c.score(key, raw, template)  # all original binding/coverage checks, offline
-    p = {'schema': 'qbrain-model-plan-v1', 'plan_id': secrets.token_hex(16), 'run_id': key['run_id'],
+    p = {'schema': 'qbrain-model-plan-v2', 'context_projection': CONTEXT_PROJECTION,
+         'plan_id': secrets.token_hex(16), 'run_id': key['run_id'],
          'endpoint': url, 'loopback_test': test, 'model': model, 'max_completion_tokens': tokens,
          'token_field': token_field, 'timeout_seconds': timeout, 'packet_text': texts}
     p['rows'] = schedule(p['plan_id'])
@@ -97,7 +131,8 @@ def prepare(directory: Path, url: str, model: str, *, test=False, tokens=512,
 
 def request_body(p: dict, packets: dict, row: dict) -> bytes:
     task = next(x for x in packets[row['mode']]['tasks'] if x['case_id'] == row['case_id'])
-    blind_task = {**task, 'case_id': row['request_id']}
+    blind_task = {**task, 'case_id': row['request_id'],
+                  'context': projected_context(task['context'], p['plan_id'])}
     return c.encode({'model': p['model'], 'messages': [{'role': 'system', 'content': PROMPT},
                      {'role': 'user', 'content': c.encode(blind_task).decode()}],
                      'response_format': {'type': 'json_object'}, 'stream': False, 'store': False,
