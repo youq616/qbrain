@@ -44,6 +44,17 @@ function IsStopped([string]$pidFile){
  $childId=[int][IO.File]::ReadAllText($pidFile)
  try{$p=[Diagnostics.Process]::GetProcessById($childId);try{return $p.HasExited}finally{$p.Dispose()}}catch{return $true}
 }
+function Stop-TestChild([int]$childId){
+ # PID files are observations, not authority: IDs may be recycled by Windows.
+ try{
+  $p=[Diagnostics.Process]::GetProcessById($childId)
+  try{
+   if($p.HasExited){return $true}
+   if(-not [string]::Equals($p.MainModule.FileName,$childPath,[StringComparison]::OrdinalIgnoreCase)){return $false}
+   $p.Kill();return $p.WaitForExit(2000)
+  }finally{$p.Dispose()}
+ }catch{return $false}
+}
 function Failure([string]$mode,[string]$inputText=''){
  $pidFile=Join-Path $root ($mode+'.pid');$errorRecord=$null
  try{$null=& $bridgePath -FilePath $childPath -ArgumentList @($mode,$pidFile,$secret) -InputJson $inputText -TimeoutMilliseconds 2000}catch{$errorRecord=$_}
@@ -84,9 +95,9 @@ try{
  Check ($d.phase -ceq 'output' -and $d.code -ceq 'output_timeout' -and $f.Message -ceq 'Qbrain output timeout.') 'inherited pipe holder has the original output timeout message'
  Check ($d.process_exited -eq $true -and $d.exit_code -eq 0 -and ($d.stdout_state -ceq 'running' -or $d.stderr_state -ceq 'running')) 'output timeout distinguishes an exited parent from open streams'
  $descendantFile=Join-Path $root 'held-output.pid.descendant'
- Check ([IO.File]::Exists($descendantFile)) 'output fixture records its separately cleaned descendant'
+ Check ([IO.File]::Exists($descendantFile) -and -not (Stop-TestChild $PID)) 'output fixture records its separately cleaned descendant'
  $descendantId=[int][IO.File]::ReadAllText($descendantFile)
- try{$p=[Diagnostics.Process]::GetProcessById($descendantId);try{if(-not $p.HasExited){$p.Kill();[void]$p.WaitForExit(2000)}}finally{$p.Dispose()}}catch{}
+ $null=Stop-TestChild $descendantId
  $f=Failure 'bad-utf8';$d=$f.Value
  Check ($d.code -ceq 'transport_error' -and $f.Message -ceq 'Qbrain transport failure.') 'invalid UTF-8 remains an error not replacement text'
  Check ($d.stdout_state -ceq 'faulted') 'stream decoder failure is visible without reading fault text'
@@ -107,7 +118,7 @@ try{
 finally{
  # Test cleanup only, no arbitrary process scan or product process-tree kill.
  foreach($pidFile in Get-ChildItem -LiteralPath $root -Filter '*.pid*' -File){
-  try{$childId=[int][IO.File]::ReadAllText($pidFile.FullName);$p=[Diagnostics.Process]::GetProcessById($childId);try{if(-not $p.HasExited){$p.Kill();[void]$p.WaitForExit(2000)}}finally{$p.Dispose()}}catch{}
+  try{$childId=[int][IO.File]::ReadAllText($pidFile.FullName);$null=Stop-TestChild $childId}catch{}
  }
  $source=(& git -C (Join-Path $PSScriptRoot '..') rev-parse HEAD).Trim()
  $record=[pscustomobject]@{schema='qbrain-n47w-bridge-test-v1';result=$(if($success){'PASS'}else{'FAIL'});source_commit=$source;shell_major=$PSVersionTable.PSVersion.Major;bridge_sha256=(HashFile $bridgePath);prior_bridge_sha256=(HashFile $priorPath);test_sha256=(HashFile $PSCommandPath);child_sha256=(HashFile $childPath);checks=@($checks);diagnostics=@($diagnostics);failure=$failure;real_client_verified=$false}
