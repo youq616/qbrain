@@ -14,6 +14,55 @@ $ErrorActionPreference='Stop'
 if($Action -eq 'Install' -and $EnableFactPromotion -and -not $EnableCapture){throw 'Fact promotion requires explicit -EnableCapture.'}
 if([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT){throw 'Native Windows is required.'}
 $utf8=New-Object Text.UTF8Encoding($false,$true)
+# Metadata-only native queries; never toggle directory flags or probe by writing.
+# Keep legacy IDs only where every existing directory is provably insensitive.
+if(-not ('Qbrain.N47V.PathGuard' -as [type])){
+ Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+namespace Qbrain.N47V {
+ public static class PathGuard {
+  [StructLayout(LayoutKind.Sequential)]
+  private struct AttributeTag { public uint Attributes; public uint Tag; }
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true, ExactSpelling=true)]
+  private static extern SafeFileHandle CreateFileW(string path, uint access,
+   uint share, IntPtr security, uint creation, uint flags, IntPtr template);
+  [DllImport("kernel32.dll", SetLastError=true, EntryPoint="GetFileInformationByHandleEx")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static extern bool GetAttributes(SafeFileHandle handle, int info,
+   out AttributeTag value, uint size);
+  [DllImport("kernel32.dll", SetLastError=true, EntryPoint="GetFileInformationByHandleEx")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static extern bool GetCaseInfo(SafeFileHandle handle, int info,
+   out uint value, uint size);
+  public static void CheckDirectory(string path) {
+   // FILE_READ_ATTRIBUTES; share read/write/delete; OPEN_EXISTING;
+   // FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT.
+   using(SafeFileHandle handle=CreateFileW(path, 0x80, 7, IntPtr.Zero, 3,
+                                         0x02200000, IntPtr.Zero)) {
+    if(handle.IsInvalid) throw new InvalidOperationException(
+     "Cannot verify directory case sensitivity; operation refused.",
+     new Win32Exception(Marshal.GetLastWin32Error()));
+    AttributeTag attributes;
+    if(!GetAttributes(handle, 9, out attributes, 8))
+     throw new InvalidOperationException("Cannot verify directory attributes; operation refused.",
+      new Win32Exception(Marshal.GetLastWin32Error()));
+    if((attributes.Attributes & 0x400)!=0 || (attributes.Attributes & 0x10)==0)
+     throw new InvalidOperationException("Reparse or non-directory path; operation refused.");
+    uint flags;
+    if(!GetCaseInfo(handle, 23, out flags, 4))
+     throw new InvalidOperationException("Cannot verify directory case sensitivity; operation refused.",
+      new Win32Exception(Marshal.GetLastWin32Error()));
+    if(flags!=0) throw new InvalidOperationException(
+     "Case-sensitive directories are not supported for integration configuration.");
+   }
+  }
+ }
+}
+'@
+}
 function Safe([string]$p){
  $p=[IO.Path]::GetFullPath($p)
  $at=$p
@@ -21,6 +70,7 @@ function Safe([string]$p){
   if(Test-Path -LiteralPath $at){
    $item=Get-Item -LiteralPath $at -Force
    if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'Reparse paths are not supported for integration configuration.'}
+   if($item.PSIsContainer){[Qbrain.N47V.PathGuard]::CheckDirectory($at)}
   }
   $parent=Split-Path -Parent $at;if($parent -eq $at){break};$at=$parent
  }
@@ -42,7 +92,8 @@ function Parse([string]$s){
 function Has($o,[string]$k){return $null -ne $o.PSObject.Properties[$k]}
 function Set-Key($o,[string]$k,$v){$o | Add-Member -NotePropertyName $k -NotePropertyValue $v -Force}
 function Hash([string]$s){
- $h=[Security.Cryptography.SHA256]::Create();try{return ([BitConverter]::ToString($h.ComputeHash($utf8.GetBytes($s)))).Replace('-','').ToLowerInvariant()}finally{$h.Dispose()}
+ $h=[Security.Cryptography.SHA256]::Create();try{return ([BitConverter]::ToString($h.ComputeHash($utf8.GetBytes($s)))).Replace('-','').ToLowerInvariant()}
+ finally{$h.Dispose()}
 }
 function Write-Atomic([string]$p,[AllowNull()]$s){
  $null=Safe $p;$temp=$p+'.tmp';$null=Safe $temp
@@ -62,6 +113,8 @@ $target=if($hostKey -eq 'claude'){Join-Path $project '.claude\settings.local.jso
 $mcpPath=if($hostKey -eq 'claude'){Join-Path $project '.mcp.json'}else{Join-Path $project '.codex\config.toml'}
 $allowed=@($target,$mcpPath,$ownerPath,$cfgPath,$bridgePath)
 foreach($p in $allowed){$null=Safe $p}
+# Known unsupported binary paths must fail before creating the owned directory.
+if($Action -eq 'Install' -and $Binary){$null=Safe ((Resolve-Path -LiteralPath $Binary).ProviderPath)}
 # Version 1 stores multiple text images; its envelope is not one config file.
 $journalLimit=33554432
 function Exact-Fields($o,[string[]]$names){
