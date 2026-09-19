@@ -1,0 +1,16 @@
+{
+  "certificate_and_hostname_verification_kept": true,
+  "credential": "synthetic only, not retained",
+  "default_untrusted_certificate_rejected_before_http": true,
+  "explicit_test_root_positive_roundtrip": true,
+  "limits": [
+    "Linux local TLS socket test only",
+    "Temporary certificate not installed into any user or system trust store",
+    "Positive test injects an isolated additional trust root; not a default-trust external-provider certification"
+  ],
+  "real_model_answers": "NOT_RUN",
+  "real_provider_tested": false,
+  "requests_reaching_handler": 1,
+  "schema": "qbrain-n47s-local-tls-review-v1",
+  "source_commit": "b88698bd041d960edcc2a4a2e9beb6fa407ffc47"
+}
