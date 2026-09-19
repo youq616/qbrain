@@ -2,9 +2,9 @@ name: N47Q cross-session task evaluation
 on:
   push:
     branches: [main, 'evaluation/n47q-cross-session-tasks']
-    paths: ['tools/acceptance/*memory_task*.py', '.github/workflows/n47q-validation.yml']
+    paths: ['tools/acceptance/*memory*.py', '.github/workflows/n47q-validation.yml']
   pull_request:
-    paths: ['tools/acceptance/*memory_task*.py', '.github/workflows/n47q-validation.yml']
+    paths: ['tools/acceptance/*memory*.py', '.github/workflows/n47q-validation.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,9 +35,9 @@ jobs:
       - name: Strict scoring tests and two event-format task runs
         shell: pwsh
         run: |
-          python tools/acceptance/test_memory_tasks.py 2>&1 | Tee-Object evidence/unit.log
+          python -m unittest discover -s tools/acceptance -p 'test_memory*.py' -v 2>&1 | Tee-Object evidence/unit.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -O tools/acceptance/test_memory_tasks.py 2>&1 | Tee-Object evidence/unit-optimized.log
+          python -O -m unittest discover -s tools/acceptance -p 'test_memory*.py' -v 2>&1 | Tee-Object evidence/unit-optimized.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           foreach ($hostFormat in @('claude', 'codex')) {
             python tools/acceptance/run_memory_tasks.py --binary runtime/qbrain.exe --host $hostFormat --output "evidence/$hostFormat" 2>&1 | Tee-Object "evidence/$hostFormat.log"
@@ -73,8 +73,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python tools/acceptance/test_memory_tasks.py 2>&1 | tee evidence/unit.log
-          python -O tools/acceptance/test_memory_tasks.py 2>&1 | tee evidence/unit-optimized.log
+          python -m unittest discover -s tools/acceptance -p 'test_memory*.py' -v 2>&1 | tee evidence/unit.log
+          python -O -m unittest discover -s tools/acceptance -p 'test_memory*.py' -v 2>&1 | tee evidence/unit-optimized.log
           for host in claude codex; do
             python tools/acceptance/run_memory_tasks.py --binary build/n47q/qbrain --host "$host" --output "evidence/$host" 2>&1 | tee "evidence/$host.log"
             python tools/acceptance/check_memory_task_run.py --directory "evidence/$host" --binary build/n47q/qbrain --report "evidence/readback-$host.json" 2>&1 | tee "evidence/readback-$host.log"

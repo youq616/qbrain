@@ -166,9 +166,14 @@ def score(key: Any, packet_raw: bytes, submitted: Any) -> dict:
                          'correct': got == wanted})
     correct = sum(row['correct'] for row in outcomes)
     answered = len(observed)
+    answerable = [cid for cid in CASE_IDS if EXPECTED_STATES[cid] in ('known', 'conflict')]
+    resolved = sum(observed.get(cid) == answer(expected[cid]) for cid in answerable)
     return {'schema': 'qbrain-memory-task-score-v1', 'run_id': run_id, 'mode': mode,
             'result': 'ANSWER_CONTENT_SCORED', 'total': len(CASES), 'answered': answered,
             'missing': len(CASES)-answered, 'correct': correct, 'accuracy': correct/len(CASES),
+            'accuracy_metric': 'packet_grounded_response',
+            'answerable_resolution': {'total': len(answerable), 'resolved': resolved,
+                                      'rate': resolved/len(answerable)},
             'complete': answered == len(CASES), 'cases': outcomes,
             'by_kind': {kind: {'correct': sum(r['correct'] for r in outcomes if r['kind'] == kind),
                                'total': len(SUBJECTS)} for kind in KINDS},
@@ -177,4 +182,5 @@ def score(key: Any, packet_raw: bytes, submitted: Any) -> dict:
             'limits': ['Structured values and supporting IDs only, not arbitrary prose quality',
                        'Submitted answers/usage are not authenticated',
                        'Missing answers remain in the fixed denominator',
+                       'No-context abstention can be grounded-correct without resolving the requested value',
                        'Packet injection is not automatic live-client Hook consumption']}
