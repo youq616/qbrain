@@ -5,7 +5,8 @@ param(
     [Parameter(Mandatory=$true)][string]$FilePath,
     [Parameter(Mandatory=$true)][AllowEmptyCollection()][AllowEmptyString()][string[]]$ArgumentList,
     [AllowEmptyString()][string]$InputJson = '',
-    [ValidateRange(100,120000)][int]$TimeoutMilliseconds = 10000
+    [ValidateRange(100,120000)][int]$TimeoutMilliseconds = 10000,
+    [switch]$IncludeDiagnostics
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -59,25 +60,84 @@ $start.StandardOutputEncoding = $utf8
 $start.StandardErrorEncoding = $utf8
 $process = New-Object System.Diagnostics.Process
 $process.StartInfo = $start
+# Timings begin immediately before Process.Start, as before. Synchronous OS
+# startup and the finite cleanup below are not a cancellable wall-clock deadline.
+$stdout=$null; $stderr=$null; $writing=$null
+$started=$false; $inputClosed=$false
+$phase='start'; $failureCode='start_failed'
+$stageMilliseconds=[ordered]@{start=$null;input=$null;process=$null;output=$null}
+$waitBudgets=[ordered]@{input=$null;process=$null;output=$null}
 $clock = [Diagnostics.Stopwatch]::StartNew()
+$phaseStart=[long]0
+function Get-QbrainRemainingMilliseconds([long]$Budget,[long]$Elapsed) {
+    return [int][Math]::Max([long]0,$Budget-$Elapsed)
+}
+function Get-QbrainTaskState($Task) {
+    if($null -eq $Task){return 'not_started'}
+    if($Task.IsCanceled){return 'canceled'}
+    if($Task.IsFaulted){return 'faulted'}
+    if($Task.IsCompleted){return 'completed'}
+    return 'running'
+}
+function Get-QbrainTransportDiagnostic([string]$Code) {
+    # Capture before cleanup; do not inspect task results or exception messages.
+    # These labels and primitives are the whole shareable payload. No raw data.
+    $exited=$null; $exitCode=$null
+    if($started){try{$exited=[bool]$process.HasExited;if($exited){$exitCode=[int]$process.ExitCode}}catch{}}
+    return [PSCustomObject][ordered]@{
+        schema='qbrain-transport-diagnostic-v1';code=$Code;phase=$phase
+        timeout_ms=$TimeoutMilliseconds;elapsed_ms=[long]$clock.ElapsedMilliseconds
+        stage_ms=[PSCustomObject]$stageMilliseconds;wait_budget_ms=[PSCustomObject]$waitBudgets
+        process_started=$started;input_closed=$inputClosed;process_exited=$exited;exit_code=$exitCode
+        input_state=(Get-QbrainTaskState $writing);stdout_state=(Get-QbrainTaskState $stdout)
+        stderr_state=(Get-QbrainTaskState $stderr);observation='before_cleanup';host_consumption_verified=$false
+    }
+}
 try {
     if (-not $process.Start()) { throw 'Could not start Qbrain.' }
+    $started=$true
+    $stageMilliseconds.start=[long]$clock.ElapsedMilliseconds
+    $phase='input'; $phaseStart=[long]$clock.ElapsedMilliseconds; $failureCode='transport_error'
     $stdout = $process.StandardOutput.ReadToEndAsync()
     $stderr = $process.StandardError.ReadToEndAsync()
     $writing = $process.StandardInput.BaseStream.WriteAsync($bytes, 0, $bytes.Length)
-    if (-not $writing.Wait($TimeoutMilliseconds)) { throw 'Qbrain input timeout.' }
-    $process.StandardInput.Close()
-    $remaining = [Math]::Max(0, $TimeoutMilliseconds - [int]$clock.ElapsedMilliseconds)
-    if (-not $process.WaitForExit($remaining)) { throw 'Qbrain process timeout.' }
-    $remaining = [Math]::Max(0, $TimeoutMilliseconds - [int]$clock.ElapsedMilliseconds)
+    $remaining=Get-QbrainRemainingMilliseconds $TimeoutMilliseconds $clock.ElapsedMilliseconds
+    $waitBudgets.input=$remaining
+    if (-not $writing.Wait($remaining)) { $failureCode='input_timeout'; throw 'Qbrain input timeout.' }
+    $process.StandardInput.Close(); $inputClosed=$true
+    $stageMilliseconds.input=[long]($clock.ElapsedMilliseconds-$phaseStart)
+    $phase='process'; $phaseStart=[long]$clock.ElapsedMilliseconds
+    $remaining=Get-QbrainRemainingMilliseconds $TimeoutMilliseconds $clock.ElapsedMilliseconds
+    $waitBudgets.process=$remaining
+    if (-not $process.WaitForExit($remaining)) { $failureCode='process_timeout'; throw 'Qbrain process timeout.' }
+    $stageMilliseconds.process=[long]($clock.ElapsedMilliseconds-$phaseStart)
+    $phase='output'; $phaseStart=[long]$clock.ElapsedMilliseconds
+    $remaining=Get-QbrainRemainingMilliseconds $TimeoutMilliseconds $clock.ElapsedMilliseconds
+    $waitBudgets.output=$remaining
     if (-not [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($stdout, $stderr), $remaining)) {
-        throw 'Qbrain output timeout.'
+        $failureCode='output_timeout'; throw 'Qbrain output timeout.'
     }
-    [PSCustomObject]@{
+    $result=[PSCustomObject]@{
         ExitCode = $process.ExitCode
         Stdout = $stdout.GetAwaiter().GetResult()
         Stderr = $stderr.GetAwaiter().GetResult()
     }
+    $stageMilliseconds.output=[long]($clock.ElapsedMilliseconds-$phaseStart)
+    $phase='complete'
+    if($IncludeDiagnostics){
+        $result | Add-Member -MemberType NoteProperty -Name Transport -Value (Get-QbrainTransportDiagnostic 'completed')
+    }
+    $result
+} catch {
+    if($stageMilliseconds.Contains($phase)){$stageMilliseconds[$phase]=[long]($clock.ElapsedMilliseconds-$phaseStart)}
+    # Preserve legacy timeout text, normalize other process/stream exceptions.
+    # Do not chain the original exception: native messages can contain paths.
+    $messages=@{start_failed='Could not start Qbrain.';input_timeout='Qbrain input timeout.';
+        process_timeout='Qbrain process timeout.';output_timeout='Qbrain output timeout.';
+        transport_error='Qbrain transport failure.'}
+    $failure=New-Object System.InvalidOperationException -ArgumentList $messages[$failureCode]
+    $failure.Data['QbrainTransport']=(ConvertTo-Json -InputObject (Get-QbrainTransportDiagnostic $failureCode) -Depth 4 -Compress)
+    throw $failure
 } finally {
     $clock.Stop()
     try { if (-not $process.HasExited) { $process.Kill(); [void]$process.WaitForExit(2000) } } catch {}
