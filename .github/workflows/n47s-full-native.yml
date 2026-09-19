@@ -1,0 +1,41 @@
+name: N47S final full native regression
+on:
+  push:
+    branches: [main, 'evaluation/n47s-model-comparison']
+    paths: ['.github/workflows/n47s-full-native.yml']
+  pull_request:
+    paths: ['.github/workflows/n47s-full-native.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n47s-full-native-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  full-native:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Fresh application and complete unchanged unit suite
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/native.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/native.log').read_text(encoding='utf-8-sig'),60)))" 2>&1 | Tee-Object evidence/native-groups.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47s-full-native
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
