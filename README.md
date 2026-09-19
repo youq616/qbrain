@@ -4,7 +4,17 @@ Windows 原生 C++20 / PowerShell 记忆与知识库，默认 SQLite + FTS5。
 预编译应用不需要编译器、Docker、WSL 或 Python 服务。Python 仅用于可选评测
 和开发工具。gbrain / OpenViking 是设计参考，不表示所有功能完全等价。
 
-## 最新源码功能：N47T 可撤回的事实使用回执
+## 最新源码功能：N47U 使用回执逐条审计
+
+新增 `fact usage-list --id ID`：按当前/历史/已撤回状态筛选，定位具体回执后再明确
+选择撤回。分页受数量和字节预算限制；中途数据变化拒绝旧游标，不混合新旧结果。
+查询不新增回执，不改写入权限/Hook/schema；调用方上报仍不等于真实模型消费。
+两平台新71项检查、原75项使用记录回归与Windows60组通过，原始证据已回读自审。
+[查询与完整分页示例](docs/integration/FACT-USAGE-AUDIT.zh-CN.md) ·
+[自审](docs/nodes/N47U-HARD-AUDIT.md) · [当前状态](CURRENT-STATUS.md)。
+本功能在新源码中，现有N47R公开包不含N47T/N47U命令，本轮未替换发行包。
+
+## 已有源码功能：N47T 可撤回的事实使用回执
 
 新增 `fact report-use`、`fact revoke-use` 和 `fact usage --id`，可显式上报使用、
 幂等重试、永久撤回，并分别查看当前/历史版本计数。只表示调用方声称使用，不证明

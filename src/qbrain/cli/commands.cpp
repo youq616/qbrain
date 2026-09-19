@@ -163,6 +163,7 @@ void print_help() {
       "  fact recall --query <text> [--match literal|all_terms|any_terms] [--predicate KEY] [--limit N] [--max-bytes N] [--source id]\n"
       "  fact report-use|revoke-use [--source id] (JSON stdin; caller-reported, not verified consumption)\n"
       "  fact usage --id ID [--source id] (read-only, revision-scoped counts)\n"
+      "  fact usage-list --id ID [--state all|current|historical|withdrawn] [--after-id ID --snapshot HASH] [--limit N] [--max-bytes N] (read-only)\n"
       "  memory capture|extract|drain|read|status|forget [--source id]\n"
       "  session-capture [--automatic] [--session-id id] [--fragment-id id]\n"
       "  version\n"
@@ -429,6 +430,7 @@ int cmd_fact(const std::vector<std::string>& args) {
     const auto& action=args[0];
     const bool promoting=action=="promote";
     const bool usage=action=="usage";
+    const bool usage_list=action=="usage-list";
     const bool conflicts=action=="conflicts";
     const bool recall=action=="recall";
     const bool lifecycle=action=="lifecycle";
@@ -436,11 +438,12 @@ int cmd_fact(const std::vector<std::string>& args) {
     const bool batch_preview=action=="batch-preview";
     const bool batch_apply=action=="batch-apply";
     const bool batch=batch_preview || batch_apply;
-    const bool reading=action=="read" || usage || conflicts || recall || lifecycle || candidates || batch_preview;
+    const bool reading=action=="read" || usage || usage_list || conflicts || recall || lifecycle || candidates || batch_preview;
     if(!reading && !promoting && !batch_apply && action!="create" && action!="attach" && action!="retract" &&
        action!="supersede" && action!="contradict" && action!="archive" && action!="restore" && action!="report-use" && action!="revoke-use") throw memory::Error("invalid_action");
     std::set<std::string> values={"--brain","--source"},flags;
-    if(usage) values.insert("--id");
+    if(usage_list) values.insert({"--id","--state","--after-id","--snapshot","--limit","--max-bytes"});
+    else if(usage) values.insert("--id");
     else if(batch) flags.insert("--stdin");
     else if(reading) {
       values.insert({"--predicate","--limit","--max-bytes"});
@@ -470,7 +473,14 @@ int cmd_fact(const std::vector<std::string>& args) {
     if(parsed.count("--brain")) brain_args={"--brain",value("--brain")};
     return with_brain(brain_args,[&](Brain& b) {
       ops::OpContext c; c.brain=&b; c.args["source_id"]=value("--source","default");
-      if(usage) { c.args["view"]="usage";c.args["fact_id"]=value("--id"); }
+      if(usage_list) {
+        c.args["view"]="usage_receipts";c.args["fact_id"]=value("--id");
+        for(const auto& [flag,key]:std::vector<std::pair<std::string,std::string>>{
+            {"--state","receipt_state"},{"--after-id","after_id"},{"--snapshot","snapshot"},
+            {"--limit","limit"},{"--max-bytes","max_bytes"}})
+          if(parsed.count(flag))c.args[key]=value(flag);
+      }
+      else if(usage) { c.args["view"]="usage";c.args["fact_id"]=value("--id"); }
       else if(batch) {
         c.args["payload"]=bounded_stdin();
         if(batch_preview)c.args["view"]="lifecycle_batch";

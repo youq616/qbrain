@@ -1,0 +1,105 @@
+name: N47U read-only receipt audit pages
+on:
+  push:
+    branches: [main, 'feature/n47u-usage-audit-pages']
+    paths: ['include/qbrain/memory/fact_usage.hpp', 'include/qbrain/memory/fact_usage_read.hpp', 'src/qbrain/ops/memory_ops.cpp', 'src/qbrain/cli/commands.cpp', '.ci/*fact_usage*.py', '.github/workflows/n47u-validation.yml']
+  pull_request:
+    paths: ['include/qbrain/memory/fact_usage.hpp', 'include/qbrain/memory/fact_usage_read.hpp', 'src/qbrain/ops/memory_ops.cpp', 'src/qbrain/cli/commands.cpp', '.ci/*fact_usage*.py', '.github/workflows/n47u-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n47u-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Fresh production build and full unchanged native suite
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/native.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/native.log').read_text(encoding='utf-8-sig'),60)))" 2>&1 | Tee-Object evidence/native-groups.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/cl/qbrain.exe evidence/qbrain.exe
+      - name: Audit pages, unchanged use writes and original process regressions
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .ci/test_fact_usage_pages.py --binary evidence/qbrain.exe --report evidence/usage-pages.json --raw-dir evidence/page-streams 2>&1 | Tee-Object evidence/usage-pages.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/check_fact_usage_pages_report.py --report evidence/usage-pages.json --binary evidence/qbrain.exe --test .ci/test_fact_usage_pages.py --raw-dir evidence/page-streams --negative-tests 2>&1 | Tee-Object evidence/pages-readback.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O .ci/check_fact_usage_pages_report.py --report evidence/usage-pages.json --binary evidence/qbrain.exe --test .ci/test_fact_usage_pages.py --raw-dir evidence/page-streams --negative-tests 2>&1 | Tee-Object evidence/pages-readback-optimized.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_fact_usage.py --binary evidence/qbrain.exe --report evidence/fact-usage.json 2>&1 | Tee-Object evidence/fact-usage.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/check_fact_usage_report.py --report evidence/fact-usage.json --binary evidence/qbrain.exe --test .ci/test_fact_usage.py 2>&1 | Tee-Object evidence/usage-readback.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($name in @('test_fact_process','test_context_process','test_multiterm_process','test_named_arguments','test_search_arguments','test_hook_fact_process','test_lifecycle_batch_process')) {
+            python ".ci/$name.py" --binary evidence/qbrain.exe --report "evidence/$name.json" 2>&1 | Tee-Object "evidence/$name.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          foreach ($name in @('test_memory_cycle','test_mcp_boundaries')) {
+            python ".ci/$name.py" --binary evidence/qbrain.exe 2>&1 | Tee-Object "evidence/$name.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47u-windows
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Compile real changed engine and retain focused original tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          cmake -S . -B build/n47u -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF 2>&1 | tee evidence/configure.log
+          cmake --build build/n47u --target qbrain qbrain_fact_tests qbrain_memory_tests qbrain_context_tests qbrain_multiterm_tests --parallel 2 2>&1 | tee evidence/build.log
+          ctest --test-dir build/n47u -R 'qbrain_(memory|context|fact|multiterm)_unit' --output-on-failure 2>&1 | tee evidence/core-unit.log
+          cp build/n47u/qbrain evidence/qbrain
+      - name: Audit pages, unchanged use writes and original process regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .ci/test_fact_usage_pages.py --binary evidence/qbrain --report evidence/usage-pages.json --raw-dir evidence/page-streams 2>&1 | tee evidence/usage-pages.log
+          python .ci/check_fact_usage_pages_report.py --report evidence/usage-pages.json --binary evidence/qbrain --test .ci/test_fact_usage_pages.py --raw-dir evidence/page-streams --negative-tests 2>&1 | tee evidence/pages-readback.log
+          python -O .ci/check_fact_usage_pages_report.py --report evidence/usage-pages.json --binary evidence/qbrain --test .ci/test_fact_usage_pages.py --raw-dir evidence/page-streams --negative-tests 2>&1 | tee evidence/pages-readback-optimized.log
+          python .ci/test_fact_usage.py --binary evidence/qbrain --report evidence/fact-usage.json 2>&1 | tee evidence/fact-usage.log
+          python .ci/check_fact_usage_report.py --report evidence/fact-usage.json --binary evidence/qbrain --test .ci/test_fact_usage.py 2>&1 | tee evidence/usage-readback.log
+          for name in test_fact_process test_context_process test_multiterm_process test_named_arguments test_search_arguments test_hook_fact_process test_lifecycle_batch_process; do
+            python ".ci/$name.py" --binary evidence/qbrain --report "evidence/$name.json" 2>&1 | tee "evidence/$name.log"
+          done
+          for name in test_memory_cycle test_mcp_boundaries; do
+            python ".ci/$name.py" --binary evidence/qbrain 2>&1 | tee "evidence/$name.log"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47u-portable
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
