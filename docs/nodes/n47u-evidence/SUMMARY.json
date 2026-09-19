@@ -1,0 +1,143 @@
+{
+  "schema": "qbrain-n47u-acceptance-v1",
+  "date": "2026-09-19",
+  "timezone": "Asia/Seoul",
+  "verdict": "PASS-scoped-read-only-receipt-pages",
+  "reviewer": "coordinating ChatGPT; separate owner-authorized engineering self-review, not a subagent or third party",
+  "base_main": "4ab3fffc6bb9e6359676a7099d9a9323f02de3d9",
+  "plan_commit": "97c4662fa95dca09ab25aee4ac755db136e7dde7",
+  "accepted_source": "b7f93bdce18cfc28e48d4cc7d1ef06a32d901831",
+  "accepted_tree": "b7b00cff4bc5dd004ab25889aa5fd366568ceb1e",
+  "run_id": 35445385260,
+  "event": "push",
+  "run_attempt": 1,
+  "jobs": {
+    "windows": 105903305987,
+    "portable": 105903306130
+  },
+  "artifacts": {
+    "windows": {
+      "id": 10584674025,
+      "bytes": 14281684,
+      "sha256": "e7480fa4366e65e2065c7d6b294fedb823dba8084d99c09763e0bdf4fe3fdc0a",
+      "members": 361
+    },
+    "portable": {
+      "id": 10584808662,
+      "bytes": 14676929,
+      "sha256": "af1dfc13a948da658e7814fdd3489264fc413eba60a4b96c2993f26e906eaa10",
+      "members": 362
+    }
+  },
+  "source_review": {
+    "files": 1140,
+    "exact_windows_crlf_files": 1126,
+    "protected_inherited_code_test_build_files": 352,
+    "changed_inherited": [
+      "src/qbrain/cli/commands.cpp",
+      "src/qbrain/ops/memory_ops.cpp"
+    ],
+    "new_header": "include/qbrain/memory/fact_usage_read.hpp",
+    "original_receipt_writes_unchanged": true,
+    "canonical_ledger_unchanged": true,
+    "frozen_inventory_unchanged": true
+  },
+  "ci_results": {
+    "new_pages_each_platform": {
+      "checks": 71,
+      "commands": 111,
+      "raw_streams_verified": 333,
+      "successful_page_responses_checked": 33
+    },
+    "unchanged_usage_each_platform": {
+      "checks": 75,
+      "commands": 118
+    },
+    "retained_checks_each_platform": {
+      "facts": 34,
+      "context": 65,
+      "multiterm": 112,
+      "named_arguments": 60,
+      "search_arguments": 226,
+      "hook_facts": 52,
+      "lifecycle_batch": 40,
+      "memory": 44,
+      "mcp": 17
+    },
+    "windows_full_native_groups": 60,
+    "portable_focused_groups": 4,
+    "live_pg": "SKIP-PG",
+    "negative_report_cases_each_normal_and_optimized": 14
+  },
+  "binary_sha256": {
+    "windows": "7f8f48c3e34510ad050993904927288a1f2625710917fd986bc8a06df3b72f7e",
+    "portable": "7399af97dde5b97cc87667dc7e0e3fbdbf79b8b435fbfb62f01f2cb4cfd4e57e"
+  },
+  "product_blobs": {
+    "include/qbrain/memory/fact_usage_read.hpp": "ec3ef0b01d2c7f7f234525a982dc2f26bf21f319",
+    "src/qbrain/ops/memory_ops.cpp": "c1616c8887bc1ee6dcc556599bc815e10028475a",
+    "src/qbrain/cli/commands.cpp": "257e3d1e543e73e9d589c1d3cd09e3e2e04f1c27"
+  },
+  "additional_review": {
+    "checks": 14,
+    "commands": 215,
+    "filter_limit_budget_combinations": 64,
+    "modes": [
+      "normal",
+      "optimized"
+    ],
+    "platform": "Linux; exact downloaded portable CI binary",
+    "natural_expiry_used": true,
+    "database_fixture_writes": "none; read-only snapshots/identity lookup only",
+    "script_sha256": "3b8deecda0883c4bc0cda694683290da40efb0b090827f3be54541109080b9ae",
+    "known_fixture_failure": "Initial supplemental fixture assumed raw memory view returns all identical quotes; corrected event identity lookup using read-only SQL, preserving all assertions and original tests."
+  },
+  "local_rerun": {
+    "new_pages": {
+      "checks": 71,
+      "commands": 111,
+      "raw_streams": 333
+    },
+    "unchanged_usage": {
+      "checks": 75,
+      "commands": 118
+    },
+    "fresh_local_build": false
+  },
+  "local_record_hashes": {
+    "ci-readback": {
+      "bytes": 13024,
+      "sha256": "1b2741e67565724e087374f2845738fa1b3fdcc03994e8ebfb050f1bdaf2c503"
+    },
+    "retained-readback": {
+      "bytes": 702,
+      "sha256": "968765933f5c5b7aab81569191f98f8e3d4a6c9cacd70a1e0138d63e4c2ac172"
+    },
+    "supplemental-initial-failure": {
+      "bytes": 205486,
+      "sha256": "b2030a8c4a326266f80c16fa9c70a8a897bba189b168c4fabcfdc332b09d067b"
+    },
+    "supplemental-normal": {
+      "bytes": 209056,
+      "sha256": "05b0d8e11a1752674bdcf5c25eaba31dfa75ef278d0111307db12bb725e46edd"
+    },
+    "supplemental-optimized": {
+      "bytes": 209056,
+      "sha256": "eb6c7ce1934f17de018d0810b88811aba461c7330a0cf6a46d4be96f1b4a450e"
+    },
+    "local-pages": {
+      "bytes": 72821,
+      "sha256": "56cfbb4508ebb4f839c4acb3309a7f95a387d5fd6052cbf17fd578d53d1d9e17"
+    }
+  },
+  "public_release_changed": false,
+  "limits": [
+    "Read-only operation on an existing brain; inherited CLI opening/initialization behavior is not changed",
+    "Snapshot is a current-data fingerprint, not a signature, permission or held cross-request transaction",
+    "Receipt metadata only; caller-reported use is not external consumption or truth",
+    "Up to 4096 receipt records scanned per page; no large-scale throughput claim",
+    "Supplementary probes ran on Linux, not on the owner Windows 11 machine",
+    "Original archives expire per Actions retention; derived records do not replace raw artifacts",
+    "No new model/client/PG/signing or stable-v1 acceptance"
+  ]
+}
