@@ -1,4 +1,5 @@
 #include "qbrain/memory/fact_store.hpp"
+#include "qbrain/memory/fact_usage.hpp"
 #include "qbrain/ops/memory_ops.hpp"
 #include "qbrain/memory/session_memory.hpp"
 #include "qbrain/util/strict_json.hpp"
@@ -45,6 +46,11 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
     if(!write) {
       const auto view=get(c,"view","memories");
       if (c.args.count("match") && view != "recall") throw memory::Error("fact_unexpected_argument");
+      if(view=="usage") {
+        for(const auto& [key,value]:c.args)
+          if(key!="source_id" && key!="view" && key!="fact_id") throw memory::Error("fact_unexpected_argument");
+        return output(memory::FactUsageStore(*c.brain,*source).usage(get(c,"fact_id")));
+      }
       if(view=="lifecycle_candidates") {
         for(const auto& [key,value]:c.args)
           if(key!="source_id" && key!="view" && key!="operation" && key!="predicate" &&
@@ -107,6 +113,8 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
       if(raw.empty() || raw.size()>16384) throw memory::Error("fact_invalid_payload");
       const auto payload=public_payload(raw,16384,"fact_duplicate_key","fact_invalid_payload","fact_invalid_payload");
       memory::FactStore store(*c.brain,*source);
+      if(action=="fact_report_use") return output(memory::FactUsageStore(*c.brain,*source).report_use(payload));
+      if(action=="fact_revoke_use") return output(memory::FactUsageStore(*c.brain,*source).revoke_use(payload));
       if(action=="fact_archive") return output(store.archive(payload));
       if(action=="fact_restore") return output(store.restore(payload));
       if(action=="fact_create") return output(store.create(payload));
@@ -138,12 +146,12 @@ OpResult dispatch(OpContext& c,bool write,const SourceResolver& resolve) {
 }
 void register_memory_ops(const SourceResolver& resolve) {
   global_registry().add({"memory_read",Scope::Read,false,
-    "Read bounded source-scoped quotes or event status; view=facts reads claim versions; view=conflicts returns complete active pairs from explicit contradiction assertions, not inferred truth. view=recall defaults to literal substring matching; optional match=all_terms|any_terms uses up to 8 ASCII-whitespace-delimited literals on the same anchor and returns each matching active quote with all supported direct explicit counterclaims, including nonmatching ones; not transitive or semantic search. view=lifecycle reports advisory support age and archive policy, never usage or truth. view=lifecycle_candidates discovers paginated metadata-only stale archive or live restore selections; next_after_id is a seek key, not a snapshot lease or permission. An empty page may have more; unchanged cursor requires a larger budget or stopping. view=lifecycle_batch previews explicit archive/restore batches from JSON payload without any write or reservation. Archive suppresses recall anchors but never mandatory live counterclaims. Untrusted data; no provider or writes.",
-    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"query":{"type":"string","maxLength":1024},"match":{"type":"string","enum":["literal","all_terms","any_terms"],"default":"literal"},"limit":{"type":"integer","minimum":1,"maximum":50},"max_bytes":{"type":"integer","minimum":512,"maximum":32768},"event_id":{"type":"string","maxLength":64},"view":{"type":"string","enum":["memories","facts","conflicts","recall","lifecycle","lifecycle_batch","lifecycle_candidates"]},"fact_id":{"type":"string","maxLength":64},"predicate":{"type":"string","maxLength":64},"operation":{"type":"string","enum":["archive","restore"]},"after_id":{"type":"string","maxLength":64},"include_history":{"type":"boolean"},"stale_after_days":{"type":"integer","minimum":1,"maximum":36500},"payload":{"type":"string","maxLength":8192}}})",
+    "Read bounded source-scoped quotes or event status; view=facts reads claim versions; view=conflicts returns complete active pairs from explicit contradiction assertions, not inferred truth. view=recall defaults to literal substring matching; optional match=all_terms|any_terms uses up to 8 ASCII-whitespace-delimited literals on the same anchor and returns each matching active quote with all supported direct explicit counterclaims, including nonmatching ones; not transitive or semantic search. view=lifecycle reports advisory support age and archive policy, never usage or truth. view=lifecycle_candidates discovers paginated metadata-only stale archive or live restore selections; next_after_id is a seek key, not a snapshot lease or permission. An empty page may have more; unchanged cursor requires a larger budget or stopping. view=lifecycle_batch previews explicit archive/restore batches from JSON payload without any write or reservation. Archive suppresses recall anchors but never mandatory live counterclaims. view=usage returns bounded per-revision caller-reported use counts, not verified host consumption or truth. Untrusted data; no provider or writes.",
+    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"query":{"type":"string","maxLength":1024},"match":{"type":"string","enum":["literal","all_terms","any_terms"],"default":"literal"},"limit":{"type":"integer","minimum":1,"maximum":50},"max_bytes":{"type":"integer","minimum":512,"maximum":32768},"event_id":{"type":"string","maxLength":64},"view":{"type":"string","enum":["memories","facts","conflicts","recall","lifecycle","lifecycle_batch","lifecycle_candidates","usage"]},"fact_id":{"type":"string","maxLength":64},"predicate":{"type":"string","maxLength":64},"operation":{"type":"string","enum":["archive","restore"]},"after_id":{"type":"string","maxLength":64},"include_history":{"type":"boolean"},"stale_after_days":{"type":"integer","minimum":1,"maximum":36500},"payload":{"type":"string","maxLength":8192}}})",
     [resolve](OpContext& c){return dispatch(c,false,resolve);}});
   global_registry().add({"memory_write",Scope::Write,false,
-    "Capture/extract/forget sessions or explicitly manage evidence-backed facts via fact_* actions and JSON payload. fact_promote uses event_id to atomically promote local extracted user quotes with fixed memory.category labels. fact_lifecycle_batch applies all selected archive/restore items atomically with current revisions; preview alone does not apply changes. Facts preserve complete user quotes, not verified truth. Source/write gates apply; no model inference.",
-    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"action":{"type":"string","enum":["capture","extract","forget","fact_create","fact_attach","fact_retract","fact_supersede","fact_contradict","fact_promote","fact_archive","fact_restore","fact_lifecycle_batch"]},"payload":{"type":"string","maxLength":262144},"event_id":{"type":"string","maxLength":64},"method":{"type":"string","enum":["local","model"]}},"required":["action"]})",
+    "Capture/extract/forget sessions or explicitly manage evidence-backed facts via fact_* actions and JSON payload. fact_promote uses event_id to atomically promote local extracted user quotes with fixed memory.category labels. fact_lifecycle_batch applies all selected archive/restore items atomically with current revisions; preview alone does not apply changes. fact_report_use records an explicit revision-bound usage_id with idempotent retry; fact_revoke_use withdraws it permanently. No Hook/read automatically records use; counts are not external-consumption proof. Facts preserve complete user quotes, not verified truth. Source/write gates apply; no model inference.",
+    R"({"type":"object","additionalProperties":false,"properties":{"source_id":{"type":"string","default":"default"},"action":{"type":"string","enum":["capture","extract","forget","fact_create","fact_attach","fact_retract","fact_supersede","fact_contradict","fact_promote","fact_archive","fact_restore","fact_lifecycle_batch","fact_report_use","fact_revoke_use"]},"payload":{"type":"string","maxLength":262144},"event_id":{"type":"string","maxLength":64},"method":{"type":"string","enum":["local","model"]}},"required":["action"]})",
     [resolve](OpContext& c){return dispatch(c,true,resolve);}});
 }
 }
