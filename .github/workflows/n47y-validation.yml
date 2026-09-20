@@ -2,9 +2,9 @@ name: N47Y consistent receipt integrity
 on:
   push:
     branches: [main, 'fix/n47y-receipt-integrity']
-    paths: ['include/qbrain/memory/fact_usage*.hpp', '.ci/*receipt_integrity.py', '.github/workflows/n47y-validation.yml']
+    paths: ['include/qbrain/memory/fact_usage*.hpp', '.ci/*receipt_integrity*.py', 'src/qbrain/mcp/server.cpp', '.github/workflows/n47y-validation.yml']
   pull_request:
-    paths: ['include/qbrain/memory/fact_usage*.hpp', '.ci/*receipt_integrity.py', '.github/workflows/n47y-validation.yml']
+    paths: ['include/qbrain/memory/fact_usage*.hpp', '.ci/*receipt_integrity*.py', 'src/qbrain/mcp/server.cpp', '.github/workflows/n47y-validation.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -47,6 +47,10 @@ jobs:
           python .ci/check_receipt_integrity.py --directory evidence/integrity --binary evidence/qbrain.exe --baseline evidence/baseline-qbrain.exe --test .ci/test_receipt_integrity.py --negative-tests 2>&1 | Tee-Object evidence/integrity-readback.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -O .ci/check_receipt_integrity.py --directory evidence/integrity --binary evidence/qbrain.exe --baseline evidence/baseline-qbrain.exe --test .ci/test_receipt_integrity.py --negative-tests 2>&1 | Tee-Object evidence/integrity-readback-optimized.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_receipt_integrity_boundary.py --binary evidence/qbrain.exe --output evidence/boundary 2>&1 | Tee-Object evidence/boundary.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O .ci/test_receipt_integrity_boundary.py --binary evidence/qbrain.exe --output evidence/boundary-optimized 2>&1 | Tee-Object evidence/boundary-optimized.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Unchanged usage pages and original process gates
         shell: pwsh
@@ -109,6 +113,8 @@ jobs:
           python .ci/test_receipt_integrity.py --binary evidence/qbrain --baseline baseline-source/build/n47y-base/qbrain --baseline-source baseline-source --output evidence/integrity 2>&1 | tee evidence/integrity.log
           python .ci/check_receipt_integrity.py --directory evidence/integrity --binary evidence/qbrain --baseline evidence/baseline-qbrain --test .ci/test_receipt_integrity.py --negative-tests 2>&1 | tee evidence/integrity-readback.log
           python -O .ci/check_receipt_integrity.py --directory evidence/integrity --binary evidence/qbrain --baseline evidence/baseline-qbrain --test .ci/test_receipt_integrity.py --negative-tests 2>&1 | tee evidence/integrity-readback-optimized.log
+          python .ci/test_receipt_integrity_boundary.py --binary evidence/qbrain --output evidence/boundary 2>&1 | tee evidence/boundary.log
+          python -O .ci/test_receipt_integrity_boundary.py --binary evidence/qbrain --output evidence/boundary-optimized 2>&1 | tee evidence/boundary-optimized.log
       - name: Unchanged usage pages and original process gates
         shell: bash
         run: |
