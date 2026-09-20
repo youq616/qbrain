@@ -1,0 +1,114 @@
+{
+  "schema": "qbrain-n47w-acceptance-v1",
+  "date": "2026-09-20",
+  "timezone": "Asia/Seoul",
+  "verdict": "PASS-scoped-bridge-diagnostics",
+  "reviewer": "coordinating ChatGPT, owner-authorized separate engineering self-review; not another agent or third party",
+  "base_main": "a3436c09e1eaed1d1e4eb6dcfaffbe19cc443eca",
+  "plan_commit": "ecdf4eac7dacd0c0c6583aa21ea4a973a7430570",
+  "accepted_source": "ea3b3f5a4ea1cd03541a5aedbf413ed0f1a3a6c1",
+  "accepted_tree": "2243a7baccecf13e2150f04e74363fbe8684bb9a",
+  "run_id": 35477227325,
+  "event": "push",
+  "run_attempt": 1,
+  "jobs": {
+    "source": 105988461031,
+    "powershell": 105988461093,
+    "pwsh": 105988461064,
+    "full_native": 105988460945
+  },
+  "required_jobs_and_steps": "completed/success, checked individually",
+  "artifacts": {
+    "source": {
+      "id": 10594965675,
+      "bytes": 12149195,
+      "sha256": "51aa8909f872b7eb23edd4f1ad12fdf5f47bb1ddc526d31b41abbb594ac72763",
+      "members": 4
+    },
+    "powershell": {
+      "id": 10594841798,
+      "bytes": 17190,
+      "sha256": "293659d391d3375340442474610f6e3ddc5fd69ff0e0b50abf5859de1db0715b",
+      "members": 18
+    },
+    "pwsh": {
+      "id": 10594268259,
+      "bytes": 16955,
+      "sha256": "933925fd02798fbc9a3d8f2668425e18b44c091d39029216d1be314c527b3d03",
+      "members": 18
+    },
+    "full-native": {
+      "id": 10594892163,
+      "bytes": 29755,
+      "sha256": "a531646829b4ac753a7e3c75c83d62b637c21f68823723e245240a4d64431ac0",
+      "members": 3
+    }
+  },
+  "source_files": 1173,
+  "only_changed_inherited_production_file": "scripts/Invoke-QbrainJson.ps1",
+  "bridge": {
+    "blob": "59e75ad4fe72427cbcc409b431a686e8168738e0",
+    "lf_sha256": "7b5acca83e8349191200093bb07ad1471bb2ce0c6b7750b0a026581514818f39",
+    "native_crlf_sha256": "a088c3ecb4992d77ac8bf59668270361d86e84014eac52904ee5226d73bde3c3"
+  },
+  "prior_bridge_blob": "8b3c4e6f04ce57dbf79cb245c94a5e5cd1a1125f",
+  "pinned_regression_exe_sha256": "c35fadde8c8356b7243bf0b34cfd5c836bda27bb46da87eddcc79c1031bf05b5",
+  "results": {
+    "each_native_shell": {
+      "new_checks": 29,
+      "observations": 6,
+      "snapshot": 24,
+      "recovery": 60,
+      "installation": 69,
+      "consent": 16,
+      "transport": 8,
+      "fact_install": 33,
+      "promotion_install": 33
+    },
+    "full_native_groups": 60,
+    "build_ok": true,
+    "live_pg": "SKIP-PG",
+    "checker_methods_each_normal_optimized": 4,
+    "fixture_negative_variants": 25,
+    "actual_report_mutations_rejected": 8
+  },
+  "review_correction": {
+    "scope": "test-harness cleanup identity",
+    "initial_source": "50dda87eb58cad1b7f783a6efbfb7548480f14ff",
+    "fixed_source": "ea3b3f5a4ea1cd03541a5aedbf413ed0f1a3a6c1",
+    "production_bridge_changed_by_correction": false,
+    "all_original_check_names_retained": true
+  },
+  "local_record_hashes": {
+    "n47w-readback.json": {
+      "bytes": 12310,
+      "sha256": "f14866a0c99b594a23252e9b7df1f5112e6de902bc348cb582f141315bcb132c"
+    },
+    "n47w-native-readback.json": {
+      "bytes": 1511,
+      "sha256": "bc292cb8eb84b117e97dbc1f9cb0cb2bc594a7413ed100ff6d9da436cc3241b1"
+    },
+    "n47w-negative-readback.json": {
+      "bytes": 1003,
+      "sha256": "e586c28f21f4dbbe36edefa5e03f9f25792afb8bc4ccc757a1cc1220b166e4f0"
+    }
+  },
+  "open_observation": {
+    "issue": 40,
+    "historical_root_cause_known": false,
+    "historical_timeout_fixed": false
+  },
+  "public_release_changed": false,
+  "local_windows_execution": false,
+  "real_client_verified": false,
+  "limits": [
+    "Structured diagnostic only, not a sanitized whole PowerShell ErrorRecord or stdout/stderr",
+    "No automatic logging or changed installed Hook error handling",
+    "Remaining wait budget is not a strict total wall-clock limit",
+    "Synchronous startup and cleanup semantics retained; no process-tree kill",
+    "Process.Start completion is not application readiness or model consumption",
+    "Synthetic native failures are not reproduction of Issue40",
+    "No new provider/PG/signing/stable-v1 acceptance",
+    "Derived Git evidence does not replace raw Actions artifact retention"
+  ]
+}

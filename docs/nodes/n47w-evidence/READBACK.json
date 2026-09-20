@@ -1,0 +1,170 @@
+{
+  "schema": "qbrain-n47w-verified-evidence-v1",
+  "source_commit": "ea3b3f5a4ea1cd03541a5aedbf413ed0f1a3a6c1",
+  "source_tree": "2243a7baccecf13e2150f04e74363fbe8684bb9a",
+  "source_files": 1173,
+  "run_id": 35477227325,
+  "attempt": 1,
+  "shells": {
+    "powershell": {
+      "new": {
+        "result": "BRIDGE_DIAGNOSTICS_VERIFIED",
+        "source_commit": "ea3b3f5a4ea1cd03541a5aedbf413ed0f1a3a6c1",
+        "shell_major": 5,
+        "checks": 29,
+        "observations": 6,
+        "bridge_sha256": "a088c3ecb4992d77ac8bf59668270361d86e84014eac52904ee5226d73bde3c3",
+        "new_windows_execution": false,
+        "real_client_verified": false
+      },
+      "snapshot": {
+        "verified": true,
+        "source_commit": "ea3b3f5a4ea1cd03541a5aedbf413ed0f1a3a6c1",
+        "shell_major": 5,
+        "passed": 24,
+        "failed": 0,
+        "expected_baseline_rejection": false
+      },
+      "recovery": {
+        "verified": true,
+        "cases": 60,
+        "passed": 60,
+        "failed": 0,
+        "baseline_expected_rejection": false,
+        "powershell": "5.1.26100.33296"
+      },
+      "old": {
+        "test_install_hooks": 69,
+        "test_install_consent": 16,
+        "test_windows_transport": 8,
+        "test_hook_fact_install": {
+          "checks": 33,
+          "shell_major": 5
+        },
+        "test_promotion_install": {
+          "checks": 33,
+          "shell_major": 5
+        }
+      },
+      "artifact_members": 18
+    },
+    "pwsh": {
+      "new": {
+        "result": "BRIDGE_DIAGNOSTICS_VERIFIED",
+        "source_commit": "ea3b3f5a4ea1cd03541a5aedbf413ed0f1a3a6c1",
+        "shell_major": 7,
+        "checks": 29,
+        "observations": 6,
+        "bridge_sha256": "a088c3ecb4992d77ac8bf59668270361d86e84014eac52904ee5226d73bde3c3",
+        "new_windows_execution": false,
+        "real_client_verified": false
+      },
+      "snapshot": {
+        "verified": true,
+        "source_commit": "ea3b3f5a4ea1cd03541a5aedbf413ed0f1a3a6c1",
+        "shell_major": 7,
+        "passed": 24,
+        "failed": 0,
+        "expected_baseline_rejection": false
+      },
+      "recovery": {
+        "verified": true,
+        "cases": 60,
+        "passed": 60,
+        "failed": 0,
+        "baseline_expected_rejection": false,
+        "powershell": "7.6.5"
+      },
+      "old": {
+        "test_install_hooks": 69,
+        "test_install_consent": 16,
+        "test_windows_transport": 8,
+        "test_hook_fact_install": {
+          "checks": 33,
+          "shell_major": 7
+        },
+        "test_promotion_install": {
+          "checks": 33,
+          "shell_major": 7
+        }
+      },
+      "artifact_members": 18
+    }
+  },
+  "native": {
+    "schema": "qbrain-n47w-native-readback-v1",
+    "source_commit": "ea3b3f5a4ea1cd03541a5aedbf413ed0f1a3a6c1",
+    "run_id": 35477227325,
+    "job_id": 105988460945,
+    "artifact_id": 10594892163,
+    "bytes": 29755,
+    "sha256": "a531646829b4ac753a7e3c75c83d62b637c21f68823723e245240a4d64431ac0",
+    "groups": [
+      "rrf",
+      "n43_memory",
+      "n45_context",
+      "n46b_http",
+      "n46c_retrieval",
+      "n46d_embedding",
+      "n47a_facts",
+      "n47b_conflicts",
+      "n47c_recall",
+      "n47d_hook_facts",
+      "n47e_local_fact_promotion",
+      "n47f_lifecycle",
+      "n47g_lifecycle_batch",
+      "n47h_lifecycle_candidates",
+      "n47i_strict_json",
+      "n47j_hook_checkpoints",
+      "n47k_hook_diagnostics",
+      "n47l_multiterm_recall",
+      "n46f_cjk",
+      "n42_foundation",
+      "vector",
+      "chunker",
+      "extract",
+      "storage",
+      "mcp",
+      "rerank",
+      "minions",
+      "migration_v6",
+      "n12_dream",
+      "live_sync",
+      "n13",
+      "codeintel",
+      "analytics",
+      "n19",
+      "n20",
+      "n22",
+      "n23",
+      "n20_23",
+      "n24_25",
+      "n26_27",
+      "wave4",
+      "wave5",
+      "doctor",
+      "n14",
+      "n15",
+      "n16",
+      "n17",
+      "n18",
+      "n30_c_routing_storage",
+      "n30_b_auth_redaction",
+      "n31_c_negatives",
+      "n31_a_counts_mapping",
+      "n32_scan_integration",
+      "n34",
+      "n33_multimodal",
+      "n35_contract_suite",
+      "n36_token_scope",
+      "n37_packaging",
+      "n38_pg_backend",
+      "n39_rerank_config"
+    ],
+    "build_ok": true,
+    "live_pg_skipped": true,
+    "new_windows_execution": false
+  },
+  "new_windows_execution": false,
+  "real_client_verified": false
+}
