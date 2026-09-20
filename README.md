@@ -1,47 +1,41 @@
 # Qbrain
 
-Windows 原生 C++20 / PowerShell 记忆与知识库，默认 SQLite + FTS5。
-应用不需要Docker、WSL或Python服务；可选模型评测工具需要Python3.10+。
+Windows原生C++20 / PowerShell记忆与知识库，默认SQLite + FTS5。
+应用不需要Docker、WSL或Python服务；可选评测工具需要Python。
 
-## 最新源码：N47Y 完整使用回执校验与 MCP 分页
+## 最新源码：N47Z原子批量回执管理
 
-上报、重试、撤回、汇总和分页现在共享实际类型/ID/版本/时间校验，拒绝损坏的
-TEXT/BLOB逻辑别名，不悄悄重复计数或修改数据。另行审核发现并修复了MCP入口
-拒绝既有receipt_state/snapshot的问题，健康筛选和连续翻页均有实际进程测试。
+新增fact usage-batch-preview/apply，支持同一来源最多32条回执、8个事实的只读预览、
+快照绑定上报/撤回和整批回滚。重复项明确显示为无需修改；发生实际变更后须重新
+预览，不能自动重试旧批准。调用方自有事务不会被接管，预览也不授予写权限。
 
-Windows/Linux各123完整性检查、普通/-O各72补充检查、原75/71及完整原生60组
-完成并核验。模块不改schema/权限/默认行为，不把上报记录当作模型消费证明。
-[模块说明](docs/integration/RECEIPT-INTEGRITY.zh-CN.md) ·
-[本人分离自审](docs/nodes/N47Y-HARD-AUDIT.md) · [当前状态](CURRENT-STATUS.md)。
-**N47Y修复目前在源码，下面的N47X公开包保持原样，尚不包含本次修复。**
+Windows/Linux各组89端到端检查、18/41直接C++事务检查、原60组和继承回归完成。
+额外参考账本24轮实际MCP对照通过。[当前状态](CURRENT-STATUS.md) ·
+[使用说明](docs/integration/USAGE-BATCHES.zh-CN.md) · [本人分离自审](docs/nodes/N47Z-HARD-AUDIT.md)。
+源码还包含N47Y统一完整性与MCP分页修复。两阶段均未改变存储schema、默认权限、
+Hook或安装器。[回执完整性说明](docs/integration/RECEIPT-INTEGRITY.zh-CN.md)。
 
-## 当前公开下载：N47X 集成工程预览
+## 当前公开下载仍为N47X
 
 [windows-current-preview-b810d689](https://github.com/youq616/qbrain/releases/tag/windows-current-preview-b810d689)。
-选择qbrain-windows-x64-n47x-preview.zip，并取同版SHA256SUMS及START-HERE说明。
-程序包4,327,611字节、27个成员，SHA256：
+选择qbrain-windows-x64-n47x-preview.zip并核对同版SHA256SUMS、START-HERE与PROVENANCE。
+4,327,611字节、27文件；SHA256：
 `c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d`。
+该固定b810构建包含N47S–N47W能力，不包含N47Y/N47Z后续源码变化。旧资产/tag不变。
+[该版本安装升级说明](docs/integration/CURRENT-PREVIEW-N47X.zh-CN.md)。仍为未签名开发预览。
 
-该包从固定b810源码重新编译，包含N47S模型工具、N47T/U使用记录与审计、N47V
-路径保护和N47W桥接诊断。仍为未签名、非latest开发预览，不是稳定版。
-[该版本安装与升级说明](docs/integration/CURRENT-PREVIEW-N47X.zh-CN.md)。旧发布保留。
+## 使用与未完成边界
 
-## 操作与边界
-
-[使用上报/撤回](docs/integration/FACT-USAGE.zh-CN.md) ·
-[逐条审计](docs/integration/FACT-USAGE-AUDIT.zh-CN.md) ·
+[单条上报撤回](docs/integration/FACT-USAGE.zh-CN.md) ·
+[分页审计](docs/integration/FACT-USAGE-AUDIT.zh-CN.md) ·
 [模型对照](docs/integration/MODEL-COMPARISON.zh-CN.md) ·
-[路径限制](docs/integration/CASE-SENSITIVE-PATHS.zh-CN.md) ·
 [桥接诊断](docs/integration/TRANSPORT-DIAGNOSTICS.zh-CN.md)。
 
-采集和MCP写入仍需明确许可。调用方回执不证明模型实际使用或事实为真；回环测试
-不是真实模型效果。Issue40历史超时、实际客户端/模型/费用、PG新模块对等、通用
-语义确认/画像/衰减、完整ACL/DLP、规模性能及签名仍有未完成项。
-[完整路线与条件性估计](docs/COMPLETION-ROADMAP.md)。
+回执是调用方声称使用，不证明模型消费或事实为真；不会自动改变排序/画像/衰减。
+真实客户端、模型质量/费用、PG新模块对等、语义确认、完整ACL/DLP、规模性能、
+签名和稳定版终验仍有未完成项，Issue40根因未知。[完成路线](docs/COMPLETION-ROADMAP.md)。
 
-## 源码与历史
-
-构建使用scripts/build-cl.ps1和scripts/build-tests-cl.ps1；只有同轮生产构建成功且
-源码未变才使用-SkipProductionBuild。本机确需任务时遵循[单提示词交接](LOCAL-AGENT-HANDOFF.md)。
-[上一README](README-N47X.md)保留原字节；[LICENSE](LICENSE) ·
-[第三方说明](THIRD-PARTY-NOTICES.md) · [规范操作清单](docs/OPS-PARITY-LEDGER.md)。
+构建使用scripts/build-cl.ps1及scripts/build-tests-cl.ps1，只有同轮生产构建成功且
+源码未变才使用-SkipProductionBuild。新增批量C++测试是独立CMake目标，不能只跑
+旧测试套件就声称覆盖。确需本机任务时遵循[单提示词交接](LOCAL-AGENT-HANDOFF.md)。
+[LICENSE](LICENSE) · [规范清单](docs/OPS-PARITY-LEDGER.md)。
