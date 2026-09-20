@@ -1,0 +1,189 @@
+{
+  "schema": "qbrain-n47z-acceptance-v1",
+  "recorded_utc_date": "2026-09-20",
+  "verdict": "PASS-scoped-atomic-receipt-batch-module",
+  "reviewer": "coordinating ChatGPT, separate owner-authorized engineering self-review; not a subagent or third party",
+  "base_main": "82e1f4c3872b5e3813b68f94ed925849b1e6b7a0",
+  "plan_commit": "bd559fff55228faf469123e5b34e200e9145b1b4",
+  "continuation_plan": "25311885a7ebb80e5acdfa3d530fb4cdc7a6f065",
+  "accepted_source": "7898dec68b5162b33a193cb30295bdd1744e5269",
+  "accepted_tree": "83312db93cd4302c2e98cfbc92b0266b38939be3",
+  "run_id": 35516145384,
+  "event": "push",
+  "attempt": 1,
+  "jobs": {
+    "windows": 106092309012,
+    "portable": 106092309117
+  },
+  "source_files": 1231,
+  "windows_exact_crlf_files": 1217,
+  "platforms": {
+    "portable": {
+      "artifact_id": 10606593858,
+      "artifact_bytes": 20792136,
+      "artifact_sha256": "c8f574d2ae3ec0f4520c53af6414137ee4b97a7b6a5c41993e20d639d10659ce",
+      "members": 1839,
+      "binary_sha256": "4087415b478ba0d02a22d1751b2c599bad494b59eaf2ebf5929e5d1a71f5f7ae",
+      "baseline_sha256": "7399af97dde5b97cc87667dc7e0e3fbdbf79b8b435fbfb62f01f2cb4cfd4e57e",
+      "batch_modes": {
+        "batches": {
+          "result": "LOCAL_BATCH_EVIDENCE_VERIFIED",
+          "checks": 89,
+          "commands": 165,
+          "raw_streams": 495,
+          "successful_batch_responses": 51,
+          "new_product_execution": false,
+          "real_client_verified": false,
+          "negative_cases": 12,
+          "report_sha256": "1c41c346c5ebf46d16bcf51c68fc00b76f5e955527f669a4d6842bf9fa111739"
+        },
+        "batches-optimized": {
+          "result": "LOCAL_BATCH_EVIDENCE_VERIFIED",
+          "checks": 89,
+          "commands": 165,
+          "raw_streams": 495,
+          "successful_batch_responses": 51,
+          "new_product_execution": false,
+          "real_client_verified": false,
+          "negative_cases": 12,
+          "report_sha256": "84c20105823f3ac57f1d241725f901a7ad180690503639b7786f428e0be70b1e"
+        }
+      },
+      "direct_tests": {
+        "batch-core": {
+          "checks": 18,
+          "binary_sha256": "cbce2da4d9d2aeae9f81c60a7fcebb15727dffcd8568e7ed4ec7343ecdd1953b"
+        },
+        "batch-ownership": {
+          "checks": 41,
+          "binary_sha256": "452d45596047bf85633c9de6aade36b5de5245e76b4629cfb38178589ac024ce"
+        }
+      },
+      "inherited_checks": {
+        "integrity": 123,
+        "boundary": 72,
+        "usage": 75,
+        "pages": 71,
+        "facts": 34,
+        "context": 65,
+        "multiterm": 112,
+        "named_arguments": 60,
+        "search_arguments": 226,
+        "hook_facts": 52,
+        "lifecycle_batch": 40,
+        "memory": 44,
+        "mcp": 17
+      },
+      "native_registered_groups": null,
+      "ctest_groups": 6
+    },
+    "windows": {
+      "artifact_id": 10606659850,
+      "artifact_bytes": 18879361,
+      "artifact_sha256": "612b72fc76814538f1f82a1b81393dffcacf374390b41dd428fdb6924d664660",
+      "members": 1837,
+      "binary_sha256": "149a710652bd69d4d3c8cd90a0f71cf8869cc0cca2f09034070d5de4fcface5e",
+      "baseline_sha256": "838955a0ad88779af08c53396b773d62b327cccd4f216a18379f0a76ffa4c9cf",
+      "batch_modes": {
+        "batches": {
+          "result": "LOCAL_BATCH_EVIDENCE_VERIFIED",
+          "checks": 89,
+          "commands": 165,
+          "raw_streams": 495,
+          "successful_batch_responses": 51,
+          "new_product_execution": false,
+          "real_client_verified": false,
+          "negative_cases": 12,
+          "report_sha256": "83faec84689cfd8c90354769fef8460f82c30a6b2b1095b7e82de6f813848e7f"
+        },
+        "batches-optimized": {
+          "result": "LOCAL_BATCH_EVIDENCE_VERIFIED",
+          "checks": 89,
+          "commands": 165,
+          "raw_streams": 495,
+          "successful_batch_responses": 51,
+          "new_product_execution": false,
+          "real_client_verified": false,
+          "negative_cases": 12,
+          "report_sha256": "05597c74139ed09f320368d6b6a653c2cb8ff27f5ee6660127adc6757589d3c1"
+        }
+      },
+      "direct_tests": {
+        "batch-core": {
+          "checks": 18,
+          "binary_sha256": "d7ef7197ba93fb6dcbe526ea84a41d727f2761774572c5bf4fcac234833c3906"
+        },
+        "batch-ownership": {
+          "checks": 41,
+          "binary_sha256": "dd52f75f8ca516818c33c1a0ae9b14fda033660bd3bef21cbe99702c2d15b1e3"
+        }
+      },
+      "inherited_checks": {
+        "integrity": 123,
+        "boundary": 72,
+        "usage": 75,
+        "pages": 71,
+        "facts": 34,
+        "context": 65,
+        "multiterm": 112,
+        "named_arguments": 60,
+        "search_arguments": 226,
+        "hook_facts": 52,
+        "lifecycle_batch": 40,
+        "memory": 44,
+        "mcp": 17
+      },
+      "native_registered_groups": 60,
+      "ctest_groups": null
+    }
+  },
+  "local_reference": {
+    "normal": {
+      "rounds": 24,
+      "facts": 8,
+      "receipts": 125,
+      "passed": 1933,
+      "failed": 0,
+      "cli_calls": 35,
+      "mcp_requests": 656,
+      "binary_sha256": "4087415b478ba0d02a22d1751b2c599bad494b59eaf2ebf5929e5d1a71f5f7ae",
+      "script_sha256": "19b24199f601a47e933f04015ed06cb757dcc8e91a00df621d56f979a5167daf",
+      "record_bytes": 1856333,
+      "record_sha256": "d12c1d07dea3970711ad60864985011b50f06a6020cfc4d93b09c38b76ce36fa"
+    },
+    "optimized": {
+      "rounds": 24,
+      "facts": 8,
+      "receipts": 125,
+      "passed": 1933,
+      "failed": 0,
+      "cli_calls": 35,
+      "mcp_requests": 656,
+      "binary_sha256": "4087415b478ba0d02a22d1751b2c599bad494b59eaf2ebf5929e5d1a71f5f7ae",
+      "script_sha256": "19b24199f601a47e933f04015ed06cb757dcc8e91a00df621d56f979a5167daf",
+      "record_bytes": 1856333,
+      "record_sha256": "6806bcba68edf3f751a9eb27e9e0492fc4d6a0019e7686b790add52cf4fecd0a"
+    }
+  },
+  "local_direct_rerun": [
+    18,
+    41
+  ],
+  "local_batch_rerun": 89,
+  "ci_readback_sha256": "14d3a6481ed05975da18ae6da58592b767e127f38bb3712918330f6e3e0edcb0",
+  "ci_readback_bytes": 10814,
+  "public_release_changed": false,
+  "issue40_closed": false,
+  "real_client_verified": false,
+  "real_model_answers": "NOT_RUN",
+  "live_pg": "SKIP-PG",
+  "provider_cost": null,
+  "limits": [
+    "Source acceptance, not a new public package or stable-v1 release",
+    "Only receipt mutations atomic; original module preparation/backup separate",
+    "Existing caller transactions rejected, no same-connection unsynchronized concurrency guarantee",
+    "SQL ABORT and commit-denial fixtures, not physical disk-fault tests",
+    "Local reference-model executions on Linux, not local Windows or real model runs",
+    "Original Actions artifact retention ends2026-10-04; derived records do not contain all raw bytes"
+  ]
+}

@@ -424,3 +424,13 @@ add_executable(qbrain_multiterm_tests tests/test_n47l.cpp)
 target_compile_definitions(qbrain_multiterm_tests PRIVATE QBRAIN_MULTITERM_STANDALONE=1)
 target_link_libraries(qbrain_multiterm_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
 add_test(NAME qbrain_multiterm_unit COMMAND qbrain_multiterm_tests)
+
+# N47Z: additional direct transaction-boundary checks, old targets unchanged.
+add_executable(qbrain_usage_batch_tests tests/test_usage_batches.cpp)
+target_link_libraries(qbrain_usage_batch_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
+add_test(NAME qbrain_usage_batch_unit COMMAND qbrain_usage_batch_tests)
+
+# N47Z continuation: independent implicit-transaction/commit-failure review.
+add_executable(qbrain_usage_batch_ownership_tests tests/test_usage_batch_ownership.cpp)
+target_link_libraries(qbrain_usage_batch_ownership_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
+add_test(NAME qbrain_usage_batch_ownership_unit COMMAND qbrain_usage_batch_ownership_tests)

@@ -1,0 +1,54 @@
+{
+  "schema": "qbrain-n47z-reference-review-summary-v1",
+  "source_commit": "7898dec68b5162b33a193cb30295bdd1744e5269",
+  "script": "review_reference_model.py",
+  "results": {
+    "normal": {
+      "binary_sha256": "4087415b478ba0d02a22d1751b2c599bad494b59eaf2ebf5929e5d1a71f5f7ae",
+      "cli_calls": 35,
+      "facts": 8,
+      "failed": 0,
+      "failure": null,
+      "limits": [
+        "public-API reference model; no SQL data writes",
+        "sequential schedules only",
+        "local Linux execution, not new Windows evidence"
+      ],
+      "mcp_requests": 656,
+      "passed": 1933,
+      "platform": "posix",
+      "provider_calls": 0,
+      "real_client_verified": false,
+      "receipts": 125,
+      "rounds": 24,
+      "schema": "qbrain-n47z-reference-review-v1",
+      "script_sha256": "19b24199f601a47e933f04015ed06cb757dcc8e91a00df621d56f979a5167daf",
+      "record_sha256": "d12c1d07dea3970711ad60864985011b50f06a6020cfc4d93b09c38b76ce36fa",
+      "record_bytes": 1856333
+    },
+    "optimized": {
+      "binary_sha256": "4087415b478ba0d02a22d1751b2c599bad494b59eaf2ebf5929e5d1a71f5f7ae",
+      "cli_calls": 35,
+      "facts": 8,
+      "failed": 0,
+      "failure": null,
+      "limits": [
+        "public-API reference model; no SQL data writes",
+        "sequential schedules only",
+        "local Linux execution, not new Windows evidence"
+      ],
+      "mcp_requests": 656,
+      "passed": 1933,
+      "platform": "posix",
+      "provider_calls": 0,
+      "real_client_verified": false,
+      "receipts": 125,
+      "rounds": 24,
+      "schema": "qbrain-n47z-reference-review-v1",
+      "script_sha256": "19b24199f601a47e933f04015ed06cb757dcc8e91a00df621d56f979a5167daf",
+      "record_sha256": "6806bcba68edf3f751a9eb27e9e0492fc4d6a0019e7686b790add52cf4fecd0a",
+      "record_bytes": 1856333
+    }
+  },
+  "raw_records_embedded": false
+}
