@@ -92,11 +92,11 @@ jobs:
           python under-test/.ci/check_fact_usage_pages_report.py --report evidence/pages.json --binary $exe --test under-test/.ci/test_fact_usage_pages.py --raw-dir evidence/page-raw --negative-tests 2>&1 | Tee-Object evidence/pages-readback.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           foreach ($name in @('test_fact_process','test_context_process','test_multiterm_process','test_named_arguments','test_search_arguments','test_hook_fact_process','test_lifecycle_batch_process')) {
-            python "under-test/.ci/$name.py" --binary $exe --report "evidence/$name.json" 2>&1 | Tee-Object "evidence/$name.log"
+            python "product/.ci/$name.py" --binary $exe --report "evidence/$name.json" 2>&1 | Tee-Object "evidence/$name.log"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           foreach ($name in @('test_memory_cycle','test_mcp_boundaries')) {
-            python "under-test/.ci/$name.py" --binary $exe 2>&1 | Tee-Object "evidence/$name.log"
+            python "product/.ci/$name.py" --binary $exe 2>&1 | Tee-Object "evidence/$name.log"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - name: Extracted model tools and actual engine to test-only HTTP pipeline
