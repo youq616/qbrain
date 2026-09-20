@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <chrono>
 #include <random>
+#include <optional>
+#include <vector>
+#include <utility>
 
 namespace qbrain::memory {
 namespace usage_detail {
@@ -140,6 +143,74 @@ inline UsageRow usage_row(DB::Statement& row) {
   return r;
 }
 inline constexpr const char* usage_columns="fact_id,fact_revision,reported_at,withdrawn_at,typeof(fact_revision),typeof(reported_at),typeof(withdrawn_at)";
+// N47Y: all public receipt routes share actual-storage-class validation. A
+// TEXT-affinity SQLite column can still contain BLOB data. Such data must not
+// disappear from scope/ID lookup, become a second logical ID, or be counted.
+struct UsageEntry { std::string uid; UsageRow row; };
+inline constexpr const char* usage_entry_columns=
+  "fact_id,fact_revision,reported_at,withdrawn_at,typeof(fact_revision),"
+  "typeof(reported_at),typeof(withdrawn_at),usage_id,typeof(usage_id),"
+  "typeof(fact_id),typeof(source_id),length(CAST(fact_id AS BLOB)),"
+  "length(CAST(usage_id AS BLOB))";
+inline UsageEntry usage_entry(DB::Statement& s) {
+  // Check storage classes and byte lengths before copying variable-size IDs.
+  require(s.column_text(8)=="text" && s.column_text(9)=="text" &&
+      s.column_text(10)=="text" && s.column_int(11)==64 && s.column_int(12)==64,
+      "fact_usage_invalid_metadata");
+  UsageEntry entry{s.column_text(7),usage_row(s)};
+  identifier(entry.uid);return entry;
+}
+inline std::vector<UsageEntry> usage_entries(DB& db,const std::string& source,
+    const std::string& id,int64_t revision) {
+  // Reject exact BLOB scope aliases by indexed existence probes first. Keeping
+  // the ordinary ordered scan on ONE index prefix avoids a temporary sort of
+  // an arbitrarily large damaged set before the 4097-row sentinel can reject it.
+  for(const auto* query:{
+      "SELECT 1 FROM memory_fact_usage WHERE source_id=CAST(?1 AS BLOB)"
+      " AND fact_id IN (?2,CAST(?2 AS BLOB)) LIMIT 1",
+      "SELECT 1 FROM memory_fact_usage WHERE source_id=?1 AND fact_id=CAST(?2 AS BLOB) LIMIT 1"}) {
+    auto aliases=db.prepare(query);aliases.bind_text(1,source);aliases.bind_text(2,id);
+    require(!aliases.step(),"fact_usage_invalid_metadata");
+  }
+  auto rows=db.prepare(std::string("SELECT ")+usage_entry_columns+
+    " FROM memory_fact_usage WHERE source_id=?1 AND fact_id=?2 ORDER BY usage_id LIMIT 4097");
+  rows.bind_text(1,source);rows.bind_text(2,id);
+  std::vector<UsageEntry> entries;
+  while(rows.step()) {
+    require(entries.size()<max_use_receipts,"fact_usage_invalid_metadata");
+    auto entry=usage_entry(rows);
+    require(entry.row.fact==id && entry.row.rev<=revision &&
+        (entries.empty() || entry.uid>entries.back().uid),"fact_usage_invalid_metadata");
+    entries.push_back(std::move(entry));
+  }
+  return entries;
+}
+inline std::optional<UsageEntry> find_usage(DB& db,const std::string& source,
+    const std::string& uid) {
+  // A requested ID may be damaged under a different fact. Check its source-wide
+  // identity too, before deciding that insertion is a new receipt.
+  auto s=db.prepare(std::string("SELECT ")+usage_entry_columns+
+    " FROM memory_fact_usage WHERE source_id IN (?1,CAST(?1 AS BLOB))"
+    " AND usage_id IN (?2,CAST(?2 AS BLOB)) LIMIT 5");
+  s.bind_text(1,source);s.bind_text(2,uid);
+  std::optional<UsageEntry> found;
+  while(s.step()) {
+    require(!found.has_value(),"fact_usage_invalid_metadata");
+    found=usage_entry(s);require(found->uid==uid,"fact_usage_invalid_metadata");
+  }
+  return found;
+}
+inline int64_t stored_usage_revision(DB& db,const std::string& source,const std::string& id) {
+  // Withdrawal is not a live-fact read: retired, archived and expired supported
+  // facts keep their withdrawal right. Only stored revision integrity is needed.
+  auto s=db.prepare("SELECT revision,typeof(revision) FROM memory_facts WHERE source_id=? AND fact_id=?");
+  s.bind_text(1,source);s.bind_text(2,id);
+  require(s.step(),"fact_usage_not_found");
+  require(s.column_text(1)=="integer" && s.column_int(0)>=1 && s.column_int(0)<=INT32_MAX,
+      "fact_usage_invalid_metadata");
+  return s.column_int(0);
+}
+
 
 } // namespace usage_detail
 class FactUsageStore {
@@ -162,21 +233,18 @@ inline Json FactUsageStore::report_use(const Json& p) {
   { ReadSnapshot snapshot(db);usage_foreign_keys(db);check_reportable(brain_,source_,id,rev); }
   initialize_usage(db);
   Tx tx(db);usage_foreign_keys(db);check_reportable(brain_,source_,id,rev);
+  require(usage_ready(db),"fact_usage_not_found");
+  const auto entries=usage_entries(db,source_,id,rev);
+  const auto existing=find_usage(db,source_,uid);
   bool duplicate=false;int64_t at=clock_now();
-  {
-    auto row=db.prepare(std::string("SELECT ")+usage_columns+" FROM memory_fact_usage WHERE source_id=? AND usage_id=?");
-    row.bind_text(1,source_);row.bind_text(2,uid);
-    if(row.step()) {
-      const auto old=usage_row(row);
-      require(old.fact==id && old.rev==rev,"fact_usage_id_conflict");
-      require(!old.revoked,"fact_usage_withdrawn");
-      duplicate=true;at=old.at;
-    }
+  if(existing) {
+    const auto& old=existing->row;
+    require(old.fact==id && old.rev==rev,"fact_usage_id_conflict");
+    require(!old.revoked,"fact_usage_withdrawn");
+    duplicate=true;at=old.at;
   }
   if(!duplicate) {
-    auto count=db.prepare("SELECT COUNT(*) FROM memory_fact_usage WHERE source_id=? AND fact_id=?");
-    count.bind_text(1,source_);count.bind_text(2,id);
-    require(count.step() && count.column_int(0)<max_use_receipts,"fact_usage_capacity");
+    require(entries.size()<max_use_receipts,"fact_usage_capacity");
     auto ins=db.prepare("INSERT INTO memory_fact_usage(source_id,usage_id,fact_id,fact_revision,reported_at) VALUES(?,?,?,?,?)");
     ins.bind_text(1,source_);ins.bind_text(2,uid);ins.bind_text(3,id);ins.bind_int(4,rev);ins.bind_int(5,at);ins.step_done();
   }
@@ -190,12 +258,11 @@ inline Json FactUsageStore::revoke_use(const Json& p) {
   auto& db=brain_.db();
   { ReadSnapshot snapshot(db);require(usage_ready(db),"fact_usage_not_found"); }
   Tx tx(db);usage_foreign_keys(db);require(usage_ready(db),"fact_usage_not_found");
-  UsageRow found;
-  {
-    auto row=db.prepare(std::string("SELECT ")+usage_columns+" FROM memory_fact_usage WHERE source_id=? AND usage_id=? AND fact_id=?");
-    row.bind_text(1,source_);row.bind_text(2,uid);row.bind_text(3,id);
-    require(row.step(),"fact_usage_not_found");found=usage_row(row);
-  }
+  const auto existing=find_usage(db,source_,uid);
+  require(existing.has_value() && existing->row.fact==id,"fact_usage_not_found");
+  const auto entries=usage_entries(db,source_,id,stored_usage_revision(db,source_,id));
+  (void)entries; // Complete validation before the tombstone update, including off-page rows.
+  const auto& found=existing->row;
   const auto at=found.revoked?found.withdrawn:std::max(clock_now(),found.at);
   if(!found.revoked) {
     auto update=db.prepare("UPDATE memory_fact_usage SET withdrawn_at=? WHERE source_id=? AND usage_id=? AND fact_id=? AND withdrawn_at IS NULL");
@@ -212,12 +279,8 @@ inline Json FactUsageStore::usage(const std::string& id) {
   const bool initialized=usage_ready(db),archived=archive_ready(db) && is_archived(db,source_,id);
   int current=0,historical=0,withdrawn=0,total=0;Json latest=nullptr;
   if(initialized) {
-    auto rows=db.prepare(std::string("SELECT ")+usage_columns+",usage_id FROM memory_fact_usage WHERE source_id=? AND fact_id=? ORDER BY usage_id LIMIT 4097");
-    rows.bind_text(1,source_);rows.bind_text(2,id);
-    while(rows.step()) {
-      require(++total<=max_use_receipts,"fact_usage_invalid_metadata");
-      const auto row=usage_row(rows);identifier(rows.column_text(7));
-      require(row.rev<=rev,"fact_usage_invalid_metadata");
+    for(const auto& entry:usage_entries(db,source_,id,rev)) {
+      ++total;const auto& row=entry.row;
       if(row.revoked)++withdrawn;
       else if(row.rev==rev){++current;if(latest.is_null() || row.at>latest.get<int64_t>())latest=row.at;}
       else ++historical;

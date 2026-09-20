@@ -24,19 +24,8 @@ inline Json read_usage_receipts(Brain& brain,const std::string& source,
   const bool archived=archive_ready(db) && is_archived(db,source,id);
   Json all=Json::array();
   if(initialized) {
-    auto rows=db.prepare(std::string("SELECT ")+usage_columns+
-      ",usage_id,typeof(usage_id),typeof(fact_id) FROM memory_fact_usage "
-      "WHERE source_id=? AND fact_id=? ORDER BY usage_id LIMIT 4097");
-    rows.bind_text(1,source);rows.bind_text(2,id);
-    std::string previous;
-    while(rows.step()) {
-      require(all.size()<max_use_receipts,"fact_usage_invalid_metadata");
-      const auto row=usage_row(rows);const auto uid=rows.column_text(7);
-      identifier(uid);
-      require(rows.column_text(8)=="text" && rows.column_text(9)=="text" &&
-              row.fact==id && row.rev<=revision && (previous.empty() || uid>previous),
-              "fact_usage_invalid_metadata");
-      previous=uid;
+    for(const auto& entry:usage_entries(db,source,id,revision)) {
+      const auto& row=entry.row;const auto& uid=entry.uid;
       all.push_back({{"usage_id",uid},{"fact_revision",row.rev},{"reported_at",row.at},
         {"withdrawn_at",row.revoked?Json(row.withdrawn):Json(nullptr)},
         {"state",row.revoked?"withdrawn":row.rev==revision?"current":"historical"}});

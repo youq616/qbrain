@@ -1,0 +1,145 @@
+{
+  "schema": "qbrain-n47y-acceptance-v1",
+  "date": "2026-09-20",
+  "timezone": "Asia/Seoul",
+  "verdict": "PASS-receipt-integrity-and-MCP-completion",
+  "reviewer": "coordinating ChatGPT; separate owner-authorized engineering self-review, not a subagent or third party",
+  "base_main": "ad31f404ba5ca94b15dc992bf9f219fa572ab167",
+  "original_plan": "d346cf8f8721d95b3a37ea2cfc90e37d1a37f03b",
+  "completion_plan": "bfeed5150c00df8e94ee6ec4371f3894b09fa297",
+  "accepted_source": "67c82b2246cb71991f62c4a40a1e681388c998dd",
+  "accepted_tree": "9efd8e3c6a47f27f45e4a55520b3bfd66282043f",
+  "run_id": 35510640800,
+  "event": "push",
+  "attempt": 1,
+  "jobs": {
+    "windows": 106077821848,
+    "portable": 106077821745
+  },
+  "required_jobs_and_steps": "completed/success, individually checked",
+  "artifacts": {
+    "windows": {
+      "id": 10605072390,
+      "bytes": 16556984,
+      "sha256": "d29f8ac056a83ef45170f7cf75df3b28557007b634daa41d0c7d0eda545d4a2c",
+      "members": 835
+    },
+    "portable": {
+      "id": 10605051057,
+      "bytes": 17415355,
+      "sha256": "5f9ae2161d06a631df48affe7fc32121c1282e8ce31adf486f8b33eea3d649a8",
+      "members": 839
+    }
+  },
+  "source_files": 1210,
+  "exact_windows_crlf_files": 1196,
+  "product_blobs": {
+    "include/qbrain/memory/fact_usage.hpp": "3a64e90e770b64a5f5da41672fde5bfc6268bc58",
+    "include/qbrain/memory/fact_usage_read.hpp": "38235d3805a388f7d9c2654298d51e86bee2aca6",
+    "src/qbrain/mcp/server.cpp": "afde18a5c29eb4eb0040d2aec0e0354d4414164a"
+  },
+  "results": {
+    "per_platform_integrity": {
+      "checks": 123,
+      "commands": 156,
+      "raw_streams": 468,
+      "negative_report_cases_normal_and_optimized": 14
+    },
+    "per_platform_boundary_each_normal_and_optimized": {
+      "checks": 72,
+      "cli_setup_calls": 8,
+      "persistent_mcp_requests": 65,
+      "valid_pages": 7,
+      "corruption_rejections": 38,
+      "combined_identity_mutations": 7,
+      "writer_lock_schedules": 3
+    },
+    "per_platform_retained": {
+      "usage": 75,
+      "pages": 71,
+      "facts": 34,
+      "context": 65,
+      "multiterm": 112,
+      "named_arguments": 60,
+      "search_arguments": 226,
+      "hook_facts": 52,
+      "lifecycle_batch": 40,
+      "memory": 44,
+      "mcp_boundaries": 17
+    },
+    "windows_full_native_groups": 60,
+    "linux_focused_groups": 4,
+    "additional_boundary_report_negatives": 12
+  },
+  "binaries": {
+    "windows": {
+      "product_sha256": "076fda5dc5ccb38e1d2fb8073a62fd23f57d730b1fa2ecee2a7f6b1431745cef",
+      "baseline_sha256": "838955a0ad88779af08c53396b773d62b327cccd4f216a18379f0a76ffa4c9cf"
+    },
+    "portable": {
+      "product_sha256": "75a1c072d4927ed190d01e8eea4d426703207d9b2037caf43e45d9e574921e69",
+      "baseline_sha256": "7399af97dde5b97cc87667dc7e0e3fbdbf79b8b435fbfb62f01f2cb4cfd4e57e"
+    }
+  },
+  "local_review": {
+    "compiled_product_sha256": "45228c49913915fd10761a1ea9a88ac2597241a44cd227161d686b6e880098b9",
+    "local_source_is_git_checkout": false,
+    "integrity_checks": 123,
+    "boundary_checks_each_normal_optimized": 72,
+    "retained_usage": 75,
+    "retained_pages": 71,
+    "retained_process_suites": 9,
+    "focused_ctest_groups": 4,
+    "downloaded_portable_boundary_rerun": 72,
+    "query_plan_shapes_indexed_without_sort": 4,
+    "query_plan_library": "same local CMake SQLite static library 3.46.1; not a large-scale performance test"
+  },
+  "mcp_defect": {
+    "rejected_candidate": "39357bae66caaf73bb02021f6fb1c5a3e78a5b5a",
+    "old_product_sha256": "5310a5016034af11bf7571384c3bb0226ca66085bb60ab9154a740989b5e1780",
+    "old_positive_controls": 3,
+    "old_healthy_filter_failed": true,
+    "repair": "Accept only advertised receipt_state and snapshot as strings in the existing typed MCP gate",
+    "record": "MCP-REGRESSION.json"
+  },
+  "local_record_hashes": {
+    "ci-readback.json": {
+      "bytes": 10805,
+      "sha256": "7470ef587efebbf369d520db04b596530fdb98408b4cbf9b077af556c173174d"
+    },
+    "boundary-readback.json": {
+      "bytes": 3921,
+      "sha256": "f69f32a6d1ebc22206c04a411fe8d6ba3f3bc8663b2a9125cee26a2c6de4bd91"
+    },
+    "old-mcp-control.json": {
+      "bytes": 12825,
+      "sha256": "09785582880d2927aff0ac0d83a76e85ac075063ca62afd256896b45ff0b762c"
+    },
+    "local-boundary-normal.json": {
+      "bytes": 55071,
+      "sha256": "804052c4e8ab4f0aaa88198e03d6caf329c40ceb5dded2d3d506d370868c4845"
+    },
+    "downloaded-portable-rerun.json": {
+      "bytes": 55071,
+      "sha256": "e6853b337e38f74d5792573a4ddbb0852a23043753bdee3e2624d85af17db0fa"
+    },
+    "sqlite-plan.log": {
+      "bytes": 521,
+      "sha256": "c1d66327d9df67a2fd9ba52ecec1cd2b8a07b55484aebf4a91461aef77c0b9f9"
+    }
+  },
+  "public_release_changed": false,
+  "issue40_closed": false,
+  "live_pg": "SKIP-PG",
+  "real_model_answers": "NOT_RUN",
+  "real_client_verified": false,
+  "limits": [
+    "Explicitly corrupted synthetic rows, not evidence of damaged user data or normal-write corruption",
+    "Only exact selected source/fact/request-ID aliases, not global or hostile-schema repair",
+    "Controlled writer-lock schedules are not proof of every interleaving",
+    "Boundary records contain decoded MCP messages; do not claim raw transport framing or post-cleanup database observation",
+    "Local execution was Linux; Windows evidence is native CI",
+    "Old published N47X package remains unchanged and lacks this repair",
+    "Actions artifacts follow 2026-10-04 retention; Git pins and derived records do not substitute for entire raw archives"
+  ]
+}

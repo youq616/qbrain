@@ -1,0 +1,30 @@
+{
+  "schema": "qbrain-n47y-mcp-readback-summary-v1",
+  "accepted_source": "67c82b2246cb71991f62c4a40a1e681388c998dd",
+  "workflow_run": 35510640800,
+  "reports": {
+    "windows_normal": "08cbb6863478158cf5c0a24292bde26d8d6ca30e874202be66e69abe8cc0f31b",
+    "windows_optimized": "0f7e1921c87f84c0ef823080547e73d8f0c6ea682f10fac14c10d6aa1f352a41",
+    "portable_normal": "c1902faa7a347d92149e092e81045d25df025ec201db69a90b1f6b35e7af1de7",
+    "portable_optimized": "32cc4205acff3fad616752d0c394541e0e1242ff1a9f73e88b1bf6c8c731d4f6"
+  },
+  "each_report_verified": {
+    "checks": 72,
+    "cli_setup_calls": 8,
+    "mcp_requests": 65,
+    "successful_page_responses": 7,
+    "corrupt_set_rejections": 38,
+    "ordered_continuation_ids_verified": true,
+    "normal_retry_duplicate_verified": true,
+    "clean_server_shutdown_verified": true
+  },
+  "negative_cases": ["count", "bool-count", "missing-check", "case-order", "script", "true-client", "rpc-id", "wrong-error", "page-id", "wrong-token", "retry-as-new", "false-exit"],
+  "all_negative_cases_rejected": true,
+  "restored_controls_passed": true,
+  "readback_modes": ["normal Python", "optimized Python"],
+  "checker": "check_boundary_readback.py",
+  "checker_sha256": "134bb5f92507038c4e5eabb5794f0bc6a0f73d9f91581bc385d38bf3a62ca076",
+  "new_product_execution": false,
+  "real_client_verified": false,
+  "scope": "Supplied record consistency; decoded MCP messages, not raw wire framing or authentication of arbitrary claims"
+}
