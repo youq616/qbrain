@@ -1,0 +1,48 @@
+{
+  "schema": "qbrain-n47w-negative-readback-v1",
+  "actual_report_sha256": "1a75227de265f808727a43ef94849dec3a1d6576bbda4d174bf6aecbb62eb1e0",
+  "cases": [
+    {
+      "case": "secret-field",
+      "rejected": true,
+      "error": "diagnostic_fields"
+    },
+    {
+      "case": "wrong-phase",
+      "rejected": true,
+      "error": "code_phase"
+    },
+    {
+      "case": "budget-reset",
+      "rejected": true,
+      "error": "stage_value"
+    },
+    {
+      "case": "boolean-exit",
+      "rejected": true,
+      "error": "exit_code"
+    },
+    {
+      "case": "false-host-claim",
+      "rejected": true,
+      "error": "scope"
+    },
+    {
+      "case": "duplicate-check",
+      "rejected": true,
+      "error": "check_results"
+    },
+    {
+      "case": "failed-result",
+      "rejected": true,
+      "error": "result"
+    },
+    {
+      "case": "wrong-script",
+      "rejected": true,
+      "error": "component_bytes"
+    }
+  ],
+  "restored_control_equal": true,
+  "new_windows_execution": false
+}
