@@ -1,0 +1,149 @@
+name: N47X current-source Windows package
+on:
+  push:
+    branches: ['delivery/n47x-current-preview']
+    paths: ['tools/delivery/*n47x*', 'docs/integration/CURRENT-PREVIEW-N47X.zh-CN.md', '.github/workflows/n47x-validation.yml']
+  pull_request:
+    paths: ['tools/delivery/*n47x*', 'docs/integration/CURRENT-PREVIEW-N47X.zh-CN.md', '.github/workflows/n47x-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n47x-validation-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Delivery source and package negatives
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/delivery-source.zip HEAD
+          (cd tools/delivery && python -m unittest test_package_n47x -v) 2>&1 | tee evidence/tests.log
+          (cd tools/delivery && python -O -m unittest test_package_n47x -v) 2>&1 | tee evidence/tests-optimized.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47x-source
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
+  native:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: b810d6898dcbbcd49bdbbed1d8473a3ac1c063e4
+          path: product
+          persist-credentials: false
+      - name: Fresh fixed-source native application and full original suite
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git -C product rev-parse HEAD | Set-Content evidence/product-source.txt
+          git -C product archive --format=zip --output="$((Get-Location).Path)/evidence/product-source.zip" HEAD
+          powershell -NoProfile -ExecutionPolicy Bypass -File product/scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/native.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Assemble twice and verify exact candidate files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m unittest discover -s tools/delivery -p test_package_n47x.py -v 2>&1 | Tee-Object evidence/package-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($copy in @('one','two')) {
+            python tools/delivery/package_n47x.py --source product --binary product/build/cl/qbrain.exe --native-log evidence/native.log --guide docs/integration/CURRENT-PREVIEW-N47X.zh-CN.md --output "evidence/$copy" 2>&1 | Tee-Object "evidence/package-$copy.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $one = 'evidence/one/qbrain-windows-x64-n47x-preview.zip'
+          $two = 'evidence/two/qbrain-windows-x64-n47x-preview.zip'
+          if ((Get-FileHash $one).Hash -cne (Get-FileHash $two).Hash) { throw 'Repeated assembly differs.' }
+          Expand-Archive $one under-test
+          Copy-Item product/.ci under-test/.ci -Recurse
+          Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-integrated-preview-9e9a92b0/qbrain-windows-x64-n47r-preview.zip' -OutFile old.zip
+          if ((Get-FileHash old.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'e7158949d805a0a25157bfb720561e4b21e80a433a6c7f031c60ee3bbaa746c5') { throw 'Wrong N47R baseline.' }
+          Expand-Archive old.zip old
+      - name: Extracted receipt features and original process regressions
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Resolve-Path under-test/qbrain.exe).Path
+          python under-test/.ci/test_fact_usage.py --binary $exe --report evidence/usage.json 2>&1 | Tee-Object evidence/usage.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python under-test/.ci/check_fact_usage_report.py --report evidence/usage.json --binary $exe --test under-test/.ci/test_fact_usage.py 2>&1 | Tee-Object evidence/usage-readback.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python under-test/.ci/test_fact_usage_pages.py --binary $exe --report evidence/pages.json --raw-dir evidence/page-raw 2>&1 | Tee-Object evidence/pages.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python under-test/.ci/check_fact_usage_pages_report.py --report evidence/pages.json --binary $exe --test under-test/.ci/test_fact_usage_pages.py --raw-dir evidence/page-raw --negative-tests 2>&1 | Tee-Object evidence/pages-readback.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($name in @('test_fact_process','test_context_process','test_multiterm_process','test_named_arguments','test_search_arguments','test_hook_fact_process','test_lifecycle_batch_process')) {
+            python "product/.ci/$name.py" --binary $exe --report "evidence/$name.json" 2>&1 | Tee-Object "evidence/$name.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          foreach ($name in @('test_memory_cycle','test_mcp_boundaries')) {
+            python "product/.ci/$name.py" --binary $exe 2>&1 | Tee-Object "evidence/$name.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Extracted model tools and actual engine to test-only HTTP pipeline
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Push-Location under-test/tools/acceptance
+          python -m unittest test_model_ab test_model_framing test_model_projection test_memory_tasks test_memory_metrics -v 2>&1 | Tee-Object ../../../evidence/model-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O -m unittest test_model_ab test_model_framing test_model_projection test_memory_tasks test_memory_metrics -v 2>&1 | Tee-Object ../../../evidence/model-tests-optimized.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
+          python under-test/tools/acceptance/integration_model_ab.py --binary under-test/qbrain.exe --output evidence/pipeline 2>&1 | Tee-Object evidence/pipeline.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python under-test/tools/acceptance/run_memory_tasks.py --binary under-test/qbrain.exe --host codex --output evidence/codex-tasks 2>&1 | Tee-Object evidence/codex-tasks.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python under-test/tools/acceptance/check_memory_task_run.py --directory evidence/codex-tasks --binary under-test/qbrain.exe --report evidence/codex-readback.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Both native shells against extracted installer and old-to-new upgrade
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Resolve-Path under-test/qbrain.exe).Path
+          $installer = (Resolve-Path under-test/scripts/Install-QbrainMemory.ps1).Path
+          foreach ($shell in @('powershell','pwsh')) {
+            $major = if ($shell -eq 'powershell') { 5 } else { 7 }
+            & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File under-test/.ci/test_installer_snapshot.ps1 -Binary $exe -Installer $installer -Report "evidence/snapshot-$shell.json" 2>&1 | Tee-Object "evidence/snapshot-$shell.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File under-test/.ci/test_installer_recovery.ps1 -Binary $exe -Installer $installer -Report "evidence/recovery-$shell.json" 2>&1 | Tee-Object "evidence/recovery-$shell.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            foreach ($name in @('test_install_hooks','test_install_consent','test_windows_transport')) {
+              & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "under-test/.ci/$name.ps1" -Binary $exe 2>&1 | Tee-Object "evidence/$name-$shell.log"
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+            foreach ($name in @('test_hook_fact_install','test_promotion_install')) {
+              & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "under-test/.ci/$name.ps1" -Binary $exe -Report "evidence/$name-$shell.json" 2>&1 | Tee-Object "evidence/$name-$shell.log"
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+            & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File under-test/.ci/test_installer_case_paths.ps1 -Binary $exe -Installer $installer -BaselineInstaller old/scripts/Install-QbrainMemory.ps1 -Report "evidence/paths-$shell.json" 2>&1 | Tee-Object "evidence/paths-$shell.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tools/delivery/test_n47x_upgrade.ps1 -OldPackage old.zip -NewPackage evidence/one/qbrain-windows-x64-n47x-preview.zip -Report "evidence/upgrade-$shell.json" 2>&1 | Tee-Object "evidence/upgrade-$shell.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47x-native
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
