@@ -1,0 +1,66 @@
+{
+  "cases": [
+    {
+      "case": "wrong-shell",
+      "reason": "upgrade_result",
+      "rejected": true
+    },
+    {
+      "case": "bool-shell",
+      "reason": "upgrade_result",
+      "rejected": true
+    },
+    {
+      "case": "failed",
+      "reason": "upgrade_result",
+      "rejected": true
+    },
+    {
+      "case": "wrong-binary",
+      "reason": "upgrade_identity",
+      "rejected": true
+    },
+    {
+      "case": "wrong-zip",
+      "reason": "upgrade_identity",
+      "rejected": true
+    },
+    {
+      "case": "missing",
+      "reason": "upgrade_checks",
+      "rejected": true
+    },
+    {
+      "case": "duplicate",
+      "reason": "upgrade_coverage",
+      "rejected": true
+    },
+    {
+      "case": "false-check",
+      "reason": "upgrade_checks",
+      "rejected": true
+    },
+    {
+      "case": "true-client",
+      "reason": "upgrade_result",
+      "rejected": true
+    },
+    {
+      "case": "extra-field",
+      "reason": "upgrade_shape",
+      "rejected": true
+    },
+    {
+      "case": "wrong-script",
+      "reason": "upgrade_identity",
+      "rejected": true
+    },
+    {
+      "case": "wrong-log",
+      "reason": "upgrade_log_sequence",
+      "rejected": true
+    }
+  ],
+  "restored_positive": true,
+  "source_report_sha256": "5db532561eb07e02308b28f3f2f59ebb28bc0d2fa21374516ee13ad0a90977a9"
+}

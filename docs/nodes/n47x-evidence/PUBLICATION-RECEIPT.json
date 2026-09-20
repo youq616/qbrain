@@ -1,0 +1,72 @@
+{
+  "anonymous_readback": {
+    "assets": [
+      {
+        "bytes": 4327611,
+        "name": "qbrain-windows-x64-n47x-preview.zip",
+        "sha256": "c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d"
+      },
+      {
+        "bytes": 5334,
+        "name": "START-HERE.zh-CN.md",
+        "sha256": "078dff9309a77d356377b308ed45ae1b064d237aaa236a163e8469c15bb191e3"
+      },
+      {
+        "bytes": 1385,
+        "name": "PROVENANCE.json",
+        "sha256": "2a89453ffde5c2206a99b9917c879421f891d237741d531736684c9e8b430ec1"
+      },
+      {
+        "bytes": 30102930,
+        "name": "VALIDATION-EVIDENCE.zip",
+        "sha256": "3d3826920e3272a14f6cb3110867304ea7b257b8e5ac0b8fb60e96d2a811e2d0"
+      },
+      {
+        "bytes": 360,
+        "name": "SHA256SUMS.txt",
+        "sha256": "40e4ef855b358c0572469bb2a995ce94601246eaa57ace43cae14f548f35813a"
+      }
+    ],
+    "authenticated": false,
+    "release_id": 392375532,
+    "result": "PUBLIC_BYTES_VERIFIED"
+  },
+  "publication": {
+    "asset_pins": {
+      "PROVENANCE.json": {
+        "digest": "sha256:2a89453ffde5c2206a99b9917c879421f891d237741d531736684c9e8b430ec1",
+        "id": 576507768,
+        "size": 1385
+      },
+      "SHA256SUMS.txt": {
+        "digest": "sha256:40e4ef855b358c0572469bb2a995ce94601246eaa57ace43cae14f548f35813a",
+        "id": 576507807,
+        "size": 360
+      },
+      "START-HERE.zh-CN.md": {
+        "digest": "sha256:078dff9309a77d356377b308ed45ae1b064d237aaa236a163e8469c15bb191e3",
+        "id": 576507751,
+        "size": 5334
+      },
+      "VALIDATION-EVIDENCE.zip": {
+        "digest": "sha256:3d3826920e3272a14f6cb3110867304ea7b257b8e5ac0b8fb60e96d2a811e2d0",
+        "id": 576507776,
+        "size": 30102930
+      },
+      "qbrain-windows-x64-n47x-preview.zip": {
+        "digest": "sha256:c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d",
+        "id": 576507739,
+        "size": 4327611
+      }
+    },
+    "downloaded_before_and_after_publication": true,
+    "new_product_build": true,
+    "release_id": 392375532,
+    "result": "PUBLISHED",
+    "signed": false,
+    "source_commit": "b810d6898dcbbcd49bdbbed1d8473a3ac1c063e4",
+    "stable_v1": false,
+    "tag": "windows-current-preview-b810d689",
+    "url": "https://github.com/youq616/qbrain/releases/tag/windows-current-preview-b810d689"
+  }
+}

@@ -1,62 +1,62 @@
 # Qbrain
 
 Windows 原生 C++20 / PowerShell 记忆与知识库，默认 SQLite + FTS5。
-预编译应用不需要编译器、Docker、WSL 或 Python 服务；Python仅用于可选评测与开发。
+应用不需要Docker、WSL或Python服务；可选模型评测工具需要Python3.10+。
 
-## 当前源码：N47W 进程桥接诊断
+## 当前公开下载：N47X 当前源码集成预览
 
-新增固定字段的启动、输入、进程等待和输出排空诊断；默认成功结果不变，失败诊断
-不包含路径、参数或正文。输入等待修正为共用启动后剩余预算，默认10秒不提高。
-两版PowerShell各29项新检查及原安装回归通过，完整原生60组已核验。本人分离自审
-修正了测试清理的PID身份核对，未放宽原测试。Issue40根因仍未知，不声称已经修复。
-[当前状态](CURRENT-STATUS.md) · [审核](docs/nodes/N47W-HARD-AUDIT.md) ·
-[使用与隐私限制](docs/integration/TRANSPORT-DIAGNOSTICS.zh-CN.md)。
-本轮只更新源码，不替换下方N47R公开包。
+**[下载 windows-current-preview-b810d689](https://github.com/youq616/qbrain/releases/tag/windows-current-preview-b810d689)**
 
-## 已有源码：N47V 安装路径身份保护
+选择 `qbrain-windows-x64-n47x-preview.zip`，同时取得同版本 `SHA256SUMS.txt` 并先读
+`START-HERE.zh-CN.md`。PROVENANCE记录来源；VALIDATION-EVIDENCE保留原始验收工件。
+不要把GitHub自动生成的Source code压缩包当作程序包。
 
-为避免大小写敏感目录中的Project/project共用安装记录，安装器现在保留普通目录
-历史ID，并拒绝大小写敏感或无法验证的相关目录。只读原生检查，不修改目录属性、
-不迁移安装ID，也不声称完整支持这类路径。默认权限、恢复事务、Hook和程序不变。
+产品ZIP：**4,327,611字节、27个成员**。SHA256：
+`c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d`。
 
-两版PowerShell各84项路径检查、22项额外边界审核及所有原安装回归完成；原生60组
-通过。一次原Codex Hook启动超时在相同版本复跑中未重现，原因仍未知，保留于
-[Issue40](https://github.com/youq616/qbrain/issues/40)，没有把它写成已修复。
+本次由固定产品源码b810d689重新编译EXE，包含N47S模型对照、N47T/U使用回执与
+逐条审计、N47V安装路径保护和N47W桥接诊断，补齐了此前源码与下载包的差距。
+仍是**未签名、非latest开发预览**，不是稳定版。继承内部版本2.0.0不代表稳定验收；
+以发布标签、来源和EXE哈希识别具体构建。[当前状态](CURRENT-STATUS.md)。
 
-[当前状态](CURRENT-STATUS.md) · [N47V自审](docs/nodes/N47V-HARD-AUDIT.md) ·
-[不支持路径的处理](docs/integration/CASE-SENSITIVE-PATHS.zh-CN.md)。
-本轮不发布新包，下面的N47R安装器不含本次检查。
+## 安装和升级
 
-## 已有源码功能
+[完整校验、安装与升级说明](docs/integration/CURRENT-PREVIEW-N47X.zh-CN.md)提供可复制
+PowerShell命令。升级前关闭相关进程、备份数据，解压到新目录，不覆盖旧程序目录。
+用新安装器/EXE对原项目和宿主重新安装，保持原脑库ID。默认不开采集、事实整理或
+召回；重装未重传的开关会关闭，不推定旧许可继续生效。不要绕过客户端信任或杀毒。
 
-N47T提供事实使用上报、撤回和版本隔离汇总；N47U提供逐条审计及数据变化检测分页。
-调用方上报不是实际模型消费或事实真伪证明，不自动改变排序、画像或衰减。
-[上报/撤回](docs/integration/FACT-USAGE.zh-CN.md) ·
-[回执查询](docs/integration/FACT-USAGE-AUDIT.zh-CN.md)。
+旧[N47R发布](https://github.com/youq616/qbrain/releases/tag/windows-integrated-preview-9e9a92b0)
+及其资产保持不变；历史节点中“仅源码可用”的描述是当时状态，当前N47X已集成上述功能。
 
-N47S提供离线模型对照计划、明确授权的API执行和原始回答评分，真实模型/客户端
-效果仍待实际观察。[使用说明](docs/integration/MODEL-COMPARISON.zh-CN.md)。
-这些源码能力尚不属于下方N47R公开包；源码完成不等于公开二进制已经更新。
+## 能力与边界
 
-## 当前公开下载：N47R Windows 集成开发预览
+事实保留完整原话和来源，支持显式生命周期操作。使用回执可上报、撤回、按版本汇总
+和分页审计；它仍是调用方陈述，不证明模型采用或事实为真，不自动改变排名/衰减。
+[上报撤回](docs/integration/FACT-USAGE.zh-CN.md) · [逐条查询](docs/integration/FACT-USAGE-AUDIT.zh-CN.md)。
 
-[windows-integrated-preview-9e9a92b0](https://github.com/youq616/qbrain/releases/tag/windows-integrated-preview-9e9a92b0)。
-选择qbrain-windows-x64-n47r-preview.zip，同时获取同版SHA256SUMS、PROVENANCE和
-START-HERE说明，不要把Source code归档当程序包。旧Release/tag保持原样。
+安装器拒绝大小写敏感或无法验证的相关目录，不迁移ID或修改目录标志。
+[路径限制](docs/integration/CASE-SENSITIVE-PATHS.zh-CN.md)。桥接阶段诊断不含原话或参数，
+默认10秒不提高；[诊断说明](docs/integration/TRANSPORT-DIAGNOSTICS.zh-CN.md)。
+[Issue40](https://github.com/youq616/qbrain/issues/40)历史超时根因仍未知，未因发布关闭。
 
-ZIP为4,858,530字节，SHA256：
-`e7158949d805a0a25157bfb720561e4b21e80a433a6c7f031c60ee3bbaa746c5`。
-该版本整合N47P恢复修复与N47Q工具，仍为未签名、非latest的开发预览，不是稳定v1。
-[该版本安装/升级说明](docs/integration/INTEGRATED-PREVIEW.zh-CN.md)。
+模型对照工具支持离线计划、明确授权的API请求和原始回答评分；密钥只在本机。
+[模型工具](docs/integration/MODEL-COMPARISON.zh-CN.md) · [任务评测](docs/integration/TASK-EVALUATION.zh-CN.md)。
 
-## 剩余工作、构建与历史
+## 已验证交付，不代替真实效果
 
-核心预览已交付，真实客户端使用、模型对照与费用、PG新模块对等、语义确认/画像/
-衰减、完整ACL/DLP、其他宿主、规模性能及签名仍有待完成范围。
-现有估计：v1约3–4个实质回合，完整增强路线15–25且包含v1；必要环境可用、范围
-不扩大且无重大返工为前提，不能按消息次数倒数。[完整路线](docs/COMPLETION-ROADMAP.md)。
+新原生构建和原60注册组通过；包内75使用检查、71分页检查、48模型工具测试及原有
+进程回归完成。两版PowerShell各49旧版升级检查、84路径检查及原安装恢复套件通过。
+两种事件格式各50任务/520调用；100次HTTP使用明确的测试响应器，不是实际模型。
+五项发布资产均完成公开前后字节比对与无令牌下载核验。
+[本人分离自审](docs/nodes/N47X-HARD-AUDIT.md) · [精确证据](docs/nodes/n47x-evidence/SUMMARY.json)。
 
-源码构建用scripts/build-cl.ps1及scripts/build-tests-cl.ps1；只在同轮生产构建成功且
-源码未变时使用-SkipProductionBuild。本机确需交接仍遵循[单提示词约定](LOCAL-AGENT-HANDOFF.md)，
-不要上传密钥或私人聊天。[上一README](README-N47U.md)保留历史字节。
-[LICENSE](LICENSE) · [第三方说明](THIRD-PARTY-NOTICES.md) · [规范清单](docs/OPS-PARITY-LEDGER.md)。
+真实登录客户端消费、实际模型效果/费用、PostgreSQL新模块对等、语义确认/画像/
+衰减、完整ACL/DLP、规模性能及签名仍有未完成项。当前v1约3–4、完整路线约15–25
+实质回合（包含v1）的估计有条件且非完成承诺。[完成路线](docs/COMPLETION-ROADMAP.md)。
+
+## 源码
+
+构建使用scripts/build-cl.ps1和scripts/build-tests-cl.ps1；只有同轮生产构建成功且
+源码未变才使用-SkipProductionBuild。本机确需任务时遵循[单提示词交接](LOCAL-AGENT-HANDOFF.md)。
+[LICENSE](LICENSE) · [第三方说明](THIRD-PARTY-NOTICES.md) · [规范操作清单](docs/OPS-PARITY-LEDGER.md)。
