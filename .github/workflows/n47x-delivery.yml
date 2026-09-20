@@ -1,0 +1,52 @@
+name: N47X fixed reviewed delivery
+on:
+  push:
+    branches: ['delivery/n47x-current-preview']
+    paths: ['tools/release/*n47x*.py', '.github/workflows/n47x-delivery.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: n47x-fixed-delivery
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  delivery:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47x-current-preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Pin reviewed delivery code and exercise negative cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          echo '7b1aa1ec8383192184cd80216d3afc249cb84dbfc531b6f43b94f5af0582c8d6  tools/release/n47x_verify.py' | sha256sum -c -
+          echo '8ccfc0edf33f54c63b7788db4837c268fe1b85a29e8e5eba27d02747224ab838  tools/release/n47x_publish.py' | sha256sum -c -
+          echo '3bbe5f4462d86bbbf2f4a76eefac50e02126b420e239fa2a1b6fb92aaf864602  tools/release/test_n47x_delivery.py' | sha256sum -c -
+          (cd tools/release && python -m unittest test_n47x_delivery -v) 2>&1 | tee evidence/tests.log
+          (cd tools/release && python -O -m unittest test_n47x_delivery -v) 2>&1 | tee evidence/tests-optimized.log
+      - name: Read-only verification of original native evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python tools/release/n47x_publish.py --output evidence/delivery 2>&1 | tee evidence/delivery.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47x-delivery
+          path: |
+            evidence/
+            !evidence/delivery/artifacts/**
+          retention-days: 14
+          if-no-files-found: error
