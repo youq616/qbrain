@@ -1,0 +1,132 @@
+name: N47Y consistent receipt integrity
+on:
+  push:
+    branches: [main, 'fix/n47y-receipt-integrity']
+    paths: ['include/qbrain/memory/fact_usage*.hpp', '.ci/*receipt_integrity.py', '.github/workflows/n47y-validation.yml']
+  pull_request:
+    paths: ['include/qbrain/memory/fact_usage*.hpp', '.ci/*receipt_integrity.py', '.github/workflows/n47y-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n47y-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Fresh production build and full unchanged native suite
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/native.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/native.log').read_text(encoding='utf-8-sig'),60)))" 2>&1 | Tee-Object evidence/native-groups.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/cl/qbrain.exe evidence/qbrain.exe
+          Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-current-preview-b810d689/qbrain-windows-x64-n47x-preview.zip' -OutFile baseline.zip
+          if ((Get-FileHash baseline.zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d') { throw 'Wrong published baseline.' }
+          Expand-Archive baseline.zip baseline
+          Copy-Item baseline/qbrain.exe evidence/baseline-qbrain.exe
+      - name: Corruption and baseline controls with raw stream readback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .ci/test_receipt_integrity.py --binary evidence/qbrain.exe --baseline evidence/baseline-qbrain.exe --output evidence/integrity 2>&1 | Tee-Object evidence/integrity.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/check_receipt_integrity.py --directory evidence/integrity --binary evidence/qbrain.exe --baseline evidence/baseline-qbrain.exe --test .ci/test_receipt_integrity.py --negative-tests 2>&1 | Tee-Object evidence/integrity-readback.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O .ci/check_receipt_integrity.py --directory evidence/integrity --binary evidence/qbrain.exe --baseline evidence/baseline-qbrain.exe --test .ci/test_receipt_integrity.py --negative-tests 2>&1 | Tee-Object evidence/integrity-readback-optimized.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Unchanged usage pages and original process gates
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .ci/test_fact_usage.py --binary evidence/qbrain.exe --report evidence/usage.json 2>&1 | Tee-Object evidence/usage.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/check_fact_usage_report.py --report evidence/usage.json --binary evidence/qbrain.exe --test .ci/test_fact_usage.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_fact_usage_pages.py --binary evidence/qbrain.exe --report evidence/pages.json --raw-dir evidence/page-raw 2>&1 | Tee-Object evidence/pages.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/check_fact_usage_pages_report.py --report evidence/pages.json --binary evidence/qbrain.exe --test .ci/test_fact_usage_pages.py --raw-dir evidence/page-raw --negative-tests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($name in @('test_fact_process','test_context_process','test_multiterm_process','test_named_arguments','test_search_arguments','test_hook_fact_process','test_lifecycle_batch_process')) {
+            python ".ci/$name.py" --binary evidence/qbrain.exe --report "evidence/$name.json" 2>&1 | Tee-Object "evidence/$name.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          foreach ($name in @('test_memory_cycle','test_mcp_boundaries')) {
+            python ".ci/$name.py" --binary evidence/qbrain.exe 2>&1 | Tee-Object "evidence/$name.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47y-windows
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ad31f404ba5ca94b15dc992bf9f219fa572ab167
+          path: baseline-source
+          persist-credentials: false
+      - name: Build changed engine and fixed-source baseline without expired artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          git -C baseline-source rev-parse HEAD > evidence/baseline-source.txt
+          cmake -S baseline-source -B baseline-source/build/n47y-base -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF 2>&1 | tee evidence/baseline-configure.log
+          cmake --build baseline-source/build/n47y-base --target qbrain --parallel 2 2>&1 | tee evidence/baseline-build.log
+          cp baseline-source/build/n47y-base/qbrain evidence/baseline-qbrain
+          cmake -S . -B build/n47y -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF 2>&1 | tee evidence/configure.log
+          cmake --build build/n47y --target qbrain qbrain_fact_tests qbrain_memory_tests qbrain_context_tests qbrain_multiterm_tests --parallel 2 2>&1 | tee evidence/build.log
+          ctest --test-dir build/n47y -R 'qbrain_(memory|context|fact|multiterm)_unit' --output-on-failure 2>&1 | tee evidence/core-unit.log
+          cp build/n47y/qbrain evidence/qbrain
+      - name: Corruption and baseline controls with raw stream readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .ci/test_receipt_integrity.py --binary evidence/qbrain --baseline baseline-source/build/n47y-base/qbrain --baseline-source baseline-source --output evidence/integrity 2>&1 | tee evidence/integrity.log
+          python .ci/check_receipt_integrity.py --directory evidence/integrity --binary evidence/qbrain --baseline evidence/baseline-qbrain --test .ci/test_receipt_integrity.py --negative-tests 2>&1 | tee evidence/integrity-readback.log
+          python -O .ci/check_receipt_integrity.py --directory evidence/integrity --binary evidence/qbrain --baseline evidence/baseline-qbrain --test .ci/test_receipt_integrity.py --negative-tests 2>&1 | tee evidence/integrity-readback-optimized.log
+      - name: Unchanged usage pages and original process gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .ci/test_fact_usage.py --binary evidence/qbrain --report evidence/usage.json 2>&1 | tee evidence/usage.log
+          python .ci/check_fact_usage_report.py --report evidence/usage.json --binary evidence/qbrain --test .ci/test_fact_usage.py
+          python .ci/test_fact_usage_pages.py --binary evidence/qbrain --report evidence/pages.json --raw-dir evidence/page-raw 2>&1 | tee evidence/pages.log
+          python .ci/check_fact_usage_pages_report.py --report evidence/pages.json --binary evidence/qbrain --test .ci/test_fact_usage_pages.py --raw-dir evidence/page-raw --negative-tests
+          for name in test_fact_process test_context_process test_multiterm_process test_named_arguments test_search_arguments test_hook_fact_process test_lifecycle_batch_process; do
+            python ".ci/$name.py" --binary evidence/qbrain --report "evidence/$name.json" 2>&1 | tee "evidence/$name.log"
+          done
+          for name in test_memory_cycle test_mcp_boundaries; do
+            python ".ci/$name.py" --binary evidence/qbrain 2>&1 | tee "evidence/$name.log"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n47y-portable
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
