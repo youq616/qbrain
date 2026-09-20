@@ -163,6 +163,7 @@ void print_help() {
       "  fact recall --query <text> [--match literal|all_terms|any_terms] [--predicate KEY] [--limit N] [--max-bytes N] [--source id]\n"
       "  fact report-use|revoke-use [--source id] (JSON stdin; caller-reported, not verified consumption)\n"
       "  fact usage --id ID [--source id] (read-only, revision-scoped counts)\n"
+      "  fact usage-batch-preview|usage-batch-apply [--source id] (JSON stdin; report/revoke, snapshot-bound atomic batch)\n"
       "  fact usage-list --id ID [--state all|current|historical|withdrawn] [--after-id ID --snapshot HASH] [--limit N] [--max-bytes N] (read-only)\n"
       "  memory capture|extract|drain|read|status|forget [--source id]\n"
       "  session-capture [--automatic] [--session-id id] [--fragment-id id]\n"
@@ -435,16 +436,19 @@ int cmd_fact(const std::vector<std::string>& args) {
     const bool recall=action=="recall";
     const bool lifecycle=action=="lifecycle";
     const bool candidates=action=="candidates";
+    const bool usage_batch_preview=action=="usage-batch-preview";
+    const bool usage_batch_apply=action=="usage-batch-apply";
+    const bool usage_batch=usage_batch_preview || usage_batch_apply;
     const bool batch_preview=action=="batch-preview";
     const bool batch_apply=action=="batch-apply";
     const bool batch=batch_preview || batch_apply;
-    const bool reading=action=="read" || usage || usage_list || conflicts || recall || lifecycle || candidates || batch_preview;
-    if(!reading && !promoting && !batch_apply && action!="create" && action!="attach" && action!="retract" &&
+    const bool reading=action=="read" || usage || usage_list || conflicts || recall || lifecycle || candidates || batch_preview || usage_batch_preview;
+    if(!reading && !promoting && !batch_apply && !usage_batch_apply && action!="create" && action!="attach" && action!="retract" &&
        action!="supersede" && action!="contradict" && action!="archive" && action!="restore" && action!="report-use" && action!="revoke-use") throw memory::Error("invalid_action");
     std::set<std::string> values={"--brain","--source"},flags;
     if(usage_list) values.insert({"--id","--state","--after-id","--snapshot","--limit","--max-bytes"});
     else if(usage) values.insert("--id");
-    else if(batch) flags.insert("--stdin");
+    else if(batch || usage_batch) flags.insert("--stdin");
     else if(reading) {
       values.insert({"--predicate","--limit","--max-bytes"});
       if(candidates)values.insert({"--operation","--after-id"});
@@ -481,6 +485,11 @@ int cmd_fact(const std::vector<std::string>& args) {
           if(parsed.count(flag))c.args[key]=value(flag);
       }
       else if(usage) { c.args["view"]="usage";c.args["fact_id"]=value("--id"); }
+      else if(usage_batch) {
+        c.args["payload"]=bounded_stdin();
+        if(usage_batch_preview)c.args["view"]="usage_batch";
+        else c.args["action"]="fact_usage_batch";
+      }
       else if(batch) {
         c.args["payload"]=bounded_stdin();
         if(batch_preview)c.args["view"]="lifecycle_batch";
