@@ -1,0 +1,39 @@
+{
+  "schema": "qbrain-n47y-mcp-regression-v1",
+  "rejected_source": "39357bae66caaf73bb02021f6fb1c5a3e78a5b5a",
+  "binary_sha256": "5310a5016034af11bf7571384c3bb0226ca66085bb60ab9154a740989b5e1780",
+  "test_sha256": "a903855782b82ce8d207a654c17d2e255008cded5d7679b721489ead2fd615ce",
+  "passed_controls": 3,
+  "failed": 1,
+  "request": {
+    "id": 5,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {
+        "fact_id": "44d99b3dbbe73abe12aaf7171c45c1726cbead48fce28a316b328e0bf688e5e4",
+        "limit": 1,
+        "receipt_state": "all",
+        "view": "usage_receipts"
+      },
+      "name": "memory_read"
+    }
+  },
+  "response": {
+    "id": 5,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "{\"error\":{\"code\":\"invalid_argument\",\"field\":\"receipt_state\",\"message\":\"unexpected argument\"}}",
+          "type": "text"
+        }
+      ],
+      "isError": true
+    }
+  },
+  "report_sha256": "09785582880d2927aff0ac0d83a76e85ac075063ca62afd256896b45ff0b762c",
+  "root_cause": "Advertised receipt_state and snapshot missing from typed memory_read adapter",
+  "correction_source": "67c82b2246cb71991f62c4a40a1e681388c998dd",
+  "scope": "Real persistent stdio MCP, isolated synthetic data; not user/model execution"
+}
