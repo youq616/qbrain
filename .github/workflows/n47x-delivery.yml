@@ -16,6 +16,9 @@ env:
 jobs:
   delivery:
     if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/delivery/n47x-current-preview'
+    permissions:
+      contents: write
+      actions: read
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -34,13 +37,13 @@ jobs:
           echo '3bbe5f4462d86bbbf2f4a76eefac50e02126b420e239fa2a1b6fb92aaf864602  tools/release/test_n47x_delivery.py' | sha256sum -c -
           (cd tools/release && python -m unittest test_n47x_delivery -v) 2>&1 | tee evidence/tests.log
           (cd tools/release && python -O -m unittest test_n47x_delivery -v) 2>&1 | tee evidence/tests-optimized.log
-      - name: Read-only verification of original native evidence
+      - name: Verify and publish the exact reviewed package
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python tools/release/n47x_publish.py --output evidence/delivery 2>&1 | tee evidence/delivery.log
+          python tools/release/n47x_publish.py --output evidence/delivery --publish 2>&1 | tee evidence/delivery.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
