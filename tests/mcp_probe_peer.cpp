@@ -19,7 +19,13 @@ void line(const J& v){std::cout<<v.dump()<<'\n'<<std::flush;}
 void wait_forever(){std::this_thread::sleep_for(std::chrono::seconds(60));}
 std::string mode;
 void emit(const J& v){
-  if(mode=="partial"){for(char c:v.dump()+"\n"){std::cout.put(c);std::cout.flush();std::this_thread::sleep_for(std::chrono::microseconds(80));}}
+  if(mode=="partial"){
+    // Split inside JSON, but do not request one scheduler sleep per byte:
+    // native Windows sleep rounding made that positive fixture exceed its budget.
+    const auto data=v.dump()+"\n";
+    for(std::size_t i=0;i<data.size();i+=32){std::cout<<data.substr(i,32)<<std::flush;
+      std::this_thread::sleep_for(std::chrono::microseconds(80));}
+  }
   else line(v);
 }
 J tools(){
