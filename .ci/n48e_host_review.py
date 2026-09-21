@@ -95,14 +95,14 @@ def run(inputs,out):
    env.update(CI='true',NO_COLOR='1',TERM='dumb',OPENCODE_PURE='true',OPENCODE_DISABLE_DEFAULT_PLUGINS='true',
       OPENCODE_DISABLE_EXTERNAL_SKILLS='true',OPENCODE_DISABLE_CLAUDE_CODE='true',OPENCODE_DISABLE_LSP_DOWNLOAD='true',
       OPENCODE_DISABLE_AUTOUPDATE='true',OPENCODE_DISABLE_MODELS_FETCH='true')
-   def call(exe,args,cwd,parsed=False):
+   def call(exe,args,cwd,parsed=False,expected=0):
     try:p=subprocess.run([str(exe),*args],cwd=cwd,env=env,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=45)
     except subprocess.TimeoutExpired as e:
      records.append(dict(program=exe.name,args=args,timeout=True,stdout=(e.stdout or b'').decode('utf-8','replace'),stderr=(e.stderr or b'').decode('utf-8','replace')))
      raise ValueError('host_command_timeout')
     text=p.stdout.decode('utf-8-sig');err=p.stderr.decode('utf-8-sig')
     records.append(dict(program=exe.name,args=args,exit=p.returncode,stdout=text,stderr=err))
-    need(p.returncode==0,'command_exit_'+exe.stem)
+    need(p.returncode==expected,'command_exit_'+exe.stem)
     return json.loads(text) if parsed else text+'\n'+err
    ver=call(host,['--version'],root);check(ver.strip()==VERSION,'actual host version equals pinned release')
    for fmt in ('v1','v2'):
@@ -123,7 +123,25 @@ def run(inputs,out):
      check(server['command']==argv and server.get('cwd')==str(project) and server.get('environment',{}).get('QBRAIN_MCP_ALLOW_WRITE')=='0' and server.get('enabled') is True,label+' host preserves command cwd and explicit access')
      check(type(server.get('timeout')) is int and server['timeout']==10000,label+' V1 resolved timeout')
      text=call(host,['mcp','list'],project);check(connected(text,name),label+' actual host reports connected')
-     check(cfg.read_bytes()==before,label+' host leaves managed JSONC unchanged')
+     after=cfg.read_bytes()
+     if after!=before:
+      # Official1.18.31 adds a missing $schema during load. Do not mask this
+      # external edit, or pretend the registration remains byte-current.
+      records.append(dict(kind='host-config-change',format=fmt,before=before.decode(),after=after.decode()))
+      expected=re.sub(rb'^\s*\{',b'{\n  "$schema": "https://opencode.ai/config.json",',before,count=1)
+      check(b'"$schema"' not in before and after==expected,label+' actual host adds only the documented schema annotation')
+      drift=call(q,['opencode','status','--project',str(project)],project,True)
+      check(drift['configuration_matches'] is False,label+' external host edit is not silently trusted')
+      rejected=call(q,['opencode','uninstall-preview','--project',str(project)],project,True,expected=1)
+      check(rejected=={'error':{'code':'opencode_external_edit'}} and cfg.read_bytes()==after,label+' normal uninstall refuses to overwrite host edit')
+      repair=call(q,['opencode','reconcile-preview','--project',str(project)],project,True)
+      call(q,['opencode','reconcile','--project',str(project),'--approve-sha256',repair['plan_sha256']],project,True)
+      stable=cfg.read_bytes()
+      check(b'"$schema": "https://opencode.ai/config.json"' in stable,label+' explicit reconciliation preserves host annotation')
+      call(host,['debug','config'],project,True)
+      check(connected(call(host,['mcp','list'],project),name),label+' actual connection survives reconciliation')
+      check(cfg.read_bytes()==stable,label+' subsequent host reads preserve reconciled JSONC')
+     else:check(after==before,label+' host leaves managed JSONC unchanged')
     for write,label in [(False,'initial read-only'),(True,'explicit write'),(False,'omitted flag restores read-only')]:
      plan_install(write);inspect(write,fmt+' '+label)
     edited=b'// synthetic external edit retained\n'+cfg.read_bytes();cfg.write_bytes(edited)
