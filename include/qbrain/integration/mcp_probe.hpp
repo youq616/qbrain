@@ -60,6 +60,7 @@ inline Json preview(const fs::path& binary,int timeout){
 }
 class Workspace {
   fs::path path_;bool owned_=false,created_=false,retained_=false;
+  std::optional<int> cleanup_error_;
 #ifdef _WIN32
   DWORD volume_=0,index_hi_=0,index_lo_=0;
   bool same()const{
@@ -98,9 +99,28 @@ class Workspace {
   }
   const fs::path& path()const{return path_;}
   void retain()noexcept{retained_=true;} // Unsafe/incomplete process cleanup: do not remove its workspace.
-  bool cleanup()noexcept{
+  std::optional<int> cleanup_error()const{return cleanup_error_;}
+  bool cleanup(Clock::time_point end=Clock::now()+std::chrono::milliseconds(cleanup_ms))noexcept{
     if(!created_)return true;if(!owned_||retained_)return false;
-    try{if(!same())return false;fs::remove_all(path_);owned_=false;created_=false;return true;}catch(...){return false;}
+    try{
+      for(;;){
+        if(!same())return false;
+        std::error_code error;fs::remove_all(path_,error);
+        if(!error){owned_=false;created_=false;cleanup_error_.reset();return true;}
+        cleanup_error_=error.value();
+#ifdef _WIN32
+        // Job termination and removal readiness are distinct observations.
+        // Wait only for explicit sharing/lock errors, with the same overall
+        // cleanup deadline and a fresh identity check before every attempt.
+        if(error.category()!=std::system_category() ||
+           (error.value()!=ERROR_SHARING_VIOLATION&&error.value()!=ERROR_LOCK_VIOLATION)||
+           Clock::now()>=end)return false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+#else
+        (void)end;return false;
+#endif
+      }
+    }catch(...){return false;}
   }
 };
 inline std::map<std::string,std::string> environment(const fs::path& home){
@@ -166,7 +186,7 @@ inline Json run(const fs::path& binary,int timeout,const std::string& approved){
     {"approval_sha256",approved},{"binary_sha256",plan["binary"]["sha256"]},{"process_started",false},
     {"initialize_verified",false},{"catalog_verified",false},{"ping_verified",false},{"clean_shutdown_verified",false},
     {"catalog_sha256",nullptr},{"tool_count",0},{"messages_received",0},{"stdout_bytes",0},{"stderr_bytes",0},
-    {"exit_code",nullptr},{"process_cleanup_verified",false},{"workspace_cleanup_verified",false},
+    {"exit_code",nullptr},{"process_cleanup_verified",false},{"workspace_cleanup_verified",false},{"workspace_cleanup_error",nullptr},
     {"elapsed_ms",0},{"tools_called",0},{"model_requests_sent",0},{"real_brain_supplied",false},{"opencode_started",false},
     {"host_consumption_verified",false},{"write_authorization_verified",false},{"os_security_sandbox",false}};
   try{
@@ -192,9 +212,12 @@ inline Json run(const fs::path& binary,int timeout,const std::string& approved){
   catch(...){report["code"]="local_runtime_error";}
   report["process_started"]=child.started();if(child.exit_code())report["exit_code"]=*child.exit_code();
   report["messages_received"]=messages;report["stdout_bytes"]=child.stdout_bytes();report["stderr_bytes"]=child.stderr_bytes();
-  const bool stopped=child.cleanup();report["process_cleanup_verified"]=stopped;
+  const auto cleanup_end=Clock::now()+std::chrono::milliseconds(cleanup_ms);
+  const bool stopped=child.cleanup(cleanup_end);report["process_cleanup_verified"]=stopped;
   if(!stopped)space.retain();
-  const bool removed=stopped&&space.cleanup();report["workspace_cleanup_verified"]=removed;
+  const bool removed=stopped&&space.cleanup(cleanup_end);report["workspace_cleanup_verified"]=removed;
+  if(space.cleanup_error())report["workspace_cleanup_error"]=*space.cleanup_error();
+  if(!removed)space.retain(); // Never repeat failed cleanup implicitly in the destructor.
   if(!stopped||!removed){report["result"]="FAILED";report["code"]="cleanup_incomplete";}
   report["elapsed_ms"]=std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now()-begin).count();
   require(report.dump().size()+1<=8192,"result_bound");return report;

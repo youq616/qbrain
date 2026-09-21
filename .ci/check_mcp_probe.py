@@ -10,7 +10,7 @@ from pathlib import Path
 FIELDS={'schema','result','code','phase','approval_sha256','binary_sha256','process_started',
  'initialize_verified','catalog_verified','ping_verified','clean_shutdown_verified','catalog_sha256',
  'tool_count','messages_received','stdout_bytes','stderr_bytes','exit_code','process_cleanup_verified',
- 'workspace_cleanup_verified','elapsed_ms','tools_called','model_requests_sent','real_brain_supplied',
+ 'workspace_cleanup_verified','workspace_cleanup_error','elapsed_ms','tools_called','model_requests_sent','real_brain_supplied',
  'opencode_started','host_consumption_verified','write_authorization_verified','os_security_sandbox'}
 BOOLS={'process_started','initialize_verified','catalog_verified','ping_verified','clean_shutdown_verified',
        'process_cleanup_verified','workspace_cleanup_verified','real_brain_supplied','opencode_started',
@@ -45,6 +45,8 @@ def check_result(r):
     for k in ('real_brain_supplied','opencode_started','host_consumption_verified','write_authorization_verified','os_security_sandbox'):
         need(r[k] is False,'false_scope')
     need(r['exit_code'] is None or type(r['exit_code']) is int,'exit_type')
+    need(r['workspace_cleanup_error'] is None or (type(r['workspace_cleanup_error']) is int and r['workspace_cleanup_error']>0),'cleanup_error_type')
+    if r['workspace_cleanup_verified']:need(r['workspace_cleanup_error'] is None,'successful_cleanup_error')
     if r['stdout_bytes']==0:need(r['messages_received']==0,'unreceived_message_count')
     if r['catalog_verified']:
         need(r['initialize_verified'] and r['tool_count']==6 and isinstance(r['catalog_sha256'],str) and re.fullmatch('[0-9a-f]{64}',r['catalog_sha256']),'catalog_evidence')
@@ -92,7 +94,7 @@ def verify(r,binary,peer,script):
 def negatives(r,binary,peer,script):
     done=[]
     for name in ('bad-hash','count-bool','missing-record','false-host','secret-field','fake-success','bool-exit','unreceived-frame',
-                 'tool-invocation','changed-approval','catalog-count','duplicate-key','check-order'):
+                 'tool-invocation','changed-approval','catalog-count','duplicate-key','check-order','cleanup-error-bool'):
         bad=copy.deepcopy(r)
         if name=='duplicate-key':
             try:decode(b'{"a":1,"a":2}')
@@ -112,6 +114,7 @@ def negatives(r,binary,peer,script):
         if name=='tool-invocation':value['tools_called']=1
         if name=='changed-approval':value['approval_sha256']='0'*64
         if name=='catalog-count':value['tool_count']=5
+        if name=='cleanup-error-bool':value['workspace_cleanup_error']=True
         row['stdout']=json.dumps(value)
         try:verify(bad,binary,peer,script)
         except (ValueError,KeyError,TypeError):done.append(name)

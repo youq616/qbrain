@@ -71,6 +71,31 @@ int main(int argc,char** argv){try{
   check(!w.cleanup()&&fs::exists(work/"unrelated.txt"),"foreign workspace identity retained");
   fs::remove_all(work);fs::rename(moved,work);check(w.cleanup()&&!fs::exists(work),"restored original workspace can be cleaned");
   check(w.cleanup(),"workspace cleanup idempotent");
+#ifdef _WIN32
+  // Native delete-sharing failure is not permission to force another handle.
+  Workspace transient;transient.create(temp);const auto transient_path=transient.path();
+  fs::remove(transient_path/"tmp"); // Empty directory: isolate sharing from not-empty errors.
+  Handle held(CreateFileW(transient_path.c_str(),FILE_LIST_DIRECTORY|FILE_READ_ATTRIBUTES,FILE_SHARE_READ|FILE_SHARE_WRITE,
+    nullptr,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,nullptr));
+  check(held.value!=INVALID_HANDLE_VALUE,"hold owned directory without delete sharing");
+  const bool refused=RemoveDirectoryW(transient_path.c_str())==FALSE;const DWORD sharing=GetLastError();
+  check(refused&&sharing==ERROR_SHARING_VIOLATION,"OS confirms delete-sharing refusal");
+  const HANDLE raw_handle=held.value;
+  std::jthread release([raw_handle]{std::this_thread::sleep_for(std::chrono::milliseconds(60));CloseHandle(raw_handle);});
+  held.value=nullptr;
+  const bool released=transient.cleanup(Clock::now()+std::chrono::milliseconds(cleanup_ms));
+  release.join();
+  check(released&&!fs::exists(transient_path),"bounded cleanup succeeds after directory handle release");
+  Workspace persistent;persistent.create(temp);
+  held.reset(CreateFileW(persistent.path().c_str(),FILE_LIST_DIRECTORY|FILE_READ_ATTRIBUTES,FILE_SHARE_READ|FILE_SHARE_WRITE,
+    nullptr,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,nullptr));
+  check(held.value!=INVALID_HANDLE_VALUE,"hold second directory through cleanup deadline");
+  const bool cleaned=persistent.cleanup(Clock::now()+std::chrono::milliseconds(30));
+  check(!cleaned&&fs::exists(persistent.path())&&persistent.cleanup_error()==ERROR_SHARING_VIOLATION,
+    "persistent sharing failure preserves owned workspace and numeric reason");
+  held.reset();check(persistent.cleanup(),"explicit cleanup after release succeeds without forcing access");
+#endif
+
   // Standalone timeout counter test is independent of the process suite.
   Workspace silent;silent.create(temp);auto copy=silent.path()/(std::string("peer-stall-init")+
 #ifdef _WIN32

@@ -231,7 +231,7 @@ class Process {
     for(;;){pump();require(pending_.empty(),"trailing_output");
       if(exit_&&out_eof_&&err_eof_){require(*exit_==0,"nonzero_exit");return;}pause();}
   }
-  bool cleanup() noexcept {
+  bool cleanup(Clock::time_point end=Clock::now()+std::chrono::milliseconds(cleanup_ms)) noexcept {
     if(cleaned_)return cleanup_ok_;
     input_.reset();output_.reset();error_.reset();bool ok=true;
 #ifdef _WIN32
@@ -239,7 +239,6 @@ class Process {
       if(job_.value)TerminateJobObject(job_.value,1);
       // Also covers the suspended child before assignment could succeed.
       if(WaitForSingleObject(process_.value,0)==WAIT_TIMEOUT)TerminateProcess(process_.value,1);
-      const auto end=Clock::now()+std::chrono::milliseconds(cleanup_ms);
       for(;;){
         const auto direct=WaitForSingleObject(process_.value,0);
         bool empty=!job_.value;
@@ -257,7 +256,6 @@ class Process {
     else if(pid_>0){
       // Do not reap until AFTER group cleanup: reserved PID prevents reuse.
       if(::kill(-pid_,SIGKILL)<0&&errno!=ESRCH)ok=false;
-      const auto end=Clock::now()+std::chrono::milliseconds(cleanup_ms);
       for(;;){int status=0;const auto r=::waitpid(pid_,&status,WNOHANG);
         if(r==pid_){pid_=-1;break;}if(r<0&&errno==EINTR)continue;
         if(r<0){ok=false;break;}if(Clock::now()>=end){ok=false;break;}

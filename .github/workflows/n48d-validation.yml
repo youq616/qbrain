@@ -22,11 +22,28 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: New standalone native protocol and ownership tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          cmake -S tests/mcp_probe -B build/probe 2>&1 | Tee-Object evidence/probe-configure.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/probe --config Release --parallel 2 2>&1 | Tee-Object evidence/probe-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build/probe -C Release --output-on-failure 2>&1 | Tee-Object evidence/probe-ctest.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/probe/Release/qbrain_mcp_probe_peer.exe evidence/peer.exe
+          Copy-Item build/probe/Release/qbrain_mcp_probe_tests.exe evidence/direct-tests.exe
+          & evidence/direct-tests.exe (Resolve-Path evidence/peer.exe).Path 2>&1 | Tee-Object evidence/direct.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Fresh original native product and full suite
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory evidence | Out-Null
+          New-Item -ItemType Directory -Force evidence | Out-Null
           git rev-parse HEAD | Set-Content evidence/source.txt
           git archive --format=zip --output=evidence/qbrain-source.zip HEAD
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/native.log
@@ -38,20 +55,6 @@ jobs:
           if ((Get-FileHash baseline.zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d') { throw 'Wrong baseline package.' }
           Expand-Archive baseline.zip baseline
           Copy-Item baseline/qbrain.exe evidence/baseline-qbrain.exe
-      - name: New standalone native protocol and ownership tests
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          cmake -S tests/mcp_probe -B build/probe 2>&1 | Tee-Object evidence/probe-configure.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build/probe --config Release --parallel 2 2>&1 | Tee-Object evidence/probe-build.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ctest --test-dir build/probe -C Release --output-on-failure 2>&1 | Tee-Object evidence/probe-ctest.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Copy-Item build/probe/Release/qbrain_mcp_probe_peer.exe evidence/peer.exe
-          Copy-Item build/probe/Release/qbrain_mcp_probe_tests.exe evidence/direct-tests.exe
-          & evidence/direct-tests.exe (Resolve-Path evidence/peer.exe).Path 2>&1 | Tee-Object evidence/direct.json
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Actual isolated runtime success and adversarial failure cases
         shell: pwsh
         run: |
