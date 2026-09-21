@@ -1,0 +1,139 @@
+{
+  "schema": "qbrain-n48d-acceptance-v1",
+  "date": "2026-09-21",
+  "timezone": "Asia/Seoul",
+  "verdict": "PASS-scoped-isolated-runtime-module",
+  "reviewer": "coordinating ChatGPT, owner-authorized separate engineering self-review; not a subagent or third party",
+  "base_main": "88c949bad4ea7e15e204008668fde4fdf85e13d2",
+  "plan_commits": [
+    "4104dbcc40bde994ca6f931ba151ec56f6e16391",
+    "0876ac9c82c0da79eef28e5d697214db439f1a97"
+  ],
+  "accepted_source": "d9cf7111f4b751998cf5a7e1d4a2bd92e747eca7",
+  "accepted_tree": "5c5e6949fde975cf461671b9b2aae8234a076dbe",
+  "run_id": 35595500574,
+  "event": "push",
+  "attempt": 1,
+  "jobs": {
+    "windows": 106319228892,
+    "portable": 106319228573
+  },
+  "artifacts": {
+    "portable": {
+      "id": 10637150259,
+      "bytes": 18030542,
+      "sha256": "79e8e602bbe0c6d7a44f1f6918e6e461774fd43fd1f4b4db91d2bffbc46822ba"
+    },
+    "windows": {
+      "id": 10636553631,
+      "bytes": 17128751,
+      "sha256": "2d934dabf23a29ffec63cbb88d1904d5fa6f46f65c9c116598891dfff76b4a46"
+    }
+  },
+  "source_files": 1256,
+  "windows_exact_crlf_files": 1242,
+  "binaries": {
+    "portable": {
+      "bytes": 5722064,
+      "sha256": "195237f99010e535a855e0a98adc89f26aa92425e3dafc6258351ef5ea614868"
+    },
+    "windows": {
+      "bytes": 4254208,
+      "sha256": "c7369d24017afbbb87dc45baffe5be5bf75cc4e89541a778878e40633fa7451e"
+    }
+  },
+  "source_only": true,
+  "results": {
+    "per_platform_each_python_mode": {
+      "checks": 172,
+      "commands": 96,
+      "runtime_results": 40,
+      "successful_results": 6,
+      "negative_cases": 14
+    },
+    "windows_direct_checks": 79,
+    "linux_direct_checks": 76,
+    "windows_original_registered_groups": 60,
+    "linux_original_core_and_batch_ctest": 6,
+    "new_standalone_ctest_each_platform": 1,
+    "retained_process_suites": 14,
+    "driver_steps_verified_each_platform": 18
+  },
+  "final_continuation_review": {
+    "independent_edge_cases": 25,
+    "commands_each_normal_optimized": 54,
+    "assertions_each_normal_optimized": 191,
+    "local_original_checks": 172,
+    "local_direct_checks": 76,
+    "asan_ubsan_direct_checks": 76,
+    "sanitizer_error_bytes": 0,
+    "new_product_build": false,
+    "supplemental_fixture_build": true,
+    "new_windows_execution": false
+  },
+  "records": {
+    "readback-portable.json": {
+      "bytes": 6076,
+      "sha256": "68166ff64f86dd5d4faa5a5e83b8d3f64032305c264aa480156a8f474747e0d7"
+    },
+    "readback-windows.json": {
+      "bytes": 7227,
+      "sha256": "be84221ff1b2f35717b3c38a93693b23d4ca63c9e199175d06fd84e89b952ab9"
+    },
+    "edges-normal/review.json": {
+      "bytes": 76849,
+      "sha256": "9dd54dcee8cbecc99253b539fbb5537a7d25ea6ca5c5bca6312dfd4a14765728"
+    },
+    "edges-optimized/review.json": {
+      "bytes": 76850,
+      "sha256": "161a5fdacce5d6a738caf6676b40f886c7b658db27c22c32fda2e4416571abfa"
+    },
+    "local-original/report.json": {
+      "bytes": 126749,
+      "sha256": "d2dda9d2450dc729fae2baf4e763b3388e14f28d6eae803fa5ce2c28fc2d5a3d"
+    },
+    "local-direct.json": {
+      "bytes": 87,
+      "sha256": "4d22b3f8fa484dc8cfbd46434280f356afe86a2617244816277f707668677c91"
+    },
+    "sanitized-direct.json": {
+      "bytes": 87,
+      "sha256": "4d22b3f8fa484dc8cfbd46434280f356afe86a2617244816277f707668677c91"
+    }
+  },
+  "public_release_changed": false,
+  "issue40_closed": false,
+  "real_agent_loaded": false,
+  "real_model_answers": "NOT_RUN",
+  "live_pg": "SKIP-PG",
+  "signed": false,
+  "limits": [
+    "Execution isolation is separate HOME/environment, not an OS security sandbox or signed executable authentication",
+    "Legacy MCP2024-11-05 runtime qualification only; no tools/call, real host loading, write authorization or model consumption verification",
+    "Protocol/cleanup waiting budgets do not bound synchronous OS/file/kernel work",
+    "Windows observes an empty owned Job; Linux signals owned group and reaps retained child, not every possible escaped descendant",
+    "Configured-path, cleanup-identity and executable-last-check races with hostile writers are not excluded",
+    "N48A/B/C remain separate unmerged work; public N47X lacks N47Y/N47Z/N48D",
+    "Actions artifact originals expire under2026-10-05 retention; repository summaries are derived evidence"
+  ],
+  "original_failures": {
+    "10635085930": {
+      "bytes": 16668024,
+      "sha256": "e73a2925b9c9436f107ff838ca391389e2d26fe883a897919ec15e5a7e4e5cc7",
+      "passed_before_failure": 24,
+      "phase": "catalog",
+      "code": "protocol_timeout",
+      "stdout_bytes": 161,
+      "workspace_cleanup_verified": true
+    },
+    "10635417350": {
+      "bytes": 16674312,
+      "sha256": "3abbde3f43d9a453230cf220feecf09a4eaa84aa5f19022e12006591f66048e6",
+      "passed_before_failure": 127,
+      "phase": "shutdown",
+      "code": "cleanup_incomplete",
+      "stdout_bytes": 739,
+      "workspace_cleanup_verified": false
+    }
+  }
+}

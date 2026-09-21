@@ -1,4 +1,20 @@
 #include "qbrain/cli/app.hpp"
+#include "qbrain/integration/mcp_probe.hpp"
+
+namespace {
+// Dispatch the explicit isolated checker before registry/default-brain setup.
+int dispatch(int argc,char** argv) {
+  if(argc>1 && std::string(argv[1])=="mcp-check") {
+    std::vector<std::string> args;for(int i=2;i<argc;++i)args.emplace_back(argv[i]);
+    return qbrain::integration::probe::command(args);
+  }
+  const int result=qbrain::cli::run(argc,argv);
+  if(argc==1 || (argc>1 && (std::string(argv[1])=="help" || std::string(argv[1])=="--help" || std::string(argv[1])=="-h")))
+    std::cout<<"Additional command: mcp-check preview|run --binary PATH [--timeout-ms N]; run requires --approve-sha256.\n";
+  return result;
+}
+}
+
 #ifdef _WIN32
 #include "qbrain/util/paths.hpp"
 #include <fcntl.h>
@@ -16,9 +32,9 @@ int wmain(int argc, wchar_t** argv) {
     // The protocols are UTF-8 bytes, not CRT locale text (also preserve CRLF payloads).
     if (_setmode(_fileno(stdin), _O_BINARY) == -1 || _setmode(_fileno(stdout), _O_BINARY) == -1)
       return 2;
-    return qbrain::cli::run(argc, utf8.data());
+    return dispatch(argc, utf8.data());
   } catch (...) { std::cerr << "invalid native Unicode command line\n"; return 2; }
 }
 #else
-int main(int argc, char** argv) { return qbrain::cli::run(argc, argv); }
+int main(int argc, char** argv) { return dispatch(argc, argv); }
 #endif

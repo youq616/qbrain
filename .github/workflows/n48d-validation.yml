@@ -1,0 +1,127 @@
+name: N48D isolated MCP runtime qualification
+on:
+  push:
+    branches: [main, 'feature/n48d-isolated-mcp-check']
+    paths: ['src/qbrain/main.cpp', 'include/qbrain/integration/mcp_probe.hpp', 'include/qbrain/integration/detail/probe_process.hpp', 'tests/*mcp_probe*.cpp', 'tests/mcp_probe/**', '.ci/*mcp_probe.py', '.ci/run_n48d_regressions.py', '.github/workflows/n48d-validation.yml']
+  pull_request:
+    paths: ['src/qbrain/main.cpp', 'include/qbrain/integration/mcp_probe.hpp', 'include/qbrain/integration/detail/probe_process.hpp', 'tests/*mcp_probe*.cpp', 'tests/mcp_probe/**', '.ci/*mcp_probe.py', '.ci/run_n48d_regressions.py', '.github/workflows/n48d-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48d-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: New standalone native protocol and ownership tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          cmake -S tests/mcp_probe -B build/probe 2>&1 | Tee-Object evidence/probe-configure.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/probe --config Release --parallel 2 2>&1 | Tee-Object evidence/probe-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build/probe -C Release --output-on-failure 2>&1 | Tee-Object evidence/probe-ctest.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/probe/Release/qbrain_mcp_probe_peer.exe evidence/peer.exe
+          Copy-Item build/probe/Release/qbrain_mcp_probe_tests.exe evidence/direct-tests.exe
+          & evidence/direct-tests.exe (Resolve-Path evidence/peer.exe).Path 2>&1 | Tee-Object evidence/direct.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Fresh original native product and full suite
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/native.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/native.log').read_text(encoding='utf-8-sig'),60)))" | Tee-Object evidence/native-groups.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/cl/qbrain.exe evidence/qbrain.exe
+          Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-current-preview-b810d689/qbrain-windows-x64-n47x-preview.zip' -OutFile baseline.zip
+          if ((Get-FileHash baseline.zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d') { throw 'Wrong baseline package.' }
+          Expand-Archive baseline.zip baseline
+          Copy-Item baseline/qbrain.exe evidence/baseline-qbrain.exe
+      - name: Actual isolated runtime success and adversarial failure cases
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .ci/test_mcp_probe.py --binary evidence/qbrain.exe --peer evidence/peer.exe --output evidence/probe-normal 2>&1 | Tee-Object evidence/probe-normal.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O .ci/test_mcp_probe.py --binary evidence/qbrain.exe --peer evidence/peer.exe --output evidence/probe-optimized 2>&1 | Tee-Object evidence/probe-optimized.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/check_mcp_probe.py --report evidence/probe-normal/report.json --binary evidence/qbrain.exe --peer evidence/peer.exe --test .ci/test_mcp_probe.py --negatives 2>&1 | Tee-Object evidence/readback.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O .ci/check_mcp_probe.py --report evidence/probe-optimized/report.json --binary evidence/qbrain.exe --peer evidence/peer.exe --test .ci/test_mcp_probe.py --negatives 2>&1 | Tee-Object evidence/readback-optimized.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/run_n48d_regressions.py --binary evidence/qbrain.exe --baseline evidence/baseline-qbrain.exe --output evidence/retained 2>&1 | Tee-Object evidence/retained.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48d-windows
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ad31f404ba5ca94b15dc992bf9f219fa572ab167
+          path: baseline-source
+          persist-credentials: false
+      - name: Compile actual changed product and original core tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/qbrain-source.zip HEAD
+          git -C baseline-source rev-parse HEAD > evidence/baseline-source.txt
+          cmake -S baseline-source -B baseline-source/build/base -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
+          cmake --build baseline-source/build/base --target qbrain --parallel 2 2>&1 | tee evidence/baseline-build.log
+          cp baseline-source/build/base/qbrain evidence/baseline-qbrain
+          cmake -S . -B build/product -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
+          cmake --build build/product --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 2>&1 | tee evidence/build.log
+          ctest --test-dir build/product -R 'qbrain_(memory|context|fact|multiterm|usage_batch|usage_batch_ownership)_unit' --output-on-failure 2>&1 | tee evidence/core-ctest.log
+          cp build/product/qbrain evidence/qbrain
+          cmake -S tests/mcp_probe -B build/probe -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/probe --parallel 2 2>&1 | tee evidence/probe-build.log
+          ctest --test-dir build/probe --output-on-failure 2>&1 | tee evidence/probe-ctest.log
+          cp build/probe/qbrain_mcp_probe_peer evidence/peer
+          cp build/probe/qbrain_mcp_probe_tests evidence/direct-tests
+          evidence/direct-tests "$(realpath evidence/peer)" | tee evidence/direct.json
+      - name: Actual isolated runtime and retained original process assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .ci/test_mcp_probe.py --binary evidence/qbrain --peer evidence/peer --output evidence/probe-normal 2>&1 | tee evidence/probe-normal.log
+          python -O .ci/test_mcp_probe.py --binary evidence/qbrain --peer evidence/peer --output evidence/probe-optimized 2>&1 | tee evidence/probe-optimized.log
+          python .ci/check_mcp_probe.py --report evidence/probe-normal/report.json --binary evidence/qbrain --peer evidence/peer --test .ci/test_mcp_probe.py --negatives 2>&1 | tee evidence/readback.log
+          python -O .ci/check_mcp_probe.py --report evidence/probe-optimized/report.json --binary evidence/qbrain --peer evidence/peer --test .ci/test_mcp_probe.py --negatives 2>&1 | tee evidence/readback-optimized.log
+          python .ci/run_n48d_regressions.py --binary evidence/qbrain --baseline evidence/baseline-qbrain --output evidence/retained 2>&1 | tee evidence/retained.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48d-portable
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
