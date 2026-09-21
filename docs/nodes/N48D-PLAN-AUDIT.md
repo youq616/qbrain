@@ -1,0 +1,9 @@
+# N48D separate plan review
+
+2026-09-21. APPROVED for the bounded isolated-runtime module. Reviewer: coordinating ChatGPT in a separate owner-authorized engineering pass, not another agent or third party. The user specifically requested self-review.
+
+The command is dispatched at the native executable entry point, before ordinary registry/default-brain setup. A standalone CMake test project keeps existing build/test lists untouched. Explicit preview and digest approval bind only this selected executable and the fixed minimal-environment protocol policy; they are not a signature or malicious-code sandbox. No user-brain path or provider credential is supplied, and no tools/call or model message is sent.
+
+Mandatory adversaries: partial or unsolicited JSON, wrong IDs/schema, no response, floods, early/nonzero exit, inherited pipes, stale approval, resource leakage and cleanup with replaced workspace identity. POSIX child identity must remain reserved until group cleanup; global signal handlers must not be changed. Windows requires an explicit application path, restricted handle inheritance and a new job before resuming the child. Clean shutdown and cleanup are positive gates, not assumed after a valid initialize reply.
+
+Use the server's supported legacy MCP2024-11-05 contract, not the latest-protocol label. Protocol deadline does not certify synchronous file/OS startup or kernel termination duration. The earlier N48A/B/C integrations remain local and separate. Windows native, actual agent loading, Issue40 and real model/PG/signing conclusions remain unaccepted until supported by their own evidence. Any blocked repository operation must be reported, not bypassed.
