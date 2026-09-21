@@ -4,7 +4,7 @@ Fetch only in the network-enabled step; execute only in an isolated Linux networ
 namespace. No user configuration, credentials, provider prompt or tools/call.
 """
 from __future__ import annotations
-import argparse, hashlib, io, json, os, re, signal, subprocess, tarfile, tempfile, zipfile
+import argparse, hashlib, io, json, os, re, signal, socket, subprocess, tarfile, tempfile, zipfile
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlparse
@@ -43,8 +43,6 @@ def fetch(output):
     listing=json.loads(get(f'{api}/actions/runs/{RUN}/artifacts',token=token))
     artifact=next(a for a in listing['artifacts'] if a['name']=='qbrain-n48e-portable')
     need(not artifact['expired'] and artifact['workflow_run']['head_sha']==SOURCE,'artifact identity')
-    # Follow artifact redirect with a new UNAUTHENTICATED request; never send the
-    # repository workflow token to the signed storage host.
     class NoRedirect(HTTPRedirectHandler):
         def redirect_request(self,*args,**kwargs):return None
     headers={'User-Agent':'qbrain-n48e-verification'}
@@ -85,8 +83,14 @@ def run(inputs,output):
         if not ok:raise ValueError(name)
     provenance=json.loads((inputs/'PROVENANCE.json').read_bytes())
     qb=(inputs/'qbrain').resolve(strict=True);host=(inputs/'opencode').resolve(strict=True)
+    network={}
     try:
-        check({p.name for p in Path('/sys/class/net').iterdir()}=={'lo'},'execution has loopback-only network namespace')
+        # Existing sysfs mount may still expose interfaces from its mount-time
+        # namespace. Query kernel interfaces and current namespace identity instead.
+        network={'interfaces':socket.if_nameindex(),'namespace':os.readlink('/proc/self/ns/net'),
+                 'initial_namespace':os.readlink('/proc/1/ns/net')}
+        check({name for _,name in network['interfaces']}=={'lo'} and network['namespace']!=network['initial_namespace'],
+              'execution has loopback-only network namespace')
         check(sha(qb.read_bytes())==provenance['qbrain_sha256'] and sha(host.read_bytes())==provenance['opencode_sha256'],'executed bytes match fetched provenance')
         with tempfile.TemporaryDirectory(prefix='n48e-actual-host-') as tmp:
             root=Path(tmp);home=root/'home';home.mkdir()
@@ -141,8 +145,8 @@ def run(inputs,output):
     report={'schema':'qbrain-n48e-real-host-v1','result':'PASS' if failure is None else 'FAIL','failure':failure,'checks':checks,
         'scenarios_completed':scenarios,'records':records,'provenance':provenance,'host_engine':'OpenCode V1 '+UPSTREAM_TAG,
         'v2_engine_tested':False,'v2_scope':'V1 compatibility loader for V2 configuration',
-        'model_prompts_sent':0,'tools_call_requested':0,'network_namespace':'loopback-only','real_user_brain_supplied':False,
-        'host_consumption_verified':False}
+        'model_prompts_sent':0,'tools_call_requested':0,'network_namespace':'loopback-only','network_observation':network,
+        'real_user_brain_supplied':False,'host_consumption_verified':False}
     (output/'report.json').write_bytes(encoded(report))
     print(json.dumps({k:v for k,v in report.items() if k not in ('records','checks','provenance')}))
     if failure:raise SystemExit(1)
