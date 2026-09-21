@@ -121,7 +121,8 @@ def run(inputs,out):
      entries=resolved.get('mcp',{});check(set(entries)=={name},label+' host resolves exact single server')
      server=entries[name];argv=[str(q),'serve','--brain','host-'+fmt,'--tool-profile','memory']+(['--allow-write'] if write else [])
      check(server['command']==argv and server.get('cwd')==str(project) and server.get('environment',{}).get('QBRAIN_MCP_ALLOW_WRITE')=='0' and server.get('enabled') is True,label+' host preserves command cwd and explicit access')
-     check(type(server.get('timeout')) is int and server['timeout']==10000,label+' V1 resolved timeout')
+     if fmt=='v1':check(type(server.get('timeout')) is int and server['timeout']==10000,label+' V1 resolved timeout')
+     else:check('timeout' not in server,label+' V2-on-V1 timeout omission is explicitly recorded, not accepted as equivalent')
      text=call(host,['mcp','list'],project);check(connected(text,name),label+' actual host reports connected')
      after=cfg.read_bytes()
      if after!=before:
@@ -160,7 +161,7 @@ def run(inputs,out):
    qbrain_sha256=sha(q.read_bytes()),host_sha256=sha(host.read_bytes()),script_sha256=sha(Path(__file__).read_bytes()),
    checks=checks,records=records,passed=sum(x['passed'] for x in checks),failure=failure,
    result='PASS' if failure is None else 'FAIL',formats=['v1','v2'],engine='OpenCode V1; V2 input compatibility only',
-   native_v2_engine='NOT_RUN',model_prompts_sent=0,tools_call_requested=0,real_user_data_supplied=False,model_consumption_verified=False)
+   native_v2_engine='NOT_RUN',v2_on_v1_timeout_preserved=False,model_prompts_sent=0,tools_call_requested=0,real_user_data_supplied=False,model_consumption_verified=False)
  save(out/'report.json',result);print(json.dumps({k:v for k,v in result.items() if k not in ('checks','records')}))
  return result
 
