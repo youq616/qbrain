@@ -1,0 +1,10 @@
+# Actual host compatibility observation and corrected test expectation
+
+2026-09-22. Separate coordinator outcome review, not a third-party review.
+Fixed OpenCode1.18.31 loaded the generated V1 entry and reported the Qbrain server connected on both platforms in run35665751039. The first supplemental script then failed its assumption that the host leaves a schema-less file unchanged (7 passed checks). Both failures remain: Linux artifact10669496215 SHA2560a8722bcf1fb70c3b123e857f4851d51ff925022d62d4c7b0c94fd9e621242f7, Windows10669176347 SHA25610313b13095e9cccd7f62c419c489640c759c8eabc7c640c6e0c501d29c78360. This was not a product success and did not complete the host lifecycle.
+
+Official tagged packages/opencode/src/config/config.ts (blob9e10b67fe703609a3ccf243ebe1801bf338961d3) explicitly writes a missing $schema annotation during load. The initial test did not save before/after file bodies, so that exact change is not retrospectively asserted from its failure alone.
+
+Approve a stronger supplemental test: retain exact before/after synthetic configuration, require the documented schema-only insertion, verify Qbrain status reports drift and ordinary uninstall-preview refuses with opencode_external_edit, then explicitly preview/approve reconciliation. Check annotation preservation, actual reconnection, subsequent stable host reads and later uninstall. Any other difference fails. Test both input formats with the pinned V1 host, never call it native V2-engine acceptance.
+
+No product change, timeout increase, weakened original N48A/B/C assertion or hidden initial failure. The original no-external-edit-overwrite guarantee is preserved; a real host annotation is an external edit, not permission for Qbrain to silently trust or discard it. User guidance must explain this behavior rather than claiming all diagnostic host commands are filesystem-read-only. Model prompts, tools/call and user data remain absent.
