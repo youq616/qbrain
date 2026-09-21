@@ -1,0 +1,7 @@
+# N48C separate plan audit
+
+2026-09-21. Reviewer: coordinating ChatGPT in an owner-authorized separate engineering pass, not a subagent or third party. APPROVED for implementation; no native/host PASS is granted.
+
+This closes an explicit lifecycle gap instead of silently weakening the old external-edit refusal. Reconcile is an independent approved action, not an automatic three-way merge. Managed-definition changes including permissions must still fail. Its pure editing projection must validate both original and result and compare semantics; preserve unrelated byte spans and explain canonical managed formatting/retained empty containers. Owner-v1 reconstruction remains the authority. Recovery cannot accept arbitrary attacker-provided before/after pairs; reconstruct the exact reconcile transformation and preserve legacy journals.
+
+Require meaningful new tests: real old-parser rejection, at least both V1/V2 through adoption/update/uninstall, independent expected bytes, write-stage recovery, stale configuration/executable/owner, negative managed edits and unsupported JSONC, plus original suites. Hashes do not authenticate a hostile operator, and the cooperating lock is not protection against arbitrary external TOCTOU. Reconciliation does not certify effective OpenCode configuration, restart a running host, or close model/client gates. Official OpenCode V1/V2 configuration was checked on2026-09-21; JSONC comments and trailing commas are preserved only within the accepted grammar.
