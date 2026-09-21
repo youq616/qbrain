@@ -239,7 +239,17 @@ class Process {
       if(job_.value)TerminateJobObject(job_.value,1);
       // Also covers the suspended child before assignment could succeed.
       if(WaitForSingleObject(process_.value,0)==WAIT_TIMEOUT)TerminateProcess(process_.value,1);
-      ok=WaitForSingleObject(process_.value,cleanup_ms)==WAIT_OBJECT_0;
+      const auto end=Clock::now()+std::chrono::milliseconds(cleanup_ms);
+      for(;;){
+        const auto direct=WaitForSingleObject(process_.value,0);
+        bool empty=!job_.value;
+        if(job_.value){JOBOBJECT_BASIC_ACCOUNTING_INFORMATION info{};
+          if(!QueryInformationJobObject(job_.value,JobObjectBasicAccountingInformation,&info,sizeof(info),nullptr)){ok=false;break;}
+          empty=info.ActiveProcesses==0;}
+        if(direct==WAIT_OBJECT_0&&empty)break;
+        if(direct==WAIT_FAILED||Clock::now()>=end){ok=false;break;}
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+      }
     }
     process_.reset();job_.reset();
 #else
