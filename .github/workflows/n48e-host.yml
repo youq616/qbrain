@@ -2,7 +2,7 @@ name: N48E pinned real host configuration loading
 on:
   push:
     branches: ['review/n48e-host-load']
-    paths: ['.ci/n48e_host_check.py', '.github/workflows/n48e-host.yml']
+    paths: ['.ci/n48e_host_check.py', '.ci/n48e_host_contract.py', '.github/workflows/n48e-host.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,13 +26,14 @@ jobs:
           set -euo pipefail
           mkdir evidence
           git rev-parse HEAD > evidence/source.txt
-          cp .ci/n48e_host_check.py evidence/host-test.py
+          cp .ci/n48e_host_check.py evidence/host-fetch.py
+          cp .ci/n48e_host_contract.py evidence/host-test.py
           python .ci/n48e_host_check.py fetch --output evidence/inputs 2>&1 | tee evidence/fetch.log
       - name: Actual host loads synthetic config with only loopback networking
         shell: bash
         run: |
           set -euo pipefail
-          sudo unshare --net /bin/sh -c 'ip link set lo up; exec python3 .ci/n48e_host_check.py run --inputs evidence/inputs --output evidence/host' 2>&1 | tee evidence/host.log
+          sudo unshare --net /bin/sh -c 'ip link set lo up; exec python3 .ci/n48e_host_contract.py --inputs evidence/inputs --output evidence/host' 2>&1 | tee evidence/host.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
