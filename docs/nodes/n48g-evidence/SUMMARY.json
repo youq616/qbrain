@@ -1,0 +1,119 @@
+{
+  "accepted_source": "4182ba4262e223ad3378f7cd26318347cfe0efa0",
+  "accepted_tree": "783cfefd3db816ac8a4fde1ff72e9404a3bccfe8",
+  "artifacts": {
+    "portable": {
+      "bytes": 20539967,
+      "id": 10685559260,
+      "sha256": "4e3f3414d19149f587f93cf9f424691aafead806c63544ebbd46352750ddddee"
+    },
+    "windows": {
+      "bytes": 19498868,
+      "id": 10686901021,
+      "sha256": "8fe7372280d61f5f3168ae714da3977e7481471dab04fb046d01cdaa80f36d11"
+    }
+  },
+  "attempt": 1,
+  "base_main": "24dd3179c6f01f665a20ce65152d6e112ec6712c",
+  "binaries": {
+    "portable": "8a74254af41cbeca07405bf4efa6c3f0495ae5e7092dcffc328cd3b7b7e94649",
+    "windows": "782c9faa7712a666d35ee781977a41f4ed639db0948f29bad82585e76fbe6763"
+  },
+  "date": "2026-09-22",
+  "event": "push",
+  "independent_review": {
+    "normal": {
+      "binary_sha256": "8a74254af41cbeca07405bf4efa6c3f0495ae5e7092dcffc328cd3b7b7e94649",
+      "commands": 824,
+      "failure": null,
+      "oracle_sha256": "0c7d0af96b1c820cf624249fb4f99a2e673c38e1a7360a673a12e2b595c59aac",
+      "passed": 6524,
+      "raw_streams": 2472,
+      "record": {
+        "bytes": 635645,
+        "sha256": "545177066d1c43fb14515d096d7197783a2c799e07e665c4aeef72a5edb53b04"
+      },
+      "schema": "qbrain-n48g-independent-review-v1",
+      "script_sha256": "a28dedbaf0c1803d80cf003b86860e112f295bd995417bd0a3a0b0d086d014a7"
+    },
+    "optimized": {
+      "binary_sha256": "8a74254af41cbeca07405bf4efa6c3f0495ae5e7092dcffc328cd3b7b7e94649",
+      "commands": 824,
+      "failure": null,
+      "oracle_sha256": "0c7d0af96b1c820cf624249fb4f99a2e673c38e1a7360a673a12e2b595c59aac",
+      "passed": 6524,
+      "raw_streams": 2472,
+      "record": {
+        "bytes": 635645,
+        "sha256": "545177066d1c43fb14515d096d7197783a2c799e07e665c4aeef72a5edb53b04"
+      },
+      "schema": "qbrain-n48g-independent-review-v1",
+      "script_sha256": "a28dedbaf0c1803d80cf003b86860e112f295bd995417bd0a3a0b0d086d014a7"
+    }
+  },
+  "issue40_closed": false,
+  "jobs": {
+    "portable": 106683488918,
+    "windows": 106683489207
+  },
+  "limits": [
+    "Explicit caller-supplied rates; no price/tier/date/TTL applicability authentication",
+    "Missing counters remain unknown, including missing cache-write fields on older response formats",
+    "Complete token subtotal is not a provider invoice; tool fees/taxes/discounts excluded",
+    "Deduplication is within one import, not persistent across separate invocations",
+    "New supplementary execution is Linux; Windows tests are the fixed native CI",
+    "Git pins and review scripts are not the entire raw Actions archives; expiry 2026-10-06"
+  ],
+  "live_pg": "SKIP-PG",
+  "local_direct_cost_checks": 103,
+  "local_direct_import_checks": 59,
+  "local_original_import_checks": 231,
+  "plan_commit": "38613f33b763f976b5d1bfe44668e440198835da",
+  "provider_requests_sent": 0,
+  "public_release_changed": false,
+  "readback": {
+    "bytes": 20085,
+    "sha256": "97ebbfc28c93be4ba4d5a6ab6a2fe90ec5b6a4ddb875e626d0981c83525b4c11"
+  },
+  "real_provider_responses_verified": false,
+  "results": {
+    "isolated_mcp_checks": 172,
+    "lifecycle_direct_targets": 4,
+    "linux_core_batch_ctest": 6,
+    "per_platform_import_direct": 59,
+    "per_platform_import_each_mode": {
+      "checks": 231,
+      "commands": 230,
+      "negative_cases": 12,
+      "normalized_cost_pipelines": 3,
+      "raw_streams": 690,
+      "refusals": 51,
+      "successful_imports": 176
+    },
+    "per_platform_prior_cost_direct": 103,
+    "per_platform_prior_cost_each_mode": {
+      "checks": 149,
+      "commands": 148,
+      "raw_streams": 444
+    },
+    "retained_process_suites": 14,
+    "windows_original_native_groups": 60
+  },
+  "reviewer": "coordinating ChatGPT; separate owner-authorized engineering self-review, not a subagent or third party",
+  "run_id": 35708615695,
+  "sanitizer": {
+    "direct_import_checks": 59,
+    "full_product_rebuilt": false,
+    "report": {
+      "bytes": 85,
+      "sha256": "e97b55e0b39764f2e3d3ba074c7a65e030fd723df2baab20ac3c5b45c81ffd72"
+    },
+    "stderr_bytes": 0
+  },
+  "schema": "qbrain-n48g-acceptance-v1",
+  "source_files": 1330,
+  "source_only": true,
+  "timezone": "Asia/Seoul",
+  "verdict": "PASS-scoped-provider-import-and-exact-accounting",
+  "windows_exact_crlf_files": 1316
+}

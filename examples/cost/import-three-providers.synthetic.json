@@ -1,0 +1,127 @@
+{
+  "currency": "USD",
+  "rates": [
+    {
+      "model": "synthetic-model",
+      "per_million": {
+        "input_cache_read": "0.1",
+        "input_cache_write": "2",
+        "input_uncached": "1",
+        "output": "3"
+      },
+      "provider": "openai",
+      "rate_id": "sample-rate-0"
+    },
+    {
+      "model": "synthetic-model",
+      "per_million": {
+        "input_cache_read": "0.1",
+        "input_cache_write": "2",
+        "input_uncached": "1",
+        "output": "3"
+      },
+      "provider": "openai",
+      "rate_id": "sample-rate-1"
+    },
+    {
+      "model": "synthetic-model",
+      "per_million": {
+        "input_cache_read": "0.1",
+        "input_cache_write": "2",
+        "input_uncached": "1",
+        "output": "3"
+      },
+      "provider": "anthropic",
+      "rate_id": "sample-rate-2"
+    }
+  ],
+  "records": [
+    {
+      "attempt": 1,
+      "call_id": "sample-0",
+      "format": "openai_chat",
+      "outcome": "success",
+      "rate_id": "sample-rate-0",
+      "response": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "message": {
+              "content": "Synthetic example only."
+            }
+          }
+        ],
+        "id": "synthetic-0",
+        "model": "synthetic-model",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 50,
+          "completion_tokens_details": {
+            "reasoning_tokens": 40
+          },
+          "prompt_tokens": 100,
+          "prompt_tokens_details": {
+            "cache_write_tokens": 20,
+            "cached_tokens": 30
+          },
+          "total_tokens": 150
+        }
+      },
+      "stage": "main"
+    },
+    {
+      "attempt": 1,
+      "call_id": "sample-1",
+      "format": "openai_responses",
+      "outcome": "success",
+      "rate_id": "sample-rate-1",
+      "response": {
+        "id": "synthetic-1",
+        "model": "synthetic-model",
+        "object": "response",
+        "output": [],
+        "status": "completed",
+        "usage": {
+          "input_tokens": 100,
+          "input_tokens_details": {
+            "cache_write_tokens": 20,
+            "cached_tokens": 30
+          },
+          "output_tokens": 50,
+          "output_tokens_details": {
+            "reasoning_tokens": 40
+          },
+          "total_tokens": 150
+        }
+      },
+      "stage": "summary"
+    },
+    {
+      "attempt": 1,
+      "call_id": "sample-2",
+      "format": "anthropic_messages",
+      "outcome": "success",
+      "rate_id": "sample-rate-2",
+      "response": {
+        "content": [],
+        "id": "synthetic-2",
+        "model": "synthetic-model",
+        "role": "assistant",
+        "stop_reason": "end_turn",
+        "type": "message",
+        "usage": {
+          "cache_creation": {
+            "ephemeral_1h_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 20
+          },
+          "cache_creation_input_tokens": 20,
+          "cache_read_input_tokens": 30,
+          "input_tokens": 50,
+          "output_tokens": 50
+        }
+      },
+      "stage": "extraction"
+    }
+  ],
+  "schema": "qbrain-usage-import-v1"
+}
