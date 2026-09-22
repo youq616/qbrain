@@ -1,6 +1,6 @@
 # N48F — Bounded opt-in query embedding cache
 
-2026-09-22. Status: draft pending the separate plan review.
+2026-09-22. Status: approved after N48F-PLAN-AUDIT at044e4565.
 Base main:6c4f779ee752bd4043847eb79a6d1a5e694d024e.
 Owner requests a complete module and coordinator self-review. This implements
 one existing roadmap performance item, not another OpenCode closure.
