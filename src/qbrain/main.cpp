@@ -1,10 +1,15 @@
 #include "qbrain/cli/app.hpp"
+#include "qbrain/accounting/token_cost.hpp"
 #include "qbrain/integration/mcp_probe.hpp"
 #include "qbrain/integration/opencode_audit.hpp"
 
 namespace {
 // Dispatch the explicit isolated checker before registry/default-brain setup.
 int dispatch(int argc,char** argv) {
+  if(argc>1 && std::string(argv[1])=="cost") {
+    std::vector<std::string> args;for(int i=2;i<argc;++i)args.emplace_back(argv[i]);
+    return qbrain::accounting::command(args);
+  }
   if(argc>1 && std::string(argv[1])=="mcp-check") {
     std::vector<std::string> args;for(int i=2;i<argc;++i)args.emplace_back(argv[i]);
     return qbrain::integration::probe::command(args);
@@ -20,6 +25,8 @@ int dispatch(int argc,char** argv) {
     std::cout<<"Additional command: mcp-check preview|run --binary PATH [--timeout-ms N]; run requires --approve-sha256.\n";
   if(argc==1 || (argc>1 && (std::string(argv[1])=="help" || std::string(argv[1])=="--help" || std::string(argv[1])=="-h")))
     std::cout<<"Additional command: opencode preview|install|status|audit|uninstall-preview|uninstall|recovery-preview|recover|reconcile-preview|reconcile --project PATH.\n";
+  if(argc==1 || (argc>1 && (std::string(argv[1])=="help" || std::string(argv[1])=="--help" || std::string(argv[1])=="-h")))
+    std::cout<<"Additional command: cost report (bounded normalized JSON from stdin; no network or brain access).\n";
   return result;
 }
 }
