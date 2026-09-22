@@ -1,5 +1,6 @@
 #include "qbrain/cli/app.hpp"
 #include "qbrain/integration/mcp_probe.hpp"
+#include "qbrain/integration/opencode_audit.hpp"
 
 namespace {
 // Dispatch the explicit isolated checker before registry/default-brain setup.
@@ -8,9 +9,17 @@ int dispatch(int argc,char** argv) {
     std::vector<std::string> args;for(int i=2;i<argc;++i)args.emplace_back(argv[i]);
     return qbrain::integration::probe::command(args);
   }
+  if(argc>1 && std::string(argv[1])=="opencode") {
+    std::vector<std::string> args;for(int i=2;i<argc;++i)args.emplace_back(argv[i]);
+    if(!args.empty() && args[0]=="audit")
+      return qbrain::integration::opencode::audit_command(args);
+    return qbrain::integration::opencode::command(args);
+  }
   const int result=qbrain::cli::run(argc,argv);
   if(argc==1 || (argc>1 && (std::string(argv[1])=="help" || std::string(argv[1])=="--help" || std::string(argv[1])=="-h")))
     std::cout<<"Additional command: mcp-check preview|run --binary PATH [--timeout-ms N]; run requires --approve-sha256.\n";
+  if(argc==1 || (argc>1 && (std::string(argv[1])=="help" || std::string(argv[1])=="--help" || std::string(argv[1])=="-h")))
+    std::cout<<"Additional command: opencode preview|install|status|audit|uninstall-preview|uninstall|recovery-preview|recover|reconcile-preview|reconcile --project PATH.\n";
   return result;
 }
 }

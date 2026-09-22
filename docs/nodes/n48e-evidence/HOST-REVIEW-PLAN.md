@@ -1,0 +1,13 @@
+# N48E supplemental outcome-review plan
+
+2026-09-22 (Asia/Seoul). Coordinating ChatGPT, separate owner-authorized engineering review; not a subagent or third party.
+
+Continue PR46 rather than another module. Fixed production/test source e419acf60375e1a7a0794375c713f759b776aa0b, tree4cb6e97c92c6b9cdb8ee01d89cdb54d8b0958225. Its original Windows/Linux run35612180651 completed successfully. Recheck original archives and source-owned validators before accepting it. The downloaded Linux lifecycle driver was rerun here successfully; this does not substitute for Windows.
+
+Approve a separate read-only-permissions CI check of official OpenCode1.18.31 with the exact candidate EXE recovered from hash-pinned existing artifacts. Verify upstream archive hashes before extraction, preserve both executable hashes and version stdout. Use disposable projects and HOME/XDG/config/data locations, no inherited secrets, user configs, credentials, API tokens, model prompts or tools/call. Only --version, debug config and mcp list are requested from OpenCode. Disable optional plugins, skill scans, model-catalog refresh and autoupdate in the test environment; do not modify the owner's machine or product defaults.
+
+For each explicit V1 and V2 configuration format, test read-only installation, deliberate read-write selection, omission restoring read-only, preservation/reconciliation of a synthetic unrelated edit and uninstall. Validate actual resolved config and connected status, not process exit alone. OpenCode1.x accepting converted V2 input is only V1 compatibility loading, never native V2-engine acceptance. Lack of a V2 runtime stays NOT_RUN. No model quality or memory consumption is inferred.
+
+The local container could not resolve github.com for the public binary download; record that local attempt as unavailable. CI network download is an ordinary authorized read, not a workaround for a denied repository write. No such repository write denial occurred in this continuation.
+
+Supplemental script/workflow add no production changes and must leave the original full Windows60, lifecycle assertions, N48D and retained gates unchanged. Preserve any host failure, fix genuine blockers only after reproducing them, and do not call a failed/unexecuted host test passed. Before final merge, independently review parser/ownership/recovery boundaries and archive actual results and limits. Old release/tag and Issue40 remain unchanged.

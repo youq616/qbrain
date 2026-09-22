@@ -1,0 +1,50 @@
+{
+  "schema": "qbrain-n48e-completion-readback-v1",
+  "accepted_source": "206d04eb4a04588007224cc98d56909b0b52a965",
+  "sequence_results": {
+    "normal": {
+      "schema": "qbrain-n48e-lifecycle-sequence-review-v1",
+      "binary_sha256": "c5844eef61407912f4b2113dbd18a94a5a00a2f4d206a9e437061f5e44aeb7da",
+      "script_sha256": "c547f93a0f7db02aac3d7bad76071f1f5d3cff044d0ad045f031c1344c643a35",
+      "scenarios": 6,
+      "commands": 114,
+      "passed": 133,
+      "failure": null,
+      "platform": "posix",
+      "new_host_execution": false,
+      "model_calls": 0,
+      "user_data_used": false
+    },
+    "optimized": {
+      "schema": "qbrain-n48e-lifecycle-sequence-review-v1",
+      "binary_sha256": "c5844eef61407912f4b2113dbd18a94a5a00a2f4d206a9e437061f5e44aeb7da",
+      "script_sha256": "c547f93a0f7db02aac3d7bad76071f1f5d3cff044d0ad045f031c1344c643a35",
+      "scenarios": 6,
+      "commands": 114,
+      "passed": 133,
+      "failure": null,
+      "platform": "posix",
+      "new_host_execution": false,
+      "model_calls": 0,
+      "user_data_used": false
+    }
+  },
+  "raw_sequence_records_embedded": false,
+  "host_record_check": {
+    "result": "PINNED_HOST_RECORDS_VERIFIED",
+    "checks": 75,
+    "record_count": 63,
+    "host_commands": 25,
+    "qbrain_commands": 36,
+    "observed_schema_edits": 2,
+    "connected_checks": 10,
+    "native_v2_engine": "NOT_RUN",
+    "v2_timeout_on_v1_preserved": false,
+    "model_consumption_verified": false,
+    "new_host_execution": false
+  },
+  "new_windows_execution": false,
+  "new_host_execution": false,
+  "archive_count": 6,
+  "host_mutation_cases_rejected": 17
+}

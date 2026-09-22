@@ -1,0 +1,202 @@
+{
+  "schema": "qbrain-n48e-acceptance-v1",
+  "date": "2026-09-22",
+  "timezone": "Asia/Seoul",
+  "verdict": "PASS-scoped-source-lifecycle-and-pinned-V1-host",
+  "reviewer": "coordinating ChatGPT; separate owner-authorized engineering self-review, not a subagent or third party",
+  "base_main": "ce2e26201fcdf977a507f895c081ab09f83359b8",
+  "plan_commit": "e679a0af23c63e47879c48b383500c7731e6a229",
+  "accepted_source": "206d04eb4a04588007224cc98d56909b0b52a965",
+  "accepted_tree": "3de27b2ef0b5f9b408e6e31d861f7507de683fcc",
+  "accepted_product_source": "e419acf60375e1a7a0794375c713f759b776aa0b",
+  "host_review_source": "206d04eb4a04588007224cc98d56909b0b52a965",
+  "final_native_run": {
+    "id": 35666915946,
+    "event": "push",
+    "attempt": 1,
+    "windows_job": 106558368876,
+    "linux_job": 106558369367,
+    "all_required_steps": "completed/success"
+  },
+  "host_run": {
+    "id": 35666915907,
+    "event": "push",
+    "attempt": 1,
+    "windows_job": 106554609371,
+    "linux_job": 106554609126
+  },
+  "artifacts": {
+    "linux": {
+      "id": 10644942504,
+      "bytes": 18781884,
+      "sha256": "346c5f3560fce9c2762c367cde1b702010dd3953b3a5bee1ef23c8866a3ef18d"
+    },
+    "windows": {
+      "id": 10645630760,
+      "bytes": 17820156,
+      "sha256": "9a0f9ee5965ff245b46b2041a5c36d2836fbc2dbc72a310993ff33d5b605accd"
+    },
+    "host-linux": {
+      "id": 10669073616,
+      "bytes": 12432718,
+      "sha256": "f589c4801439294d1e6b14102a3cc3b1acd2421ec96ef11ab593d38eb9c5ddf8"
+    },
+    "host-windows": {
+      "id": 10669593188,
+      "bytes": 12471316,
+      "sha256": "7b28185c8324796659461f7e331d389f46a4ade1c447fd82d6fcad8ef8d69f96"
+    }
+  },
+  "host": {
+    "version": "1.18.31",
+    "checks_each_platform": 75,
+    "records_each_platform": 63,
+    "host_commands_each_platform": 25,
+    "qbrain_commands_each_platform": 36,
+    "connected_observations_each_platform": 10,
+    "schema_edits_each_platform": 2,
+    "native_v2_engine": "NOT_RUN",
+    "v2_on_v1_timeout_preserved": false,
+    "model_consumption_verified": false
+  },
+  "limits": [
+    "Source acceptance, not a newly published installer",
+    "Pinned OpenCode1.18.31 account-free loading/connection only; no model memory-consumption acceptance",
+    "V2-on-V1 omits the stage timeout override; use v1 for the tested1.x client",
+    "Owned state/journals can contain private configuration before-images",
+    "Per-file atomicity and cooperating locks do not remove all last-check or hostile-administrator races",
+    "Actions artifacts have stated2026-10-05 expiry; derived records are not permanent copies of full archives"
+  ],
+  "continuation": {
+    "date": "2026-09-22",
+    "same_blocked_blob_retry": "same create_blob action succeeded; no alternate route",
+    "product_or_ci_changed": false,
+    "native_reports_replayed": 4,
+    "lifecycle_reports_replayed": 24,
+    "native_readback_normal_optimized_equal": true,
+    "host_records_each_platform": 63,
+    "host_mutations_rejected_each_mode": 17,
+    "local_direct_checks": [
+      1164,
+      529,
+      1345,
+      164
+    ],
+    "local_original_process_checks": [
+      70,
+      96,
+      133
+    ],
+    "new_sequence_each_mode": {
+      "scenarios": 6,
+      "commands": 114,
+      "assertions": 133
+    },
+    "new_host_execution": false,
+    "new_windows_execution": false,
+    "new_product_build": false,
+    "new_sanitizer_build": false
+  },
+  "new_records": {
+    "archive-readback.json": {
+      "bytes": 1503,
+      "sha256": "1e03c8276a4a9e7f9ef092c32444395debc98398eddbeb59c111706472a58b38"
+    },
+    "native-recheck-normal.json": {
+      "bytes": 27813,
+      "sha256": "d9c34bac158c90323d7f51e2a4dd26021be789c2c592b5bfec98fa7d7d54031b"
+    },
+    "native-recheck-optimized.json": {
+      "bytes": 27813,
+      "sha256": "d9c34bac158c90323d7f51e2a4dd26021be789c2c592b5bfec98fa7d7d54031b"
+    },
+    "host-linux-recheck.json": {
+      "bytes": 1494,
+      "sha256": "1670eed66727ca06aca8ba362a5e008543bdb03f87e18dd69d539090f0101462"
+    },
+    "host-windows-recheck.json": {
+      "bytes": 1494,
+      "sha256": "1670eed66727ca06aca8ba362a5e008543bdb03f87e18dd69d539090f0101462"
+    },
+    "sequence-normal/review.json": {
+      "bytes": 89322,
+      "sha256": "3b21c9d06bb41a8bbd3b72fe7bd96a534c9b78d58a9e9c8180bc5d53a3d2e8eb"
+    },
+    "sequence-optimized/review.json": {
+      "bytes": 89322,
+      "sha256": "35eab9e16671d7166f2e428f4a74ba6ff3d73ccc0bc5ea9fad3380b5b4be39a4"
+    },
+    "check_host_records.py": {
+      "bytes": 9868,
+      "sha256": "db51e3a9eb0d2adac371ad9e51037d172a35d213b9ab902debe3328f22de11e8"
+    },
+    "review_lifecycle_sequences.py": {
+      "bytes": 8918,
+      "sha256": "c547f93a0f7db02aac3d7bad76071f1f5d3cff044d0ad045f031c1344c643a35"
+    },
+    "verify_native_records.py": {
+      "bytes": 6144,
+      "sha256": "ee8d36bcd1a2ecd421068fdbd057bc60db8ac3d0be3cfc2d891f6564f9799a75"
+    }
+  },
+  "public_release_changed": false,
+  "issue40_closed": false,
+  "live_pg": "SKIP-PG",
+  "model_consumption_verified": false,
+  "merge_identity": "See actual PR46 merge readback; not the original binary identity.",
+  "final_native_artifacts": {
+    "linux": {
+      "bytes": 18791748,
+      "sha256": "1dcc64adbd23b12dcd997b8cb8488d7a720c77612002adc25bf414f26184748d",
+      "members": 1381,
+      "source_files": 1288,
+      "exe_sha256": "c5844eef61407912f4b2113dbd18a94a5a00a2f4d206a9e437061f5e44aeb7da",
+      "exact_previous_exe": true,
+      "artifact_id": 10669821875
+    },
+    "windows": {
+      "bytes": 17830794,
+      "sha256": "ebf92432f581a1bf3c9f96a8f08f1e539c59fc3d7f27dab3a02c42352f5535a1",
+      "members": 1380,
+      "source_files": 1288,
+      "exe_sha256": "44ad56d777bbf5e1abf561dd7e0b90d9952856dbf85107b335b2f5b3e1e29f74",
+      "exact_previous_exe": false,
+      "artifact_id": 10670362885
+    }
+  },
+  "test_counts": {
+    "per_mode_windows": [
+      68,
+      93,
+      133
+    ],
+    "per_mode_linux": [
+      70,
+      96,
+      133
+    ],
+    "reconcile_commands": 164,
+    "direct_windows": [
+      1162,
+      486,
+      1345,
+      164
+    ],
+    "direct_linux": [
+      1164,
+      529,
+      1345,
+      164
+    ],
+    "windows_full_groups": 60,
+    "linux_core_groups": 6,
+    "standalone_targets": 4,
+    "inherited_process_suites": 14,
+    "n48d_process_checks": 172,
+    "negative_cases": [
+      12,
+      14,
+      16
+    ]
+  }
+}
