@@ -1,0 +1,69 @@
+{
+  "schema": "qbrain-cost-input-v1",
+  "currency": "USD",
+  "rates": [
+    {
+      "rate_id": "demo-main",
+      "provider": "synthetic",
+      "model": "example-main",
+      "per_million": {
+        "input_uncached": "2",
+        "input_cache_read": "0.2",
+        "input_cache_write": "2.5",
+        "output": "10"
+      }
+    },
+    {
+      "rate_id": "demo-extract",
+      "provider": "synthetic",
+      "model": "example-extractor",
+      "per_million": {
+        "input_uncached": "1",
+        "input_cache_read": "0.1",
+        "input_cache_write": "1.25",
+        "output": "5"
+      }
+    }
+  ],
+  "calls": [
+    {
+      "call_id": "main-attempt-1",
+      "stage": "main",
+      "rate_id": "demo-main",
+      "attempt": 1,
+      "outcome": "failure",
+      "tokens": {
+        "input_uncached": 100,
+        "input_cache_read": 0,
+        "input_cache_write": 0,
+        "output": 0
+      }
+    },
+    {
+      "call_id": "main-attempt-2",
+      "stage": "main",
+      "rate_id": "demo-main",
+      "attempt": 2,
+      "outcome": "success",
+      "tokens": {
+        "input_uncached": 1000,
+        "input_cache_read": 800,
+        "input_cache_write": 200,
+        "output": 50
+      }
+    },
+    {
+      "call_id": "extract-1",
+      "stage": "extraction",
+      "rate_id": "demo-extract",
+      "attempt": 1,
+      "outcome": "success",
+      "tokens": {
+        "input_uncached": 200,
+        "input_cache_read": 0,
+        "input_cache_write": 0,
+        "output": 20
+      }
+    }
+  ]
+}

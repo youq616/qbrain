@@ -1,0 +1,129 @@
+{
+  "schema": "qbrain-n48f-acceptance-v1",
+  "date": "2026-09-22",
+  "timezone": "Asia/Seoul",
+  "verdict": "PASS-scoped-normalized-offline-token-cost-module",
+  "reviewer": "coordinating ChatGPT, owner-authorized separate engineering self-review; not a subagent or third party",
+  "base_main": "6c4f779ee752bd4043847eb79a6d1a5e694d024e",
+  "plan_commit": "95d11564e865edaf051191a06bb079c4d72b7b80",
+  "accepted_source": "5990fbc4146f06ca53b1af32cf1996e2ae53914a",
+  "accepted_tree": "43e7bff202da7149761e0123ac9f07e1b8e16687",
+  "run_id": 35695173057,
+  "event": "push",
+  "attempt": 1,
+  "jobs": {
+    "windows": 106640349584,
+    "portable": 106640349810
+  },
+  "artifacts": {
+    "portable": {
+      "id": 10680480725,
+      "bytes": 19540095,
+      "sha256": "2bb49450c69f9a65ff1158811b5ccb2dd97c0dd796e067afc06897e9b65fe557"
+    },
+    "windows": {
+      "id": 10680388945,
+      "bytes": 18539190,
+      "sha256": "aef6e762903e426a7acebf89f5913eeb37daf31656cb2b9e263176ddb41ac698"
+    }
+  },
+  "source_files": 1308,
+  "windows_exact_crlf_files": 1294,
+  "binaries": {
+    "portable": {
+      "bytes": 5944360,
+      "sha256": "25d99a4aa12a225c375d5655c6f23003f3305c5447d0a696977c8c51b93bdbc7"
+    },
+    "windows": {
+      "bytes": 4430336,
+      "sha256": "0e9e139ecb4b31783ad99c8ae7e7f236a5682393c108226a7a0cf6b793dde819"
+    }
+  },
+  "native_results": {
+    "each_platform_each_python_mode": {
+      "checks": 149,
+      "commands": 148,
+      "raw_files": 444,
+      "decimal_reference_successes": 92,
+      "refusals": 56,
+      "report_negative_cases": 12
+    },
+    "cost_direct_checks_each_platform": 103,
+    "windows_original_registered_groups": 60,
+    "linux_original_core_and_batch_groups": 6,
+    "opencode_direct_targets_each_platform": 4,
+    "lifecycle_driver_steps_each_platform": 16,
+    "retained_process_suites_each_platform": 14,
+    "retained_driver_steps_each_platform": 18,
+    "mcp_probe_checks_each_platform": 172
+  },
+  "separate_review": {
+    "reference": "Python Fraction; complete expected report, not imported product/Decimal test oracle",
+    "each_normal_and_optimized": {
+      "commands": 398,
+      "assertions": 1237,
+      "raw_files": 1194,
+      "unknown_token_rate_masks": 256,
+      "missing_card_combinations": 81,
+      "mixed_scenarios": 24,
+      "actual_report_mutations_rejected": 11
+    },
+    "exact_scaled_u64_ceiling": "18446744.073709551615",
+    "one_minimum_unit_over_ceiling_rejected": true,
+    "full_fraction_comparisons_of_each_native_cost_report": 92,
+    "local_original_cost_checks_each_mode": 149,
+    "downloaded_direct_rerun": 103,
+    "sanitized_direct_checks": 103,
+    "sanitizer_error_bytes": 0,
+    "new_product_build": false,
+    "local_windows_execution": false
+  },
+  "local_record_hashes": {
+    "readback-normal.json": {
+      "bytes": 16408,
+      "sha256": "e5dcea5b330dff92ea3d197c8cb7e11b09a1fdca00ea9abcb0421fa19a69f637"
+    },
+    "readback-optimized.json": {
+      "bytes": 16408,
+      "sha256": "e5dcea5b330dff92ea3d197c8cb7e11b09a1fdca00ea9abcb0421fa19a69f637"
+    },
+    "independent-normal/review.json": {
+      "bytes": 194040,
+      "sha256": "d73ffd2de4b43e60fedc3814bd600df096180d1722cd124285f655057b769292"
+    },
+    "independent-optimized/review.json": {
+      "bytes": 194040,
+      "sha256": "d73ffd2de4b43e60fedc3814bd600df096180d1722cd124285f655057b769292"
+    },
+    "local-original-normal/report.json": {
+      "bytes": 68393,
+      "sha256": "1b249c3614f7c2ec42f6ae26a8ac736bc2ab3add54aac4ccb86a8b4fe5fdf0dd"
+    },
+    "local-original-optimized/report.json": {
+      "bytes": 68393,
+      "sha256": "1b249c3614f7c2ec42f6ae26a8ac736bc2ab3add54aac4ccb86a8b4fe5fdf0dd"
+    },
+    "sanitized-direct.json": {
+      "bytes": 78,
+      "sha256": "d7e2847107730462b58cac8a7201df503efa9d4d8deb857832b7418f39b05ed3"
+    },
+    "sanitizer-errors.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "public_release_changed": false,
+  "real_provider_calls": 0,
+  "billing_verified": false,
+  "real_model_savings_verified": false,
+  "issue40_closed": false,
+  "live_pg": "SKIP-PG",
+  "limits": [
+    "Single user-supplied currency label; no currency conversion or vendor rate lookup",
+    "One explicit price per disjoint bucket per record; mixed-tier or mixed-TTL bucket pricing is not inferred",
+    "Complete means supplied components are priceable, not all calls observed or invoice authenticated",
+    "No fees, taxes, discounts, rounding-to-currency-minor-unit, credentials or automatic telemetry integration",
+    "The amount ceiling applies to known subtotal even when other components are unknown",
+    "Native archives use Actions retention ending2026-10-06; repository records are derived, not entire raw archives"
+  ]
+}
