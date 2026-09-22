@@ -1,0 +1,86 @@
+{
+  "schema": "qbrain-n48f-readback-summary-v1",
+  "source": "5990fbc4146f06ca53b1af32cf1996e2ae53914a",
+  "run_id": 35695173057,
+  "attempt": 1,
+  "full_local_record": {
+    "bytes": 16408,
+    "sha256": "e5dcea5b330dff92ea3d197c8cb7e11b09a1fdca00ea9abcb0421fa19a69f637"
+  },
+  "modes": [
+    "normal Python",
+    "optimized Python"
+  ],
+  "modes_identical": true,
+  "platforms": {
+    "portable": {
+      "binary_sha256": "25d99a4aa12a225c375d5655c6f23003f3305c5447d0a696977c8c51b93bdbc7",
+      "cost_modes": {
+        "normal": {
+          "checks": 149,
+          "commands": 148,
+          "decimal_reference_successes": 92,
+          "raw_files": 444,
+          "refusals": 56,
+          "separate_full_fraction_comparisons": 92
+        },
+        "optimized": {
+          "checks": 149,
+          "commands": 148,
+          "decimal_reference_successes": 92,
+          "raw_files": 444,
+          "refusals": 56,
+          "separate_full_fraction_comparisons": 92
+        }
+      },
+      "direct_cost_checks": 103,
+      "lifecycle_driver_steps": 16,
+      "retained_driver_steps": 18,
+      "lifecycle_direct": {
+        "config": 1164,
+        "audit": 529,
+        "reconcile": 1345,
+        "write_races": 164
+      },
+      "probe_checks": 172,
+      "original_native_groups": null,
+      "original_core_ctest": 6
+    },
+    "windows": {
+      "binary_sha256": "0e9e139ecb4b31783ad99c8ae7e7f236a5682393c108226a7a0cf6b793dde819",
+      "cost_modes": {
+        "normal": {
+          "checks": 149,
+          "commands": 148,
+          "decimal_reference_successes": 92,
+          "raw_files": 444,
+          "refusals": 56,
+          "separate_full_fraction_comparisons": 92
+        },
+        "optimized": {
+          "checks": 149,
+          "commands": 148,
+          "decimal_reference_successes": 92,
+          "raw_files": 444,
+          "refusals": 56,
+          "separate_full_fraction_comparisons": 92
+        }
+      },
+      "direct_cost_checks": 103,
+      "lifecycle_driver_steps": 16,
+      "retained_driver_steps": 18,
+      "lifecycle_direct": {
+        "config": 1162,
+        "audit": 486,
+        "reconcile": 1345,
+        "write_races": 164
+      },
+      "probe_checks": 172,
+      "original_native_groups": 60,
+      "original_core_ctest": null
+    }
+  },
+  "new_execution": false,
+  "billing_verified": false,
+  "raw_archives_embedded": false
+}
