@@ -1,0 +1,188 @@
+name: N48G offline provider usage import
+on:
+  push:
+    branches: [main, 'feature/n48g-provider-usage-import']
+    paths: ['include/qbrain/accounting/**', 'src/qbrain/main.cpp', 'tests/test_provider_usage.cpp', 'tests/usage_import/**', '.ci/*provider_usage.py', '.github/workflows/n48g-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48g-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Standalone lifecycle tests before full native compilation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          cmake -S tests/opencode -B build/opencode
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/opencode --config Release --parallel 2 2>&1 | Tee-Object evidence/standalone-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build/opencode -C Release --output-on-failure 2>&1 | Tee-Object evidence/standalone-ctest.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/opencode/Release/*_tests.exe evidence/
+      - name: Fresh native product and unchanged full60
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/native.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/native.log').read_text(encoding='utf-8-sig'),60)))" | Tee-Object evidence/native-groups.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/cl/qbrain.exe evidence/qbrain.exe
+          Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-current-preview-b810d689/qbrain-windows-x64-n47x-preview.zip' -OutFile baseline.zip
+          if ((Get-FileHash baseline.zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d') { throw 'Baseline mismatch' }
+          Expand-Archive baseline.zip baseline
+          Copy-Item baseline/qbrain.exe evidence/baseline-qbrain.exe
+      - name: New provider import direct and process contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cmake -S tests/usage_import -B build/import
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/import --config Release --parallel 2 2>&1 | Tee-Object evidence/import-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build/import -C Release --output-on-failure 2>&1 | Tee-Object evidence/import-ctest.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/import/Release/qbrain_usage_import_tests.exe evidence/import-tests.exe
+          & evidence/import-tests.exe | Tee-Object evidence/import-direct.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_provider_usage.py --binary evidence/qbrain.exe --output evidence/import-normal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O .ci/test_provider_usage.py --binary evidence/qbrain.exe --output evidence/import-optimized
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/check_provider_usage.py --directory evidence/import-normal --binary evidence/qbrain.exe --test .ci/test_provider_usage.py --negatives | Tee-Object evidence/import-readback.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O .ci/check_provider_usage.py --directory evidence/import-optimized --binary evidence/qbrain.exe --test .ci/test_provider_usage.py --negatives | Tee-Object evidence/import-readback-optimized.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Independent cost arithmetic and actual stdin contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cmake -S tests/cost -B build/cost
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/cost --config Release --parallel 2 2>&1 | Tee-Object evidence/cost-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build/cost -C Release --output-on-failure 2>&1 | Tee-Object evidence/cost-ctest.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/cost/Release/qbrain_cost_tests.exe evidence/cost-tests.exe
+          & evidence/cost-tests.exe | Tee-Object evidence/cost-direct.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/test_token_cost.py --binary evidence/qbrain.exe --output evidence/cost-normal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O .ci/test_token_cost.py --binary evidence/qbrain.exe --output evidence/cost-optimized
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/check_token_cost.py --directory evidence/cost-normal --binary evidence/qbrain.exe --test .ci/test_token_cost.py --negatives | Tee-Object evidence/cost-readback.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O .ci/check_token_cost.py --directory evidence/cost-optimized --binary evidence/qbrain.exe --test .ci/test_token_cost.py --negatives | Tee-Object evidence/cost-readback-optimized.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Combined lifecycle and preserved application regression
+        shell: pwsh
+        run: |
+          python .ci/run_n48e_checks.py --binary evidence/qbrain.exe --direct-dir evidence --output evidence/lifecycle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/run_n48d_regressions.py --binary evidence/qbrain.exe --baseline evidence/baseline-qbrain.exe --output evidence/retained
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake -S tests/mcp_probe -B build/probe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/probe --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/probe/Release/qbrain_mcp_probe_peer.exe evidence/peer.exe
+          python .ci/test_mcp_probe.py --binary evidence/qbrain.exe --peer evidence/peer.exe --output evidence/probe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/check_mcp_probe.py --report evidence/probe/report.json --binary evidence/qbrain.exe --peer evidence/peer.exe --test .ci/test_mcp_probe.py --negatives
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48g-windows
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ad31f404ba5ca94b15dc992bf9f219fa572ab167
+          path: baseline-source
+          persist-credentials: false
+      - name: Fresh combined product and core suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          cmake -S baseline-source -B baseline-source/build/base -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
+          cmake --build baseline-source/build/base --target qbrain --parallel 2 > evidence/baseline-build.log 2>&1
+          cp baseline-source/build/base/qbrain evidence/baseline-qbrain
+          cmake -S . -B build/product -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
+          cmake --build build/product --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
+          ctest --test-dir build/product -R 'qbrain_(memory|context|fact|multiterm|usage_batch|usage_batch_ownership)_unit' --output-on-failure | tee evidence/core-ctest.log
+          cp build/product/qbrain evidence/qbrain
+          cmake -S tests/opencode -B build/opencode -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/opencode --parallel 2 > evidence/standalone-build.log 2>&1
+          ctest --test-dir build/opencode --output-on-failure | tee evidence/standalone-ctest.log
+          cp build/opencode/*_tests evidence/
+      - name: New provider import direct and process contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S tests/usage_import -B build/import -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/import --parallel 2 > evidence/import-build.log 2>&1
+          ctest --test-dir build/import --output-on-failure | tee evidence/import-ctest.log
+          cp build/import/qbrain_usage_import_tests evidence/import-tests
+          evidence/import-tests | tee evidence/import-direct.json
+          python .ci/test_provider_usage.py --binary evidence/qbrain --output evidence/import-normal
+          python -O .ci/test_provider_usage.py --binary evidence/qbrain --output evidence/import-optimized
+          python .ci/check_provider_usage.py --directory evidence/import-normal --binary evidence/qbrain --test .ci/test_provider_usage.py --negatives | tee evidence/import-readback.json
+          python -O .ci/check_provider_usage.py --directory evidence/import-optimized --binary evidence/qbrain --test .ci/test_provider_usage.py --negatives | tee evidence/import-readback-optimized.json
+      - name: Independent cost arithmetic and actual stdin contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S tests/cost -B build/cost -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/cost --parallel 2 > evidence/cost-build.log 2>&1
+          ctest --test-dir build/cost --output-on-failure | tee evidence/cost-ctest.log
+          cp build/cost/qbrain_cost_tests evidence/cost-tests
+          evidence/cost-tests | tee evidence/cost-direct.json
+          python .ci/test_token_cost.py --binary evidence/qbrain --output evidence/cost-normal
+          python -O .ci/test_token_cost.py --binary evidence/qbrain --output evidence/cost-optimized
+          python .ci/check_token_cost.py --directory evidence/cost-normal --binary evidence/qbrain --test .ci/test_token_cost.py --negatives | tee evidence/cost-readback.json
+          python -O .ci/check_token_cost.py --directory evidence/cost-optimized --binary evidence/qbrain --test .ci/test_token_cost.py --negatives | tee evidence/cost-readback-optimized.json
+      - name: Combined lifecycle and preserved application regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .ci/run_n48e_checks.py --binary evidence/qbrain --direct-dir evidence --output evidence/lifecycle
+          python .ci/run_n48d_regressions.py --binary evidence/qbrain --baseline evidence/baseline-qbrain --output evidence/retained
+          cmake -S tests/mcp_probe -B build/probe -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/probe --parallel 2
+          cp build/probe/qbrain_mcp_probe_peer evidence/peer
+          python .ci/test_mcp_probe.py --binary evidence/qbrain --peer evidence/peer --output evidence/probe
+          python .ci/check_mcp_probe.py --report evidence/probe/report.json --binary evidence/qbrain --peer evidence/peer --test .ci/test_mcp_probe.py --negatives
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48g-portable
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
