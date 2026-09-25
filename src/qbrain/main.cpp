@@ -1,6 +1,7 @@
 #include "qbrain/cli/app.hpp"
 #include "qbrain/accounting/token_cost.hpp"
 #include "qbrain/accounting/provider_usage.hpp"
+#include "qbrain/accounting/stream_usage.hpp"
 #include "qbrain/integration/mcp_probe.hpp"
 #include "qbrain/integration/opencode_audit.hpp"
 
@@ -9,6 +10,7 @@ namespace {
 int dispatch(int argc,char** argv) {
   if(argc>1 && std::string(argv[1])=="cost") {
     std::vector<std::string> args;for(int i=2;i<argc;++i)args.emplace_back(argv[i]);
+    if(!args.empty() && args[0]=="import-stream") return qbrain::accounting::stream_import::command(args);
     if(!args.empty() && args[0]=="import") return qbrain::accounting::usage_import::command(args);
     return qbrain::accounting::command(args);
   }
@@ -28,7 +30,7 @@ int dispatch(int argc,char** argv) {
   if(argc==1 || (argc>1 && (std::string(argv[1])=="help" || std::string(argv[1])=="--help" || std::string(argv[1])=="-h")))
     std::cout<<"Additional command: opencode preview|install|status|audit|uninstall-preview|uninstall|recovery-preview|recover|reconcile-preview|reconcile --project PATH.\n";
   if(argc==1 || (argc>1 && (std::string(argv[1])=="help" || std::string(argv[1])=="--help" || std::string(argv[1])=="-h")))
-    std::cout<<"Additional command: cost report|import (bounded JSON from stdin; no network or brain access).\n";
+    std::cout<<"Additional command: cost report|import|import-stream (bounded JSON from stdin; no network or brain access).\n";
   return result;
 }
 }

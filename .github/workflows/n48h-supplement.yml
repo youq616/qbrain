@@ -1,0 +1,82 @@
+name: N48H integrated history supplement
+on:
+  push:
+    branches: [main, 'feature/n48h-stream-usage-import']
+    paths: ['include/qbrain/accounting/**', 'src/qbrain/main.cpp', 'tests/test_stream_usage*.cpp', 'tests/stream_import/**', '.ci/test_stream_usage_history.py', '.github/workflows/n48h-supplement.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48h-supplement-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  supplement:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: portable
+            suffix: ''
+            config_dir: ''
+          - os: windows-latest
+            platform: windows
+            suffix: '.exe'
+            config_dir: 'Release/'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Pin exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+      - name: Fresh native Windows product
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-cl.ps1 2>&1 | Tee-Object evidence/product-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/cl/qbrain.exe evidence/qbrain.exe
+      - name: Fresh portable product
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/product -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
+          cmake --build build/product --target qbrain --parallel 2 > evidence/product-build.log 2>&1
+          cp build/product/qbrain evidence/qbrain
+      - name: Both native suites and independent process matrix
+        shell: bash
+        env:
+          SUFFIX: ${{ matrix.suffix }}
+          CONFIG_DIR: ${{ matrix.config_dir }}
+        run: |
+          set -euo pipefail
+          cmake -S tests/stream_import -B build/stream -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/stream --config Release --parallel 2 > evidence/direct-build.log 2>&1
+          ctest --test-dir build/stream -C Release --output-on-failure | tee evidence/direct-ctest.log
+          cp "build/stream/${CONFIG_DIR}qbrain_stream_import_tests${SUFFIX}" "evidence/stream-tests${SUFFIX}"
+          cp "build/stream/${CONFIG_DIR}qbrain_stream_history_tests${SUFFIX}" "evidence/supplement-tests${SUFFIX}"
+          "evidence/stream-tests${SUFFIX}" | tee evidence/stream-direct.json
+          "evidence/supplement-tests${SUFFIX}" | tee evidence/supplement-direct.json
+          python .ci/test_stream_usage_history.py --binary "evidence/qbrain${SUFFIX}" --output evidence/supplement-normal
+          python -O .ci/test_stream_usage_history.py --binary "evidence/qbrain${SUFFIX}" --output evidence/supplement-optimized
+          python .ci/test_stream_usage_history.py --binary "evidence/qbrain${SUFFIX}" --output evidence/supplement-normal --negatives | tee evidence/supplement-readback.json
+          python -O .ci/test_stream_usage_history.py --binary "evidence/qbrain${SUFFIX}" --output evidence/supplement-optimized --negatives | tee evidence/supplement-readback-optimized.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48h-supplement-${{ matrix.platform }}
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error

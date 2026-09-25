@@ -1,0 +1,11 @@
+# N48H continuation plan review
+
+2026-09-22. APPROVED before this continuation's implementation. Reviewer: coordinating ChatGPT, owner-authorized separate engineering self-review; not a subagent or third party.
+
+The branch30d947e7 contains only the original approved plan and review. The prior conversation mentions a local stream/comparison candidate, but no N48H implementation is available in the current mounted files, Library search or remote branch. This continuation implements only the existing N48H streaming module against main9c61049d; it does not claim recovery of those unavailable bytes or their old test results. Cost comparison is a separate future module.
+
+Primary contract review found the original rule 'Responses sequence numbers from0' too restrictive: the official response.created reference includes an example starting at1. Accept a first sequence number of0 or1 only, then exact contiguous increments and one terminal response; arbitrary offsets/resumed or missing-event streams still reject. Test both starts plus gaps, repeats and offset2. This narrowly documented amendment replaces that one original acceptance phrase, not identity/completion/usage requirements.
+
+Reference: https://developers.openai.com/api/reference/resources/responses/streaming-events (response.created example). Chat final usage has empty choices and Anthropic message_delta counts are cumulative; each must have its own state machine. No guessed zero for missing usage, no content reconstruction/hash, no live network or provider request. Original N48F/G arithmetic, nonstream adapters, tests, stored data and permission defaults stay unchanged.
+
+Windows/Linux native gates and separate outcome review remain required for source acceptance. The product is built locally from the previously downloaded tree whose inherited production files match the base, not a fabricated Git checkout. Remote CI must build the actual submitted tree. No timeouts or old assertions may be weakened. On any blocked repository write, stop that path; preserve local source/evidence without alternate-route circumvention.

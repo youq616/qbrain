@@ -1,0 +1,46 @@
+{
+  "runtime_and_original_gates": [
+    {
+      "path": "include/qbrain/accounting/stream_usage.hpp",
+      "sha256": "65e5f0b18ba2229317a1d370dc556e848373f812610f924d6f3ff87f177cc788",
+      "unchanged_from_817d222a": true
+    },
+    {
+      "path": "include/qbrain/accounting/provider_usage.hpp",
+      "sha256": "cbf189a88127335f79915c1beed48fb82fe621cf66a502f1c84a6b6b2199406a",
+      "unchanged_from_817d222a": true
+    },
+    {
+      "path": "include/qbrain/accounting/token_cost.hpp",
+      "sha256": "bc83770dca7aea78c9c739d650825622eb2cadefdf83b458cfb39311ec8034d5",
+      "unchanged_from_817d222a": true
+    },
+    {
+      "path": "src/qbrain/main.cpp",
+      "sha256": "d664a30e6a298e996d830b4f8491087d72b3dab5910f4404812876a3978269da",
+      "unchanged_from_817d222a": true
+    },
+    {
+      "path": "tests/test_stream_usage.cpp",
+      "sha256": "85bf4cbf51f9d9c2a7e80ec766e1f6df57b9be20a6b10e3cf36b5a2ca75420c6",
+      "unchanged_from_817d222a": true
+    },
+    {
+      "path": ".ci/test_stream_usage.py",
+      "sha256": "df3b0fab5160182309e94a17772057d01bda05b022d1565839f8a08c3323fdf8",
+      "unchanged_from_817d222a": true
+    },
+    {
+      "path": ".ci/review_stream_usage.py",
+      "sha256": "f54705728dc0b87e88aae427385f58805a192cfe07eebe3ae2c6ccdc62e568e3",
+      "unchanged_from_817d222a": true
+    },
+    {
+      "path": ".github/workflows/n48h-validation.yml",
+      "sha256": "02c1a31f43f6e881cadb24b19c1aa0e1003a732abc8d4b1e55f840bff58040eb",
+      "unchanged_from_817d222a": true
+    }
+  ],
+  "case_generator_unchanged_from_previous_delivery": true,
+  "source_tree": "9b95184ae32a2ca0b9512820da56e2bd7e951737"
+}

@@ -213,3 +213,13 @@ PG checks remain skipped in this N47L run and full project completion is not cla
 - `doctor_remediate` remains the separate local-only Write path.
 - Windows direct MSVC path verified with `scripts\build-tests-cl.ps1`: **18/18 PASS** after adding doctor-specific tests.
 
+
+## N48H — offline accounting extension (2026-09-25)
+
+Native CLI `cost import-stream` is source-qualified at0227db92 after Windows/Linux
+original and supplementary gates plus separate owner-authorized self-review. It
+adds complete saved-SSE validation and normalized exact token costing for three
+explicit formats. This is a CLI accounting extension, not a new MCP registry op;
+no existing ops row or count is changed, and no additional full gbrain/PG parity
+is claimed. See nodes/N48H-HARD-AUDIT.md and CURRENT-STATUS.md for exact evidence
+and the still-open live-client/model, release/signing and Issue40 boundaries.

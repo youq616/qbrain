@@ -1,0 +1,13 @@
+{
+  "script_sha256": "3a12bbd02254f80eef146a9ff36fd6010ddee6369b207e5f95ca8ce2f278d2eb",
+  "probes": [
+    {
+      "case": "boolean-token",
+      "accepted_by_inherited_checker": true
+    },
+    {
+      "case": "duplicate-json-key",
+      "accepted_by_inherited_checker": true
+    }
+  ]
+}

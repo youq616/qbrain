@@ -1,0 +1,46 @@
+{
+  "schema": "qbrain-n48h-examples-v1",
+  "candidate_commit": "0227db92efa736075086ae222e8fbb6ad82d41f5",
+  "binary_sha256": "a117955d3882168f0fbab10893f107998d2da39787c101e2bbfa297d0e7bd551",
+  "passed": 5,
+  "failed": 0,
+  "records": [
+    {
+      "file": "examples/cost/stream-anthropic_messages.json",
+      "exit": 0,
+      "input_sha256": "43779d1992d276d703cb38764508540a0f3f03f302e14a221ae666305b789480",
+      "output_sha256": "6201efcf82851642321f5310d9c0438497d1f26085cfb38ba939187bf8332d4b",
+      "passed": true
+    },
+    {
+      "file": "examples/cost/stream-openai_chat.json",
+      "exit": 0,
+      "input_sha256": "870ece67050a7831b3c4b36d660f0c2ffc971952627d953066bfbd11d13d1419",
+      "output_sha256": "f4569c87fd5057962129a3a3e2f91b5b9fdc4d57539d45276b29fed2994c581e",
+      "passed": true
+    },
+    {
+      "file": "examples/cost/stream-openai_responses.json",
+      "exit": 0,
+      "input_sha256": "9fdac766bb9eab5717c78f7584cfd65ec6c804e5f506366da8cae9773207598b",
+      "output_sha256": "c7b9a3173afaf6cdf851efe86cf96f9dd78e6e04e6d8c1d04364a0d4f6c10a82",
+      "passed": true
+    },
+    {
+      "file": "examples/cost/stream-rejected-truncated.json",
+      "exit": 2,
+      "input_sha256": "85f6cd0256e5188f4ccd164954a3bdf5fa0709d92126a7eb8036e0b6fd78576f",
+      "output_sha256": "c225f5ebabca266a1b25833922cf68339506d656cdacec509ee7d0649f05e303",
+      "passed": true
+    },
+    {
+      "file": "examples/cost/stream-unknown-cache.json",
+      "exit": 0,
+      "input_sha256": "ac3571845d0613134d161a2974c00613eaa6f598a76de68529bd6273664e68dd",
+      "output_sha256": "d3ea069ecac74c53f32682719c53da986aceede31a184d5300daed01ae675343",
+      "passed": true
+    }
+  ],
+  "synthetic_only": true,
+  "windows_shell_examples_executed": false
+}

@@ -1,0 +1,28 @@
+{
+  "schema": "qbrain-stream-import-v1",
+  "currency": "USD",
+  "rates": [
+    {
+      "rate_id": "synthetic-rate",
+      "provider": "openai",
+      "model": "synthetic-model",
+      "per_million": {
+        "input_uncached": "1.000000",
+        "input_cache_read": "0.100000",
+        "input_cache_write": "2.000000",
+        "output": "3.000000"
+      }
+    }
+  ],
+  "records": [
+    {
+      "call_id": "synthetic-call",
+      "stage": "main",
+      "rate_id": "synthetic-rate",
+      "attempt": 1,
+      "outcome": "success",
+      "format": "openai_responses",
+      "stream": "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"synthetic-response\",\"model\":\"synthetic-model\",\"object\":\"response\",\"status\":\"in_progress\",\"usage\":null,\"output\":[{\"text\":\"SYNTHETIC_PRIVATE_BODY_NOT_FOR_OUTPUT\"}]}}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":1,\"response\":{\"id\":\"synthetic-response\",\"model\":\"synthetic-model\",\"object\":\"response\",\"status\":\"completed\",\"usage\":{\"input_tokens\":100,\"output_tokens\":20,\"total_tokens\":120,\"input_tokens_details\":{\"cached_tokens\":null,\"cache_write_tokens\":0}},\"output\":[{\"text\":\"SYNTHETIC_PRIVATE_BODY_NOT_FOR_OUTPUT\"}]}}\n\n"
+    }
+  ]
+}
