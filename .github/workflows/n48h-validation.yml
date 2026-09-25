@@ -68,6 +68,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -O .ci/check_stream_usage.py --directory evidence/stream-optimized --binary evidence/qbrain.exe --test .ci/test_stream_usage.py --negatives | Tee-Object evidence/stream-readback-optimized.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/review_stream_usage.py --binary evidence/qbrain.exe --output evidence/history-normal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O .ci/review_stream_usage.py --binary evidence/qbrain.exe --output evidence/history-optimized
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .ci/review_stream_usage.py --binary evidence/qbrain.exe --output evidence/history-normal --readback | Tee-Object evidence/history-readback.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O .ci/review_stream_usage.py --binary evidence/qbrain.exe --output evidence/history-optimized --readback | Tee-Object evidence/history-readback-optimized.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: New provider import direct and process contracts
         shell: pwsh
         run: |
@@ -177,6 +185,10 @@ jobs:
           python -O .ci/test_stream_usage.py --binary evidence/qbrain --output evidence/stream-optimized
           python .ci/check_stream_usage.py --directory evidence/stream-normal --binary evidence/qbrain --test .ci/test_stream_usage.py --negatives | tee evidence/stream-readback.json
           python -O .ci/check_stream_usage.py --directory evidence/stream-optimized --binary evidence/qbrain --test .ci/test_stream_usage.py --negatives | tee evidence/stream-readback-optimized.json
+          python .ci/review_stream_usage.py --binary evidence/qbrain --output evidence/history-normal
+          python -O .ci/review_stream_usage.py --binary evidence/qbrain --output evidence/history-optimized
+          python .ci/review_stream_usage.py --binary evidence/qbrain --output evidence/history-normal --readback | tee evidence/history-readback.json
+          python -O .ci/review_stream_usage.py --binary evidence/qbrain --output evidence/history-optimized --readback | tee evidence/history-readback-optimized.json
       - name: New provider import direct and process contracts
         shell: bash
         run: |

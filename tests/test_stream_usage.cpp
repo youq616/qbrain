@@ -57,5 +57,25 @@ int main(){try{
   delta["usage"]=nullptr;auto unknown=s::anthropic({{"",start.dump()},{"",delta.dump()},{"",stop.dump()}});
   check(unknown.response["usage"]["input_tokens"].is_null()&&unknown.response["usage"]["output_tokens"].is_null(),"null usage invalidates initial totals");
   rejects([&]{s::anthropic({{"",start.dump()},{"",stop.dump()}});},"stream_anthropic_nonterminal");
+  // Reverse aggregate bounds: an omitted/null aggregate does not erase history.
+  for(int total_mode:{0,1}){
+    created["response"]["usage"]={{"total_tokens",100}};
+    finished["response"]["usage"]={{"input_tokens",5},{"output_tokens",5}};
+    if(total_mode)finished["response"]["usage"]["total_tokens"]=nullptr;
+    rejects([&]{s::responses({{"",created.dump()},{"",finished.dump()}});},"stream_usage_lower_bound");
+    finished["response"]["usage"]["output_tokens"]=95;
+    check(s::responses({{"",created.dump()},{"",finished.dump()}}).response["usage"]["output_tokens"]==95,"equal derived total allowed");
+    finished["response"]["usage"]["output_tokens"]=nullptr;
+    check(s::responses({{"",created.dump()},{"",finished.dump()}}).response["usage"]["output_tokens"].is_null(),"unknown component not fabricated from earlier total");
+  }
+  for(int ttl:{0,1}){
+    start["message"]["usage"]={{"input_tokens",9},{"output_tokens",1},{"cache_creation_input_tokens",100}};
+    delta["usage"]={{"output_tokens",5},{"cache_creation_input_tokens",nullptr},
+      {"cache_creation",{{"ephemeral_5m_input_tokens",ttl?0:5},{"ephemeral_1h_input_tokens",ttl?5:0}}}};
+    rejects([&]{s::anthropic({{"",start.dump()},{"",delta.dump()},{"",stop.dump()}});},"stream_usage_lower_bound");
+    delta["usage"]["cache_creation"][ttl?"ephemeral_1h_input_tokens":"ephemeral_5m_input_tokens"]=100;
+    auto same=s::anthropic({{"",start.dump()},{"",delta.dump()},{"",stop.dump()}});
+    check(usage_import::anthropic_usage(same.response["usage"]).tokens[2]==100,"equal TTL-derived cache total allowed");
+  }
   std::cout<<Json{{"schema","qbrain-n48h-direct-v1"},{"passed",n},{"failed",0}}.dump()<<'\n';return 0;
 }catch(const std::exception& e){std::cerr<<"FAIL after "<<n<<": "<<e.what()<<'\n';return 1;}}

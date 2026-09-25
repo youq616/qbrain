@@ -98,11 +98,20 @@ inline void openai_bounds(const Json& u,const std::map<std::string,Amount>& b){
     minimum_output=(std::max)(minimum_output,lower(b,key));
   if(auto v=usage_import::count(u,"output_tokens"))need(minimum_output<=*v,"stream_usage_lower_bound");
   if(auto v=usage_import::count(u,"total_tokens"))need(add((std::max)(cache,lower(b,"/input_tokens")),minimum_output)<=*v,"stream_usage_lower_bound");
+  // The reverse relation matters too: null/absent total cannot erase an earlier
+  // aggregate when both CURRENT components now determine an exact total.
+  const auto input=usage_import::count(u,"input_tokens"),output=usage_import::count(u,"output_tokens");
+  if(input&&output)need(add(*input,*output)>=lower(b,"/total_tokens"),"stream_usage_lower_bound");
 }
 inline void anthropic_bounds(const Json& u,const std::map<std::string,Amount>& b){
   const auto short_ttl=lower(b,"/cache_creation/ephemeral_5m_input_tokens"),long_ttl=lower(b,"/cache_creation/ephemeral_1h_input_tokens");
   need(!short_ttl||!long_ttl,"usage_mixed_cache_ttl");
   if(auto v=usage_import::count(u,"cache_creation_input_tokens"))need(add(short_ttl,long_ttl)<=*v,"stream_usage_lower_bound");
+  // TTL detail is itself an exact cache-write total in N48G, including when the
+  // aggregate is explicitly null. Compare that derived total to numeric history.
+  const auto detail=usage_import::detail(u,"cache_creation");
+  const auto short_now=usage_import::count(detail,"ephemeral_5m_input_tokens"),long_now=usage_import::count(detail,"ephemeral_1h_input_tokens");
+  if(short_now&&long_now)need(add(*short_now,*long_now)>=lower(b,"/cache_creation_input_tokens"),"stream_usage_lower_bound");
   if(auto v=usage_import::count(u,"output_tokens"))need(lower(b,"/output_tokens_details/thinking_tokens")<=*v,"stream_usage_lower_bound");
 }
 inline Replayed responses(const std::vector<Event>& stream){
@@ -189,7 +198,7 @@ inline Replayed anthropic(const std::vector<Event>& stream){
       if(d.contains("stop_sequence"))string_field(d,"stop_sequence",true);
       if(j.contains("usage")&&!j["usage"].is_null()){
         need(j["usage"].is_object(),"usage_object");Json merged=usage;merge_usage(merged,j["usage"]);
-        (void)usage_import::anthropic_usage(merged);monotonic(j["usage"],bounds);anthropic_bounds(j["usage"],bounds);usage=std::move(merged);
+        (void)usage_import::anthropic_usage(merged);monotonic(j["usage"],bounds);anthropic_bounds(merged,bounds);usage=std::move(merged);
         if(j["usage"].contains("output_tokens"))final_output=true;
       }else if(j.contains("usage")){
         usage={{"input_tokens",nullptr},{"cache_read_input_tokens",nullptr},{"cache_creation_input_tokens",nullptr},{"output_tokens",nullptr}};
