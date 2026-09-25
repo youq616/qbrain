@@ -1,0 +1,15 @@
+{
+  "binary_sha256": "404360c944c80f481a51f3145839c5f1ce95af1774d2825d567cedef85db13f2",
+  "calls": 65,
+  "checks": 292,
+  "passed": true,
+  "real_quality_verified": false,
+  "schema": "qbrain-n48i-separate-review-v1",
+  "script_sha256": "6f321ef5ff2ce23de0bcf9953371252888ff4c89eb8e1e904272036907a266c7",
+  "synthetic_only": true,
+  "raw_records_omitted_from_repository": true,
+  "full_evidence_path": "separate-review/RESULT.json",
+  "full_evidence_sha256": "e96fa94827e91cd3e31f4ce4e42a3853d69a7210fea57eab1c4656c09a737831",
+  "full_evidence_bytes": 17799,
+  "note": "Full execution report and raw streams are preserved unchanged in the source/evidence delivery ZIP; this repository file is only a compact index."
+}

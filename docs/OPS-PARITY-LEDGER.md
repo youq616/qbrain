@@ -223,3 +223,16 @@ explicit formats. This is a CLI accounting extension, not a new MCP registry op;
 no existing ops row or count is changed, and no additional full gbrain/PG parity
 is claimed. See nodes/N48H-HARD-AUDIT.md and CURRENT-STATUS.md for exact evidence
 and the still-open live-client/model, release/signing and Issue40 boundaries.
+
+## N48I — paired task cost accounting (2026-09-25)
+
+Native CLI `cost compare` adds paired normalized-ledger analysis with common task
+bindings, exactly-once ownership of submitted calls, shared overhead and retained
+failed/retry costs. Unknown coverage/costs or mismatched primary model/prices
+withhold all deltas. Amounts and relative changes remain exact integer/fraction
+results; cost eligibility never certifies quality or authenticates provider usage.
+This is not a new MCP registry op and changes no existing operation count/row.
+Candidate3880dde7 and its actual qualification are recorded in nodes/N48I-HARD-AUDIT.md
+and ../CURRENT-STATUS.md; actual merge is recorded in PR50. N47S live execution,
+real later-session memory consumption, PG/signing, release and Issue40 remain
+separate unclosed gates. The prior ledger text above is preserved byte-for-byte.

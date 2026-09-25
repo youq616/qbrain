@@ -1,0 +1,99 @@
+{
+  "schema": "qbrain-cost-comparison-v1",
+  "comparison_id": "synthetic-demo",
+  "currency": "USD",
+  "baseline": {
+    "label": "without-context",
+    "conditions_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ledger_complete": true,
+    "cost_input": {
+      "schema": "qbrain-cost-input-v1",
+      "currency": "USD",
+      "rates": [
+        {
+          "rate_id": "demo",
+          "provider": "synthetic",
+          "model": "synthetic-model",
+          "per_million": {
+            "input_uncached": "1",
+            "input_cache_read": "1",
+            "input_cache_write": "1",
+            "output": "1"
+          }
+        }
+      ],
+      "calls": [
+        {
+          "call_id": "main-1",
+          "stage": "main",
+          "rate_id": "demo",
+          "attempt": 1,
+          "outcome": "success",
+          "tokens": {
+            "input_uncached": 100,
+            "input_cache_read": 0,
+            "input_cache_write": 0,
+            "output": 20
+          }
+        }
+      ]
+    },
+    "tasks": [
+      {
+        "task_id": "task-1",
+        "task_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "call_ids": [
+          "main-1"
+        ]
+      }
+    ],
+    "shared_call_ids": []
+  },
+  "candidate": {
+    "label": "with-context",
+    "conditions_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ledger_complete": true,
+    "cost_input": {
+      "schema": "qbrain-cost-input-v1",
+      "currency": "USD",
+      "rates": [
+        {
+          "rate_id": "demo",
+          "provider": "synthetic",
+          "model": "synthetic-model",
+          "per_million": {
+            "input_uncached": "1",
+            "input_cache_read": "1",
+            "input_cache_write": "1",
+            "output": "1"
+          }
+        }
+      ],
+      "calls": [
+        {
+          "call_id": "main-1",
+          "stage": "main",
+          "rate_id": "demo",
+          "attempt": 1,
+          "outcome": "success",
+          "tokens": {
+            "input_uncached": 50,
+            "input_cache_read": 0,
+            "input_cache_write": 0,
+            "output": 20
+          }
+        }
+      ]
+    },
+    "tasks": [
+      {
+        "task_id": "task-1",
+        "task_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "call_ids": [
+          "main-1"
+        ]
+      }
+    ],
+    "shared_call_ids": []
+  }
+}

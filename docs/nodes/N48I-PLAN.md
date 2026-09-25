@@ -64,3 +64,12 @@ accounting/import/stream sources and their tests remain unchanged. Retain raw in
 outputs, exits and exact identities; review implementation and executed results
 against this plan before acceptance. Roll back additive route/header without any
 DB migration. Use a new branch/expected-head merge, no force push or release change.
+
+## Acceptance closure — 2026-09-25
+
+Status: **done for the bounded paired-cost source module** after fixed-candidate
+Windows/Linux qualification, original artifact readback and the owner-authorized
+separate outcome review in N48I-HARD-AUDIT.md. Candidate3880dde7 / treeefcaae2f is
+the tested product source. Closing changes may add only documentation, synthetic
+examples and executed review records. Actual merge identity is recorded in PR50.
+No real-client/quality/invoice/PG/signing or Issue40 closure is inferred.
