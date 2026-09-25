@@ -1,0 +1,162 @@
+{
+  "schema": "qbrain-n48h-integrated-outcome-v1",
+  "recorded_at_utc": "2026-09-25T12:29:50.604332+00:00",
+  "qualified_commit": "0227db92efa736075086ae222e8fbb6ad82d41f5",
+  "qualified_tree": "9b95184ae32a2ca0b9512820da56e2bd7e951737",
+  "remote_repair_parent": "817d222a727bfe190f6ea0ee66d08eb61a0624b4",
+  "main_before_module": "9c61049d29d9638b0b9558243025cb92a6d7e54d",
+  "verdict": "PASS_BOUNDED_N48H_SOURCE_MODULE",
+  "reviewer": "ChatGPT: owner-authorized separate coordinator self-review, not a subagent or third party",
+  "workflow_observations": [
+    {
+      "run_id": 36133311806,
+      "name": "N48H original qualification",
+      "attempt": 1,
+      "jobs": [
+        108065382394,
+        108065382615
+      ],
+      "all_jobs": "completed/success"
+    },
+    {
+      "run_id": 36133311818,
+      "name": "N48H integrated supplement",
+      "attempt": 1,
+      "jobs": [
+        108065382010,
+        108065382233
+      ],
+      "all_jobs": "completed/success"
+    },
+    {
+      "run_id": 36133315619,
+      "name": "N48D retained PR regression",
+      "attempt": 1,
+      "jobs": [
+        108065394235,
+        108065394541
+      ],
+      "all_jobs": "completed/success"
+    }
+  ],
+  "artifacts": [
+    {
+      "kind": "original",
+      "platform": "portable",
+      "bytes": 23312824,
+      "sha256": "57a044a6734ebc9f5949312f8035234f517be9f74fac8cd2f2789f6eae21f10d",
+      "source_files": 1355,
+      "exact_crlf_only_differences": 0,
+      "binary_sha256": "a117955d3882168f0fbab10893f107998d2da39787c101e2bbfa297d0e7bd551",
+      "artifact_id": 10862924091,
+      "run_id": 36133311806,
+      "readback_sets": 8
+    },
+    {
+      "kind": "original",
+      "platform": "windows",
+      "bytes": 22221535,
+      "sha256": "aa79f3c8089903c4969845658c98128d5402406eecacd8c5e32ca9864ac9f050",
+      "source_files": 1355,
+      "exact_crlf_only_differences": 1341,
+      "binary_sha256": "fa114f26af4a2019a474ae0909e1886c98660047f443701d158aca227e8af996",
+      "artifact_id": 10862384240,
+      "run_id": 36133311806,
+      "readback_sets": 8
+    },
+    {
+      "kind": "supplement",
+      "platform": "portable",
+      "bytes": 18295010,
+      "sha256": "562e00983662cf9dc991de4b0f861d4a6513e7ba1829adfb42df3f55f153ef3e",
+      "source_files": 1355,
+      "exact_crlf_only_differences": 0,
+      "binary_sha256": "a117955d3882168f0fbab10893f107998d2da39787c101e2bbfa297d0e7bd551",
+      "artifact_id": 10862643578,
+      "run_id": 36133311818,
+      "readback_sets": 2
+    },
+    {
+      "kind": "supplement",
+      "platform": "windows",
+      "bytes": 17757123,
+      "sha256": "25456db29fe39c8de8312fad9ec2835cd00622872c1e8b8639ee26a79a0d7cab",
+      "source_files": 1355,
+      "exact_crlf_only_differences": 1341,
+      "binary_sha256": "4f6c55476961719261e8bad9813c70b84c8e5f5522e0f6190f53be4fbc44653b",
+      "artifact_id": 10862303037,
+      "run_id": 36133311818,
+      "readback_sets": 2
+    }
+  ],
+  "per_platform": {
+    "native_stream_direct": 47,
+    "native_supplement_direct": 47,
+    "windows_original_registered_groups": 60,
+    "per_python_mode": {
+      "original_stream": {
+        "checks": 187,
+        "commands": 171,
+        "raw_files": 513,
+        "rejected_report_mutations": 15
+      },
+      "original_independent_review": {
+        "commands": 543,
+        "accepted": 444,
+        "rejected": 99
+      },
+      "supplement": {
+        "commands": 711,
+        "accepted": 641,
+        "rejected": 70,
+        "raw_files": 2133,
+        "rejected_report_mutations": 22
+      },
+      "provider_import": {
+        "checks": 231,
+        "commands": 230,
+        "rejected_report_mutations": 12
+      },
+      "token_cost": {
+        "checks": 149,
+        "commands": 148,
+        "rejected_report_mutations": 12
+      }
+    },
+    "provider_direct": 59,
+    "cost_direct": 103,
+    "lifecycle_driver_steps": 16,
+    "retained_process_suites": 14,
+    "retained_driver_steps": 18,
+    "mcp_probe_checks": 172
+  },
+  "local": {
+    "direct_and_asan_ubsan_checks": 94,
+    "sanitizer_diagnostic_bytes": 0,
+    "examples": 5,
+    "windows_shell_examples_executed": false,
+    "interrupted_runs_excluded": [
+      "initial optimized matrix without report",
+      "GCC Release build interrupted by execution tool time limit"
+    ]
+  },
+  "checker_findings": {
+    "before_sha256": "3a12bbd02254f80eef146a9ff36fd6010ddee6369b207e5f95ca8ce2f278d2eb",
+    "after_lf_sha256": "cfc643130c3288803e97cc34a2b0bb9a878834bcadd0d6d0d5847eccfe3d7803",
+    "before_evaluator_accepted": [
+      "Boolean token in place of zero",
+      "duplicate top-level JSON key"
+    ],
+    "after": "both captured outputs rejected; 22 mutations rejected in each qualified mode"
+  },
+  "scope": {
+    "source_module_accepted": true,
+    "all_provider_calls_observed": false,
+    "real_client_memory_consumption_verified": false,
+    "real_model_quality_or_invoice_verified": false,
+    "postgresql_parity_verified": false,
+    "signed_release_created": false,
+    "issue_40_closed": false,
+    "new_product_code_in_integration_commit": false
+  }
+}

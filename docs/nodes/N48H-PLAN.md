@@ -62,3 +62,13 @@ Remove additive route/header to roll back. No current Release/tag is replaced.
 Known-body limits and closed event contracts are explicit compatibility limits,
 not arbitrary-provider support. Issue40, actual quality/consumption, PG and signing
 remain independent unclosed gates. Do not bypass a blocked repository write.
+
+## Acceptance closure — 2026-09-25
+
+Status: **done for the bounded source module** after the owner-authorized separate
+outcome review in N48H-HARD-AUDIT.md and fixed-candidate native qualification.
+Qualified commit0227db92 / tree9b95184a integrates repaired817d222a without replacing
+its product. The earlier implementation amendment permits Responses origin0 or1
+followed by strict continuity; the original “from0” sentence above is preserved as
+plan history, not misreported as the final contract. No live collection, actual
+model consumption, release/signing, PG parity or Issue40 closure is inferred.
