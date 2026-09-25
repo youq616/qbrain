@@ -13,3 +13,7 @@ add_executable(qbrain_stream_import_tests "${ROOT}/tests/test_stream_usage.cpp")
 target_link_libraries(qbrain_stream_import_tests PRIVATE stream_import_support)
 enable_testing()
 add_test(NAME stream_usage_contract COMMAND qbrain_stream_import_tests)
+
+add_executable(qbrain_stream_history_tests "${ROOT}/tests/test_stream_usage_history.cpp")
+target_link_libraries(qbrain_stream_history_tests PRIVATE stream_import_support)
+add_test(NAME stream_history_contract COMMAND qbrain_stream_history_tests)
