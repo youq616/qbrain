@@ -1,0 +1,33 @@
+{
+  "schema": "qbrain-n48i-composition-review-v1",
+  "candidate": "3880dde71190b15af7f9b4831ecfc02a6e433fef",
+  "binary_sha256": "404360c944c80f481a51f3145839c5f1ce95af1774d2825d567cedef85db13f2",
+  "calls": 3,
+  "passed": true,
+  "normalization_modified": false,
+  "quality_verified": false,
+  "synthetic_only": true,
+  "records": [
+    {
+      "name": "baseline-import",
+      "action": "import-stream",
+      "exit": 0,
+      "input_sha256": "10c140e908bab159b4a907bda2f042ab53814180eecf487be95859e0865e7410",
+      "output_sha256": "f4569c87fd5057962129a3a3e2f91b5b9fdc4d57539d45276b29fed2994c581e"
+    },
+    {
+      "name": "candidate-import",
+      "action": "import-stream",
+      "exit": 0,
+      "input_sha256": "e59ccbad2d47e16e77ccb49f4eb798365a243ade46445d59c85aed30bce9421e",
+      "output_sha256": "16704d4bcb11917384b8bc3c4e8dc41a77f2bb8dd43eb7000f3237e464f8278e"
+    },
+    {
+      "name": "compare",
+      "action": "compare",
+      "exit": 0,
+      "input_sha256": "9584a941ac4f5c3925d60534edbfaad124506f3cf523fb386ed0176502e3d48b",
+      "output_sha256": "2889b71071e9d3e6b10c19b6add3e628f5882dd35f6212df5891b3c38d084239"
+    }
+  ]
+}

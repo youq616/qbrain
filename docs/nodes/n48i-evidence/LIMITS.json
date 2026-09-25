@@ -1,0 +1,51 @@
+{
+  "schema": "qbrain-n48i-limit-review-v1",
+  "binary_sha256": "404360c944c80f481a51f3145839c5f1ce95af1774d2825d567cedef85db13f2",
+  "calls": 6,
+  "passed": true,
+  "records": [
+    {
+      "name": "baseline-exact-ledger-limit",
+      "exit": 2,
+      "input_sha256": "2c5336ead6f8bca38594a4070815c1cfbf8820968fd9a7a08e7f1e816d6943ba",
+      "output_sha256": "25bd12881ffed9830e2b80a7d8e4ae9d5f85e33b6e0d8f6375afb8115c52c009",
+      "expected_error": "cost_fields"
+    },
+    {
+      "name": "baseline-over-ledger-limit",
+      "exit": 2,
+      "input_sha256": "c7b6ba323355f13bd1962f76ceea63374c85af6de43706d762ca2b09be01debb",
+      "output_sha256": "dd817c8cfee337b8d2a4c39c5b7ee0784381357627cbd08da918e86b3cabd4b1",
+      "expected_error": "comparison_ledger_limit"
+    },
+    {
+      "name": "candidate-exact-ledger-limit",
+      "exit": 2,
+      "input_sha256": "ef7d74d2b947d009a19764fc082088d00561fd7a4bd6a61c9b870d69461d0591",
+      "output_sha256": "25bd12881ffed9830e2b80a7d8e4ae9d5f85e33b6e0d8f6375afb8115c52c009",
+      "expected_error": "cost_fields"
+    },
+    {
+      "name": "candidate-over-ledger-limit",
+      "exit": 2,
+      "input_sha256": "9a8ecfed56759ebb1aa6dc0c08d49257d21e10f2a1c96f43e21c8e491837e815",
+      "output_sha256": "dd817c8cfee337b8d2a4c39c5b7ee0784381357627cbd08da918e86b3cabd4b1",
+      "expected_error": "comparison_ledger_limit"
+    },
+    {
+      "name": "cross-task-reuse",
+      "exit": 2,
+      "input_sha256": "da9addb7d26469385d438db89321fa43a31a784548cd851f6139848397dc3257",
+      "output_sha256": "61ef2a20fc4d4d0736e966f6ad213e5ce27af0f7865c0a2be7d6ccc1ec193f60",
+      "expected_error": "comparison_call_reused"
+    },
+    {
+      "name": "maximum-json-quantity",
+      "exit": 2,
+      "input_sha256": "3e6b8f49342013f3b00b3a79fffc30a87b624862f54385bbed207193d4b5b4c9",
+      "output_sha256": "29ffa699a869965ed1b2cf0b66a2120df7fead84926480bb95236807baf64c1e",
+      "expected_error": "cost_quantity"
+    }
+  ],
+  "synthetic_only": true
+}

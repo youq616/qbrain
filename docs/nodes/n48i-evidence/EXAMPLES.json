@@ -1,0 +1,92 @@
+{
+  "schema": "qbrain-n48i-examples-v1",
+  "candidate": "3880dde71190b15af7f9b4831ecfc02a6e433fef",
+  "binary_sha256": "404360c944c80f481a51f3145839c5f1ce95af1774d2825d567cedef85db13f2",
+  "passed": 6,
+  "failed": 0,
+  "records": [
+    {
+      "path": "examples/cost/compare-basic.json",
+      "exit": 0,
+      "sha256": "9e0fd3770c1fd27ff23e471fcf1fae0017287aa0c1b7082ccf6b71892c97758e",
+      "output_sha256": "b200207f7ecc4f3e9e78b7f9f773ddca06b596e4ce7c9e4d90eb1f720c841ee1",
+      "change": {
+        "candidate_minus_baseline": "-0.000050000000",
+        "relative_change": {
+          "denominator": "12",
+          "numerator": "-5"
+        },
+        "relative_change_unavailable_reason": null,
+        "unavailable_reason": null
+      },
+      "passed": true
+    },
+    {
+      "path": "examples/cost/compare-shared-overhead.json",
+      "exit": 0,
+      "sha256": "09fe01168c659b44369769f8abfa4d12e1919042617a1653401683f9bae2ab82",
+      "output_sha256": "a998fd920cc15aebc7203db43af553160d3d318d7300814844c340f36085138a",
+      "change": {
+        "candidate_minus_baseline": "0.000010000000",
+        "relative_change": {
+          "denominator": "12",
+          "numerator": "1"
+        },
+        "relative_change_unavailable_reason": null,
+        "unavailable_reason": null
+      },
+      "passed": true
+    },
+    {
+      "path": "examples/cost/compare-failed-retry.json",
+      "exit": 0,
+      "sha256": "fc45124043d050e2f37a76c773b3873e18345d2e7055eb467010313b39e6f5bc",
+      "output_sha256": "6f94851e2b600a03adaef7cdf2ea5b020d02f91346aac4e375f666b4799a975e",
+      "change": {
+        "candidate_minus_baseline": "0.000070000000",
+        "relative_change": {
+          "denominator": "12",
+          "numerator": "7"
+        },
+        "relative_change_unavailable_reason": null,
+        "unavailable_reason": null
+      },
+      "passed": true
+    },
+    {
+      "path": "examples/cost/compare-unknown.json",
+      "exit": 0,
+      "sha256": "22fa9758ff2df880bb9029f4cb32a793b303d8f13d2b77cca734fe5f240b190b",
+      "output_sha256": "154baacb26fc22bafc16d1f9ea696607854e5b2f90ae59ddbe842dd2b47764e0",
+      "change": {
+        "candidate_minus_baseline": null,
+        "relative_change": null,
+        "unavailable_reason": "comparison_not_eligible"
+      },
+      "passed": true
+    },
+    {
+      "path": "examples/cost/compare-rejected-task.json",
+      "exit": 2,
+      "sha256": "b5a51a541fc66108f6005b61e5bf15ce51b6aa190d689dfd8da0128ddfddcb2a",
+      "output_sha256": "380b479988eca69bd3eb4ad442010b1af3488662b3e5d6e36ab9ec2cd92de974",
+      "change": null,
+      "passed": true
+    },
+    {
+      "path": "examples/cost/compare-zero-baseline.json",
+      "exit": 0,
+      "sha256": "7d3eee9f36a4fa066fd276578337e2aa0b443b473a0a436c6abf319df5cbb375",
+      "output_sha256": "30493ecc6e8574441a8c096d8cc3fceeb2d55d446f11f03e803f4426afd25ac8",
+      "change": {
+        "candidate_minus_baseline": "0.000001000000",
+        "relative_change": null,
+        "relative_change_unavailable_reason": "zero_baseline",
+        "unavailable_reason": null
+      },
+      "passed": true
+    }
+  ],
+  "windows_shell_examples_executed": false,
+  "synthetic_only": true
+}

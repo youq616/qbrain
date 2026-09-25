@@ -1,0 +1,148 @@
+{
+  "schema": "qbrain-n48i-outcome-v1",
+  "recorded_at_utc": "2026-09-25T13:45:26.028999+00:00",
+  "qualified_commit": "3880dde71190b15af7f9b4831ecfc02a6e433fef",
+  "qualified_tree": "efcaae2f25bd55fa611a7491a284f5551ff55172",
+  "base_main": "b2ae3380e96de13256094166bda7015778418e96",
+  "verdict": "PASS_BOUNDED_PAIRED_COST_MODULE",
+  "reviewer": "ChatGPT, owner-authorized separate coordinator engineering self-review; not a subagent or third party",
+  "workflows": [
+    {
+      "run_id": 36140168439,
+      "name": "N48I paired task cost comparison",
+      "attempt": 1,
+      "jobs": [
+        108087765380,
+        108087765736
+      ],
+      "all_jobs": "completed/success",
+      "downloaded_artifacts": 2
+    },
+    {
+      "run_id": 36140207308,
+      "name": "N48D retained PR regression",
+      "attempt": 1,
+      "jobs": [
+        108087906296,
+        108087906757
+      ],
+      "all_jobs": "completed/success",
+      "downloaded_artifacts": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "schema": "qbrain-n48i-artifact-readback-v1",
+      "qualified_commit": "3880dde71190b15af7f9b4831ecfc02a6e433fef",
+      "qualified_tree": "efcaae2f25bd55fa611a7491a284f5551ff55172",
+      "artifact_bytes": 29094406,
+      "artifact_sha256": "d4c9fb1374abeb3c06ffd7c36c8e5a8e3ee7ab895f2be7d2f12a349fc8ecc8f6",
+      "platform": "portable",
+      "source_files": 1379,
+      "crlf_only_files": 0,
+      "binary_sha256": "6610eb3803bf8ed59ff14d87e50d9499b2eed8ca9c95c65807bc71a412e178fa",
+      "baseline_sha256": "7399af97dde5b97cc87667dc7e0e3fbdbf79b8b435fbfb62f01f2cb4cfd4e57e",
+      "driver_steps": 55,
+      "accounting_report_sets": 12,
+      "lifecycle_report_sets": 6,
+      "mcp_report_sets": 1,
+      "windows_native_groups": null,
+      "passed": true,
+      "new_windows_execution": false,
+      "artifact_id": 10867585229,
+      "run_id": 36140168439
+    },
+    {
+      "schema": "qbrain-n48i-artifact-readback-v1",
+      "qualified_commit": "3880dde71190b15af7f9b4831ecfc02a6e433fef",
+      "qualified_tree": "efcaae2f25bd55fa611a7491a284f5551ff55172",
+      "artifact_bytes": 27929282,
+      "artifact_sha256": "46fa232057c745878b654235fc667708f9b56478510d155a28a75bffd122339b",
+      "platform": "windows",
+      "source_files": 1379,
+      "crlf_only_files": 1364,
+      "binary_sha256": "447dff451173dcdd75b0aad86daddbb0f5465ddc48dc701a6ba0685042d70c87",
+      "baseline_sha256": "838955a0ad88779af08c53396b773d62b327cccd4f216a18379f0a76ffa4c9cf",
+      "driver_steps": 55,
+      "accounting_report_sets": 12,
+      "lifecycle_report_sets": 6,
+      "mcp_report_sets": 1,
+      "windows_native_groups": 60,
+      "passed": true,
+      "new_windows_execution": false,
+      "artifact_id": 10867406923,
+      "run_id": 36140168439
+    }
+  ],
+  "per_platform": {
+    "driver_steps": 55,
+    "new_direct_checks": 144,
+    "per_python_mode": {
+      "new_comparison": {
+        "calls": 288,
+        "valid_inputs": 197,
+        "invalid_inputs": 91,
+        "rejected_report_mutations": 20
+      },
+      "cost": {
+        "calls": 148,
+        "checks": 149
+      },
+      "provider_import": {
+        "calls": 230,
+        "checks": 231
+      },
+      "stream": {
+        "calls": 171,
+        "checks": 187
+      },
+      "stream_independent": {
+        "calls": 543
+      },
+      "stream_history": {
+        "calls": 711
+      }
+    },
+    "lifecycle_driver_steps": 16,
+    "retained_process_suites": 14,
+    "retained_driver_steps": 18,
+    "mcp_checks": 172
+  },
+  "readback": {
+    "accounting_sets": 24,
+    "lifecycle_sets": 12,
+    "mcp_sets": 2,
+    "commands": 38,
+    "original_source_and_log_hashes_checked": true
+  },
+  "local": {
+    "binary_sha256": "404360c944c80f481a51f3145839c5f1ce95af1774d2825d567cedef85db13f2",
+    "direct_checks": 144,
+    "asan_ubsan_checks": 144,
+    "sanitizer_diagnostic_bytes": 0,
+    "core_ctest": 6,
+    "driver_steps": 55,
+    "separate_review_calls": 65,
+    "separate_review_checks": 292,
+    "ci_linux_product_separate_review_calls": 65,
+    "other_limit_calls": 6,
+    "composition_calls": 3,
+    "examples": 6,
+    "windows_shell_examples_executed": false,
+    "initial_direct_compile_failure_retained": true
+  },
+  "identity": {
+    "process_oracle_lf_sha256": "f6f3d2608eb92370ddccea19ef060a28959a36f376c85c6ea647d1d30ff9ed76",
+    "driver_lf_sha256": "fb8148bb90950e8fc14976dc5b491bb9d7b26ccbb1741110758cefcf2a053616"
+  },
+  "scope": {
+    "synthetic_only": true,
+    "real_provider_usage_authenticated": false,
+    "all_provider_calls_observed": false,
+    "quality_verified": false,
+    "real_client_consumption_verified": false,
+    "new_release_created": false,
+    "issue_40_closed": false,
+    "postgresql_parity_verified": false
+  }
+}

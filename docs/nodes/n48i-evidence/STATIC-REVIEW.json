@@ -1,0 +1,56 @@
+{
+  "candidate_tree": "efcaae2f25bd55fa611a7491a284f5551ff55172",
+  "unchanged": [
+    {
+      "path": "include/qbrain/accounting/token_cost.hpp",
+      "sha256": "bc83770dca7aea78c9c739d650825622eb2cadefdf83b458cfb39311ec8034d5",
+      "unchanged_from_main_b2ae3380": true
+    },
+    {
+      "path": "include/qbrain/accounting/provider_usage.hpp",
+      "sha256": "cbf189a88127335f79915c1beed48fb82fe621cf66a502f1c84a6b6b2199406a",
+      "unchanged_from_main_b2ae3380": true
+    },
+    {
+      "path": "include/qbrain/accounting/stream_usage.hpp",
+      "sha256": "65e5f0b18ba2229317a1d370dc556e848373f812610f924d6f3ff87f177cc788",
+      "unchanged_from_main_b2ae3380": true
+    },
+    {
+      "path": ".ci/test_token_cost.py",
+      "sha256": "0d32ecac62527f0c008df3d9b11a45bf511334a63a80d3002c780010e4ddc0cd",
+      "unchanged_from_main_b2ae3380": true
+    },
+    {
+      "path": ".ci/test_provider_usage.py",
+      "sha256": "7afc1e7e74eda69abaf4d50aa0cee8f318b4d686a7cfa632bf514f98932cb3bd",
+      "unchanged_from_main_b2ae3380": true
+    },
+    {
+      "path": ".ci/test_stream_usage.py",
+      "sha256": "df3b0fab5160182309e94a17772057d01bda05b022d1565839f8a08c3323fdf8",
+      "unchanged_from_main_b2ae3380": true
+    },
+    {
+      "path": ".ci/test_stream_usage_history.py",
+      "sha256": "cfc643130c3288803e97cc34a2b0bb9a878834bcadd0d6d0d5847eccfe3d7803",
+      "unchanged_from_main_b2ae3380": true
+    },
+    {
+      "path": ".ci/review_stream_usage.py",
+      "sha256": "f54705728dc0b87e88aae427385f58805a192cfe07eebe3ae2c6ccdc62e568e3",
+      "unchanged_from_main_b2ae3380": true
+    },
+    {
+      "path": ".github/workflows/n48h-validation.yml",
+      "sha256": "02c1a31f43f6e881cadb24b19c1aa0e1003a732abc8d4b1e55f840bff58040eb",
+      "unchanged_from_main_b2ae3380": true
+    },
+    {
+      "path": "scripts/Invoke-QbrainJson.ps1",
+      "sha256": "7b5acca83e8349191200093bb07ad1471bb2ce0c6b7750b0a026581514818f39",
+      "unchanged_from_main_b2ae3380": true
+    }
+  ],
+  "main_route_diff": "diff --git a/src/qbrain/main.cpp b/src/qbrain/main.cpp\nindex 8cbf247..6ec0b14 100644\n--- a/src/qbrain/main.cpp\n+++ b/src/qbrain/main.cpp\n@@ -1,5 +1,6 @@\n #include \"qbrain/cli/app.hpp\"\n #include \"qbrain/accounting/token_cost.hpp\"\n+#include \"qbrain/accounting/cost_comparison.hpp\"\n #include \"qbrain/accounting/provider_usage.hpp\"\n #include \"qbrain/accounting/stream_usage.hpp\"\n #include \"qbrain/integration/mcp_probe.hpp\"\n@@ -10,6 +11,7 @@ namespace {\n int dispatch(int argc,char** argv) {\n   if(argc>1 && std::string(argv[1])==\"cost\") {\n     std::vector<std::string> args;for(int i=2;i<argc;++i)args.emplace_back(argv[i]);\n+    if(!args.empty() && args[0]==\"compare\") return qbrain::accounting::comparison::command(args);\n     if(!args.empty() && args[0]==\"import-stream\") return qbrain::accounting::stream_import::command(args);\n     if(!args.empty() && args[0]==\"import\") return qbrain::accounting::usage_import::command(args);\n     return qbrain::accounting::command(args);\n@@ -30,7 +32,7 @@ int dispatch(int argc,char** argv) {\n   if(argc==1 || (argc>1 && (std::string(argv[1])==\"help\" || std::string(argv[1])==\"--help\" || std::string(argv[1])==\"-h\")))\n     std::cout<<\"Additional command: opencode preview|install|status|audit|uninstall-preview|uninstall|recovery-preview|recover|reconcile-preview|reconcile --project PATH.\\n\";\n   if(argc==1 || (argc>1 && (std::string(argv[1])==\"help\" || std::string(argv[1])==\"--help\" || std::string(argv[1])==\"-h\")))\n-    std::cout<<\"Additional command: cost report|import|import-stream (bounded JSON from stdin; no network or brain access).\\n\";\n+    std::cout<<\"Additional command: cost report|import|import-stream|compare (bounded JSON from stdin; no network or brain access).\\n\";\n   return result;\n }\n }\n"
+}
