@@ -1,41 +1,34 @@
 # Qbrain
 
 Windows 原生 C++20 / PowerShell 记忆与知识库，默认 SQLite + FTS5。
-应用不需要 Docker、WSL 或 Python 服务；Python 仅用于可选评测和开发工具。
+不要求 Docker、WSL 或 Python 常驻服务；可选评测脚本需要 Python。
 
-## 最新模块：N48J 模型执行记录费用桥接
+## N48K：可运行的 Windows 集成候选
 
-已有 N47S 模型 A/B 运行目录可直接用 `model_cost.py export|verify` 生成规范化
-账本、覆盖观察和原生 N48I 费用对照，不再手工整理响应里的缓存 Token。
-原始计划、请求、回执与响应先核验；失败成本和未知值保留，未尝试位置不伪造成调用。
-只统计计划内主请求，不声称全流程费用或质量保持。工具离线运行，不读密钥或答案。
+将 N47X 之后的回执、MCP/OpenCode、精确计价及 N48J 模型执行费用桥接整合到
+一个独立 Windows x64 ZIP。无需自行编译。它仍是未签名开发候选，不是稳定版，
+不会自动安装或授权采集；本轮没有替换旧 N47X GitHub Release。
 
-固定候选 `bb5ea5fe` 已通过 Windows/Linux 验证及本人分离自审。
-[中文使用说明](docs/integration/MODEL-EXECUTION-COST.zh-CN.md) ·
-[当前状态](CURRENT-STATUS.md) · [结果审核](docs/nodes/N48J-HARD-AUDIT.md) ·
-[实际合并记录 PR51](https://github.com/youq616/qbrain/pull/51)。
+运行包为 `qbrain-windows-x64-n48k-candidate.zip`，4,890,639 字节、51 个成员。
+SHA256：`58d56b7bd7c9a662514e41d20bacb88c68c92bbe3fc380496a09331bf1f5cafa`。
+原始完整资格验证通过；另补齐升级前回执保留测试，两个 Windows 运行环境中的
+PowerShell 5/7 均验证升级、回退、再次升级和卸载，事实及有效/已撤销回执完整保留。
+这不是对真实登录客户端记忆消费或所有 Windows 用户环境的认证。
 
-## 已有源码能力
+[实际交付与合并 PR52](https://github.com/youq616/qbrain/pull/52) ·
+[外部验收记录](docs/nodes/n48k-evidence/ACCEPTANCE.json) ·
+[自审报告](docs/nodes/N48K-HARD-AUDIT.md) · [当前状态](CURRENT-STATUS.md)。
+包内构建 MANIFEST 保持原字节；最终验收通过外部记录绑定同一 ZIP，不改包冒充新构建。
 
-N48I 原生 `cost compare` 对照相同任务的完整账本，保留共享开销、失败和重试。
-N48G/N48H 提供非流式与完整 SSE 导入，N48F 提供规范化 Token 精确计价。
-N48E 提供 OpenCode 生命周期；N48D 检查隔离 MCP 启动、目录和退出。
-N47Y/N47Z 提供回执完整性及只读批量预览、精确批准和整批回滚。
-协议握手、回执与合成计价不等于真实模型消费或效果提升。
+## 使用与已有能力
 
-## 公开下载仍为 N47X 工程预览
+先核验摘要并解压到新目录，再读包内 START-HERE 或
+[候选包说明](docs/integration/WINDOWS-CANDIDATE-N48K.zh-CN.md)。保留旧目录与脑库备份。
+N48J 提供执行记录费用桥接；N48I 提供任务配对费用对照；N48G/H 导入供应商用量；
+N48E/D 提供 OpenCode 生命周期与隔离 MCP 检查；N47Y/Z 提供回执审计与批量处理。
+完整原生构建入口仍是 scripts/build-cl.ps1 和 scripts/build-tests-cl.ps1。
 
-[windows-current-preview-b810d689](https://github.com/youq616/qbrain/releases/tag/windows-current-preview-b810d689)。
-选择 qbrain-windows-x64-n47x-preview.zip 及同版 START-HERE、SHA256SUMS、PROVENANCE。
-该包不含后续 N47Y/N47Z/N48D–N48J 源码能力，本轮没有替换发行资产。
-ZIP SHA256：`c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d`。
-仍为未签名开发预览，不用旧 EXE 验证新命令。
-
-## 构建与未完成范围
-
-原生构建使用 scripts/build-cl.ps1 与 scripts/build-tests-cl.ps1；原 60 组并不
-替代新增独立测试目标。N48J 使用既有原生计价，没有改动应用、旧工具或旧测试。
-真实后续会话记忆消费、真实模型质量/全流程费用、PG 对等、完整 ACL/DLP、规模
-性能、签名及稳定版验收仍有未完成项；Issue40 根因未确定。
-[路线](docs/COMPLETION-ROADMAP.md) · [本机交接](LOCAL-AGENT-HANDOFF.md) ·
-[上一 README](README-N48I.md) · [LICENSE](LICENSE)。
+真实客户端后续记忆消费、真实模型质量/全流程费用、PG 对等、签名、稳定版和
+Issue40 启动超时根因仍须独立验收，不因候选包测试通过而关闭。
+[既有路线](docs/COMPLETION-ROADMAP.md) · [本机交接](LOCAL-AGENT-HANDOFF.md) ·
+[上一 README](README-N48J.md) · [LICENSE](LICENSE)。

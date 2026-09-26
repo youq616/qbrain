@@ -1,0 +1,100 @@
+name: N48K Windows integrated candidate
+on:
+  push:
+    branches: ['delivery/n48k-windows-candidate']
+    paths: ['tools/delivery/*n48k*', 'docs/integration/WINDOWS-CANDIDATE-N48K.zh-CN.md', '.github/workflows/n48k-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48k-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Exact source and packaging tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          python -m unittest discover -s tools/delivery -p test_package_n48k.py -v 2>&1 | tee evidence/tests.log
+          python -O -m unittest discover -s tools/delivery -p test_package_n48k.py -v 2>&1 | tee evidence/tests-optimized.log
+          (cd tools/delivery && python -m unittest -v test_package_n47x test_reviewed_n47o) 2>&1 | tee evidence/retained-tests.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48k-portable
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 24345f85e0c4962c93205a7fab0fbdb380a5ff09
+          path: product
+          persist-credentials: false
+      - name: Fixed source and compiler and shell preflight
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          git -C product archive --format=zip --output="$((Get-Location).Path)/evidence/product-source.zip" HEAD
+          python -c "import sys;from pathlib import Path;sys.path.insert(0,'tools/delivery');from check_n48k_bundle import preflight;print(preflight(Path('evidence/preflight')))" 2>&1 | Tee-Object evidence/preflight.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Fresh pinned native build and original full60
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          powershell -NoProfile -ExecutionPolicy Bypass -File product/scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/native.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Canonical assembly twice and independent verification
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m unittest discover -s tools/delivery -p test_package_n48k.py -v 2>&1 | Tee-Object evidence/tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O -m unittest discover -s tools/delivery -p test_package_n48k.py -v 2>&1 | Tee-Object evidence/tests-optimized.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($copy in @('one','two')) {
+            python tools/delivery/package_n48k.py --source product --binary product/build/cl/qbrain.exe --native-log evidence/native.log --guide docs/integration/WINDOWS-CANDIDATE-N48K.zh-CN.md --output "evidence/$copy" 2>&1 | Tee-Object "evidence/assembly-$copy.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $package = 'evidence/one/qbrain-windows-x64-n48k-candidate.zip'
+          if ((Get-FileHash $package).Hash -cne (Get-FileHash evidence/two/qbrain-windows-x64-n48k-candidate.zip).Hash) { throw 'Repeated assembly differs' }
+          python tools/delivery/package_n48k.py --source product --binary product/build/cl/qbrain.exe --native-log evidence/native.log --guide docs/integration/WINDOWS-CANDIDATE-N48K.zh-CN.md --verify $package 2>&1 | Tee-Object evidence/verification.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Expand-Archive -LiteralPath $package -DestinationPath under-test
+          Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-current-preview-b810d689/qbrain-windows-x64-n47x-preview.zip' -OutFile evidence/old-n47x.zip
+          if ((Get-FileHash evidence/old-n47x.zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d') { throw 'Wrong baseline' }
+          Expand-Archive -LiteralPath evidence/old-n47x.zip -DestinationPath evidence/baseline
+      - name: Test actual extracted bundle and both native shell upgrades
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python tools/delivery/check_n48k_bundle.py --source product --bundle under-test --package evidence/one/qbrain-windows-x64-n48k-candidate.zip --old evidence/old-n47x.zip --output evidence/qualification 2>&1 | Tee-Object evidence/qualification.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48k-windows
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
