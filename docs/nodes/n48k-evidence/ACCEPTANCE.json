@@ -1,0 +1,184 @@
+{
+  "acceptance_granted": true,
+  "archived_evidence": [
+    {
+      "artifact_id": 10902481831,
+      "bytes": 46268002,
+      "file": "qbrain-n48k-windows-f261896e.zip",
+      "sha256": "42677bf75e3ea3a1d94a9cbae1e8bc3bd5122991a015112913928c2e02b844b0"
+    },
+    {
+      "artifact_id": 10901685676,
+      "bytes": 12734098,
+      "file": "qbrain-n48k-portable-f261896e.zip",
+      "sha256": "0ddfedefefdde1d52d74df652bcf55087f94d66779f6268d4cd423c7b1e8dbb6"
+    },
+    {
+      "artifact_id": 10904476380,
+      "bytes": 17324403,
+      "file": "qbrain-n48k-preservation-a2146138.zip",
+      "sha256": "721aa7bb95f2cda646ca4c0fa697c40dd629db99acad3a9e41a0dd4ec9e17e59"
+    },
+    {
+      "artifact_id": 10904272463,
+      "bytes": 17324401,
+      "file": "qbrain-n48k-preservation-b38c30bd.zip",
+      "sha256": "3cea19cc8b782a669d54d72be04ecfbb59e2882e21b880d743ea7a3ea6b0b3bf"
+    }
+  ],
+  "checks": {
+    "all_supplement_raw_snapshots_independently_matched": 48,
+    "extracted_qualification_steps": 23,
+    "local_linux_supplement_per_python_mode": {
+      "checks": 64,
+      "commands": 79,
+      "windows_installer_executed": false
+    },
+    "offline_report_replays": {
+      "accounting": 12,
+      "application_receipts": 4,
+      "bridge_semantic": 2,
+      "lifecycle": 6,
+      "mcp": 1
+    },
+    "original_native_groups": 60,
+    "original_upgrade_checks_per_shell": 50,
+    "package_acceptance_mutations_per_python_mode": 152,
+    "package_tests_per_platform_per_python_mode": 25,
+    "packaged_bridge_tests_per_python_mode": 27,
+    "packaged_prior_acceptance_tests_per_python_mode": 48,
+    "portable_retained_units": 26,
+    "preservation_report_mutations_per_python_mode": 40,
+    "recovery_checks_per_shell": 60,
+    "retained_native_steps": 55,
+    "snapshot_checks_per_shell": 24,
+    "supplement_groups": 4,
+    "supplement_per_windows_image_per_shell": {
+      "checks": 79,
+      "commands": 98,
+      "hosts": [
+        "Claude",
+        "Codex"
+      ],
+      "phases": [
+        "upgrade",
+        "rollback",
+        "reupgrade",
+        "uninstall"
+      ],
+      "snapshots": 12
+    },
+    "supplement_total_native_checks": 316,
+    "supplement_total_native_commands": 392
+  },
+  "finding_closed": {
+    "implemented_check": "Old executable creates active and withdrawn receipts before upgrade; full fact and receipt snapshots survive upgrade/rollback/reupgrade/uninstall.",
+    "kind": "acceptance_coverage_gap_not_demonstrated_data_loss",
+    "new_native_gate_passed": true,
+    "new_product_repair_claimed": false,
+    "original_gap": "Receipt created after upgrade did not prove pre-upgrade receipt preservation."
+  },
+  "history": {
+    "earlier_failures_not_reclassified": true,
+    "earlier_windows_failures": [
+      36225556969,
+      36227104972
+    ],
+    "no_timeout_or_assertion_relaxation": true,
+    "queued_supplement_runs_eventually_succeeded": true,
+    "script_unchanged_between_supplement_runs": true,
+    "second_supplement_workflow_delta": [
+      "runner label windows-latest to windows-2022",
+      "SHA marker PowerShell output redirection syntax"
+    ]
+  },
+  "package": {
+    "binary_sha256": "8f9ae1f7d644de107defa8a664184458cee946c50aa912b268b7ad8117477b1b",
+    "bytes": 4890639,
+    "construction_status_preserved": "BUILT_NOT_YET_ACCEPTED",
+    "members": 51,
+    "name": "qbrain-windows-x64-n48k-candidate.zip",
+    "product_source": "24345f85e0c4962c93205a7fab0fbdb380a5ff09",
+    "product_tree": "b9b5f8a50e34ca7b897c85b2490e0b61100ab756",
+    "rewritten_after_testing": false,
+    "sha256": "58d56b7bd7c9a662514e41d20bacb88c68c92bbe3fc380496a09331bf1f5cafa"
+  },
+  "qualified_sources": [
+    {
+      "attempt": 1,
+      "commit": "f261896e8ccf97cb0f0630b3488151d1b91927d0",
+      "jobs": [
+        108366806549,
+        108366806605
+      ],
+      "result": "completed/success",
+      "run_id": 36228428928,
+      "scope": "original packaging and extracted native product",
+      "tree": "7c3e6dc91662de6cdf5f60900ceeb3969e3a4095"
+    },
+    {
+      "attempt": 1,
+      "commit": "a21461380cb5408183716541ec9bc036a03092cb",
+      "jobs": [
+        108386476397
+      ],
+      "result": "completed/success",
+      "run_id": 36235526784,
+      "scope": "preexisting receipts; windows-latest; PowerShell5/7",
+      "tree": "08ac0cf2f3fd341edd4f08ee0d699071b3d09d95"
+    },
+    {
+      "attempt": 1,
+      "commit": "b38c30bdb6c375831df886e9c78fc67cac2aedd1",
+      "jobs": [
+        108387909232
+      ],
+      "result": "completed/success",
+      "run_id": 36236062404,
+      "scope": "identical preexisting receipt test; windows-2022; PowerShell5/7",
+      "tree": "ffd16b9a6e905d01b8c23c81e8ab17c0696fea83"
+    }
+  ],
+  "recorded_at_utc": "2026-09-26T10:43:21.358858+00:00",
+  "review_indices": {
+    "INDEPENDENT-READBACK.json": {
+      "bytes": 1075,
+      "sha256": "581cf3266a1534b76bb4bc034fb22445fe36aac8af8166e77ae72be17fa2904e"
+    },
+    "PRESERVATION-READBACK.json": {
+      "bytes": 2134,
+      "sha256": "f0f1dc2db437cec4cfeb98fe779a2e3f9c66269491d44a81f8ee32c6334afe2d"
+    },
+    "mutations-normal.json": {
+      "bytes": 11915,
+      "sha256": "4f6ad77e185484fd764e312e28027e4107ddde456194cbd7550a5889a4b403e6"
+    },
+    "mutations-optimized.json": {
+      "bytes": 11914,
+      "sha256": "b30caccb9b7232a49937904b8a99b80302e1d2c96b97af3586676e3d1d49e158"
+    },
+    "preservation-mutations-normal.json": {
+      "bytes": 2922,
+      "sha256": "b8ba2dfec3f169b3380546d908fa449f7239d6b3e58f13f57b08ae494fb09900"
+    },
+    "preservation-mutations-optimized.json": {
+      "bytes": 2921,
+      "sha256": "17cc87c3b5dd75b3aba44eae63e85fd1f846e40396d3207c13c8a7bbf66d3de4"
+    }
+  },
+  "reviewer": "ChatGPT: owner-authorized separate post-implementation engineering self-review; not a subagent or third party",
+  "schema": "qbrain-n48k-external-acceptance-v1",
+  "scope": {
+    "issue40_closed": false,
+    "new_windows_execution_in_local_container": false,
+    "postgresql_parity_verified": false,
+    "public_release_replaced": false,
+    "real_client_consumption_verified": false,
+    "real_model_quality_verified": false,
+    "signed": false,
+    "source_or_invoice_authenticated": false,
+    "stable_v1": false,
+    "user_machine_modified": false
+  },
+  "verdict": "PASS_BOUNDED_WINDOWS_INTEGRATION_CANDIDATE"
+}

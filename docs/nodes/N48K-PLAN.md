@@ -24,3 +24,14 @@ No mandatory Python runtime, Docker/WSL, automatic capture or silent reinstall.
 No paid requests, signing claim, PG parity, real signed-in host/model proof or
 Issue40 closure. Review outcome only after actual logs/artifacts are available;
 any failures remain evidence, and changed candidate code needs fresh validation.
+
+## Acceptance closure — 2026-09-26
+
+Done for the bounded N48K Windows integration candidate. Original full
+qualification f261896e passed, and separate review identified and closed the
+preexisting-receipt test gap through native runs36235526784 and36236062404.
+Both Windows images and PowerShell5/7 retain complete old receipt snapshots
+through upgrade, rollback, re-upgrade and uninstall. Package58d56b7b stays
+unchanged; external acceptance and N48K-HARD-AUDIT.md record exact identities.
+Actual merge is recorded by PR52. No real-client/model, PG/signing, stable-v1
+or Issue40 completion is inferred. Earlier failures remain in the history.
