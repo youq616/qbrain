@@ -1,0 +1,54 @@
+name: N48K existing receipt preservation
+on:
+  push:
+    branches: ['delivery/n48k-windows-candidate']
+    paths: ['.ci/test_n48k_existing_receipts.py', '.github/workflows/n48k-preservation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Fixed new test source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+      - name: Retrieve the already qualified immutable Windows artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://api.github.com/repos/youq616/qbrain/actions/artifacts/10902481831/zip'
+          Invoke-WebRequest -Uri $url -Headers @{Authorization="Bearer $env:GH_TOKEN";Accept='application/vnd.github+json'} -OutFile original.zip
+          if ((Get-FileHash original.zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne '42677bf75e3ea3a1d94a9cbae1e8bc3bd5122991a015112913928c2e02b844b0') { throw 'Original artifact digest mismatch' }
+          Expand-Archive original.zip original
+          Copy-Item original/one/qbrain-windows-x64-n48k-candidate.zip evidence/candidate.zip
+          Copy-Item original/old-n47x.zip evidence/old-n47x.zip
+      - name: Preexisting active and withdrawn receipts across both native shells
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($shell in @('powershell','pwsh')) {
+            python .ci/test_n48k_existing_receipts.py --old-package evidence/old-n47x.zip --package evidence/candidate.zip --shell $shell --output "evidence/$shell" 2>&1 | Tee-Object "evidence/$shell.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48k-existing-receipts
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
