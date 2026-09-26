@@ -9,7 +9,7 @@ permissions:
   actions: read
 jobs:
   windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 15
     env:
       PYTHONIOENCODING: utf-8
@@ -23,7 +23,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory evidence | Out-Null
-          git rev-parse HEAD | Set-Content evidence/source.txt
+          git rev-parse HEAD > evidence/source.txt
           git archive --format=zip --output=evidence/source.zip HEAD
       - name: Retrieve the already qualified immutable Windows artifact
         shell: pwsh
