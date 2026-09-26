@@ -1,0 +1,24 @@
+{
+  "binary_sha256": "6610eb3803bf8ed59ff14d87e50d9499b2eed8ca9c95c65807bc71a412e178fa",
+  "contexts_observed": 30,
+  "cost_change": {
+    "candidate_minus_baseline": "0.001500000000",
+    "relative_change": {
+      "denominator": "101",
+      "numerator": "30"
+    },
+    "relative_change_unavailable_reason": null,
+    "unavailable_reason": null
+  },
+  "cost_scope": "scheduled_main_requests_only",
+  "engine_commands": 520,
+  "engine_tasks": 50,
+  "execution_kind": "LOOPBACK_TEST",
+  "http_requests": 100,
+  "passed": true,
+  "quality_scoring_separate": true,
+  "real_model_or_host_consumption_verified": false,
+  "review_script_sha256": "8b6dd7d31e3fe42db28241c27165df7385c1514658b7e9e6b0f13fce34622c6f",
+  "schema": "qbrain-n48j-engine-pipeline-v1",
+  "task_count_per_arm": 50
+}

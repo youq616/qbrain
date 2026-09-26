@@ -1,0 +1,1 @@
+{"currency":"USD","rates":[{"model":"fixture-model","per_million":{"input_cache_read":"0.123456","input_cache_write":"2.000003","input_uncached":"1.234567","output":"3.456789"},"provider":"openai","rate_id":"main-price"}],"schema":"qbrain-model-cost-rates-v1","scope":"scheduled_main_requests_only"}

@@ -64,3 +64,11 @@ numeric eligibility; it does not imply quality, live models or complete egress.
 Delivery includes source, tests, reproducible examples and separate review evidence.
 Use normal branch/expected-head writes, never overwrite parallel work. No installer,
 Release/tag, PG, signing, real-client consumption or Issue40 closure from this module.
+
+## Acceptance closure — 2026-09-26
+
+Done for the bounded source module at bb5ea5fe / tree96f148ab after actual native
+Windows/Linux qualification, original artifact readback and the separate outcome
+review in N48J-HARD-AUDIT.md. This does not certify provider invoices, real model
+quality, full pipeline costs or signed-in host consumption. Closing changes are
+documentation/history/executed evidence only; actual merge identity is in PR51.
