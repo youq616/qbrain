@@ -17,6 +17,16 @@ import tempfile
 import package_n48k as p
 
 
+def environments(original: dict, home: str):
+    # Build discovery needs the runner's real Visual Studio profile. Runtime
+    # probes remain isolated; the inherited driver isolates its own test data.
+    toolchain = {k:v for k,v in original.items() if not k.upper().startswith(
+        ('QBRAIN','OPENAI','ANTHROPIC','GH_TOKEN','GITHUB_TOKEN'))}
+    toolchain.update(PYTHONIOENCODING='utf-8', PYTHONDONTWRITEBYTECODE='1')
+    runtime = {**toolchain, **dict.fromkeys(('HOME','USERPROFILE','APPDATA','LOCALAPPDATA'),home)}
+    return toolchain, runtime
+
+
 def execute(source: Path, bundle: Path, package: Path, old: Path, output: Path):
     p.z.need(os.name == 'nt', 'native Windows required')
     source, bundle, package, old = [x.resolve(strict=True) for x in (source, bundle, package, old)]
@@ -38,16 +48,14 @@ def execute(source: Path, bundle: Path, package: Path, old: Path, output: Path):
 
     inventory()
     exe = bundle/'qbrain.exe'
-    env = {k:v for k,v in os.environ.items() if not k.upper().startswith(('QBRAIN','OPENAI','ANTHROPIC','GH_TOKEN','GITHUB_TOKEN'))}
-    env.update(PYTHONIOENCODING='utf-8', PYTHONDONTWRITEBYTECODE='1')
     with tempfile.TemporaryDirectory(prefix='qbrain-n48k-home-') as home:
-        env.update(HOME=home, USERPROFILE=home, APPDATA=home, LOCALAPPDATA=home)
+        build_env, env = environments(os.environ,home)
 
-        def run(name, command, *, cwd=bundle, data=None, code=0):
+        def run(name, command, *, cwd=bundle, data=None, code=0, environment=None):
             argv = list(map(str, command))
-            row = dict(name=name, argv=argv, status='started'); rows.append(row)
+            row = dict(name=name, argv=argv, status='started', environment_scope='toolchain_profile' if environment is not None else 'isolated_runtime'); rows.append(row)
             (output/'driver.json').write_bytes(p.z.encoded(dict(package_sha256=original_hash, steps=rows)))
-            result = subprocess.run(argv, input=data, capture_output=True, cwd=cwd, env=env, timeout=1800)
+            result = subprocess.run(argv, input=data, capture_output=True, cwd=cwd, env=env if environment is None else environment, timeout=1800)
             (logs/(name+'.stdout')).write_bytes(result.stdout)
             (logs/(name+'.stderr')).write_bytes(result.stderr)
             if data is not None: (logs/(name+'.stdin')).write_bytes(data)
@@ -91,8 +99,6 @@ def execute(source: Path, bundle: Path, package: Path, old: Path, output: Path):
             else:
                 p.z.need(report['schema'] == 'qbrain-usage-import-report-v1', 'import schema')
 
-        run('retained-native', [sys.executable,source/'.ci/run_n48i_checks.py','--binary',exe,
-            '--baseline',output.parent/'baseline/qbrain.exe','--output',output/'retained'])
         installer = bundle/'scripts/Install-QbrainMemory.ps1'
         for shell in ('powershell','pwsh'):
             prefix = [shell,'-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File']
@@ -106,6 +112,10 @@ def execute(source: Path, bundle: Path, package: Path, old: Path, output: Path):
             p.z.need(record['result']=='PASS' and record['shell_major']==(5 if shell=='powershell' else 7)
                      and record['new_zip_sha256']==original_hash and len(record['checks']) >= 50
                      and all(row['passed'] is True for row in record['checks']), 'upgrade report')
+        # The unchanged driver compiles standalone tests before running its own
+        # isolated fixtures. Do not hide Visual Studio's profile from CMake.
+        run('retained-native', [sys.executable,source/'.ci/run_n48i_checks.py','--binary',exe,
+            '--baseline',output.parent/'baseline/qbrain.exe','--output',output/'retained'],environment=build_env)
         inventory()
         p.z.need(p.read(package,p.z.MAX_ARCHIVE)==original,'ZIP changed during qualification')
     result = dict(schema='qbrain-n48k-bundle-qualification-v1', result='PASS',

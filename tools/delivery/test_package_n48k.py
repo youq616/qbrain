@@ -23,6 +23,23 @@ def inputs():
 
 class Package(unittest.TestCase):
     def setUp(self): self.args = inputs(); self.wanted = p.expected(*self.args)
+    def test_compiler_profile_and_runtime_isolation_are_separate(self):
+        from check_n48k_bundle import environments
+        roots = dict(HOME='real-home', USERPROFILE='real-profile', APPDATA='real-roaming', LOCALAPPDATA='real-local')
+        original = {**roots, 'PATH':'native-tools', 'QBRAIN_EVAL_KEY':'secret', 'OPENAI_API_KEY':'secret', 'GITHUB_TOKEN':'secret'}
+        saved = original.copy()
+        toolchain, runtime = environments(original,'isolated-temp')
+        self.assertEqual(original,saved)
+        for name,value in roots.items():
+            self.assertEqual(toolchain[name],value)
+            self.assertEqual(runtime[name],'isolated-temp')
+        for mapping in (toolchain,runtime):
+            self.assertEqual(mapping['PATH'],'native-tools')
+            self.assertEqual(mapping['PYTHONDONTWRITEBYTECODE'],'1')
+            self.assertFalse(any(key.endswith('KEY') or key=='GITHUB_TOKEN' for key in mapping))
+        runtime['PATH']='changed'
+        self.assertEqual(toolchain['PATH'],'native-tools')
+
     def test_deterministic_complete_membership(self):
         raw = p.z.make_zip(self.wanted)
         self.assertEqual(raw, p.z.make_zip(dict(reversed(list(self.wanted.items())))))
