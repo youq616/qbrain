@@ -27,6 +27,47 @@ def environments(original: dict, home: str):
     return toolchain, runtime
 
 
+def child_environment(argv: list[str], environment: dict):
+    # PowerShell 7 repairs PSModulePath only for directly launched Windows PS.
+    # Python is an intermediate process, so let Windows PS rebuild its defaults.
+    legacy = Path(argv[0]).name.lower() in ('powershell', 'powershell.exe')
+    child = {k:v for k,v in environment.items() if not (legacy and k.upper() == 'PSMODULEPATH')}
+    return child, legacy
+
+
+def preflight(output: Path):
+    """Check the exact compiler/shell environments before the expensive build."""
+    p.z.need(os.name == 'nt', 'native Windows required')
+    output = output.absolute(); output.mkdir(exist_ok=False); rows = []
+    with tempfile.TemporaryDirectory(prefix='qbrain-n48k-preflight-') as temp:
+        root = Path(temp); home = root/'home'; home.mkdir()
+        toolchain, runtime = environments(os.environ,str(home))
+        def probe(name, command, environment):
+            argv = list(map(str,command)); child, reset = child_environment(argv,environment)
+            result = subprocess.run(argv,env=child,cwd=root,capture_output=True,timeout=180)
+            (output/(name+'.stdout')).write_bytes(result.stdout)
+            (output/(name+'.stderr')).write_bytes(result.stderr)
+            rows.append(dict(name=name,argv=argv,exit=result.returncode,
+                windows_powershell_module_path_reset=reset,
+                stdout_sha256=p.z.sha(result.stdout),stderr_sha256=p.z.sha(result.stderr)))
+            (output/'steps.json').write_bytes(p.z.encoded(rows))
+            p.z.need(result.returncode == 0,'tool preflight failed: '+name)
+            return result
+        expression = "$ErrorActionPreference='Stop'; $names=@('Get-FileHash','ConvertTo-Json','ConvertFrom-Json','Expand-Archive'); $commands=@(Get-Command -Name $names -ErrorAction Stop); if($commands.Count -ne 4){throw 'Missing required command'}; @{major=$PSVersionTable.PSVersion.Major;commands=@($commands.Name)} | ConvertTo-Json -Compress"
+        for shell,major in (('powershell',5),('pwsh',7)):
+            result=probe('shell-'+shell,[shell,'-NoProfile','-NonInteractive','-Command',expression],runtime)
+            value=p.z.obj(result.stdout)
+            p.z.need(value['major']==major and sorted(value['commands'])==sorted(['Get-FileHash','ConvertTo-Json','ConvertFrom-Json','Expand-Archive']),'shell capability inventory')
+        source=root/'source';source.mkdir()
+        (source/'CMakeLists.txt').write_text('cmake_minimum_required(VERSION 3.24)\nproject(n48k_probe LANGUAGES CXX)\nadd_executable(n48k_probe main.cpp)\n')
+        (source/'main.cpp').write_text('int main() { return 0; }\n')
+        probe('compiler-configure',['cmake','-S',source,'-B',root/'build'],toolchain)
+        probe('compiler-build',['cmake','--build',root/'build','--config','Release'],toolchain)
+    result=dict(schema='qbrain-n48k-tool-preflight-v1',result='PASS',steps=rows,native_product_execution=False,
+        script_sha256=p.z.sha(Path(__file__).read_bytes()))
+    (output/'RESULT.json').write_bytes(p.z.encoded(result));return result
+
+
 def execute(source: Path, bundle: Path, package: Path, old: Path, output: Path):
     p.z.need(os.name == 'nt', 'native Windows required')
     source, bundle, package, old = [x.resolve(strict=True) for x in (source, bundle, package, old)]
@@ -53,9 +94,10 @@ def execute(source: Path, bundle: Path, package: Path, old: Path, output: Path):
 
         def run(name, command, *, cwd=bundle, data=None, code=0, environment=None):
             argv = list(map(str, command))
-            row = dict(name=name, argv=argv, status='started', environment_scope='toolchain_profile' if environment is not None else 'isolated_runtime'); rows.append(row)
+            child, reset = child_environment(argv,env if environment is None else environment)
+            row = dict(name=name, argv=argv, status='started', environment_scope='toolchain_profile' if environment is not None else 'isolated_runtime', windows_powershell_module_path_reset=reset); rows.append(row)
             (output/'driver.json').write_bytes(p.z.encoded(dict(package_sha256=original_hash, steps=rows)))
-            result = subprocess.run(argv, input=data, capture_output=True, cwd=cwd, env=env if environment is None else environment, timeout=1800)
+            result = subprocess.run(argv, input=data, capture_output=True, cwd=cwd, env=child, timeout=1800)
             (logs/(name+'.stdout')).write_bytes(result.stdout)
             (logs/(name+'.stderr')).write_bytes(result.stderr)
             if data is not None: (logs/(name+'.stdin')).write_bytes(data)

@@ -40,6 +40,20 @@ class Package(unittest.TestCase):
         runtime['PATH']='changed'
         self.assertEqual(toolchain['PATH'],'native-tools')
 
+    def test_legacy_shell_does_not_inherit_powershell7_module_path(self):
+        from check_n48k_bundle import child_environment
+        original={'PsModulePath':'PowerShell7/modules','PATH':'tools','LOCALAPPDATA':'isolated'}
+        for command in ('powershell','powershell.exe','POWERSHELL.EXE'):
+            result, reset=child_environment([command],original)
+            self.assertTrue(reset)
+            self.assertEqual(result,{'PATH':'tools','LOCALAPPDATA':'isolated'})
+        for command in ('pwsh','cmake','python'):
+            result, reset=child_environment([command],original)
+            self.assertFalse(reset)
+            self.assertEqual(result,original)
+            self.assertIsNot(result,original)
+        self.assertIn('PsModulePath',original)
+
     def test_deterministic_complete_membership(self):
         raw = p.z.make_zip(self.wanted)
         self.assertEqual(raw, p.z.make_zip(dict(reversed(list(self.wanted.items())))))

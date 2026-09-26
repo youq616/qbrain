@@ -49,7 +49,7 @@ jobs:
           ref: 24345f85e0c4962c93205a7fab0fbdb380a5ff09
           path: product
           persist-credentials: false
-      - name: Fresh pinned native build and original full60
+      - name: Fixed source and compiler and shell preflight
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -57,6 +57,12 @@ jobs:
           git rev-parse HEAD | Set-Content evidence/source.txt
           git archive --format=zip --output=evidence/source.zip HEAD
           git -C product archive --format=zip --output="$((Get-Location).Path)/evidence/product-source.zip" HEAD
+          python -c "import sys;from pathlib import Path;sys.path.insert(0,'tools/delivery');from check_n48k_bundle import preflight;print(preflight(Path('evidence/preflight')))" 2>&1 | Tee-Object evidence/preflight.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Fresh pinned native build and original full60
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
           powershell -NoProfile -ExecutionPolicy Bypass -File product/scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/native.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Canonical assembly twice and independent verification
