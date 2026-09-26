@@ -1,0 +1,199 @@
+{
+  "artifacts": [
+    {
+      "accounting_readback_sets": 12,
+      "archive_bytes": 29621355,
+      "archive_sha256": "86b1fd1842e3b2de2cf9ec70c353435acce30c80fb9b7e374873037c1fb9cb90",
+      "artifact_id": 10897692581,
+      "baseline_sha256": "7399af97dde5b97cc87667dc7e0e3fbdbf79b8b435fbfb62f01f2cb4cfd4e57e",
+      "binary_sha256": "6610eb3803bf8ed59ff14d87e50d9499b2eed8ca9c95c65807bc71a412e178fa",
+      "bridge_cross_platform_details": [
+        {
+          "analysis_and_comparison_input_byte_equal": true,
+          "mode": "normal",
+          "original_binary_sha256": "6610eb3803bf8ed59ff14d87e50d9499b2eed8ca9c95c65807bc71a412e178fa",
+          "passed": true,
+          "replay_binary_sha256": "6610eb3803bf8ed59ff14d87e50d9499b2eed8ca9c95c65807bc71a412e178fa",
+          "source_manifest_only_runtime_digest_differs": true,
+          "windows_native_execution_here": false
+        },
+        {
+          "analysis_and_comparison_input_byte_equal": true,
+          "mode": "optimized",
+          "original_binary_sha256": "6610eb3803bf8ed59ff14d87e50d9499b2eed8ca9c95c65807bc71a412e178fa",
+          "passed": true,
+          "replay_binary_sha256": "6610eb3803bf8ed59ff14d87e50d9499b2eed8ca9c95c65807bc71a412e178fa",
+          "source_manifest_only_runtime_digest_differs": true,
+          "windows_native_execution_here": false
+        }
+      ],
+      "bridge_semantic_replays": 2,
+      "candidate": "bb5ea5fea724407ddb1ab1422f42bd80a2fbc122",
+      "crlf_only_files": 0,
+      "lifecycle_readback_sets": 6,
+      "mcp_readback_sets": 1,
+      "native_windows_groups": null,
+      "nested_driver_steps": {
+        "lifecycle": 16,
+        "retained": 18
+      },
+      "passed": true,
+      "platform": "portable",
+      "retained_driver_steps": 55,
+      "schema": "qbrain-n48j-artifact-metadata-v1",
+      "source_files": 1403,
+      "tree": "96f148ab8937f7b847b8bf135f688d6ff710c9d6",
+      "unit_tests": {
+        "acceptance-normal": {
+          "skipped": 0,
+          "tests": 48
+        },
+        "acceptance-optimized": {
+          "skipped": 0,
+          "tests": 48
+        },
+        "bridge-normal": {
+          "skipped": 0,
+          "tests": 27
+        },
+        "bridge-optimized": {
+          "skipped": 0,
+          "tests": 27
+        }
+      },
+      "workflow_run": 36216040990
+    },
+    {
+      "accounting_readback_sets": 12,
+      "archive_bytes": 28455389,
+      "archive_sha256": "85774d5ddc9bf7b95d5b4a7bfd66fbfede4f07cb657aca79bf3804866270b39f",
+      "artifact_id": 10897787853,
+      "baseline_sha256": "838955a0ad88779af08c53396b773d62b327cccd4f216a18379f0a76ffa4c9cf",
+      "binary_sha256": "ce7d662a3241b729a14c9190e21292b550866f31260f8a24219843722be69592",
+      "bridge_cross_platform_details": [
+        {
+          "analysis_and_comparison_input_byte_equal": true,
+          "mode": "normal",
+          "original_binary_sha256": "ce7d662a3241b729a14c9190e21292b550866f31260f8a24219843722be69592",
+          "passed": true,
+          "replay_binary_sha256": "6610eb3803bf8ed59ff14d87e50d9499b2eed8ca9c95c65807bc71a412e178fa",
+          "source_manifest_only_runtime_digest_differs": true,
+          "windows_native_execution_here": false
+        },
+        {
+          "analysis_and_comparison_input_byte_equal": true,
+          "mode": "optimized",
+          "original_binary_sha256": "ce7d662a3241b729a14c9190e21292b550866f31260f8a24219843722be69592",
+          "passed": true,
+          "replay_binary_sha256": "6610eb3803bf8ed59ff14d87e50d9499b2eed8ca9c95c65807bc71a412e178fa",
+          "source_manifest_only_runtime_digest_differs": true,
+          "windows_native_execution_here": false
+        }
+      ],
+      "bridge_semantic_replays": 2,
+      "candidate": "bb5ea5fea724407ddb1ab1422f42bd80a2fbc122",
+      "crlf_only_files": 1388,
+      "lifecycle_readback_sets": 6,
+      "mcp_readback_sets": 1,
+      "native_windows_groups": 60,
+      "nested_driver_steps": {
+        "lifecycle": 16,
+        "retained": 18
+      },
+      "passed": true,
+      "platform": "windows",
+      "retained_driver_steps": 55,
+      "schema": "qbrain-n48j-artifact-metadata-v1",
+      "source_files": 1403,
+      "tree": "96f148ab8937f7b847b8bf135f688d6ff710c9d6",
+      "unit_tests": {
+        "acceptance-normal": {
+          "skipped": 0,
+          "tests": 48
+        },
+        "acceptance-optimized": {
+          "skipped": 0,
+          "tests": 48
+        },
+        "bridge-normal": {
+          "skipped": 0,
+          "tests": 27
+        },
+        "bridge-optimized": {
+          "skipped": 0,
+          "tests": 27
+        }
+      },
+      "workflow_run": 36216040990
+    }
+  ],
+  "base_main": "3c944a9df0ca1867ff3b320a20f4a3632c92ff0f",
+  "local": {
+    "engine_commands": 520,
+    "engine_pipeline_http_requests": 100,
+    "engine_tasks": 50,
+    "interrupted_original_native_driver": {
+      "accepted_as_pass": false,
+      "completed_steps": 13,
+      "last_step": "stream_import-build",
+      "original_driver_retained": true,
+      "reason": "execution_tool_timeout_during_native_compilation",
+      "steps_recorded": 14
+    },
+    "native_binary_sha256": "6610eb3803bf8ed59ff14d87e50d9499b2eed8ca9c95c65807bc71a412e178fa",
+    "native_program_previously_qualified_unchanged_source": true,
+    "new_tests_per_python_mode": 27,
+    "remaining_readbacks_completed_separately_without_checker_changes": true,
+    "retained_acceptance_tests_per_python_mode": 48,
+    "separate_review_cli_calls": 26,
+    "separate_review_repeated_on_ci_source": 26,
+    "two_offline_wrapper_interruptions_preserved": true
+  },
+  "qualified_commit": "bb5ea5fea724407ddb1ab1422f42bd80a2fbc122",
+  "qualified_tree": "96f148ab8937f7b847b8bf135f688d6ff710c9d6",
+  "readbacks": {
+    "accounting_sets": 24,
+    "bridge_semantic_replays": 4,
+    "lifecycle_sets": 12,
+    "mcp_sets": 2,
+    "windows_binary_not_executed_locally": true
+  },
+  "recorded_at_utc": "2026-09-26T04:19:03.616364+00:00",
+  "reviewer": "ChatGPT, owner-authorized separate post-implementation self-review; not a subagent or third party",
+  "schema": "qbrain-n48j-outcome-v1",
+  "scope": {
+    "existing_tests_changed": false,
+    "full_pipeline_costs_included": false,
+    "issue_40_closed": false,
+    "native_product_changed": false,
+    "new_release_or_installer_created": false,
+    "paid_provider_requests": false,
+    "postgresql_or_signing_accepted": false,
+    "real_host_consumption_verified": false,
+    "real_model_quality_verified": false,
+    "scheduled_main_requests_only": true
+  },
+  "verdict": "PASS_BOUNDED_N48J_SOURCE_MODULE",
+  "workflows": [
+    {
+      "artifacts_downloaded": 2,
+      "attempt": 1,
+      "jobs": [
+        108332083412,
+        108332083557
+      ],
+      "result": "completed/success",
+      "run_id": 36216040990
+    },
+    {
+      "artifacts_downloaded": 0,
+      "jobs": [
+        108332132135,
+        108332132234
+      ],
+      "original_linux_engine_step_skipped_by_platform_condition": true,
+      "result": "completed/success",
+      "run_id": 36216058802
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "all_candidate_worktree_files_byte_equal": true,
+  "candidate": "bb5ea5fea724407ddb1ab1422f42bd80a2fbc122",
+  "candidate_tree": "96f148ab8937f7b847b8bf135f688d6ff710c9d6",
+  "local_git_commit_is_mirror_not_remote_commit": true,
+  "private_source_or_paid_calls_used": false,
+  "unchanged_files": [
+    {
+      "path": "include/qbrain/accounting/token_cost.hpp",
+      "sha256": "bc83770dca7aea78c9c739d650825622eb2cadefdf83b458cfb39311ec8034d5",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "include/qbrain/accounting/provider_usage.hpp",
+      "sha256": "cbf189a88127335f79915c1beed48fb82fe621cf66a502f1c84a6b6b2199406a",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "include/qbrain/accounting/stream_usage.hpp",
+      "sha256": "65e5f0b18ba2229317a1d370dc556e848373f812610f924d6f3ff87f177cc788",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "include/qbrain/accounting/cost_comparison.hpp",
+      "sha256": "5a3fb4a7f135c210112cfc80eee91b0542c0d38b0aa3e03bc781334cbeb10d98",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "src/qbrain/main.cpp",
+      "sha256": "4af417a5590e1f63ae5dd63e92f90e5b5c83722e134932a6391dc44cd0975406",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "tools/acceptance/model_ab.py",
+      "sha256": "295d99df9772cf2bd1a8aafb4e4a7b506fc581133dada934b116c5d1f439d741",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "tools/acceptance/memory_task_contract.py",
+      "sha256": "7d89bd2843c077a67dcb9651d8336931d3cc3ed5564ae2bc4810ca0fa5f73b63",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "tools/acceptance/run_memory_tasks.py",
+      "sha256": "f8a18fa7a63c7afb4eeb4bb2b05c0c49add7f40ed5399cdbd599592fd56355dc",
+      "unchanged_from_base": true
+    },
+    {
+      "path": ".ci/run_n48i_checks.py",
+      "sha256": "fb8148bb90950e8fc14976dc5b491bb9d7b26ccbb1741110758cefcf2a053616",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "tools/acceptance/test_model_ab.py",
+      "sha256": "4ad204034024ee4e5e806a819d0f813e2cbd49f800c1493f722e167b5c57dcae",
+      "unchanged_from_base": true
+    },
+    {
+      "path": ".github/workflows/n48i-validation.yml",
+      "sha256": "b86c4530c0317747989446338454a4ef4f1ba595c19e829de37718831e43f750",
+      "unchanged_from_base": true
+    },
+    {
+      "path": ".github/workflows/n47s-validation.yml",
+      "sha256": "2937510a311b4c2e2b285266aea9207e2e10b326e6b653d74c7a7ebae16565aa",
+      "unchanged_from_base": true
+    }
+  ]
+}
