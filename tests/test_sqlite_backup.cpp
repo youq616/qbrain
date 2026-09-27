@@ -52,15 +52,15 @@ int main() {
     Connection source(live); init(source);
     source.sql("PRAGMA journal_mode=WAL;PRAGMA wal_autocheckpoint=0;"
                "INSERT INTO pages VALUES(2,'COMMITTED-PRIVATE',X'00AB00','main');");
-    check(fs::file_size(fs::path(b::utf8(live) + "-wal")) > 0, "actual WAL exists");
+    check(fs::file_size(fs::u8path(b::utf8(live) + "-wal")) > 0, "actual WAL exists");
     const auto before_main = b::read(live, b::database_cap);
-    const auto before_wal = b::read(fs::path(b::utf8(live) + "-wal"), b::database_cap);
+    const auto before_wal = b::read(fs::u8path(b::utf8(live) + "-wal"), b::database_cap);
     source.sql("BEGIN IMMEDIATE;INSERT INTO pages VALUES(3,'UNCOMMITTED',X'01','main');");
     auto report = b::create(live, root / "backup");
     const std::string digest = report.at("manifest_sha256");
     check(report["result"] == "CREATED", "create report");
     check(b::read(live, b::database_cap) == before_main, "source main unchanged");
-    check(b::read(fs::path(b::utf8(live) + "-wal"), b::database_cap) == before_wal, "source WAL unchanged");
+    check(b::read(fs::u8path(b::utf8(live) + "-wal"), b::database_cap) == before_wal, "source WAL unchanged");
     source.sql("ROLLBACK");
     const auto manifest_raw = b::read(root / "backup/manifest.json", b::manifest_cap);
     const auto image = b::read(root / "backup/snapshot.sqlite3", b::database_cap);

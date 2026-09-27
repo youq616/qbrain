@@ -6,6 +6,7 @@ Every actual command preserves stdin/stdout/stderr and its expected exit. Python
 """
 from __future__ import annotations
 import argparse
+from contextlib import closing
 import copy
 import hashlib
 import json
@@ -176,7 +177,7 @@ def run(binary, output):
                 reject('tamper-'+mutation,['restore','--backup',target,'--expect-sha256',expected,'--output',root/('reject-'+mutation)])
                 check(not (root/('reject-'+mutation)).exists(), mutation+' rejected before restore directory creation')
             # Read locks and source transaction consistency, not automatic operation retries.
-            with sqlite3.connect(source,isolation_level=None) as locked:
+            with closing(sqlite3.connect(source,isolation_level=None)) as locked:
                 locked.execute('PRAGMA journal_mode=DELETE'); locked.execute('BEGIN EXCLUSIVE')
                 start=time.monotonic()
                 reject('busy-lock',['create','--database',source,'--output',root/'locked-out','--timeout-ms','100'],'backup_timeout')
@@ -199,7 +200,7 @@ def run(binary, output):
                 for i in range(3):
                     folder=root/f'concurrent-{i}'
                     r=call(f'concurrent-{i}',['backup','create','--database',source,'--output',folder])
-                    with sqlite3.connect(folder/'snapshot.sqlite3') as con:
+                    with closing(sqlite3.connect(folder/'snapshot.sqlite3')) as con:
                         a=con.execute('SELECT n FROM concurrent_a').fetchone()[0];b=con.execute('SELECT n FROM concurrent_b').fetchone()[0]
                     check(a==b,'concurrent snapshot preserves transaction boundary '+str(i))
             finally: stop.set();thread.join(10)
