@@ -1,6 +1,6 @@
 # N48N plan — read-only SQLite deep health inspection
 
-Status: approved after the separate plan audit below; base f83d1b138c88d1413d38a3541d4c929ac82a3b0f.
+Status: done after fixed-source native qualification and separate outcome audit; base f83d1b138c88d1413d38a3541d4c929ac82a3b0f.
 Owner's current instruction explicitly requests the coordinator's own separate audit.
 
 ## Goal and contract
@@ -64,3 +64,10 @@ were unchanged. Preserve that failed test and raw report. Update the contract an
 validator explicitly: preserve every existing main/WAL byte; allow only newly empty
 WAL plus SQLite SHM bookkeeping. No immutable=1 shortcut, checkpoint or file deletion
 is used to hide normal SQLite behavior. No user DB or previous assertion was changed.
+
+## Completed acceptance
+
+Qualified candidate b6d0e800 passed both native platforms and separately reviewed raw
+evidence. See [outcome audit](N48N-HARD-AUDIT.md) and [executed result index](n48n-evidence/RESULT.json).
+Only documentation/history/result indices change at closure; runtime/tests/workflow
+remain fixed. Actual merge is recorded in PR55, not retroactively in old CI reports.
