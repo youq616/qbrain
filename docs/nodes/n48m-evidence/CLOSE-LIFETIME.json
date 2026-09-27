@@ -1,0 +1,10 @@
+{
+  "schema": "qbrain-n48m-close-order-review-v1",
+  "controlled_reconstruction": true,
+  "before_exit": 1,
+  "before_asan_heap_use_after_free": true,
+  "after_direct_checks": 62,
+  "after_exit": 0,
+  "after_diagnostic_bytes": 0,
+  "not_an_archived_upstream_failure": true
+}

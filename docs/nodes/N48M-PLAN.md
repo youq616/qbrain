@@ -56,3 +56,14 @@ Pure native header and early CLI route; standalone direct/test-process suite,
 new dedicated CI, user guide and honest separate outcome audit. Preserve existing
 backup_to migration behavior and all old assertions. Normal expected-head PR;
 no old ZIP/tag rewrite, actual user-machine operation or Issue40 closure.
+
+## Outcome closure — 2026-09-27
+
+Complete for the bounded SQLite source module at d9942612 / treea89ce43c after
+actual native Windows/Linux qualification and the separate N48M-HARD-AUDIT.md
+review. The initial candidate's failed Windows fixture remains recorded.
+Manifest-last requires a successful receipt and externally pinned verification;
+it is not a claim of OS-atomic publication or that every I/O fault leaves zero
+marker bytes. The extra warning-as-error profile is not claimed to pass.
+Closing changes are documentation/history/executed indices only. PR54 records
+the actual merge. No existing package, live brain, PG, signing or Issue40 change.
