@@ -10,6 +10,8 @@
 #include <sqlite3.h>
 
 #include "qbrain/storage/backend.hpp"
+#include "qbrain/storage/pg_backend.hpp"
+#include <stdexcept>
 
 namespace qbrain::storage {
 
@@ -49,6 +51,18 @@ class Database {
   // authorizer/serialize/update_hook seams.
   sqlite3* handle() const;
 
+  // Native transaction state only; no handle escapes the storage facade.
+  bool transaction_active() const {
+    if (!is_open()) return false;
+    if (backend_kind() == BackendKind::sqlite)
+      return sqlite3_get_autocommit(handle()) == 0;
+#ifdef QBRAIN_WITH_PG
+    if (auto* pg = pg_conn_of(*backend_))
+      return PQtransactionStatus(pg) != PQTRANS_IDLE;
+#endif
+    throw std::runtime_error("transaction state unavailable");
+  }
+
   void exec(std::string_view sql);
   int64_t last_insert_rowid() const;
   int changes() const;
@@ -60,7 +74,7 @@ class Database {
   // N38-B wiring seam (Brain::open_pg / n38 harness): arm this facade with
   // an externally constructed, already-open backend (PG mode), closing any
   // backend it held first. Generic by design -- no PG types cross this
-  // boundary, so database.cpp stays libpq-free.
+  // boundary. N48O inspects native transaction state only inside storage.
   void adopt_backend(std::unique_ptr<IStorageBackend> backend);
 
   // N38 D0.5 forwarding shims (see backend.hpp for semantics).

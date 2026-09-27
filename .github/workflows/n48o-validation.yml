@@ -1,0 +1,167 @@
+name: N48O real PostgreSQL session memory
+on:
+  push:
+    branches: [main, 'feature/n48o-pg-session-memory']
+    paths: ['CMakeLists.txt', 'include/qbrain/storage/**', 'src/qbrain/storage/**', 'include/qbrain/memory/**', 'src/qbrain/memory/**', 'tests/test_pg_memory.cpp', '.ci/test_pg_memory.py', '.github/workflows/n48o-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48o-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            suffix: ''
+            config: ''
+          - os: windows-2022
+            platform: windows
+            suffix: '.exe'
+            config: 'Release/'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Pin source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        if: runner.os == 'Linux'
+        with:
+          ref: b810d6898dcbbcd49bdbbed1d8473a3ac1c063e4
+          path: baseline-source
+          persist-credentials: false
+      - name: Disposable native PostgreSQL on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pg_bin="$(dirname "$(find /usr/lib/postgresql -path '*/bin/initdb' | sort -V | tail -1)")"
+          test -x "$pg_bin/initdb"
+          "$pg_bin/initdb" -D "$RUNNER_TEMP/n48o-pg" -U postgres --auth=trust --encoding=UTF8 --no-locale > evidence/pg-init.log
+          "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/n48o-pg" -l "$RUNNER_TEMP/n48o-pg.log" -o '-h 127.0.0.1 -p 55432' -w start
+          export PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres
+          "$pg_bin/psql" -X -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE qbrain_n48o LOGIN PASSWORD 'n48o-synthetic-only'"
+          "$pg_bin/createdb" -O qbrain_n48o qbrain_n48o_native
+          "$pg_bin/createdb" -O qbrain_n48o qbrain_n48o_process
+          echo "$pg_bin" >> "$GITHUB_PATH"
+          echo 'PGHOST=127.0.0.1' >> "$GITHUB_ENV"
+          echo 'PGPORT=55432' >> "$GITHUB_ENV"
+          echo 'PGUSER=qbrain_n48o' >> "$GITHUB_ENV"
+          echo 'PGPASSWORD=n48o-synthetic-only' >> "$GITHUB_ENV"
+          "$pg_bin/postgres" --version > evidence/postgres-version.txt
+      - name: Disposable databases on native Windows PostgreSQL
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:PGROOT -or -not (Test-Path "$env:PGROOT\lib\libpq.lib")) { throw 'Native PostgreSQL/libpq installation required' }
+          $service = Get-Service 'postgresql-x64-*' | Select-Object -First 1
+          Set-Service $service.Name -StartupType Manual
+          Start-Service $service.Name
+          $env:PGHOST = '127.0.0.1'; $env:PGPORT='5432'; $env:PGUSER='postgres'; $env:PGPASSWORD='root'
+          & "$env:PGROOT\bin\psql.exe" -X -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE qbrain_n48o LOGIN PASSWORD 'n48o-synthetic-only'"
+          if ($LASTEXITCODE -ne 0) { throw 'Create disposable role failed' }
+          foreach ($name in @('qbrain_n48o_native','qbrain_n48o_process')) {
+            & "$env:PGROOT\bin\createdb.exe" -O qbrain_n48o $name
+            if ($LASTEXITCODE -ne 0) { throw 'Create disposable database failed' }
+          }
+          "$env:PGROOT\bin" | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+          "QBRAIN_PG_ROOT=$env:PGROOT" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          'PGHOST=127.0.0.1','PGPORT=5432','PGUSER=qbrain_n48o','PGPASSWORD=n48o-synthetic-only' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          & "$env:PGROOT\bin\postgres.exe" --version | Out-File evidence/postgres-version.txt -Encoding utf8
+      - name: Compile real native product and required PG tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/n48o -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=ON -DQBRAIN_REQUIRE_PG=ON | tee evidence/configure.log
+          cmake --build build/n48o --config Release --target qbrain qbrain_pg_memory_tests qbrain_memory_tests qbrain_context_tests qbrain_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
+          ctest --test-dir build/n48o -C Release -R 'qbrain_(memory|context|fact|multiterm|usage_batch|usage_batch_ownership)_unit' --output-on-failure | tee evidence/core.log
+      - name: Real PostgreSQL lifecycle and cross-backend CLI checks
+        shell: bash
+        env:
+          SUFFIX: ${{ matrix.suffix }}
+          CONFIG: ${{ matrix.config }}
+        run: |
+          set -euo pipefail
+          cp "build/n48o/${CONFIG}qbrain${SUFFIX}" "evidence/qbrain${SUFFIX}"
+          cp "build/n48o/${CONFIG}qbrain_pg_memory_tests${SUFFIX}" "evidence/pg-memory-tests${SUFFIX}"
+          export QBRAIN_PG_MEMORY_TEST_DISPOSABLE=1
+          export QBRAIN_PG_MEMORY_TEST_DSN="host=127.0.0.1 port=$PGPORT dbname=qbrain_n48o_native user=qbrain_n48o password=n48o-synthetic-only"
+          export QBRAIN_PG_PROCESS_TEST_DSN="host=127.0.0.1 port=$PGPORT dbname=qbrain_n48o_process user=qbrain_n48o password=n48o-synthetic-only"
+          export PGDATABASE=qbrain_n48o_process
+          "evidence/pg-memory-tests${SUFFIX}" > evidence/native-result.json
+          python .ci/test_pg_memory.py --binary "evidence/qbrain${SUFFIX}" --output evidence/process-normal | tee evidence/process-normal.json
+          python -O .ci/test_pg_memory.py --binary "evidence/qbrain${SUFFIX}" --output evidence/process-optimized | tee evidence/process-optimized.json
+          psql -X -q -A -t -v ON_ERROR_STOP=1 -c 'SELECT version()' > evidence/server-version.txt
+          pg_dump --no-owner --no-privileges --format=plain > evidence/synthetic-process.sql
+      - name: Original Windows full registry
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/windows-full.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/windows-full.log').read_text(encoding='utf-8-sig'),60)))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Fixed Linux baseline for unchanged regressions
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C baseline-source rev-parse HEAD)" = b810d6898dcbbcd49bdbbed1d8473a3ac1c063e4
+          cmake -S baseline-source -B baseline-source/build/base -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
+          cmake --build baseline-source/build/base --target qbrain --parallel 2 > evidence/baseline-build.log 2>&1
+          cp baseline-source/build/base/qbrain evidence/baseline-qbrain
+      - name: Fixed Windows baseline for unchanged regressions
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-current-preview-b810d689/qbrain-windows-x64-n47x-preview.zip' -OutFile baseline.zip
+          if ((Get-FileHash baseline.zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d') { throw 'Baseline mismatch' }
+          Expand-Archive baseline.zip baseline
+          Copy-Item baseline/qbrain.exe evidence/baseline-qbrain.exe
+      - name: Unchanged accounting lifecycle and application gates
+        shell: bash
+        env:
+          SUFFIX: ${{ matrix.suffix }}
+        run: |
+          set -euo pipefail
+          python .ci/run_n48i_checks.py --binary "evidence/qbrain${SUFFIX}" --baseline "evidence/baseline-qbrain${SUFFIX}" --output evidence/retained | tee evidence/retained-summary.json
+      - name: Original SQLite session CLI regression
+        shell: bash
+        env:
+          SUFFIX: ${{ matrix.suffix }}
+        run: |
+          set -euo pipefail
+          python .ci/test_memory_cycle.py --binary "evidence/qbrain${SUFFIX}" > evidence/sqlite-memory-process.log 2>&1
+          python -O .ci/test_memory_cycle.py --binary "evidence/qbrain${SUFFIX}" > evidence/sqlite-memory-process-optimized.log 2>&1
+          git diff --exit-code > evidence/worktree-diff.log
+      - name: Retain Windows libpq dependency files
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force evidence/pg-runtime | Out-Null
+          Get-ChildItem "$env:PGROOT\bin\*.dll" | Copy-Item -Destination evidence/pg-runtime
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48o-${{ matrix.platform }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 14
