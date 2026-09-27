@@ -199,7 +199,9 @@ def run(binary,output):
             inspect('directory-as-file',root,2)
             for index,args in enumerate([[],['check'],['repair','--database',pristine],['check','--database',pristine,'--repair','1'],['check','--database',pristine,'--database',pristine],['check','--database',pristine,'--timeout-ms'],['check','--database',pristine,'--timeout-ms','0'],['check','--database',pristine,'--timeout-ms','99'],['check','--database',pristine,'--timeout-ms','120001'],['check','--database',pristine,'--timeout-ms','NaN'],['check','--database','file:other?mode=rw'],['check','--database','../other.db']]):
                 call('invalid-args-'+str(index),['database',*args],2)
-            hard=root/'hard.db';os.link(pristine,hard)
+            # Windows runners use different volumes for checkout (D:) and TEMP (C:).
+            # Hard links must share a volume: preserve the rejection probe, not skip it.
+            hard=pristine.with_name('hard-link.db');os.link(pristine,hard)
             try: inspect('hard-link',hard,2)
             finally:hard.unlink()
             link=root/'linked.db'
