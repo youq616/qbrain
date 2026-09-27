@@ -53,3 +53,10 @@ scorers, cost bridge, packaging scripts and the immutable N48K ZIP byte-for-byte
 Rollback removes additive files; no migration. The tool remains optional Python,
 not a required application service. PG/signing/Issue40 and real host/model gates
 remain separate. Do not silently substitute a synthetic test for them.
+
+## Acceptance closure — 2026-09-27
+
+Done for the bounded source module after original d79181be qualification and
+7e5d4ddc independent Windows/Linux review. See N48L-HARD-AUDIT.md and
+n48l-evidence/RESULT.json. No real model/client, full-pipeline, PG/signing,
+stable-release or Issue40 gate is closed. Actual merge identity is in PR53.

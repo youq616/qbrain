@@ -1,0 +1,92 @@
+[
+  {
+    "scenario": "perfect-less",
+    "grounded": {
+      "with-context": 50,
+      "without-context": 50
+    },
+    "resolved": {
+      "with-context": 25,
+      "without-context": 0
+    },
+    "decision": "CANDIDATE_DOMINATES_OBSERVED_CASES",
+    "main_cost_change": "-0.003086417500",
+    "evaluation_sha256": "a4f89f657c6b1384867ce08d80e231f0f7229c87189b3c8e24b46f8278f23f5c",
+    "synthetic_only": true
+  },
+  {
+    "scenario": "perfect-equal",
+    "grounded": {
+      "with-context": 50,
+      "without-context": 50
+    },
+    "resolved": {
+      "with-context": 25,
+      "without-context": 0
+    },
+    "decision": "CANDIDATE_DOMINATES_OBSERVED_CASES",
+    "main_cost_change": "0.000000000000",
+    "evaluation_sha256": "3e9719e5f42ab2ac7a611fbee86c65150324e45f1bb3bc335ab0655e637012b6",
+    "synthetic_only": true
+  },
+  {
+    "scenario": "perfect-more",
+    "grounded": {
+      "with-context": 50,
+      "without-context": 50
+    },
+    "resolved": {
+      "with-context": 25,
+      "without-context": 0
+    },
+    "decision": "TRADEOFF_OBSERVED",
+    "main_cost_change": "0.003086417500",
+    "evaluation_sha256": "fbbd2e47a96296c0fa49f7eafbeaefc236a8919d67adacdfd41a672dec5e9d93",
+    "synthetic_only": true
+  },
+  {
+    "scenario": "both-wrong-less",
+    "grounded": {
+      "with-context": 25,
+      "without-context": 25
+    },
+    "resolved": {
+      "with-context": 0,
+      "without-context": 0
+    },
+    "decision": "CANDIDATE_DOMINATES_OBSERVED_CASES",
+    "main_cost_change": "-0.003086417500",
+    "evaluation_sha256": "23d6b7b5ba4d990264782abf0d4b8dcce9530a52b447483707f995826aa294d7",
+    "synthetic_only": true
+  },
+  {
+    "scenario": "all-abstain",
+    "grounded": {
+      "with-context": 20,
+      "without-context": 50
+    },
+    "resolved": {
+      "with-context": 0,
+      "without-context": 0
+    },
+    "decision": "TRADEOFF_OBSERVED",
+    "main_cost_change": "-0.003086417500",
+    "evaluation_sha256": "b934f4e7e5d1366da7ad50dfbb71d46b0d239df3ecd08c5463ec4714b42e9757",
+    "synthetic_only": true
+  },
+  {
+    "scenario": "stop-100",
+    "grounded": {
+      "with-context": 49,
+      "without-context": 50
+    },
+    "resolved": {
+      "with-context": 24,
+      "without-context": 0
+    },
+    "decision": "NOT_COMPARABLE",
+    "main_cost_change": null,
+    "evaluation_sha256": "b3190a78d9d6a180a35b691eed437f2d6aa4db6cf0d3b3f8253123563f40c24e",
+    "synthetic_only": true
+  }
+]
