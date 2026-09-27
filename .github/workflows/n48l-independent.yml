@@ -1,0 +1,91 @@
+name: N48L independent paired-outcome review
+on:
+  push:
+    branches: ['feature/n48l-model-evaluation']
+    paths: ['.ci/review_n48l.py', '.github/workflows/n48l-independent.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  review:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: '10905263046'
+            digest: '12e35dd6e29418cf44eca28cdb2f65c7ed49f1886fecb67437c1ed5e6e4718d3'
+            platform: portable
+            suffix: ''
+          - os: windows-latest
+            artifact: '10905815734'
+            digest: 'f11fccc592171016c8a55c81d89694f552df74dd12b5c18c684d08bae278a316'
+            platform: windows
+            suffix: '.exe'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Pin reviewer source and retrieve original qualified artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT: ${{ matrix.artifact }}
+          DIGEST: ${{ matrix.digest }}
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          python - <<'PY'
+          import os, urllib.request, urllib.error, urllib.parse, zipfile, hashlib
+          from pathlib import Path
+          request = urllib.request.Request('https://api.github.com/repos/youq616/qbrain/actions/artifacts/'+os.environ['ARTIFACT']+'/zip', headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+          try:
+              response=urllib.request.build_opener(NoRedirect).open(request, timeout=60)
+          except urllib.error.HTTPError as error:
+              assert error.code in (301,302,303,307,308)
+              url=error.headers['Location']
+              assert urllib.parse.urlsplit(url).scheme=='https'
+              response=urllib.request.urlopen(url, timeout=60)  # no token on storage redirect
+          with response:
+              raw=response.read(64*1024*1024+1)
+          assert hashlib.sha256(raw).hexdigest()==os.environ['DIGEST']
+          Path('original.zip').write_bytes(raw)
+          with zipfile.ZipFile('original.zip') as z:
+              assert z.testzip() is None
+              z.extractall('original')
+          with zipfile.ZipFile('original/source.zip') as z:
+              assert z.comment.decode()=='d79181be96d4cfb3db74ec01048562e6db06e177'
+              for item in z.infolist():
+                  if item.is_dir(): continue
+                  actual=Path(item.filename).read_bytes()
+                  old=z.read(item.filename)
+                  assert actual.replace(b'\r\n',b'\n')==old.replace(b'\r\n',b'\n'), item.filename
+          PY
+      - name: Independent complete native CLI matrix in both Python modes
+        shell: bash
+        env:
+          SUFFIX: ${{ matrix.suffix }}
+        run: |
+          set -euo pipefail
+          cp "original/qbrain${SUFFIX}" "evidence/qbrain${SUFFIX}"
+          chmod +x "evidence/qbrain${SUFFIX}"
+          python .ci/review_n48l.py --fixture original/evaluation-normal/loopback --tool tools/acceptance/model_evaluation.py --binary "evidence/qbrain${SUFFIX}" --output evidence/review-normal | tee evidence/review-normal.log
+          python -O .ci/review_n48l.py --fixture original/evaluation-optimized/loopback --tool tools/acceptance/model_evaluation.py --binary "evidence/qbrain${SUFFIX}" --output evidence/review-optimized | tee evidence/review-optimized.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48l-independent-${{ matrix.platform }}
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error

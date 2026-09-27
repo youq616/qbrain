@@ -1,0 +1,135 @@
+{
+  "schema": "qbrain-n48l-outcome-v1",
+  "date": "2026-09-27",
+  "verdict": "PASS_BOUNDED_SOURCE_MODULE",
+  "base_main": "89a4e1c88341409fe726a82cdd5779af52ded5ef",
+  "implementation_commit": "d79181be96d4cfb3db74ec01048562e6db06e177",
+  "implementation_tree": "c07e715eaaa2af0b4602420b3942d8ae2fbaf41a",
+  "review_commit": "7e5d4ddc407c6656b64e06f8c475881313dc2efb",
+  "review_tree": "352dc9dea6dd6a412af95d933b2b131da66665fd",
+  "workflow_runs": [
+    {
+      "id": 36239071944,
+      "jobs": [
+        108396078616,
+        108396078764
+      ],
+      "success": true
+    },
+    {
+      "id": 36305969704,
+      "jobs": [
+        108582590365,
+        108582590502
+      ],
+      "success": true
+    }
+  ],
+  "original_artifacts": [
+    {
+      "platform": "portable",
+      "artifact_sha256": "12e35dd6e29418cf44eca28cdb2f65c7ed49f1886fecb67437c1ed5e6e4718d3",
+      "source_files": 1434,
+      "crlf_only": 0,
+      "source_commit": "d79181be96d4cfb3db74ec01048562e6db06e177",
+      "binary_sha256": "6610eb3803bf8ed59ff14d87e50d9499b2eed8ca9c95c65807bc71a412e178fa",
+      "test_counts": {
+        "evaluation-normal": 28,
+        "evaluation-optimized": 28,
+        "bridge-normal": 27,
+        "bridge-optimized": 27,
+        "acceptance-normal": 48,
+        "acceptance-optimized": 48
+      },
+      "driver_steps": 55,
+      "windows_original_groups": null,
+      "artifact_id": 10905263046
+    },
+    {
+      "platform": "windows",
+      "artifact_sha256": "f11fccc592171016c8a55c81d89694f552df74dd12b5c18c684d08bae278a316",
+      "source_files": 1434,
+      "crlf_only": 1419,
+      "source_commit": "d79181be96d4cfb3db74ec01048562e6db06e177",
+      "binary_sha256": "f2b75fc00f60d3702bf3ab714ddadc1f399ffc9cb16563c2e094b01e77bad50f",
+      "test_counts": {
+        "evaluation-normal": 28,
+        "evaluation-optimized": 28,
+        "bridge-normal": 27,
+        "bridge-optimized": 27,
+        "acceptance-normal": 48,
+        "acceptance-optimized": 48
+      },
+      "driver_steps": 55,
+      "windows_original_groups": 60,
+      "artifact_id": 10905815734
+    }
+  ],
+  "supplement_artifacts": [
+    {
+      "platform": "portable",
+      "source_files": 1437,
+      "crlf_only": 0,
+      "archive_sha256": "42628cc3e46326e9d4c6ee709f2776d3b94cbae50f6ec921c07efe3738b647ed",
+      "binary_sha256": "6610eb3803bf8ed59ff14d87e50d9499b2eed8ca9c95c65807bc71a412e178fa",
+      "tool_sha256": "5eb9343315f0ccae6f6fef5c62f16dbaa91559773b680f0f39e2207a5d7506d8",
+      "reviewer_sha256": "29e3d9b502ee75ed56d8b695c786e9d4cd439273e269281770b24bda0654ad04",
+      "modes": [
+        {
+          "mode": "normal",
+          "cases": 68,
+          "identity_pass": true
+        },
+        {
+          "mode": "optimized",
+          "cases": 68,
+          "identity_pass": true
+        }
+      ],
+      "artifact_id": 10927406119
+    },
+    {
+      "platform": "windows",
+      "source_files": 1437,
+      "crlf_only": 1422,
+      "archive_sha256": "9b57e175a04497f05575ffc0fba23110916d975057753be10e950fc03e814d9a",
+      "binary_sha256": "f2b75fc00f60d3702bf3ab714ddadc1f399ffc9cb16563c2e094b01e77bad50f",
+      "tool_sha256": "73140362ee50c3aafc61346118bd3d7641ce38e2b61fc011a59e256b7fc1ec35",
+      "reviewer_sha256": "f07658975b175653cf672da7ce7d44c0b3f5611d57ea1ea51c8205bf7ed5cf72",
+      "modes": [
+        {
+          "mode": "normal",
+          "cases": 68,
+          "identity_pass": true
+        },
+        {
+          "mode": "optimized",
+          "cases": 68,
+          "identity_pass": true
+        }
+      ],
+      "artifact_id": 10927825524
+    }
+  ],
+  "readback": {
+    "original_accounting_sets": 24,
+    "original_joint_bundles": 4,
+    "supplement_case_runs": 272,
+    "local_review_per_mode": 68,
+    "local_shards_per_mode": 4,
+    "checker_mutations_rejected_per_mode": 12
+  },
+  "reviewer": "Owner-authorized separate coordinator self-review, not a third party or subagent",
+  "scope": {
+    "real_model_quality_verified": false,
+    "real_client_consumption_verified": false,
+    "full_pipeline_costs_included": false,
+    "paid_requests": false,
+    "n48k_zip_replaced": false,
+    "issue40_closed": false
+  },
+  "retained_failures": [
+    "initial reviewer lazy generator TypeError",
+    "two tool-limited unsharded local runs, not accepted as passes"
+  ]
+}

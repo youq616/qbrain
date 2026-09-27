@@ -1,34 +1,29 @@
 # Qbrain
 
 Windows 原生 C++20 / PowerShell 记忆与知识库，默认 SQLite + FTS5。
-不要求 Docker、WSL 或 Python 常驻服务；可选评测脚本需要 Python。
+不要求 Docker、WSL 或 Python 常驻服务；可选离线评测使用 Python。
 
-## N48K：可运行的 Windows 集成候选
+## N48L：逐题质量与主请求费用联合评估
 
-将 N47X 之后的回执、MCP/OpenCode、精确计价及 N48J 模型执行费用桥接整合到
-一个独立 Windows x64 ZIP。无需自行编译。它仍是未签名开发候选，不是稳定版，
-不会自动安装或授权采集；本轮没有替换旧 N47X GitHub Release。
+`tools/acceptance/model_evaluation.py export|verify` 将同一次模型执行的原始回答、
+离线评分答案与费用账本绑定起来。分别报告 50 题的依据上下文正确率、25 道可解题
+的解决率，并逐题列改善/退步。更便宜的拒答或总分抵消不能代替解决问题。
+完整响应且费用可比时才给本批样本的逐题优劣/取舍关系，不认证真实模型效果。
 
-运行包为 `qbrain-windows-x64-n48k-candidate.zip`，4,890,639 字节、51 个成员。
-SHA256：`58d56b7bd7c9a662514e41d20bacb88c68c92bbe3fc380496a09331bf1f5cafa`。
-原始完整资格验证通过；另补齐升级前回执保留测试，两个 Windows 运行环境中的
-PowerShell 5/7 均验证升级、回退、再次升级和卸载，事实及有效/已撤销回执完整保留。
-这不是对真实登录客户端记忆消费或所有 Windows 用户环境的认证。
+原模块 d79181be 与本轮独立审核 7e5d4ddc 均取得 Windows/Linux 结果；旧实现、
+评分器和计价保持原字节。最终结论见 [当前状态](CURRENT-STATUS.md)、
+[中文用法](docs/integration/MODEL-QUALITY-COST.zh-CN.md)、
+[分离自审](docs/nodes/N48L-HARD-AUDIT.md) 与
+[PR53](https://github.com/youq616/qbrain/pull/53)。
 
-[实际交付与合并 PR52](https://github.com/youq616/qbrain/pull/52) ·
-[外部验收记录](docs/nodes/n48k-evidence/ACCEPTANCE.json) ·
-[自审报告](docs/nodes/N48K-HARD-AUDIT.md) · [当前状态](CURRENT-STATUS.md)。
-包内构建 MANIFEST 保持原字节；最终验收通过外部记录绑定同一 ZIP，不改包冒充新构建。
+## Windows 候选包与使用边界
 
-## 使用与已有能力
+已交付的 N48K Windows 集成候选仍可使用，且其 ZIP 没有被本轮改写。
+它含 N48I 原生费用对照与 N48J 费用桥接，但不会自动包含新的 N48L Python 脚本。
+新工具从本轮源码或单独工具包取得；不覆盖旧包、脑库或历史报告。
+[候选包说明](docs/integration/WINDOWS-CANDIDATE-N48K.zh-CN.md)。
 
-先核验摘要并解压到新目录，再读包内 START-HERE 或
-[候选包说明](docs/integration/WINDOWS-CANDIDATE-N48K.zh-CN.md)。保留旧目录与脑库备份。
-N48J 提供执行记录费用桥接；N48I 提供任务配对费用对照；N48G/H 导入供应商用量；
-N48E/D 提供 OpenCode 生命周期与隔离 MCP 检查；N47Y/Z 提供回执审计与批量处理。
-完整原生构建入口仍是 scripts/build-cl.ps1 和 scripts/build-tests-cl.ps1。
-
-真实客户端后续记忆消费、真实模型质量/全流程费用、PG 对等、签名、稳定版和
-Issue40 启动超时根因仍须独立验收，不因候选包测试通过而关闭。
-[既有路线](docs/COMPLETION-ROADMAP.md) · [本机交接](LOCAL-AGENT-HANDOFF.md) ·
-[上一 README](README-N48J.md) · [LICENSE](LICENSE)。
+N48L 离线运行，不发起付费请求、不安装 Hook、不修改脑库，也不传出评分答案。
+只计计划内主请求，不含全部辅助费用；结构化测试不等于通用回答质量或登录客户端
+实际记忆消费。未签名候选、PG、签名、稳定版和 Issue40 仍有独立验收要求。
+[此前路线](docs/COMPLETION-ROADMAP.md) · [上一 README](README-N48K.md) · [LICENSE](LICENSE)。
