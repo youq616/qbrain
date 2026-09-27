@@ -1,5 +1,6 @@
 #include "qbrain/cli/app.hpp"
 #include "qbrain/maintenance/sqlite_backup.hpp"
+#include "qbrain/maintenance/sqlite_check.hpp"
 #include "qbrain/accounting/token_cost.hpp"
 #include "qbrain/accounting/cost_comparison.hpp"
 #include "qbrain/accounting/provider_usage.hpp"
@@ -10,6 +11,10 @@
 namespace {
 // Dispatch the explicit isolated checker before registry/default-brain setup.
 int dispatch(int argc,char** argv) {
+  if(argc>1 && std::string(argv[1])=="database") {
+    std::vector<std::string> args;for(int i=2;i<argc;++i)args.emplace_back(argv[i]);
+    return qbrain::maintenance::check::command(args);
+  }
   if(argc>1 && std::string(argv[1])=="backup") {
     std::vector<std::string> args;for(int i=2;i<argc;++i)args.emplace_back(argv[i]);
     return qbrain::maintenance::backup::command(args);
@@ -37,7 +42,7 @@ int dispatch(int argc,char** argv) {
   if(argc==1 || (argc>1 && (std::string(argv[1])=="help" || std::string(argv[1])=="--help" || std::string(argv[1])=="-h")))
     std::cout<<"Additional command: opencode preview|install|status|audit|uninstall-preview|uninstall|recovery-preview|recover|reconcile-preview|reconcile --project PATH.\n";
   if(argc==1 || (argc>1 && (std::string(argv[1])=="help" || std::string(argv[1])=="--help" || std::string(argv[1])=="-h")))
-    std::cout<<"Additional command: cost report|import|import-stream|compare (bounded JSON from stdin; no network or brain access).\nAdditional command: backup create|verify|restore (explicit SQLite file; restore to a new directory only).\n";
+    std::cout<<"Additional command: cost report|import|import-stream|compare (bounded JSON from stdin; no network or brain access).\nAdditional command: backup create|verify|restore (explicit SQLite file; restore to a new directory only).\nAdditional command: database check --database PATH [--timeout-ms N] (read-only deep SQLite/FTS inspection).\n";
   return result;
 }
 }
