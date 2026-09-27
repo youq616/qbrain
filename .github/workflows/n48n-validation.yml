@@ -1,0 +1,126 @@
+name: N48N read-only SQLite and FTS health
+on:
+  push:
+    branches: [main, 'feature/n48n-sqlite-check']
+    paths: ['include/qbrain/maintenance/**', 'src/qbrain/main.cpp', 'tests/test_sqlite_check.cpp', 'tests/sqlite_check/**', '.ci/test_sqlite_check.py', '.github/workflows/n48n-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48n-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: portable
+            suffix: ''
+            config: ''
+          - os: windows-latest
+            platform: windows
+            suffix: '.exe'
+            config: 'Release/'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Exact candidate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        if: runner.os != 'Windows'
+        with:
+          ref: b810d6898dcbbcd49bdbbed1d8473a3ac1c063e4
+          path: baseline-source
+          persist-credentials: false
+      - name: Native Windows product and unchanged full60
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/native.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/native.log').read_text(encoding='utf-8-sig'),60)))" | Tee-Object evidence/native-groups.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/cl/qbrain.exe evidence/qbrain.exe
+          Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-current-preview-b810d689/qbrain-windows-x64-n47x-preview.zip' -OutFile baseline.zip
+          if ((Get-FileHash baseline.zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d') { throw 'Baseline mismatch' }
+          Expand-Archive baseline.zip baseline
+          Copy-Item baseline/qbrain.exe evidence/baseline-qbrain.exe
+      - name: Portable product and retained core
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C baseline-source rev-parse HEAD)" = b810d6898dcbbcd49bdbbed1d8473a3ac1c063e4
+          cmake -S baseline-source -B baseline-source/build/base -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
+          cmake --build baseline-source/build/base --target qbrain --parallel 2 > evidence/baseline-build.log 2>&1
+          cp baseline-source/build/base/qbrain evidence/baseline-qbrain
+          cmake -S . -B build/product -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
+          cmake --build build/product --target qbrain qbrain_memory_tests qbrain_context_tests qbrain_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/product-build.log 2>&1
+          ctest --test-dir build/product -R 'qbrain_(memory|context|fact|multiterm|usage_batch|usage_batch_ownership)_unit' --output-on-failure | tee evidence/core-ctest.log
+          cp build/product/qbrain evidence/qbrain
+      - name: New direct and actual diagnostic checks
+        shell: bash
+        env:
+          SUFFIX: ${{ matrix.suffix }}
+          CONFIG: ${{ matrix.config }}
+        run: |
+          set -euo pipefail
+          cmake -S tests/sqlite_check -B build/check -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/check --config Release --parallel 2 > evidence/check-build.log 2>&1
+          ctest --test-dir build/check -C Release --output-on-failure | tee evidence/check-ctest.log
+          cp "build/check/${CONFIG}qbrain_database_tests${SUFFIX}" evidence/
+          "evidence/qbrain_database_tests${SUFFIX}" | tee evidence/check-direct.json
+          python .ci/test_sqlite_check.py --binary "evidence/qbrain${SUFFIX}" --output evidence/check-normal | tee evidence/check-normal.log
+          python -O .ci/test_sqlite_check.py --binary "evidence/qbrain${SUFFIX}" --output evidence/check-optimized | tee evidence/check-optimized.log
+          python .ci/test_sqlite_check.py --binary "evidence/qbrain${SUFFIX}" --output evidence/check-normal --verify | tee evidence/check-readback-normal.json
+          python -O .ci/test_sqlite_check.py --binary "evidence/qbrain${SUFFIX}" --output evidence/check-optimized --verify | tee evidence/check-readback-optimized.json
+      - name: Direct backup checks and independent actual database recovery
+        shell: bash
+        env:
+          SUFFIX: ${{ matrix.suffix }}
+          CONFIG: ${{ matrix.config }}
+        run: |
+          set -euo pipefail
+          cmake -S tests/sqlite_backup -B build/backup -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/backup --config Release --parallel 2 > evidence/direct-build.log 2>&1
+          ctest --test-dir build/backup -C Release --output-on-failure | tee evidence/direct-ctest.log
+          cp "build/backup/${CONFIG}qbrain_backup_tests${SUFFIX}" evidence/
+          "evidence/qbrain_backup_tests${SUFFIX}" | tee evidence/direct-result.json
+          python .ci/test_sqlite_backup.py --binary "evidence/qbrain${SUFFIX}" --output evidence/backup-normal | tee evidence/backup-normal.log
+          python -O .ci/test_sqlite_backup.py --binary "evidence/qbrain${SUFFIX}" --output evidence/backup-optimized | tee evidence/backup-optimized.log
+          python .ci/test_sqlite_backup.py --binary "evidence/qbrain${SUFFIX}" --output evidence/backup-normal --verify | tee evidence/readback-normal.json
+          python -O .ci/test_sqlite_backup.py --binary "evidence/qbrain${SUFFIX}" --output evidence/backup-optimized --verify | tee evidence/readback-optimized.json
+      - name: Original accounting lifecycle MCP and application gates
+        shell: bash
+        env:
+          SUFFIX: ${{ matrix.suffix }}
+        run: |
+          set -euo pipefail
+          python .ci/run_n48i_checks.py --binary "evidence/qbrain${SUFFIX}" --baseline "evidence/baseline-qbrain${SUFFIX}" --output evidence/retained | tee evidence/retained-summary.json
+      - name: Preserve exact worktree scripts
+        if: always()
+        shell: bash
+        run: |
+          cp -r .ci evidence/scripts
+          git diff --exit-code > evidence/worktree-diff.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48n-${{ matrix.platform }}
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
