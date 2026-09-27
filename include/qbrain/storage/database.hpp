@@ -10,8 +10,6 @@
 #include <sqlite3.h>
 
 #include "qbrain/storage/backend.hpp"
-#include "qbrain/storage/pg_backend.hpp"
-#include <stdexcept>
 
 namespace qbrain::storage {
 
@@ -32,7 +30,7 @@ enum class BackendKind { sqlite, postgres };
 // N38 D0.5 (plan P0-1): backend_file_path / backup_to / fts_search forward
 // to the new IStorageBackend capabilities, and handle() is no longer part of
 // the contract -- it remains here as a documented sqlite test hook
-// (authorizer/serialize/update_hook); production code must not call it.
+// (authorizer/serialize/update_hook); callers outside storage must not use it.
 class Database {
  public:
   Database() = default;
@@ -52,16 +50,7 @@ class Database {
   sqlite3* handle() const;
 
   // Native transaction state only; no handle escapes the storage facade.
-  bool transaction_active() const {
-    if (!is_open()) return false;
-    if (backend_kind() == BackendKind::sqlite)
-      return sqlite3_get_autocommit(handle()) == 0;
-#ifdef QBRAIN_WITH_PG
-    if (auto* pg = pg_conn_of(*backend_))
-      return PQtransactionStatus(pg) != PQTRANS_IDLE;
-#endif
-    throw std::runtime_error("transaction state unavailable");
-  }
+  bool transaction_active() const;
 
   void exec(std::string_view sql);
   int64_t last_insert_rowid() const;

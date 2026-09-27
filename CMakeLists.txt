@@ -119,6 +119,7 @@ qbrain_lib(storage
   src/qbrain/storage/database.cpp
   src/qbrain/storage/migrate.cpp
   src/qbrain/storage/pg_backend.cpp
+  src/qbrain/storage/transaction_state.cpp
 )
 target_link_libraries(qbrain_storage PUBLIC qbrain_util)
 if(QBRAIN_PG_ENABLED)

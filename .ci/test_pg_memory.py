@@ -42,7 +42,9 @@ def main(binary, output):
             hashes[suffix] = hashlib.sha256(raw).hexdigest()
         rows.append(dict(name=name, command=[str(x) for x in args], exit=p.returncode, expected_exit=expected, hashes=hashes))
         check(p.returncode == expected, name+' exit')
-        check(not p.stderr, name+' stderr')
+        expected_stderr = (b'[qbrain-serve] stdio MCP ready brain=n48o write=disabled\n'
+                           b'[qbrain-serve] shutdown: stdin EOF\n') if name.endswith(':MCP deny') else b''
+        check(p.stderr.replace(b'\r\n', b'\n') == expected_stderr, name+' exact stderr')
         return p.stdout
     def psql(sql, query=False):
         if query:
