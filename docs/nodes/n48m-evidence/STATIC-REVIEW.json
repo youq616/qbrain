@@ -1,0 +1,24 @@
+{
+  "schema": "qbrain-n48m-static-tree-review-v1",
+  "base_commit": "1e7ff0d6a2a744c34e0051308301421bdaf50631",
+  "base_tree": "7f699d3ec48f3049e3177995ef2d9cf0947a7069",
+  "tested_candidate": "d9942612a2ed3aecd1696265802d3f554715d0dd",
+  "tested_tree": "a89ce43cd785faf1cc26f3d97a5bf2688d5b2828",
+  "base_files": 1443,
+  "candidate_files": 1450,
+  "changed_paths": [
+    "A\t.ci/test_sqlite_backup.py",
+    "A\t.github/workflows/n48m-validation.yml",
+    "A\tdocs/nodes/N48M-PLAN-AUDIT.md",
+    "A\tdocs/nodes/N48M-PLAN.md",
+    "A\tinclude/qbrain/maintenance/sqlite_backup.hpp",
+    "M\tsrc/qbrain/main.cpp",
+    "A\ttests/sqlite_backup/CMakeLists.txt",
+    "A\ttests/test_sqlite_backup.cpp"
+  ],
+  "original_files_unchanged_except_early_cli_route_and_help": true,
+  "old_tests_unchanged": true,
+  "old_storage_backup_to_unchanged": true,
+  "runtime_header_sha256": "a90730b68dab73e0a9fece32b1ef9059d099533fcbfa88eb586f7fa744376af4",
+  "local_commits_are_byte_identical_tree_mirrors_not_original_remote_commits": true
+}

@@ -1,0 +1,394 @@
+{
+  "schema": "qbrain-n48m-outcome-v1",
+  "recorded_at_utc": "2026-09-27T09:55:17.324757+00:00",
+  "verdict": "PASS_BOUNDED_SQLITE_BACKUP_RESTORE_MODULE",
+  "base_main": "1e7ff0d6a2a744c34e0051308301421bdaf50631",
+  "qualified_commit": "d9942612a2ed3aecd1696265802d3f554715d0dd",
+  "qualified_tree": "a89ce43cd785faf1cc26f3d97a5bf2688d5b2828",
+  "reviewer": "ChatGPT; owner-authorized separate post-implementation engineering self-review, not a subagent or third party",
+  "workflow_observations": [
+    {
+      "run_id": 36309034614,
+      "attempt": 1,
+      "jobs": [
+        108592708070,
+        108592708176
+      ],
+      "all_jobs": "completed/success",
+      "downloaded_artifacts": 2
+    },
+    {
+      "run_id": 36309037673,
+      "attempt": 1,
+      "jobs": [
+        108591288263,
+        108591288397
+      ],
+      "all_jobs": "completed/success",
+      "downloaded_artifacts": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "archive_bytes": 30260229,
+      "archive_sha256": "bb4fd9967616dacf0ae9d2aade629a224867e7492a6a4dbf89d8c483f7745247",
+      "backup_process": {
+        "normal": {
+          "checks": 106,
+          "commands": 45,
+          "skipped": []
+        },
+        "optimized": {
+          "checks": 106,
+          "commands": 45,
+          "skipped": []
+        }
+      },
+      "baseline_sha256": "7399af97dde5b97cc87667dc7e0e3fbdbf79b8b435fbfb62f01f2cb4cfd4e57e",
+      "binary_sha256": "c013962e1dc219aef3029143a983e40db3aae757ca16f18fd53e269024518786",
+      "commit": "d9942612a2ed3aecd1696265802d3f554715d0dd",
+      "crlf_only_files": 0,
+      "driver_steps": 55,
+      "native_original_groups": null,
+      "nested_driver_steps": {
+        "lifecycle": 16,
+        "retained": 18
+      },
+      "new_direct_checks": 62,
+      "new_windows_execution_here": false,
+      "passed": true,
+      "platform": "portable",
+      "schema": "qbrain-n48m-ci-identity-review-v1",
+      "source_files": 1450,
+      "tree": "a89ce43cd785faf1cc26f3d97a5bf2688d5b2828",
+      "artifact_id": 10928239997,
+      "run_id": 36309034614,
+      "retained_report_readbacks": 23,
+      "backup_raw_readback": {
+        "normal": {
+          "passed": true,
+          "commands": 45,
+          "checks": 106,
+          "sqlite_tables": 32,
+          "mode": "normal",
+          "platform": "posix",
+          "skipped": [],
+          "new_native_execution": false,
+          "source_authenticated": false,
+          "rejected_mutations": [
+            "drop-command",
+            "swap-order",
+            "bool-exit",
+            "changed-scope",
+            "wrong-manifest-pin",
+            "false-zero-calls",
+            "changed-restored-row",
+            "missing-withdrawn",
+            "altered-timestamp",
+            "changed-expected-rows",
+            "duplicate-json",
+            "wrong-error",
+            "extra-raw",
+            "missing-hash"
+          ]
+        },
+        "optimized": {
+          "passed": true,
+          "commands": 45,
+          "checks": 106,
+          "sqlite_tables": 32,
+          "mode": "optimized",
+          "platform": "posix",
+          "skipped": [],
+          "new_native_execution": false,
+          "source_authenticated": false,
+          "rejected_mutations": [
+            "drop-command",
+            "swap-order",
+            "bool-exit",
+            "changed-scope",
+            "wrong-manifest-pin",
+            "false-zero-calls",
+            "changed-restored-row",
+            "missing-withdrawn",
+            "altered-timestamp",
+            "changed-expected-rows",
+            "duplicate-json",
+            "wrong-error",
+            "extra-raw",
+            "missing-hash"
+          ]
+        }
+      }
+    },
+    {
+      "archive_bytes": 28926933,
+      "archive_sha256": "d664ae5037fabe0e36e2ec44153b1f3ca6d644b0b3a820160251e788c1cfe5a9",
+      "backup_process": {
+        "normal": {
+          "checks": 112,
+          "commands": 47,
+          "skipped": []
+        },
+        "optimized": {
+          "checks": 112,
+          "commands": 47,
+          "skipped": []
+        }
+      },
+      "baseline_sha256": "838955a0ad88779af08c53396b773d62b327cccd4f216a18379f0a76ffa4c9cf",
+      "binary_sha256": "f81ad718576e02b527bd3542794f215c407c83d2218bb4128597340582dc4bd5",
+      "commit": "d9942612a2ed3aecd1696265802d3f554715d0dd",
+      "crlf_only_files": 1435,
+      "driver_steps": 55,
+      "native_original_groups": 60,
+      "nested_driver_steps": {
+        "lifecycle": 16,
+        "retained": 18
+      },
+      "new_direct_checks": 59,
+      "new_windows_execution_here": false,
+      "passed": true,
+      "platform": "windows",
+      "schema": "qbrain-n48m-ci-identity-review-v1",
+      "source_files": 1450,
+      "tree": "a89ce43cd785faf1cc26f3d97a5bf2688d5b2828",
+      "artifact_id": 10929361079,
+      "run_id": 36309034614,
+      "retained_report_readbacks": 23,
+      "backup_raw_readback": {
+        "normal": {
+          "passed": true,
+          "commands": 47,
+          "checks": 112,
+          "sqlite_tables": 32,
+          "mode": "normal",
+          "platform": "nt",
+          "skipped": [],
+          "new_native_execution": false,
+          "source_authenticated": false,
+          "rejected_mutations": [
+            "drop-command",
+            "swap-order",
+            "bool-exit",
+            "changed-scope",
+            "wrong-manifest-pin",
+            "false-zero-calls",
+            "changed-restored-row",
+            "missing-withdrawn",
+            "altered-timestamp",
+            "changed-expected-rows",
+            "duplicate-json",
+            "wrong-error",
+            "extra-raw",
+            "missing-hash"
+          ]
+        },
+        "optimized": {
+          "passed": true,
+          "commands": 47,
+          "checks": 112,
+          "sqlite_tables": 32,
+          "mode": "optimized",
+          "platform": "nt",
+          "skipped": [],
+          "new_native_execution": false,
+          "source_authenticated": false,
+          "rejected_mutations": [
+            "drop-command",
+            "swap-order",
+            "bool-exit",
+            "changed-scope",
+            "wrong-manifest-pin",
+            "false-zero-calls",
+            "changed-restored-row",
+            "missing-withdrawn",
+            "altered-timestamp",
+            "changed-expected-rows",
+            "duplicate-json",
+            "wrong-error",
+            "extra-raw",
+            "missing-hash"
+          ]
+        }
+      }
+    }
+  ],
+  "prior_failed_candidate": {
+    "schema": "qbrain-n48m-first-ci-review-v1",
+    "commit": "9626aed13dfb9d24348ff408ddf79f442b2b7ed0",
+    "run_id": 36308697498,
+    "artifact_id": 10928194373,
+    "archive_sha256": "5f0e3a07ade60c4797599ea9d840d427bb5b5bf4aa61df839f6e35a7cd372bdc",
+    "archive_bytes": 17099424,
+    "result": "FAIL",
+    "native_full60_prior_step": "success",
+    "failed_stage": "direct backup CTest before any counted checks",
+    "observed_error": "file_size cannot find Unicode WAL path",
+    "test_fix_candidate": "d9942612a2ed3aecd1696265802d3f554715d0dd",
+    "used_as_acceptance": false
+  },
+  "local": {
+    "binary_sha256": "218c8901d767f03f324b63f1f958bb0ce7bcbd1db7bbbd5485fd9c44507c49ff",
+    "direct_checks": 62,
+    "asan_ubsan_checks": 62,
+    "asan_ubsan_exit": 0,
+    "asan_ubsan_diagnostic_bytes": 0,
+    "process_per_python_mode": {
+      "calls": 45,
+      "checks": 106,
+      "skipped": []
+    },
+    "independent_reviews": [
+      {
+        "binary_sha256": "218c8901d767f03f324b63f1f958bb0ce7bcbd1db7bbbd5485fd9c44507c49ff",
+        "optimized": false,
+        "passed": true,
+        "platform": "posix",
+        "reviewer_sha256": "6ad52e8fa0a49a2dd737495c7409ff0810d86b1c7a9c9f0a06ac854893dc874b",
+        "schema": "qbrain-n48m-independent-review-v1",
+        "synthetic_only": true,
+        "calls": 58,
+        "checks": 199,
+        "raw_report": "local-evidence/independent-final-normal/RESULT.json",
+        "raw_report_sha256": "bb77f3f077d573473b7c8ea579844001497a50ceb7c1b6ab5a1a49f589c3d8be"
+      },
+      {
+        "binary_sha256": "218c8901d767f03f324b63f1f958bb0ce7bcbd1db7bbbd5485fd9c44507c49ff",
+        "optimized": true,
+        "passed": true,
+        "platform": "posix",
+        "reviewer_sha256": "6ad52e8fa0a49a2dd737495c7409ff0810d86b1c7a9c9f0a06ac854893dc874b",
+        "schema": "qbrain-n48m-independent-review-v1",
+        "synthetic_only": true,
+        "calls": 58,
+        "checks": 199,
+        "raw_report": "local-evidence/independent-final-optimized/RESULT.json",
+        "raw_report_sha256": "d712c961ad67ee7ee6fdd97157b6bb7ed390ca12ba979a36856a684108bb45f4"
+      },
+      {
+        "binary_sha256": "c013962e1dc219aef3029143a983e40db3aae757ca16f18fd53e269024518786",
+        "optimized": false,
+        "passed": true,
+        "platform": "posix",
+        "reviewer_sha256": "6ad52e8fa0a49a2dd737495c7409ff0810d86b1c7a9c9f0a06ac854893dc874b",
+        "schema": "qbrain-n48m-independent-review-v1",
+        "synthetic_only": true,
+        "calls": 58,
+        "checks": 199,
+        "raw_report": "local-evidence/independent-ci-portable-normal/RESULT.json",
+        "raw_report_sha256": "c7e9c640f31c30f00ad1161844f891df73bdcbb7c01ba7e03b106d45b61ccce3"
+      },
+      {
+        "binary_sha256": "c013962e1dc219aef3029143a983e40db3aae757ca16f18fd53e269024518786",
+        "optimized": true,
+        "passed": true,
+        "platform": "posix",
+        "reviewer_sha256": "6ad52e8fa0a49a2dd737495c7409ff0810d86b1c7a9c9f0a06ac854893dc874b",
+        "schema": "qbrain-n48m-independent-review-v1",
+        "synthetic_only": true,
+        "calls": 58,
+        "checks": 199,
+        "raw_report": "local-evidence/independent-ci-portable-optimized/RESULT.json",
+        "raw_report_sha256": "8c14869871d1fb59785ad90952d3d629559b7d9828bd5e95537500d2e1886b12"
+      }
+    ],
+    "controlled_close_order_reconstruction": {
+      "schema": "qbrain-n48m-close-order-review-v1",
+      "controlled_reconstruction": true,
+      "before_exit": 1,
+      "before_asan_heap_use_after_free": true,
+      "after_direct_checks": 62,
+      "after_exit": 0,
+      "after_diagnostic_bytes": 0,
+      "not_an_archived_upstream_failure": true
+    },
+    "io_failure_review": {
+      "schema": "qbrain-n48m-io-failure-review-v1",
+      "passed": true,
+      "platform": "posix",
+      "file_size_limit_bytes": 4096,
+      "sigxfsz_ignored_for_controlled_write_error": true,
+      "binary_sha256": "c013962e1dc219aef3029143a983e40db3aae757ca16f18fd53e269024518786",
+      "reviewer_sha256": "1d91158bf2d2a8dde3876271a0844c48a59749d64456eaa5f34acb31aa4c72eb",
+      "calls": 4,
+      "native_windows_io_failure_executed": false,
+      "synthetic_only": true
+    },
+    "extra_warning_profile": {
+      "schema": "qbrain-n48m-extra-warning-profile-v1",
+      "compiler": "clang++ using local libstdc++14",
+      "argv": [
+        "-std=c++20",
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Werror",
+        "-fsyntax-only"
+      ],
+      "exit": 1,
+      "diagnostic": "five filesystem::u8path deprecated-declaration errors promoted by -Werror",
+      "qualified_repository_configuration_changed": false,
+      "accepted_as_pass": false,
+      "runtime_utf8_path_failure_in_fixed_candidate": false,
+      "note": "Additional diagnostic profile, not the approved repository build configuration. No warning suppression, product patch or altered test assertions were applied. Warning-free compilation under this stricter profile is not claimed."
+    }
+  },
+  "readback_totals": {
+    "new_backup_sets": 4,
+    "retained_accounting_sets": 24,
+    "retained_lifecycle_sets": 12,
+    "retained_mcp_sets": 2,
+    "retained_receipt_sets": 8,
+    "retained_commands": 46,
+    "backup_evidence_mutations_per_mode_and_platform": 14,
+    "actual_sqlite_tables_per_recovery_fixture": 32
+  },
+  "reviewer_sources": {
+    "review_backup.py": {
+      "sha256": "6ad52e8fa0a49a2dd737495c7409ff0810d86b1c7a9c9f0a06ac854893dc874b",
+      "bytes": 11471,
+      "delivered_path": "reviewers/review_backup.py"
+    },
+    "review_backup_evidence.py": {
+      "sha256": "ba3dd7e7e7674ca77c67932def8b761f5ca2adfa26a89281f79478100443a6f7",
+      "bytes": 12553,
+      "delivered_path": "reviewers/review_backup_evidence.py"
+    },
+    "review_backup_io_failure.py": {
+      "sha256": "1d91158bf2d2a8dde3876271a0844c48a59749d64456eaa5f34acb31aa4c72eb",
+      "bytes": 3380,
+      "delivered_path": "reviewers/review_backup_io_failure.py"
+    },
+    "review_ci_n48m.py": {
+      "sha256": "af6b903b595de4031112f35f0ad078e599d3c4adab3507fd6484b0e3bdaf54c5",
+      "bytes": 8146,
+      "delivered_path": "reviewers/review_ci_n48m.py"
+    },
+    "replay_retained_n48m.py": {
+      "sha256": "629d94da09c668c54a38cdbe8785e15f68c4050e9f3e3f79e72a98bb6ac8d229",
+      "bytes": 3790,
+      "delivered_path": "reviewers/replay_retained_n48m.py"
+    }
+  },
+  "scope": {
+    "sqlite_only": true,
+    "database_bytes_cap": 268435456,
+    "manifest_bytes_cap": 8192,
+    "scope": "database_only_all_sources",
+    "encrypted": false,
+    "externally_saved_manifest_digest_required": true,
+    "restore_existing_destination_allowed": false,
+    "registry_modified": false,
+    "external_brain_files_included": false,
+    "full_application_semantics_proven": false,
+    "hostile_filesystem_sandbox": false,
+    "power_loss_atomic_directory_commit_proven": false,
+    "actual_user_data_used": false,
+    "real_model_or_client_consumption_verified": false,
+    "postgresql_implemented": false,
+    "signed_or_stable_release_created": false,
+    "old_n48k_zip_changed": false,
+    "issue40_closed": false
+  }
+}
