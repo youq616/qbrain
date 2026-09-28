@@ -17,11 +17,12 @@ import zipfile
 
 import check_pg_memory_evidence as memory
 import check_pg_scope_evidence as scope
+import check_session_lifecycle_evidence as session
 
 FILES = ('.ci/test_pg_memory.py', 'tests/test_pg_memory.cpp',
          'tests/test_pg_memory_scope.cpp', '.ci/check_pg_memory_evidence.py',
          '.ci/check_pg_scope_evidence.py', '.ci/review_session_lifecycle.py',
-         '.ci/run_pg_memory_gate.py')
+         '.ci/run_pg_memory_gate.py', '.ci/check_session_lifecycle_evidence.py')
 ROOT = Path(__file__).resolve().parents[1]
 CAP = 128 * 1024 * 1024
 
@@ -107,13 +108,18 @@ def lifecycle(directory, pins, mode):
     need(r['postgres_execution'] is False and r['real_client_consumption_verified'] is False, 'lifecycle scope')
     need(len(r['commands']) == 42 and len(r['checks']) == 110 and all(c['passed'] is True for c in r['checks']), 'lifecycle coverage')
     need({p.name for p in (directory/'raw').iterdir()} == {f'{i:03d}.{ext}' for i in range(42) for ext in ('stdin','stdout','stderr')}, 'lifecycle raw inventory')
+    streams = []
     for i, row in enumerate(r['commands']):
+        current = {}
         need(type(row['exit']) is int and row['exit'] == (1 if i in (9, 18, 20, 23, 30, 32, 33) else 0), 'lifecycle exact exit')
         for ext in ('stdin', 'stdout', 'stderr'):
             data = read(directory/'raw'/f'{i:03d}.{ext}', memory.CAP)
+            current[ext] = data
             need(sha(data) == row['hashes'][ext], 'lifecycle raw digest')
             if ext == 'stderr':
                 need(not data, 'lifecycle stderr')
+        streams.append(current)
+    session.validate(r['commands'], streams)
     dbfile = directory/'synthetic-final.db'
     need(sha(read(dbfile)) == r['synthetic_snapshot_sha256'], 'lifecycle snapshot identity')
     # Read a closed synthetic snapshot, never a live user DB; do not import its SQL.

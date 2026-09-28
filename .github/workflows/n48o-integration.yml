@@ -2,7 +2,7 @@ name: N48O integrated PostgreSQL memory acceptance
 on:
   push:
     branches: [main, 'feature/n48o-pg-session-memory']
-    paths: ['CMakeLists.txt', 'include/qbrain/storage/**', 'src/qbrain/storage/**', 'include/qbrain/memory/**', 'src/qbrain/memory/**', 'tests/test_pg_memory.cpp', 'tests/test_pg_memory_scope.cpp', '.ci/test_pg_memory.py', '.ci/check_pg_memory_evidence.py', '.ci/check_pg_scope_evidence.py', '.ci/review_session_lifecycle.py', '.ci/run_pg_memory_gate.py', '.github/workflows/n48o-integration.yml']
+    paths: ['CMakeLists.txt', 'include/qbrain/storage/**', 'src/qbrain/storage/**', 'include/qbrain/memory/**', 'src/qbrain/memory/**', 'tests/test_pg_memory.cpp', 'tests/test_pg_memory_scope.cpp', '.ci/test_pg_memory.py', '.ci/check_pg_memory_evidence.py', '.ci/check_pg_scope_evidence.py', '.ci/review_session_lifecycle.py', '.ci/run_pg_memory_gate.py', '.ci/check_session_lifecycle_evidence.py', '.github/workflows/n48o-integration.yml']
   workflow_dispatch:
 permissions:
   contents: read
