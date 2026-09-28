@@ -2,7 +2,7 @@ name: N48O real PostgreSQL session memory
 on:
   push:
     branches: [main, 'feature/n48o-pg-session-memory']
-    paths: ['CMakeLists.txt', 'include/qbrain/storage/**', 'src/qbrain/storage/**', 'include/qbrain/memory/**', 'src/qbrain/memory/**', 'tests/test_pg_memory.cpp', '.ci/test_pg_memory.py', '.github/workflows/n48o-validation.yml']
+    paths: ['CMakeLists.txt', 'include/qbrain/storage/**', 'src/qbrain/storage/**', 'include/qbrain/memory/**', 'src/qbrain/memory/**', 'tests/test_pg_memory.cpp', 'tests/test_pg_memory_scope.cpp', '.ci/test_pg_memory.py', '.github/workflows/n48o-validation.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -90,7 +90,7 @@ jobs:
         run: |
           set -euo pipefail
           cmake -S . -B build/n48o -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=ON -DQBRAIN_REQUIRE_PG=ON | tee evidence/configure.log
-          cmake --build build/n48o --config Release --target qbrain qbrain_pg_memory_tests qbrain_memory_tests qbrain_context_tests qbrain_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
+          cmake --build build/n48o --config Release --target qbrain qbrain_pg_memory_tests qbrain_pg_memory_scope_tests qbrain_memory_tests qbrain_context_tests qbrain_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
           ctest --test-dir build/n48o -C Release -R 'qbrain_(memory|context|fact|multiterm|usage_batch|usage_batch_ownership)_unit' --output-on-failure | tee evidence/core.log
       - name: Real PostgreSQL lifecycle and cross-backend CLI checks
         shell: bash
@@ -106,10 +106,33 @@ jobs:
           export QBRAIN_PG_PROCESS_TEST_DSN="host=127.0.0.1 port=$PGPORT dbname=qbrain_n48o_process user=qbrain_n48o password=n48o-synthetic-only"
           export PGDATABASE=qbrain_n48o_process
           "evidence/pg-memory-tests${SUFFIX}" > evidence/native-result.json
+          cp "build/n48o/${CONFIG}qbrain_pg_memory_scope_tests${SUFFIX}" "evidence/pg-scope-tests${SUFFIX}"
+          "evidence/pg-scope-tests${SUFFIX}" > evidence/scope-result.json
           python .ci/test_pg_memory.py --binary "evidence/qbrain${SUFFIX}" --output evidence/process-normal | tee evidence/process-normal.json
           python -O .ci/test_pg_memory.py --binary "evidence/qbrain${SUFFIX}" --output evidence/process-optimized | tee evidence/process-optimized.json
           psql -X -q -A -t -v ON_ERROR_STOP=1 -c 'SELECT version()' > evidence/server-version.txt
           pg_dump --no-owner --no-privileges --format=plain > evidence/synthetic-process.sql
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        if: runner.os == 'Linux'
+        with:
+          ref: ed79b44951db626556b2d2cbca924fcd1c33dd86
+          path: parent-source
+          persist-credentials: false
+      - name: Characterize unchanged parent on the same disposable native server
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C parent-source rev-parse HEAD)" = ed79b44951db626556b2d2cbca924fcd1c33dd86
+          cp tests/test_pg_memory_scope.cpp parent-source/tests/test_pg_memory_scope.cpp
+          printf '\nadd_executable(qbrain_parent_scope tests/test_pg_memory_scope.cpp)\ntarget_link_libraries(qbrain_parent_scope PRIVATE qbrain_ops qbrain_memory qbrain_core qbrain_jobs qbrain_ai)\n' >> parent-source/CMakeLists.txt
+          cmake -S parent-source -B parent-source/build/probe -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=ON -DQBRAIN_REQUIRE_PG=ON > evidence/parent-configure.log 2>&1
+          cmake --build parent-source/build/probe --target qbrain_parent_scope --parallel 2 > evidence/parent-build.log 2>&1
+          cp parent-source/build/probe/qbrain_parent_scope evidence/parent-scope-tests
+          export QBRAIN_PG_MEMORY_TEST_DISPOSABLE=1
+          export QBRAIN_PG_MEMORY_TEST_DSN="host=127.0.0.1 port=$PGPORT dbname=qbrain_n48o_native user=qbrain_n48o password=n48o-synthetic-only"
+          evidence/parent-scope-tests --characterize-parent > evidence/parent-scope-result.json
+          git -C parent-source diff -- CMakeLists.txt > evidence/parent-driver-only.patch
       - name: Original Windows full registry
         if: runner.os == 'Windows'
         shell: pwsh

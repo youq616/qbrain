@@ -456,4 +456,6 @@ add_test(NAME qbrain_usage_batch_ownership_unit COMMAND qbrain_usage_batch_owner
 if(QBRAIN_PG_ENABLED)
   add_executable(qbrain_pg_memory_tests tests/test_pg_memory.cpp)
   target_link_libraries(qbrain_pg_memory_tests PRIVATE qbrain_ops qbrain_memory)
+  add_executable(qbrain_pg_memory_scope_tests tests/test_pg_memory_scope.cpp)
+  target_link_libraries(qbrain_pg_memory_scope_tests PRIVATE qbrain_ops qbrain_memory qbrain_core qbrain_jobs qbrain_ai)
 endif()

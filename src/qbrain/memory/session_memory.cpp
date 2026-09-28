@@ -40,8 +40,9 @@ std::string str(const Json& j, const char* k) {
 }
 void source_check(Brain& b, const std::string& source) {
   const auto canonical = Brain::canonical_source_id(source);
-  if (!canonical || *canonical != source || !b.source_exists(source)) throw Error("invalid_source");
+  if (!canonical || *canonical != source) throw Error("invalid_source");
   if (pg_session::enabled(b.db())) pg_session::require_context(b.db());
+  if (!b.source_exists(source)) throw Error("invalid_source");
 }
 std::string mode(Brain& b) {
   const auto m = b.get_config_value("memory.writeback").value_or(b.config().memory_writeback);

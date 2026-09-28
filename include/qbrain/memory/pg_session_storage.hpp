@@ -11,13 +11,23 @@ inline bool enabled(DB& db) { return db.backend_kind() == storage::BackendKind::
 
 inline void require_context(DB& db) {
   if (db.transaction_active()) throw Error("memory_transaction_active");
-  auto s = db.prepare("SELECT current_schema(), current_setting('server_encoding')");
+  auto s = db.prepare("SELECT pg_catalog.current_schema(), pg_catalog.current_setting('server_encoding')");
   if (!s.step() || s.column_text(0) != "public" || s.column_text(1) != "UTF8")
+    throw Error("memory_pg_schema_context");
+  // current_schema() omits the implicit pg_temp lookup. Locks and all subsequent
+  // unqualified operations must refer to the same public relations. This rejects
+  // accidental shadowing without changing the caller's search_path or temp data.
+  auto resolved = db.prepare(
+    "SELECT count(*) FROM (VALUES ('sources'),('pages'),('config'),"
+    "('memory_module'),('memory_events'),('memory_items'),('memory_attempts')) AS names(name) "
+    "WHERE pg_catalog.to_regclass(name) IS DISTINCT FROM "
+    "pg_catalog.to_regclass('public.' || name)");
+  if (!resolved.step() || resolved.column_int(0) != 0)
     throw Error("memory_pg_schema_context");
 }
 
 inline void begin(DB& db) {
-  if (db.transaction_active()) throw Error("memory_transaction_active");
+  require_context(db); // Revalidate after an external callback as well as at entry.
   db.exec("BEGIN ISOLATION LEVEL READ COMMITTED");
   try {
     db.exec("SET LOCAL lock_timeout = '2500ms'");
