@@ -1,3 +1,5 @@
+#include "qbrain/memory/detail/composed_read.hpp"
+#include "qbrain/memory/pg_fact_storage.hpp"
 #include "qbrain/memory/session_memory.hpp"
 #include "qbrain/memory/pg_session_storage.hpp"
 #include "qbrain/util/hash.hpp"
@@ -377,9 +379,15 @@ Json extract(Brain& b, const std::string& source, const std::string& id,
   tx.commit(); return result;
 }
 
-Json read(Brain& b, const std::string& source, const std::string& query, int limit, int budget,
-          const std::string& id) {
-  source_check(b,source); text(query,1024,true);
+namespace {
+Json read_impl(Brain& b, const std::string& source, const std::string& query, int limit, int budget,
+               const std::string& id, bool composed) {
+  if (!composed) source_check(b,source);
+  else {
+    const auto canonical = Brain::canonical_source_id(source);
+    if (!canonical || *canonical != source || !b.source_exists(source)) throw Error("invalid_source");
+  }
+  text(query,1024,true);
   if (limit<1 || limit>50 || budget<512 || budget>32768) throw Error("invalid_read_budget");
   Json result={{"source_id",source},{"items",Json::array()},{"untrusted_data",true},
                {"truth_status","caller_attested_user_statement"},{"truncated",false}};
@@ -433,6 +441,26 @@ Json read(Brain& b, const std::string& source, const std::string& query, int lim
   result["candidate_limit"]=200;
   return result;
 }
+
+} // namespace
+Json read(Brain& b, const std::string& source, const std::string& query, int limit, int budget,
+          const std::string& id) {
+  return read_impl(b,source,query,limit,budget,id,false);
+}
+namespace detail {
+Json read_in_fact_snapshot(Brain& b, const std::string& source,
+                          const std::string& query, int limit, int budget) {
+  auto& db=b.db();
+  if (!pg_fact::enabled(db) || !pg_fact::owned(db) || !db.transaction_active())
+    throw Error("memory_composed_snapshot_required");
+  pg_fact::validate_context(db); // Includes all session and fact relation identities.
+  auto state=db.prepare("SELECT pg_catalog.current_setting('transaction_read_only'),"
+                        "pg_catalog.current_setting('transaction_isolation')");
+  if (!state.step() || state.column_text(0)!="on" || state.column_text(1)!="repeatable read")
+    throw Error("memory_composed_snapshot_required");
+  return read_impl(b,source,query,limit,budget,"",true);
+}
+} // namespace detail
 
 Json drain(Brain& b,const std::string& source,const std::string& method,int limit) {
   source_check(b,source);

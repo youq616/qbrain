@@ -1,0 +1,116 @@
+name: N48R native PostgreSQL Hooks
+on:
+  push:
+    branches: [main, 'feature/n48r-pg-hook']
+    paths: ['src/qbrain/integration/hook.cpp', 'src/qbrain/memory/**', 'include/qbrain/memory/**', 'include/qbrain/integration/detail/hook_storage.hpp', 'tests/test_pg_hooks.cpp', '.ci/test_pg_hooks.py', '.ci/run_pg_hook_gate.py', '.ci/pg_hook_targets.cmake', 'CMakeLists.txt', '.github/workflows/n48r-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48r-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Pin exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          git ls-tree --full-tree -r -z HEAD > evidence/source-tree.bin
+          python .ci/test_source_archive.py --report evidence/source-tests.json
+          python .ci/test_source_gate_integration.py --report evidence/source-gate-tests.json
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        if: runner.os == 'Linux'
+        with:
+          ref: b810d6898dcbbcd49bdbbed1d8473a3ac1c063e4
+          path: baseline-source
+          persist-credentials: false
+      - name: Disposable Linux PostgreSQL
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pg_bin="$(dirname "$(find /usr/lib/postgresql -path '*/bin/initdb' | sort -V | tail -1)")"
+          "$pg_bin/initdb" -D "$RUNNER_TEMP/n48r-pg" -U postgres --auth=trust --encoding=UTF8 --no-locale > evidence/pg-init.log
+          mkdir "$RUNNER_TEMP/n48r-socket"
+          "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/n48r-pg" -l "$GITHUB_WORKSPACE/evidence/pg-server.log" -o "-h 127.0.0.1 -p 55432 -k $RUNNER_TEMP/n48r-socket" -w start
+          export PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres
+          "$pg_bin/psql" -X -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE qbrain_n48o LOGIN PASSWORD 'n48o-synthetic-only'"
+          for module in n48o n48p n48q n48r; do for kind in native process; do "$pg_bin/createdb" -O qbrain_n48o "qbrain_${module}_${kind}"; done; done
+          "$pg_bin/createdb" -O qbrain_n48o qbrain_n48r_empty
+          echo "$pg_bin" >> "$GITHUB_PATH"
+          printf 'PGHOST=127.0.0.1\nPGPORT=55432\nPGUSER=qbrain_n48o\nPGPASSWORD=n48o-synthetic-only\n' >> "$GITHUB_ENV"
+          "$pg_bin/postgres" --version > evidence/postgres-version.txt
+          cmake -S baseline-source -B baseline-source/build -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=OFF
+          cmake --build baseline-source/build --target qbrain --parallel 2 > evidence/baseline-build.log 2>&1
+          cp baseline-source/build/qbrain evidence/baseline-qbrain
+      - name: Disposable Windows PostgreSQL and retained baseline
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if (-not $env:PGROOT -or -not (Test-Path "$env:PGROOT\lib\libpq.lib")) { throw 'Native PostgreSQL required' }
+          $service=Get-Service 'postgresql-x64-*' | Select-Object -First 1
+          Set-Service $service.Name -StartupType Manual
+          Start-Service $service.Name
+          $env:PGHOST='127.0.0.1'; $env:PGPORT='5432'; $env:PGUSER='postgres'; $env:PGPASSWORD='root'
+          & "$env:PGROOT\bin\psql.exe" -X -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE qbrain_n48o LOGIN PASSWORD 'n48o-synthetic-only'"
+          if ($LASTEXITCODE -ne 0) { throw 'role failed' }
+          foreach($module in @('n48o','n48p','n48q','n48r')) { foreach($kind in @('native','process')) {
+            & "$env:PGROOT\bin\createdb.exe" -O qbrain_n48o "qbrain_${module}_${kind}"
+            if ($LASTEXITCODE -ne 0) { throw 'database failed' }
+          }}
+          & "$env:PGROOT\bin\createdb.exe" -O qbrain_n48o qbrain_n48r_empty
+          if ($LASTEXITCODE -ne 0) { throw 'empty database failed' }
+          "$env:PGROOT\bin" | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+          "QBRAIN_PG_ROOT=$env:PGROOT" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          'PGHOST=127.0.0.1','PGPORT=5432','PGUSER=qbrain_n48o','PGPASSWORD=n48o-synthetic-only' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          & "$env:PGROOT\bin\postgres.exe" --version | Out-File evidence/postgres-version.txt -Encoding utf8
+          Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-current-preview-b810d689/qbrain-windows-x64-n47x-preview.zip' -OutFile baseline.zip
+          if ((Get-FileHash baseline.zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d') { throw 'Baseline identity' }
+          Expand-Archive baseline.zip baseline
+          Copy-Item baseline/qbrain.exe evidence/baseline-qbrain.exe
+      - name: Build fresh native program and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/n48r -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=ON -DQBRAIN_REQUIRE_PG=ON -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/pg_hook_targets.cmake" > evidence/configure.log 2>&1
+          cmake --build build/n48r --config Release --target qbrain qbrain_pg_hook_tests qbrain_pg_fact_tests qbrain_pg_context_tests qbrain_pg_memory_tests qbrain_pg_memory_scope_tests qbrain_hook_fact_tests qbrain_memory_tests qbrain_context_tests qbrain_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
+          ctest --test-dir build/n48r -C Release -R 'qbrain_(memory|context|fact|multiterm|usage_batch|usage_batch_ownership|hook_fact|pg_hook_sqlite)_unit' --output-on-failure | tee evidence/core.log
+      - name: Original Windows registry
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/windows-full.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/windows-full.log').read_text(encoding='utf-8-sig'),60)))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Actual Hook and retained full qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=''; if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; fi
+          python .ci/run_pg_hook_gate.py --build build/n48r --output evidence --baseline "evidence/baseline-qbrain${suffix}" | tee evidence/summary.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48r-${{ matrix.os }}
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
