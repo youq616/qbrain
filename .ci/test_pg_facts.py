@@ -164,10 +164,12 @@ def main(binary: Path, output: Path, sqlite_only=False):
                 # Three requests exercise the original allowed-source and default-write gates.
                 messages=[dict(jsonrpc='2.0',id=1,method='tools/call',params=dict(name='memory_read',arguments=dict(source_id='alpha',view='facts',fact_id=fid))),
                           dict(jsonrpc='2.0',id=2,method='tools/call',params=dict(name='memory_read',arguments=dict(source_id='beta',view='facts'))),
-                          dict(jsonrpc='2.0',id=3,method='tools/call',params=dict(name='memory_write',arguments=dict(source_id='alpha',action='fact_retract',payload=dict(fact_id=fid,expected_revision=4))))]
+                          dict(jsonrpc='2.0',id=3,method='tools/call',params=dict(name='memory_write',arguments=dict(source_id='alpha',action='fact_retract',payload=encoded(dict(fact_id=fid,expected_revision=4)).decode())))]
                 raw=execute([binary,'serve','--brain','n48q'],b'\n'.join(encoded(m) for m in messages)+b'\n',env,home,name=backend+':MCP',mcp=True)
                 replies=[decode(line) for line in raw.splitlines()]
-                check(replies[0]['result']['isError'] is False and replies[1]['result']['isError'] is True and replies[2]['result']['isError'] is True,'MCP allowed read/source refusal/default write refusal')
+                check(replies[0]['result']['isError'] is False and replies[1]['result']['isError'] is True and replies[2]['result']['isError'] is True and
+                      decode(replies[1]['result']['content'][0]['text'].encode())['error']['code']=='source_not_allowed' and
+                      decode(replies[2]['result']['content'][0]['text'].encode())['error']['code']=='write_denied','MCP allowed read/exact source refusal/exact default write refusal')
                 check(fact('read',args=['--id',fid])['items'][0]['status']=='active','denied MCP no mutation')
                 check(memory('forget',args=['--event',event])['status']=='forgotten','first support forgotten')
                 remaining=fact('read',args=['--id',fid])['items'][0]

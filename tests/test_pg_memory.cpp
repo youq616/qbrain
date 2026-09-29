@@ -208,8 +208,14 @@ int main() {
     b->save_config_value("mcp.allowed_sources","alpha",false);
     check(ops::global_registry().call("memory_write",ctx).ok,"MCP allowed capture uses PG");
     ctx.args={{"source_id","beta"}};check(!ops::global_registry().call("memory_read",ctx).ok,"MCP other source read denied");
-    ctx.args={{"source_id","alpha"},{"view","facts"}};auto unsupported=ops::global_registry().call("memory_read",ctx);
-    check(!unsupported.ok,"fact store PG parity not silently enabled");
+    // N48Q intentionally replaces the old unsupported-backend expectation.
+    // Keep a real assertion: authorized empty facts read works without optional DDL.
+    ctx.args={{"source_id","alpha"},{"view","facts"}};auto facts=ops::global_registry().call("memory_read",ctx);
+    const J expected_facts={{"source_id","alpha"},{"items",J::array()},{"untrusted_data",true},
+      {"truth_status","caller_attested_user_statement"},{"truncated",false},{"candidate_limit",100},{"initialized",false}};
+    check(facts.ok && J::parse(facts.json)==expected_facts &&
+      number(*b,"SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='memory_fact_module'")==0,
+      "N48Q authorized PG facts read is complete and does not initialize module");
 
     reset(*b);b->db().exec("CREATE TABLE public.memory_events(marker INTEGER)");
     bool conflict=false;try{capture(*b);}catch(const std::exception&){conflict=true;}
