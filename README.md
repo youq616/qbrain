@@ -1,5 +1,13 @@
 # Qbrain
 
+## 最新源码 N48P：PostgreSQL 分层上下文
+
+现有 context list/read/summary 和 MCP 分层读取补齐 PG 路径，支持版本绑定的原文分页、
+提取式／显式授权的模型摘要，以及页面变化后的派生缓存清除。SQLite 仍默认。
+[使用说明](docs/integration/POSTGRES-LAYERED-CONTEXT.zh-CN.md) ·
+[审核](docs/nodes/N48P-HARD-AUDIT.md) · [实际合并 PR58](https://github.com/youq616/qbrain/pull/58)。
+固定受测136a4828，不能把新文档提交当成另一次程序构建；未签名开发候选，不自动安装。
+
 Windows 原生 C++20 / PowerShell 记忆与知识库；SQLite 默认，PostgreSQL 显式 opt-in。
 无需必需的 Docker、WSL 或 Python 常驻服务。可选评测使用 Python。
 
