@@ -459,3 +459,7 @@ if(QBRAIN_PG_ENABLED)
   add_executable(qbrain_pg_memory_scope_tests tests/test_pg_memory_scope.cpp)
   target_link_libraries(qbrain_pg_memory_scope_tests PRIVATE qbrain_ops qbrain_memory qbrain_core qbrain_jobs qbrain_ai)
 endif()
+
+# N48P: exact same layered-context contract on SQLite and real PostgreSQL.
+add_executable(qbrain_pg_context_tests tests/test_pg_context.cpp)
+target_link_libraries(qbrain_pg_context_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_jobs qbrain_ai)

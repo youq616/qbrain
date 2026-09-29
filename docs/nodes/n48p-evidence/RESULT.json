@@ -1,0 +1,126 @@
+{
+  "schema": "qbrain-n48p-final-outcome-v1",
+  "verdict": "PASS_BOUNDED_SOURCE_MODULE",
+  "date": "2026-09-29",
+  "qualified_commit": "136a4828ec31eeb5d870b3a3814d5b5c533783d6",
+  "qualified_tree": "557fe883fa403c86eddd02567cb13248ba82aec6",
+  "base_main": "17a9998f5e874cd233ebb5b4ac70748fbe9e412d",
+  "reviewer": "ChatGPT coordinator, owner-authorized separate self-review; not third party/subagent",
+  "native_workflow": {
+    "run": 36512018075,
+    "jobs": [
+      109226490391,
+      109226490563
+    ],
+    "attempt": 1,
+    "result": "success"
+  },
+  "artifacts": [
+    {
+      "platform": "linux",
+      "id": 11009677035,
+      "bytes": 36482776,
+      "sha256": "536fd88e31896fa42096b3fb9a201fa00722433e070dc4afc1f12a8aafae5159"
+    },
+    {
+      "platform": "windows",
+      "id": 11009333464,
+      "bytes": 54932738,
+      "sha256": "b6a696b423b23c4ccebdcc052b506c90bc9db14ddc5f197d40eb010e5d3fd38b"
+    }
+  ],
+  "metadata": {
+    "schema": "qbrain-n48p-metadata-and-native-readback-v1",
+    "passed": true,
+    "artifacts": [
+      {
+        "platform": "linux",
+        "source_files": 1505,
+        "newline_only_files": 0,
+        "native_checks": 198,
+        "sqlite_checks": 68,
+        "postgres_checks": 130,
+        "native_report_sha256": "b6192cfb99d012a52fb2de36ef3d5bfceb79e1a0beea71186bebb7cbaa21b0b3",
+        "complete_context_dump_checked": true,
+        "dump_sql_executed": false,
+        "binary_sha256": "ff367cfc60e1dadb276147115362afb131b75c9200976ea0bff6bddeb5780c12"
+      },
+      {
+        "platform": "windows",
+        "source_files": 1505,
+        "newline_only_files": 1490,
+        "native_checks": 198,
+        "sqlite_checks": 68,
+        "postgres_checks": 130,
+        "native_report_sha256": "0e4b4c9c4b20669af351d4930fc916d8e3160f40550b9d12d542cef03e96a837",
+        "complete_context_dump_checked": true,
+        "dump_sql_executed": false,
+        "binary_sha256": "318ac7c3f69f7dd440a5d3946204bf311abf416403b0075525e39762ba8e264b"
+      }
+    ],
+    "windows_original_groups": 60,
+    "new_pg_execution": false
+  },
+  "per_platform": {
+    "native_checks": 198,
+    "sqlite_direct_checks": 68,
+    "postgres_checks": 130,
+    "process_per_mode": {
+      "commands": 55,
+      "product_commands": 42,
+      "sql_calls": 13,
+      "checks": 173
+    },
+    "retained_driver_steps": 55,
+    "core_ctests": 6,
+    "retained_pg_memory_checks": 122,
+    "retained_pg_scope_checks": 112
+  },
+  "independent_readback": {
+    "context_reports": 4,
+    "rejected_mutations_per_report": 22,
+    "prior_integrated_gates": 4,
+    "other_original_checkers": 46,
+    "total_checker_commands": 54,
+    "driver_result_sha256": "752042077960b5b54d026f0c8e46c69b8bd920ca0c3eec81a518a7690c6c0e18",
+    "native_observations_recomputed": true,
+    "context_dump_sql_executed": false
+  },
+  "local": {
+    "newly_built_context_direct": 68,
+    "original_context_direct": 37,
+    "asan_ubsan_checks": 68,
+    "sanitizer_stderr_bytes": 0,
+    "original_sqlite_process_per_mode": {
+      "commands": 21,
+      "checks": 72
+    },
+    "independent_process_per_mode": {
+      "commands": 33,
+      "checks": 87
+    },
+    "synthetic_example_commands": 6,
+    "new_postgres_execution": false,
+    "new_windows_execution": false
+  },
+  "review_scripts": {
+    "probe_context_lifecycle.py": "4c8e2e21819031dce7236195923ecfd6dc0fbdaf196efd590465bd53dc6a8edf",
+    "review_pg_context.py": "0404719aba9fce0ba88ae67296e5d88d0c2a1899c98f5c78b6b65f631192eec8"
+  },
+  "retained_failures": [
+    "Initial independent reader omitted CASCADE in expected fixture SQL; corrected expectation, source/log retained.",
+    "Metadata helper zipped columns with outer row list rather than first row; corrected helper only, source/log retained.",
+    "First replay wrapper used logs/ for a nested driver whose logs are at its root; 23 completed replays retained as partial, not full acceptance.",
+    "Attempt to use unsupported streaming container API executed no test.",
+    "Inherited initial Windows ANSI psql fixture failure is documented by upstream136a commit; its old artifact was not downloaded in this closeout."
+  ],
+  "scope": {
+    "runtime_changed_during_closeout": false,
+    "original_tests_or_workflows_changed": false,
+    "paid_model_calls": false,
+    "real_client_consumption_verified": false,
+    "full_pg_parity": false,
+    "new_release": false,
+    "issue40_closed": false
+  }
+}
