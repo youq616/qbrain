@@ -28,6 +28,7 @@ def main(binary,output,sqlite_only=False):
     output.mkdir(parents=True,exist_ok=False);(output/'raw').mkdir()
     rows=[];checks=[];results={}
     env_base={k:v for k,v in os.environ.items() if not k.upper().startswith(('QBRAIN','OPENAI','ANTHROPIC','GH_TOKEN','GITHUB_TOKEN'))}
+    env_base['PGCLIENTENCODING']='UTF8'
     def check(ok,label):
         checks.append(dict(name=label,passed=bool(ok)));need(ok,label)
     def execute(command,data=b'',env=None,cwd=None,expected=0,name='command',mcp=False):
@@ -74,7 +75,11 @@ def main(binary,output,sqlite_only=False):
             def config(k,v):sql("INSERT INTO config(key,value) VALUES('"+k+"','"+v+"') ON CONFLICT(key) DO UPDATE SET value=excluded.value")
             config('embed.auto','false');config('mcp.allowed_sources','alpha')
             original=('中文😀 quote "source"\r\n'*60)
-            esc=lambda value:"'"+value.replace("'","''")+"'"
+            # Native Windows psql uses an ANSI argv boundary. Keep fixture SQL ASCII;
+            # encode exact UTF8 bytes server-side instead of losing Chinese/emoji.
+            def esc(value):
+                if backend=='postgres': return "pg_catalog.convert_from(pg_catalog.decode('"+value.encode('utf-8').hex()+"','hex'),'UTF8')"
+                return "'"+value.replace("'","''")+"'"
             for ident,source,text in ((100,'alpha',original),(200,'beta','BETA_SECRET')):
                 sql("INSERT INTO pages(id,source_id,slug,title,body) "+('OVERRIDING SYSTEM VALUE ' if backend=='postgres' else '')+
                     "VALUES("+str(ident)+","+esc(source)+",'docs/a','Demo',"+esc(text)+")")
@@ -107,7 +112,7 @@ def main(binary,output,sqlite_only=False):
             check('source_not_allowed' in json.dumps(replies[1]),'actual MCP source deny')
             check(replies[2]['result']['isError'] is True,'actual MCP write default deny')
             observed['mcp']=replies
-            sql("UPDATE pages SET body='Changed 中文😀' WHERE id=100")
+            sql("UPDATE pages SET body="+esc("Changed 中文😀")+" WHERE id=100")
             check(sql("SELECT dirty,l0,l1,refs_json FROM context_cache WHERE source_id='alpha'",True)==[dict(dirty=1,l0='',l1='',refs_json='[]')],'raw cache content cleared')
             observed['stale']=context(extra=['--layer','L1'])
             check(observed['stale']['content']=='Demo\nChanged 中文😀\n','stale uses new evidence')
