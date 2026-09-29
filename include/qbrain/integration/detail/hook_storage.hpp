@@ -2,6 +2,8 @@
 // Internal Hook admission; no schema initialization, DSN echo or SQLite fallback.
 #include "qbrain/core/brain.hpp"
 #include "qbrain/storage/pg_backend.hpp"
+#include <stdexcept>
+#include <string>
 namespace qbrain::integration::detail {
 
 inline void open_existing_postgres(Brain& brain, const std::string& dsn) {
