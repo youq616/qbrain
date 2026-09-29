@@ -1,4 +1,5 @@
 #include "qbrain/memory/session_memory.hpp"
+#include "qbrain/memory/pg_session_storage.hpp"
 #include "qbrain/util/hash.hpp"
 #include "qbrain/util/string_util.hpp"
 #include "qbrain/util/time_util.hpp"
@@ -39,8 +40,9 @@ std::string str(const Json& j, const char* k) {
 }
 void source_check(Brain& b, const std::string& source) {
   const auto canonical = Brain::canonical_source_id(source);
-  if (!canonical || *canonical != source || !b.source_exists(source)) throw Error("invalid_source");
-  if (b.db().backend_kind() != storage::BackendKind::sqlite) throw Error("memory_backend_unsupported");
+  if (!canonical || *canonical != source) throw Error("invalid_source");
+  if (pg_session::enabled(b.db())) pg_session::require_context(b.db());
+  if (!b.source_exists(source)) throw Error("invalid_source");
 }
 std::string mode(Brain& b) {
   const auto m = b.get_config_value("memory.writeback").value_or(b.config().memory_writeback);
@@ -56,6 +58,7 @@ std::string nonce() {
 struct Tx {
   DB& db; bool committed = false; int old_timeout = 0;
   explicit Tx(DB& d) : db(d) {
+    if (pg_session::enabled(db)) { pg_session::begin(db); return; }
     { auto st = db.prepare("PRAGMA busy_timeout"); if (st.step()) old_timeout = int(st.column_int(0)); }
     db.exec("PRAGMA busy_timeout=2500");
     try { db.exec("BEGIN IMMEDIATE"); }
@@ -64,10 +67,13 @@ struct Tx {
   void commit() { db.exec("COMMIT"); committed = true; }
   ~Tx() {
     if (!committed) { try { db.exec("ROLLBACK"); } catch (...) {} }
-    try { db.exec("PRAGMA busy_timeout=" + std::to_string(old_timeout)); } catch (...) {}
+    if (!pg_session::enabled(db)) {
+      try { db.exec("PRAGMA busy_timeout=" + std::to_string(old_timeout)); } catch (...) {}
+    }
   }
 };
 bool ready(DB& db) {
+  if (pg_session::enabled(db)) return pg_session::ready(db);
   { auto s = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_module'");
     if (!s.step()) return false; }
   auto s = db.prepare("SELECT version FROM memory_module");
@@ -76,6 +82,12 @@ bool ready(DB& db) {
 }
 void initialize(DB& db) {
   if (ready(db)) return;
+  if (pg_session::enabled(db)) {
+    Tx tx(db);
+    if (!ready(db)) pg_session::create(db);
+    tx.commit();
+    return;
+  }
   const auto path = db.backend_file_path();
   // Unique backup destinations avoid concurrent initializers overwriting a backup.
   if (!path.empty() && !db.backup_to(path + ".pre-memory-v1-" + nonce() + ".bak"))
@@ -182,7 +194,7 @@ bool contains_sensitive_material(const std::string& input) {
 
 Json capture(Brain& b, const std::string& source, const Json& payload, bool manual) {
   source_check(b, source);
-  const auto m = mode(b);
+  auto m = mode(b);
   if (!manual && m == "off") return {{"status","skipped"},{"reason","writeback_off"},{"archived",false}};
   keys(payload, {"session_id","fragment_id","messages","expires_at"});
   const auto session = str(payload,"session_id"), fragment = str(payload,"fragment_id");
@@ -208,6 +220,14 @@ Json capture(Brain& b, const std::string& source, const Json& payload, bool manu
   const auto hash = util::sha256_hex(body);
   const auto id = util::sha256_hex(Json::array({"qbrain-memory-v1",source,session,fragment,hash}).dump());
   auto& db = b.db(); initialize(db); Tx tx(db);
+  if (pg_session::enabled(db)) {
+    if (!b.source_exists(source)) throw Error("invalid_source");
+    m = mode(b); // A policy/source change before acquiring locks must win.
+    if (!manual && m == "off") {
+      tx.commit();
+      return {{"status","skipped"},{"reason","writeback_off"},{"archived",false}};
+    }
+  }
   { auto s = db.prepare("SELECT event_id FROM memory_events WHERE source_id=? AND session_id=? AND fragment_id=?");
     s.bind_text(1,source); s.bind_text(2,session); s.bind_text(3,fragment);
     if (s.step()) {
@@ -386,7 +406,8 @@ Json read(Brain& b, const std::string& source, const std::string& query, int lim
     "e.method,p.slug,p.body,e.payload_hash FROM memory_items m JOIN memory_events e ON e.event_id=m.event_id "
     "JOIN pages p ON p.id=e.page_id AND p.source_id=e.source_id "
     "WHERE e.source_id=? AND e.status='extracted' AND p.deleted_at IS NULL AND p.content_hash=e.page_hash "
-    "AND (m.expires_at=0 OR m.expires_at>?) AND instr(lower(m.quote),lower(?))>0 "
+    "AND (m.expires_at=0 OR m.expires_at>?) AND " +
+    std::string(pg_session::enabled(db) ? pg_session::literal_match : "instr(lower(m.quote),lower(?))>0 ") +
     "ORDER BY m.created_at DESC,m.item_id ASC LIMIT 201");
   s.bind_text(1,source); s.bind_int(2,now()); s.bind_text(3,query);
   std::set<std::string> quotes; int scanned=0;

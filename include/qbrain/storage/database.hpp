@@ -30,7 +30,7 @@ enum class BackendKind { sqlite, postgres };
 // N38 D0.5 (plan P0-1): backend_file_path / backup_to / fts_search forward
 // to the new IStorageBackend capabilities, and handle() is no longer part of
 // the contract -- it remains here as a documented sqlite test hook
-// (authorizer/serialize/update_hook); production code must not call it.
+// (authorizer/serialize/update_hook); callers outside storage must not use it.
 class Database {
  public:
   Database() = default;
@@ -49,6 +49,9 @@ class Database {
   // authorizer/serialize/update_hook seams.
   sqlite3* handle() const;
 
+  // Native transaction state only; no handle escapes the storage facade.
+  bool transaction_active() const;
+
   void exec(std::string_view sql);
   int64_t last_insert_rowid() const;
   int changes() const;
@@ -60,7 +63,7 @@ class Database {
   // N38-B wiring seam (Brain::open_pg / n38 harness): arm this facade with
   // an externally constructed, already-open backend (PG mode), closing any
   // backend it held first. Generic by design -- no PG types cross this
-  // boundary, so database.cpp stays libpq-free.
+  // boundary. N48O inspects native transaction state only inside storage.
   void adopt_backend(std::unique_ptr<IStorageBackend> backend);
 
   // N38 D0.5 forwarding shims (see backend.hpp for semantics).

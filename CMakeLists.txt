@@ -65,14 +65,26 @@ function(qbrain_pg_discover out_root)
   set(${out_root} "${_best}" PARENT_SCOPE)
 endfunction()
 
-qbrain_pg_discover(QBRAIN_PG_DISCOVERED)
 set(QBRAIN_PG_ENABLED OFF)
-if(QBRAIN_WITH_PG AND QBRAIN_PG_DISCOVERED)
-  set(QBRAIN_PG_ENABLED ON)
-  message(STATUS "N38: libpq found at ${QBRAIN_PG_DISCOVERED} -- QBRAIN_WITH_PG ON")
-elseif(QBRAIN_WITH_PG)
-  message(STATUS "N38: libpq not found (QBRAIN_PG_ROOT / D:/PostgreSQL/<max> / C:/Program Files/PostgreSQL/<max>) -- QBRAIN_WITH_PG auto-OFF; SQLite path unaffected")
+if(QBRAIN_WITH_PG)
+  if(WIN32)
+    qbrain_pg_discover(QBRAIN_PG_DISCOVERED)
+    if(QBRAIN_PG_DISCOVERED)
+      set(QBRAIN_PG_ENABLED ON)
+    endif()
+  else()
+    # N48O: use the real libpq target on non-Windows; never fake a .lib path.
+    find_package(PostgreSQL QUIET)
+    if(PostgreSQL_FOUND)
+      set(QBRAIN_PG_ENABLED ON)
+    endif()
+  endif()
 endif()
+option(QBRAIN_REQUIRE_PG "Fail configuration unless the PostgreSQL backend is enabled" OFF)
+if(QBRAIN_REQUIRE_PG AND NOT QBRAIN_PG_ENABLED)
+  message(FATAL_ERROR "PostgreSQL is required for this build but libpq was not found/enabled")
+endif()
+message(STATUS "Qbrain PostgreSQL backend: ${QBRAIN_PG_ENABLED}")
 
 add_library(sqlite3 STATIC ${SQLITE_DIR}/sqlite3.c)
 target_include_directories(sqlite3 PUBLIC ${SQLITE_DIR})
@@ -107,13 +119,18 @@ qbrain_lib(storage
   src/qbrain/storage/database.cpp
   src/qbrain/storage/migrate.cpp
   src/qbrain/storage/pg_backend.cpp
+  src/qbrain/storage/transaction_state.cpp
 )
 target_link_libraries(qbrain_storage PUBLIC qbrain_util)
 if(QBRAIN_PG_ENABLED)
   # N38: libpq include dir + import lib + the QBRAIN_WITH_PG compile switch
   # propagate to every consumer of qbrain_storage (tests, CLI, harnesses).
-  target_include_directories(qbrain_storage PUBLIC "${QBRAIN_PG_DISCOVERED}/include")
-  target_link_libraries(qbrain_storage PUBLIC "${QBRAIN_PG_DISCOVERED}/lib/libpq.lib")
+  if(WIN32)
+    target_include_directories(qbrain_storage PUBLIC "${QBRAIN_PG_DISCOVERED}/include")
+    target_link_libraries(qbrain_storage PUBLIC "${QBRAIN_PG_DISCOVERED}/lib/libpq.lib")
+  else()
+    target_link_libraries(qbrain_storage PUBLIC PostgreSQL::PostgreSQL)
+  endif()
   target_compile_definitions(qbrain_storage PUBLIC QBRAIN_WITH_PG=1)
   if(MSVC)
     # Delay-load keeps libpq.dll off the loader path until PG is actually
@@ -434,3 +451,11 @@ add_test(NAME qbrain_usage_batch_unit COMMAND qbrain_usage_batch_tests)
 add_executable(qbrain_usage_batch_ownership_tests tests/test_usage_batch_ownership.cpp)
 target_link_libraries(qbrain_usage_batch_ownership_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
 add_test(NAME qbrain_usage_batch_ownership_unit COMMAND qbrain_usage_batch_ownership_tests)
+
+# N48O explicit real-server target: not part of the no-DSN default suite.
+if(QBRAIN_PG_ENABLED)
+  add_executable(qbrain_pg_memory_tests tests/test_pg_memory.cpp)
+  target_link_libraries(qbrain_pg_memory_tests PRIVATE qbrain_ops qbrain_memory)
+  add_executable(qbrain_pg_memory_scope_tests tests/test_pg_memory_scope.cpp)
+  target_link_libraries(qbrain_pg_memory_scope_tests PRIVATE qbrain_ops qbrain_memory qbrain_core qbrain_jobs qbrain_ai)
+endif()
