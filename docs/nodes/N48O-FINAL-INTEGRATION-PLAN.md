@@ -33,3 +33,13 @@ not claims of actions performed now. Do not duplicate old local-delivery status 
 current status. Source capture/extract/read/status/drain/forget is the bounded PG
 module; SQLite remains default. Other PG modules, real signed-in client memory
 consumption, paid-model quality, signing/stable and Issue40 remain separate.
+
+## Acceptance closure — 2026-09-29
+
+Status: done for the bounded N48O source module after qualification of504f2825 /
+tree33db2874, native Windows/Linux execution and separate outcome review.
+See [N48O-HARD-AUDIT.md](N48O-HARD-AUDIT.md) and
+[n48o-evidence/FINAL-RESULT.json](n48o-evidence/FINAL-RESULT.json).
+Only reviewed documentation/examples/executed review material may follow this
+candidate; actual merge identity belongs to PR57. No whole-PG/project, real-client,
+model-quality, signed/stable release or Issue40 completion is inferred.

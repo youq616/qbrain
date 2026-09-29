@@ -1,0 +1,88 @@
+{
+  "schema": "qbrain-n48o-final-static-review-v1",
+  "qualified_candidate": "504f2825fe371d3a1b4a867c11f1b66b16a3bc8a",
+  "tree": "33db28742011eb5c8b435dca73a98c6946a30d9e",
+  "changed_paths": [
+    ".ci/check_source_archive.py",
+    ".ci/run_pg_memory_gate.py",
+    ".ci/test_source_archive.py",
+    ".ci/test_source_gate_integration.py",
+    ".github/workflows/n48o-integration.yml",
+    "docs/nodes/N48O-FINAL-INTEGRATION-PLAN.md"
+  ],
+  "inherited_function_asts_unchanged": [
+    "need",
+    "read",
+    "sha",
+    "encode",
+    "lifecycle"
+  ],
+  "unchanged": [
+    {
+      "path": "include/qbrain/memory/pg_session_storage.hpp",
+      "sha256": "33c1be0c802693e998dd61bf50630dd3fa5606e036f7edff34e5655e1d0b25f1",
+      "unchanged_from_a073": true
+    },
+    {
+      "path": "src/qbrain/memory/session_memory.cpp",
+      "sha256": "df661286e6041ed86e37b8d86296931796463491486b0f079240132ea1d7f519",
+      "unchanged_from_a073": true
+    },
+    {
+      "path": "src/qbrain/storage/transaction_state.cpp",
+      "sha256": "af378f01c2ade80f000e8fd308d5d096ddeb47413821148061f40da8afe6e0f7",
+      "unchanged_from_a073": true
+    },
+    {
+      "path": "tests/test_pg_memory.cpp",
+      "sha256": "87903b36bfe81c46180a612a5b93ba3875fc372220a2995e68c94f3746a7b1ea",
+      "unchanged_from_a073": true
+    },
+    {
+      "path": "tests/test_pg_memory_scope.cpp",
+      "sha256": "fdd403dfd7590ce2fa9b9404d97f34b22ed953235ff0e5b84d0d89fc2b0b0e28",
+      "unchanged_from_a073": true
+    },
+    {
+      "path": ".ci/check_pg_memory_evidence.py",
+      "sha256": "9b0e44e0071ac1e9462421425ef7807d719a53c00bf1e901127e84e2777ea160",
+      "unchanged_from_a073": true
+    },
+    {
+      "path": ".ci/check_pg_scope_evidence.py",
+      "sha256": "079373bc5628a4377ebd522ef4b11cd45d076ba4bd6b39c06586702348f1ee7c",
+      "unchanged_from_a073": true
+    },
+    {
+      "path": ".ci/review_session_lifecycle.py",
+      "sha256": "73e43b4613f1286e31f159acce63b05b840469f9aa13b97b33a586f0ef7ce4cb",
+      "unchanged_from_a073": true
+    },
+    {
+      "path": ".ci/check_session_lifecycle_evidence.py",
+      "sha256": "b4cfa6a5db8ded0dc16e56b73e1d25f6dccf0781a4206030511d6c2c1357dc3b",
+      "unchanged_from_a073": true
+    },
+    {
+      "path": ".ci/test_pg_memory.py",
+      "sha256": "5008002869c6a7251df28697834d6001d3de1321ff7018f2d5c314e49032dc00",
+      "unchanged_from_a073": true
+    },
+    {
+      "path": "CMakeLists.txt",
+      "sha256": "da750293b7e2cea9bc1bc3112f0169ee2bd442788c4acfbffa0d5ee372ffaa1f",
+      "unchanged_from_a073": true
+    },
+    {
+      "path": "scripts/build-cl.ps1",
+      "sha256": "43d32fb5bd414156e53aecb3170bdd3928cf71a22182fe86c10566763d89eac3",
+      "unchanged_from_a073": true
+    },
+    {
+      "path": "scripts/build-tests-cl.ps1",
+      "sha256": "2a67b6fd3021278a934815664f3672198926d28eb7de24b08f8d1853ae6a61f4",
+      "unchanged_from_a073": true
+    }
+  ],
+  "local_git_is_tree_mirror": true
+}

@@ -98,3 +98,16 @@ PG对等、签名、稳定版和Issue40验收；旧N48K固定ZIP与公开发行�
 本模块补齐恢复副本/升级前的深度诊断入口，不代表全部业务语义、真实客户端/模型、
 PG、签名、稳定版或Issue40完成。[审核](nodes/N48N-HARD-AUDIT.md) ·
 [用法](integration/SQLITE-CHECK.zh-CN.md)。旧包与发行资产不替换，实际合并见PR55。
+
+## N48O：PostgreSQL 会话记忆主路径
+
+2026-09-29。固定504f2825已通过两平台真实PG与原生回归、完整源码树绑定和本人分离
+自审；实际合并见PR57。会话capture/extract/read/status/drain/forget的PG实现缺口
+已补齐，来源、完整用户语句、独立许可、并发租约和遗忘墓碑保持。此前本地补充现已
+进入仓库并重新验证，不再需要用户手工套旧补丁。
+
+这只关闭session_memory的PG路径，不代表fact_store、context、Hook或全部其他模块
+对等，也不证明真实登录客户端使用了记忆。同DSN的不同brain标签不是硬隔离租户。
+不自动迁移数据、开启采集或替换公开发行/旧ZIP。真实客户端、模型效果与全流程费用、
+其余PG、签名、稳定版和Issue40继续保留。[最终审核](nodes/N48O-HARD-AUDIT.md) ·
+[中文说明](integration/POSTGRES-SESSION-MEMORY.zh-CN.md)。

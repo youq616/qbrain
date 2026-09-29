@@ -1,0 +1,18 @@
+{
+  "session_id": "n48o-integrated-demo-v1",
+  "fragment_id": "explicit-manual",
+  "messages": [
+    {
+      "role": "user",
+      "content": "我偏好 Windows 原生开发，并保留中文原始证据。"
+    },
+    {
+      "role": "assistant",
+      "content": "I prefer ASSISTANT_ONLY_NOT_A_USER_FACT."
+    },
+    {
+      "role": "user",
+      "content": "我决定先核对来源，再使用记忆。"
+    }
+  ]
+}

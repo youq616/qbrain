@@ -1,0 +1,276 @@
+{
+  "schema": "qbrain-n48o-final-integrated-outcome-v1",
+  "verdict": "PASS_BOUNDED_POSTGRES_SESSION_MEMORY",
+  "recorded_at_utc": "2026-09-29T01:17:56.234745+00:00",
+  "qualified_commit": "504f2825fe371d3a1b4a867c11f1b66b16a3bc8a",
+  "qualified_tree": "33db28742011eb5c8b435dca73a98c6946a30d9e",
+  "base_main": "d038aa1f0ba5df064306ada87d44bf3bc5a43fbf",
+  "integration_parent": "a073e24bb0122dfe26d231f045fdb70408169dc9",
+  "runtime_repair": "cd4ca9ae35d846b16738f8ed66dde88f1bf841b5",
+  "reviewer": "Owner-authorized separate ChatGPT coordinator engineering self-review; not third-party/subagent",
+  "workflows": [
+    {
+      "run_id": 36505039842,
+      "attempt": 1,
+      "jobs": [
+        109204451200,
+        109204451541
+      ],
+      "observed_result": "completed/success",
+      "original_artifacts_downloaded": 2
+    },
+    {
+      "run_id": 36505044411,
+      "jobs": [
+        109204464942,
+        109204465054
+      ],
+      "observed_result": "completed/success",
+      "original_artifacts_downloaded": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "archive_sha256": "7346b6ac163d345f369058646db75c501539ea799adf3b3fffb05453fe91840a",
+      "archive_bytes": 34867387,
+      "source_files": 1491,
+      "binary_sha256": "5767f3d7a883d14616a67497861afffdb3a50c8296a14065111bd893afd9a913",
+      "platform": "linux",
+      "artifact_id": 11006754667,
+      "run_id": 36505039842,
+      "git_tree": "33db28742011eb5c8b435dca73a98c6946a30d9e",
+      "crlf_only_files": 0,
+      "source_archive_sha256": "a8084682a1f199718fb5bdc84cd92f0b866df5c789265b01b954b8ae8bbf6fda",
+      "source_tree_manifest_sha256": "59f52477466a8376e03f8d646fc76fe1ab88334525d38e6581db5ed554be730e",
+      "server_version": "PostgreSQL 16.15 (Ubuntu 16.15-1.pgdg24.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit",
+      "gate_replays": [
+        {
+          "mode": "normal",
+          "result_sha256": "208be31b003055b7591927a4077f7df94f264a0cbdba92be9bd54dac3bdcb3c4",
+          "pin_sha256": "3c77eeb998cd42296b103fb3f356d4345c6233a30dac159984172076dec5677f"
+        },
+        {
+          "mode": "optimized",
+          "result_sha256": "208be31b003055b7591927a4077f7df94f264a0cbdba92be9bd54dac3bdcb3c4",
+          "pin_sha256": "3c77eeb998cd42296b103fb3f356d4345c6233a30dac159984172076dec5677f"
+        }
+      ],
+      "old_sqlite_harness_lock_retries": {
+        "normal": 1,
+        "optimized": 1
+      }
+    },
+    {
+      "archive_sha256": "425126839276832e6d1a4e1b0d7d7aa4542f71d9a0b7727ea58bace62a227799",
+      "archive_bytes": 53769464,
+      "source_files": 1491,
+      "binary_sha256": "33084a2f61c7872b6ba08a6e375f0fb0cd1b4ceb736071416a78bbc20c029301",
+      "platform": "windows",
+      "artifact_id": 11007391822,
+      "run_id": 36505039842,
+      "git_tree": "33db28742011eb5c8b435dca73a98c6946a30d9e",
+      "crlf_only_files": 1476,
+      "source_archive_sha256": "6970f8c148425873a35491e761b0ad186d19e1f4f81b2f5bafcb3e6bf4b2704f",
+      "source_tree_manifest_sha256": "59f52477466a8376e03f8d646fc76fe1ab88334525d38e6581db5ed554be730e",
+      "server_version": "PostgreSQL 14.24, compiled by Visual C++ build 1944, 64-bit",
+      "gate_replays": [
+        {
+          "mode": "normal",
+          "result_sha256": "3e2b38dd25b485a7f0009c25890db6804c152025b292143a01ee9faee1863ce1",
+          "pin_sha256": "0a1773e7fc52123e007b651483cf01b1985dce389f53f98c4f2d5f919d1701f6"
+        },
+        {
+          "mode": "optimized",
+          "result_sha256": "3e2b38dd25b485a7f0009c25890db6804c152025b292143a01ee9faee1863ce1",
+          "pin_sha256": "0a1773e7fc52123e007b651483cf01b1985dce389f53f98c4f2d5f919d1701f6"
+        }
+      ],
+      "old_sqlite_harness_lock_retries": {
+        "normal": 0,
+        "optimized": 0
+      }
+    }
+  ],
+  "native_per_platform": {
+    "pg_direct_checks": 122,
+    "scope_direct_checks": 112,
+    "core_ctests": 6,
+    "retained_driver_steps": 55,
+    "nested_lifecycle_steps": 16,
+    "nested_retained_steps": 18,
+    "per_python_mode": {
+      "source_contract_tests": 25,
+      "source_pin_tests": 10,
+      "differential_calls": 75,
+      "differential_product_calls": 60,
+      "differential_psql_calls": 15,
+      "differential_checks": 213,
+      "memory_evidence_mutations_rejected": 25,
+      "sqlite_review_calls": 42,
+      "sqlite_review_checks": 110,
+      "sqlite_review_retries": 0,
+      "old_sqlite_checks": 44
+    },
+    "scope_evidence_mutations_rejected": {
+      "windows": 19,
+      "linux_with_parent": 21
+    }
+  },
+  "windows_original_registered_groups": 60,
+  "original_report_replay_commands": 46,
+  "integrated_gate_replays": 4,
+  "retained_replay_results": [
+    {
+      "platform": "linux",
+      "group": "accounting",
+      "mode": "normal",
+      "commands": 6,
+      "result_sha256": "53393fdcf1ddf9a16c1c88ac8c192af59cef070cc26a8647a3f3b00e4b18bea3"
+    },
+    {
+      "platform": "linux",
+      "group": "accounting",
+      "mode": "optimized",
+      "commands": 6,
+      "result_sha256": "d5c7f98d8b623867b2b7a2f81a33123663763ba81208fb503a05ee77a84c6499"
+    },
+    {
+      "platform": "linux",
+      "group": "lifecycle",
+      "mode": "normal",
+      "commands": 3,
+      "result_sha256": "6f2c1c84f22bd16d33f97d0b378a1208e03c2a6fb2dc11821c657c3d0be55d1b"
+    },
+    {
+      "platform": "linux",
+      "group": "lifecycle",
+      "mode": "optimized",
+      "commands": 3,
+      "result_sha256": "0bcbee33e0536502a5a46ff64a37223de98649abf5a36e7fc58f93180ea77a17"
+    },
+    {
+      "platform": "linux",
+      "group": "receipts",
+      "mode": "normal",
+      "commands": 5,
+      "result_sha256": "f44a90a79d8bdf52f8a9ce314c5ecc8fb54858539ef42f54989a022f6dfe6c5c"
+    },
+    {
+      "platform": "windows",
+      "group": "accounting",
+      "mode": "normal",
+      "commands": 6,
+      "result_sha256": "7636d87a05fde88861fd97c743dd57d69246fc32d388fba091648a04cc3b1ecf"
+    },
+    {
+      "platform": "windows",
+      "group": "accounting",
+      "mode": "optimized",
+      "commands": 6,
+      "result_sha256": "c98721254aab03c87cd4ee1344f934ff1d1abe872de22c436ea8cb799e167d67"
+    },
+    {
+      "platform": "windows",
+      "group": "lifecycle",
+      "mode": "normal",
+      "commands": 3,
+      "result_sha256": "1972fc31c5381eb8441ce890827e9eecfb51189bf185de555b9d5b13b50387ec"
+    },
+    {
+      "platform": "windows",
+      "group": "lifecycle",
+      "mode": "optimized",
+      "commands": 3,
+      "result_sha256": "d5a974e3978d66165125b34b730fbe11444794a2be72a044b26ed8c034295343"
+    },
+    {
+      "platform": "windows",
+      "group": "receipts",
+      "mode": "normal",
+      "commands": 5,
+      "result_sha256": "c471009a8c0cb6f1a4bfd9ce2b2082e2f6e7b1111ef00cc778dd34ef8dd54284"
+    }
+  ],
+  "local": {
+    "source_tests_per_mode": 25,
+    "pin_tests_per_mode": 10,
+    "independent_source_cli_calls_per_mode": 36,
+    "independent_source_correct_archives": 12,
+    "independent_source_rejected_archives": 24,
+    "qualified_program_sqlite_calls_per_mode": 42,
+    "qualified_program_sqlite_checks_per_mode": 110,
+    "qualified_program_demo_calls": 6,
+    "postgres_server_executed_here": false,
+    "windows_binary_executed_here": false,
+    "new_full_cpp_build_or_sanitizer_here": false,
+    "evidence": [
+      {
+        "path": "local/source-tests-normal.json",
+        "sha256": "345b4a65553c8e1dd37532edff856838c029a8e1af213c81847384b43f31cc79",
+        "passed": true
+      },
+      {
+        "path": "local/source-tests-optimized.json",
+        "sha256": "cd87a88c429306143fa962d1cf6fd585059ec650e4591bcb48558f97407d0c2f",
+        "passed": true
+      },
+      {
+        "path": "local/gate-tests-normal.json",
+        "sha256": "85127dc318257058443a390b33c5e1647d5606c50570a82419d5de01365d6e75",
+        "passed": true
+      },
+      {
+        "path": "local/gate-tests-optimized.json",
+        "sha256": "70e322914564e20da25f2f1986e1c0471738b7f5678463a1e1bf07d931c7c55b",
+        "passed": true
+      },
+      {
+        "path": "source-blackbox-normal/RESULT.json",
+        "sha256": "973a14d667f882b0ce36cda81b8b932a07f6c27f09cf016c7de08e2ad253bfa1",
+        "passed": true
+      },
+      {
+        "path": "source-blackbox-optimized-complete/RESULT.json",
+        "sha256": "c7957eee7b65e5b37bbe613baf5fd74d4f78fed96a66b91465e4e0e7ed350189",
+        "passed": true
+      },
+      {
+        "path": "final-native-lifecycle-normal/RESULT.json",
+        "sha256": "80086545eb088fad8e9fe9d35b50b7bdb65917155e1f7b8c15e7afdcd1e46189",
+        "passed": true
+      },
+      {
+        "path": "final-native-lifecycle-optimized/RESULT.json",
+        "sha256": "bc8a85fbf3c581446000a96b50c5e3f76d5ff2a71e10d3981961588ac324e87e",
+        "passed": true
+      },
+      {
+        "path": "final-demo/RESULT.json",
+        "sha256": "b4c288cebdf53ab1e9f89824ad86d2d4773d9373d3c529a5a8f905026c678cfb",
+        "passed": true
+      }
+    ]
+  },
+  "reviewer_sources": {
+    "audit_source_cli.py": "929be8b634da16950ada10faebf58980a530d6a33f99251a2e13ddc03d7d20af",
+    "replay_final_artifact.py": "30d1c45bb7b551e0288eb5500fd92c85e04fcca942dbb115fc00178d114d6f07",
+    "run_demo.py": "752e1fd49e28b74088f5be61b4462fef9c72cd75afb9b79e11813b2ca7dc3ce4"
+  },
+  "retained_failures": [
+    "partial first optimized source black-box batch: no successful RESULT.json",
+    "unsupported streaming request: no test started",
+    "initial replay wrapper relative paths: failure retained, corrected to absolute paths"
+  ],
+  "scope": {
+    "native_runtime_changed_this_integration": false,
+    "previous_local_source_binding_now_pushed": true,
+    "all_pg_modules_complete": false,
+    "real_client_consumption_verified": false,
+    "paid_model_requested": false,
+    "real_user_data_used": false,
+    "new_release_created": false,
+    "issue40_closed": false,
+    "stable_or_signed_release": false
+  },
+  "closure_rule": "Only reviewed docs/history/examples/already-executed review material may follow qualified source; actual merge is in PR57 and DELIVERY.json."
+}
