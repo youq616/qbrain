@@ -120,8 +120,8 @@ inline Json usage_batch(Brain& brain,const std::string& source,const Json& paylo
   // Autocommit alone misses implicit transactions held by unfinished SELECT,
   // RETURNING or blob handles. Never commit/roll back a caller-owned snapshot
   // or pending write, including one in an attached database.
-  if (apply) require(sqlite3_get_autocommit(db.handle())!=0 &&
-      sqlite3_txn_state(db.handle(),nullptr)==SQLITE_TXN_NONE,"fact_transaction_active");
+  if (apply) require(pg_fact::enabled(db)?!db.transaction_active():
+      (sqlite3_get_autocommit(db.handle())!=0 && sqlite3_txn_state(db.handle(),nullptr)==SQLITE_TXN_NONE),"fact_transaction_active");
   {
     ReadSnapshot snapshot(db);
     planned=preview(brain,source,request);

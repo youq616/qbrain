@@ -463,3 +463,8 @@ endif()
 # N48P: exact same layered-context contract on SQLite and real PostgreSQL.
 add_executable(qbrain_pg_context_tests tests/test_pg_context.cpp)
 target_link_libraries(qbrain_pg_context_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_jobs qbrain_ai)
+
+# N48Q: explicit real-server qualification; only SQLite is registered for generic CTest.
+add_executable(qbrain_pg_fact_tests tests/test_pg_facts.cpp)
+target_link_libraries(qbrain_pg_fact_tests PRIVATE qbrain_mcp qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai)
+add_test(NAME qbrain_pg_fact_sqlite_unit COMMAND qbrain_pg_fact_tests --sqlite-only)

@@ -1,4 +1,6 @@
 #include "qbrain/memory/fact_store.hpp"
+#include "qbrain/memory/pg_fact_storage.hpp"
+#include "qbrain/memory/pg_session_storage.hpp"
 #include "qbrain/util/hash.hpp"
 #include "qbrain/util/utf8_display.hpp"
 #include <algorithm>
@@ -49,29 +51,34 @@ int64_t revision(const Json& p) {
 }
 struct Tx {
   DB& db; bool done = false; int old_timeout = 0;
+  std::unique_ptr<pg_fact::WriteScope> pg;
   explicit Tx(DB& d) : db(d) {
-    { auto s = db.prepare("PRAGMA busy_timeout"); if (s.step()) old_timeout = int(s.column_int(0)); }
+    if(pg_fact::enabled(db)){pg=std::make_unique<pg_fact::WriteScope>(db);return;}
+    { auto s = pg_fact::prepare(db,"PRAGMA busy_timeout"); if (s.step()) old_timeout = int(s.column_int(0)); }
     db.exec("PRAGMA busy_timeout=2500");
     try { db.exec("BEGIN IMMEDIATE"); }
     catch (...) { db.exec("PRAGMA busy_timeout=" + std::to_string(old_timeout)); throw; }
   }
-  void commit() { db.exec("COMMIT"); done = true; }
+  void commit() { if(pg){pg->commit();done=true;return;} db.exec("COMMIT"); done = true; }
   ~Tx() {
+    if(pg)return;
     if (!done) { try { db.exec("ROLLBACK"); } catch (...) {} }
     try { db.exec("PRAGMA busy_timeout=" + std::to_string(old_timeout)); } catch (...) {}
   }
 };
 bool exists(DB& db, const char* name, const char* type = "table") {
-  auto s = db.prepare("SELECT 1 FROM sqlite_master WHERE type=? AND name=?");
+  if(pg_fact::enabled(db))return pg_fact::exists(db,name,type);
+  auto s = pg_fact::prepare(db,"SELECT 1 FROM sqlite_master WHERE type=? AND name=?");
   s.bind_text(1, type); s.bind_text(2, name); return s.step();
 }
 bool ready(DB& db) {
+  if(pg_fact::enabled(db))return pg_fact::ready(db);
   if (!exists(db, "memory_fact_module")) {
     require(!exists(db, "memory_facts") && !exists(db, "memory_fact_evidence") &&
         !exists(db, "memory_fact_relations"), "fact_schema_conflict");
     return false;
   }
-  { auto s = db.prepare("SELECT version FROM memory_fact_module");
+  { auto s = pg_fact::prepare(db,"SELECT version FROM memory_fact_module");
     require(s.step() && s.column_int(0) == 1 && !s.step(), "fact_schema_version_unsupported"); }
   for (const auto* name : {"memory_facts", "memory_fact_evidence", "memory_fact_relations"})
     require(exists(db, name), "fact_schema_incomplete");
@@ -79,6 +86,10 @@ bool ready(DB& db) {
   return true;
 }
 void initialize(DB& db) {
+  if(pg_fact::enabled(db)){
+    {pg_fact::ReadScope snapshot(db);if(ready(db))return;}
+    pg_fact::WriteScope tx(db);if(!ready(db))pg_fact::create(db);tx.commit();return;
+  }
   if (ready(db)) return;
   const auto path = db.backend_file_path();
   if (!path.empty()) {
@@ -132,28 +143,38 @@ END;
 // APIs support authorizers that deny transaction-control SQL. Finalizing this
 // statement releases only its own read, never the caller's transaction.
 struct ReadSnapshot {
+  pg_fact::ReadScope pg;
   DB::Statement pin;
-  explicit ReadSnapshot(DB& db) : pin(db.prepare("SELECT COUNT(*) FROM sqlite_master")) {
-    require(pin.step(), "fact_snapshot_unavailable");
+  explicit ReadSnapshot(DB& db) : pg(db) {
+    if(!pg_fact::enabled(db)){
+      pin=db.prepare("SELECT COUNT(*) FROM sqlite_master");
+      require(pin.step(), "fact_snapshot_unavailable");
+    }
   }
   ReadSnapshot(const ReadSnapshot&) = delete;
   ReadSnapshot& operator=(const ReadSnapshot&) = delete;
 };
 bool archive_ready(DB& db) {
+  if(pg_fact::enabled(db))return pg_fact::archive_ready(db);
   if (!exists(db,"memory_fact_lifecycle_module")) {
     require(!exists(db,"memory_fact_archive"),"fact_lifecycle_schema_conflict");
     return false;
   }
-  auto version=db.prepare("SELECT version FROM memory_fact_lifecycle_module");
+  auto version=pg_fact::prepare(db,"SELECT version FROM memory_fact_lifecycle_module");
   require(version.step() && version.column_int(0)==1 && !version.step(),
           "fact_lifecycle_version_unsupported");
   require(exists(db,"memory_fact_archive"),"fact_lifecycle_schema_incomplete");
   // Validate the required columns even when there are no archived rows.
-  auto columns=db.prepare("SELECT fact_id,source_id,archived_at FROM memory_fact_archive LIMIT 0");
+  auto columns=pg_fact::prepare(db,"SELECT fact_id,source_id,archived_at FROM memory_fact_archive LIMIT 0");
   columns.step();
   return true;
 }
 void initialize_archive(DB& db) {
+  if(pg_fact::enabled(db)){
+    {pg_fact::ReadScope snapshot(db);if(archive_ready(db))return;require(ready(db),"fact_not_found");}
+    pg_fact::WriteScope tx(db);require(ready(db),"fact_not_found");
+    if(!archive_ready(db))pg_fact::create_archive(db);tx.commit();return;
+  }
   {
   ReadSnapshot snapshot(db);
   if (archive_ready(db)) return;
@@ -179,7 +200,7 @@ CREATE INDEX idx_memory_fact_archive_source ON memory_fact_archive(source_id,fac
   tx.commit();
 }
 bool is_archived(DB& db,const std::string& source,const std::string& id) {
-  auto row=db.prepare("SELECT archived_at,typeof(archived_at) FROM memory_fact_archive WHERE source_id=? AND fact_id=?");
+  auto row=pg_fact::prepare(db,"SELECT archived_at,typeof(archived_at) FROM memory_fact_archive WHERE source_id=? AND fact_id=?");
   row.bind_text(1,source);row.bind_text(2,id);
   if (!row.step()) return false;
   require(row.column_text(1)=="integer" && !row.column_is_null(0) && row.column_int(0)>=0,
@@ -203,9 +224,9 @@ Evidence evidence(DB& db, const std::string& source, const std::string& item, in
   identifier(item);
   if (!exists(db, "memory_module") || !exists(db, "memory_items") || !exists(db, "memory_events"))
     throw Error("fact_evidence_unavailable");
-  { auto version = db.prepare("SELECT version FROM memory_module");
+  { auto version = pg_fact::prepare(db,"SELECT version FROM memory_module");
     require(version.step() && version.column_int(0)==1 && !version.step(), "fact_evidence_unavailable"); }
-  auto s = db.prepare(
+  auto s = pg_fact::prepare(db,
       "SELECT m.event_id,m.category,m.quote,m.message_index,m.expires_at,e.status,e.payload_hash,"
       "e.page_hash,e.expires_at,e.session_id,e.fragment_id,e.method,p.slug,p.body,p.content_hash,p.deleted_at "
       "FROM memory_items m JOIN memory_events e ON e.event_id=m.event_id "
@@ -249,7 +270,7 @@ Evidence evidence(DB& db, const std::string& source, const std::string& item, in
   return result;
 }
 Json load(DB& db, const std::string& source, const std::string& id, int64_t at, ReadWork* work = nullptr) {
-  auto s = db.prepare("SELECT subject,predicate,object,status,revision,created_at,updated_at "
+  auto s = pg_fact::prepare(db,"SELECT subject,predicate,object,status,revision,created_at,updated_at "
                       "FROM memory_facts WHERE source_id=? AND fact_id=?");
   s.bind_text(1,source); s.bind_text(2,id);
   if (!s.step()) return nullptr;
@@ -258,7 +279,7 @@ Json load(DB& db, const std::string& source, const std::string& id, int64_t at, 
       {"revision",s.column_int(4)},{"created_at",s.column_int(5)},{"updated_at",s.column_int(6)},
       {"confidence",nullptr},{"truth_status","caller_attested_user_statement"},
       {"untrusted_data",true},{"evidence",Json::array()}};
-  auto refs = db.prepare("SELECT item_id,quote_hash,payload_hash FROM memory_fact_evidence "
+  auto refs = pg_fact::prepare(db,"SELECT item_id,quote_hash,payload_hash FROM memory_fact_evidence "
                          "WHERE fact_id=? AND source_id=? ORDER BY item_id LIMIT 17");
   refs.bind_text(1,id); refs.bind_text(2,source);
   int count = 0;
@@ -282,7 +303,7 @@ Json load(DB& db, const std::string& source, const std::string& id, int64_t at, 
 Json support_age(DB& db, const Json& fact, int64_t at, int days) {
   int64_t newest=0;bool anomaly=false,unknown=false;
   for(const auto& support:fact["evidence"]) {
-    auto time=db.prepare("SELECT created_at,typeof(created_at) FROM memory_items WHERE item_id=?");
+    auto time=pg_fact::prepare(db,"SELECT created_at,typeof(created_at) FROM memory_items WHERE item_id=?");
     time.bind_text(1,support["item_id"].get_ref<const std::string&>());
     require(time.step(),"fact_evidence_unavailable");
     const auto value=time.column_int(0);
@@ -303,7 +324,7 @@ Json need(DB& db, const std::string& source, const std::string& id, int64_t at) 
   auto f = load(db,source,id,at); require(!f.is_null(), "fact_not_found"); return f;
 }
 void insert_evidence(DB& db, const std::string& source, const std::string& id, const Evidence& e, int64_t at) {
-  auto s = db.prepare("INSERT INTO memory_fact_evidence(fact_id,source_id,item_id,quote_hash,payload_hash,created_at) "
+  auto s = pg_fact::prepare(db,"INSERT INTO memory_fact_evidence(fact_id,source_id,item_id,quote_hash,payload_hash,created_at) "
                       "VALUES(?,?,?,?,?,?)");
   s.bind_text(1,id); s.bind_text(2,source); s.bind_text(3,e.item);
   s.bind_text(4,util::sha256_hex(e.quote)); s.bind_text(5,e.hash); s.bind_int(6,at); s.step_done();
@@ -311,24 +332,24 @@ void insert_evidence(DB& db, const std::string& source, const std::string& id, c
 void advance(DB& db, const std::string& source, const std::string& id, int64_t rev,
              const std::string& status, int64_t at) {
   require(rev > 0 && rev < INT32_MAX, "fact_invalid_revision");
-  auto s = db.prepare("UPDATE memory_facts SET status=?,revision=revision+1,updated_at=? "
+  auto s = pg_fact::prepare(db,"UPDATE memory_facts SET status=?,revision=revision+1,updated_at=? "
                       "WHERE source_id=? AND fact_id=? AND revision=?");
   s.bind_text(1,status); s.bind_int(2,at); s.bind_text(3,source); s.bind_text(4,id); s.bind_int(5,rev);
   s.step_done(); require(db.changes() == 1, "fact_revision_conflict");
 }
 bool has_relation(DB& db, const std::string& source, const std::string& a,
                   const std::string& b, const std::string& kind) {
-  auto s = db.prepare("SELECT 1 FROM memory_fact_relations WHERE source_id=? AND from_id=? AND to_id=? AND relation=?");
+  auto s = pg_fact::prepare(db,"SELECT 1 FROM memory_fact_relations WHERE source_id=? AND from_id=? AND to_id=? AND relation=?");
   s.bind_text(1,source); s.bind_text(2,a); s.bind_text(3,b); s.bind_text(4,kind); return s.step();
 }
 void link(DB& db, const std::string& source, const std::string& a,
           const std::string& b, const std::string& kind, int64_t at) {
   for (const auto& id : {a,b}) {
-    auto n = db.prepare("SELECT COUNT(*) FROM memory_fact_relations WHERE source_id=? AND (from_id=? OR to_id=?)");
+    auto n = pg_fact::prepare(db,"SELECT COUNT(*) FROM memory_fact_relations WHERE source_id=? AND (from_id=? OR to_id=?)");
     n.bind_text(1,source); n.bind_text(2,id); n.bind_text(3,id);
     require(n.step() && n.column_int(0) < max_relations, "fact_relation_limit");
   }
-  auto s = db.prepare("INSERT INTO memory_fact_relations(source_id,from_id,to_id,relation,created_at) VALUES(?,?,?,?,?)");
+  auto s = pg_fact::prepare(db,"INSERT INTO memory_fact_relations(source_id,from_id,to_id,relation,created_at) VALUES(?,?,?,?,?)");
   s.bind_text(1,source); s.bind_text(2,a); s.bind_text(3,b); s.bind_text(4,kind); s.bind_int(5,at); s.step_done();
 }
 void compatible(const Json& a, const Json& b) {
@@ -344,9 +365,15 @@ Json receipt(const Json& fact, bool duplicate = false) {
 
 FactStore::FactStore(Brain& brain, std::string source) : brain_(brain), source_(std::move(source)) { validate(); }
 void FactStore::validate() const {
-  require(brain_.db().backend_kind() == storage::BackendKind::sqlite, "fact_backend_unsupported");
+  auto& db=brain_.db();
+  require(db.backend_kind()==storage::BackendKind::sqlite || pg_fact::enabled(db),"fact_backend_unsupported");
+  if(pg_fact::enabled(db))pg_fact::validate_context(db);
   const auto canonical = Brain::canonical_source_id(source_);
   require(canonical && *canonical == source_ && brain_.source_exists(source_), "invalid_source");
+  if(pg_fact::enabled(db)){
+    if(pg_fact::exists(db,"memory_module")) (void)pg_session::ready(db);
+    return;
+  }
   auto s = brain_.db().prepare("PRAGMA foreign_keys");
   require(s.step() && s.column_int(0) == 1, "fact_foreign_keys_required");
 }
@@ -362,7 +389,7 @@ Json promotion_target(DB& db,const std::string& source,const std::string& id,int
   if(!live.is_null())return live;
   const auto historical=load(db,source,id,0);
   require(!historical.is_null() && historical["status"]=="active","fact_not_found");
-  auto count=db.prepare("SELECT COUNT(*) FROM memory_fact_evidence WHERE source_id=? AND fact_id=?");
+  auto count=pg_fact::prepare(db,"SELECT COUNT(*) FROM memory_fact_evidence WHERE source_id=? AND fact_id=?");
   count.bind_text(1,source);count.bind_text(2,id);
   require(count.step() && count.column_int(0)>=1 && count.column_int(0)<=max_evidence &&
       historical["evidence_count"]==count.column_int(0),"fact_not_found");
@@ -376,7 +403,7 @@ std::vector<Evidence> promotion_evidence(DB& db,const std::string& source,
                                         const std::string& id,int64_t at) {
   if(!exists(db,"memory_module") || !exists(db,"memory_events") || !exists(db,"memory_items"))
     throw Error("fact_event_unavailable");
-  auto state=db.prepare("SELECT e.status,e.method,e.expires_at,e.payload_hash,e.page_hash,"
+  auto state=pg_fact::prepare(db,"SELECT e.status,e.method,e.expires_at,e.payload_hash,e.page_hash,"
       "e.session_id,e.fragment_id,p.body,p.content_hash,p.deleted_at "
       "FROM memory_events e JOIN pages p ON p.id=e.page_id AND p.source_id=e.source_id "
       "WHERE e.source_id=? AND e.event_id=? AND length(CAST(p.body AS BLOB))<=262144");
@@ -398,7 +425,7 @@ std::vector<Evidence> promotion_evidence(DB& db,const std::string& source,
         p.contains("expires_at") && p["expires_at"].is_number_integer() && p["expires_at"]==expiry,
         "fact_event_unavailable");
   } catch(...) {throw Error("fact_event_unavailable");}
-  auto items=db.prepare("SELECT item_id FROM memory_items WHERE event_id=? ORDER BY message_index,item_id LIMIT 33");
+  auto items=pg_fact::prepare(db,"SELECT item_id FROM memory_items WHERE event_id=? ORDER BY message_index,item_id LIMIT 33");
   items.bind_text(1,id);std::vector<Evidence> result;ReadWork work;
   while(items.step()) {
     require(result.size()<32,"fact_promotion_item_limit");
@@ -411,7 +438,7 @@ std::vector<Evidence> promotion_evidence(DB& db,const std::string& source,
 
 Json FactStore::promote_event(const std::string& event_id) {
   validate();identifier(event_id);auto& db=brain_.db();
-  require(sqlite3_get_autocommit(db.handle())!=0,"fact_transaction_active");
+  require((pg_fact::enabled(db)?!db.transaction_active():sqlite3_get_autocommit(db.handle())!=0),"fact_transaction_active");
   auto preflight=promotion_evidence(db,source_,event_id,clock_now());
   Json out={{"source_id",source_},{"event_id",event_id},{"method","local_category_promotion"},
       {"model_inference",false},{"items",Json::array()},
@@ -427,7 +454,7 @@ Json FactStore::promote_event(const std::string& event_id) {
     Json row={{"item_id",e.item},{"predicate",pred}};std::string outcome;
     // Any explicitly retired equal quote is a conservative automatic-write veto.
     // Manual create/attach semantics and other predicates remain unchanged.
-    auto retired=db.prepare("SELECT fact_id,revision,status FROM memory_facts "
+    auto retired=pg_fact::prepare(db,"SELECT fact_id,revision,status FROM memory_facts "
         "WHERE source_id=? AND object=? AND status IN ('retracted','superseded') "
         "ORDER BY created_at,fact_id LIMIT 1");
     retired.bind_text(1,source_);retired.bind_text(2,e.quote);
@@ -438,7 +465,7 @@ Json FactStore::promote_event(const std::string& event_id) {
     } else {
       // Prefer an existing attachment to keep replay idempotent even if another
       // same-quote fact was explicitly inserted later with an earlier timestamp.
-      auto prior=db.prepare("SELECT f.fact_id FROM memory_facts f WHERE f.source_id=? "
+      auto prior=pg_fact::prepare(db,"SELECT f.fact_id FROM memory_facts f WHERE f.source_id=? "
           "AND f.subject='user' AND f.predicate=? AND f.object=? AND f.status='active' "
           "ORDER BY EXISTS(SELECT 1 FROM memory_fact_evidence e WHERE e.fact_id=f.fact_id "
           "AND e.source_id=f.source_id AND e.item_id=?) DESC,f.created_at,f.fact_id LIMIT 1");
@@ -446,11 +473,11 @@ Json FactStore::promote_event(const std::string& event_id) {
       if(prior.step()) {
         const auto id=prior.column_text(0);identifier(id);
         auto f=promotion_target(db,source_,id,at);
-        auto attached=db.prepare("SELECT 1 FROM memory_fact_evidence WHERE source_id=? AND fact_id=? AND item_id=?");
+        auto attached=pg_fact::prepare(db,"SELECT 1 FROM memory_fact_evidence WHERE source_id=? AND fact_id=? AND item_id=?");
         attached.bind_text(1,source_);attached.bind_text(2,id);attached.bind_text(3,e.item);
         if(attached.step())outcome="duplicate";
         else {
-          auto count=db.prepare("SELECT COUNT(*) FROM memory_fact_evidence WHERE source_id=? AND fact_id=?");
+          auto count=pg_fact::prepare(db,"SELECT COUNT(*) FROM memory_fact_evidence WHERE source_id=? AND fact_id=?");
           count.bind_text(1,source_);count.bind_text(2,id);require(count.step(),"fact_not_found");
           if(count.column_int(0)>=max_evidence)outcome="skipped_limit";
           else {
@@ -462,7 +489,7 @@ Json FactStore::promote_event(const std::string& event_id) {
         row.update(receipt(f));
       } else {
         const auto id=util::sha256_hex(Json::array({"qbrain-fact-v1",source_,"user",pred,e.quote,e.item}).dump());
-        auto s=db.prepare("INSERT INTO memory_facts(fact_id,source_id,subject,predicate,object,created_at,updated_at) "
+        auto s=pg_fact::prepare(db,"INSERT INTO memory_facts(fact_id,source_id,subject,predicate,object,created_at,updated_at) "
                           "VALUES(?,?,'user',?,?,?,?)");
         s.bind_text(1,id);s.bind_text(2,source_);s.bind_text(3,pred);s.bind_text(4,e.quote);
         s.bind_int(5,at);s.bind_int(6,at);s.step_done();insert_evidence(db,source_,id,e,at);
@@ -489,7 +516,7 @@ Json FactStore::create(const Json& p) {
   if (auto old = load(db,source_,id,at); !old.is_null()) {
     tx.commit(); return receipt(old,true); // Explicit retraction/supersession never resets.
   }
-  auto s = db.prepare("INSERT INTO memory_facts(fact_id,source_id,subject,predicate,object,created_at,updated_at) "
+  auto s = pg_fact::prepare(db,"INSERT INTO memory_facts(fact_id,source_id,subject,predicate,object,created_at,updated_at) "
                       "VALUES(?,?,'user',?,?,?,?)");
   s.bind_text(1,id); s.bind_text(2,source_); s.bind_text(3,pred); s.bind_text(4,e.quote);
   s.bind_int(5,at); s.bind_int(6,at); s.step_done();
@@ -505,10 +532,10 @@ Json FactStore::attach(const Json& p) {
   auto f = need(db,source_,id,at); require(f["status"] != "retracted", "fact_state_conflict");
   const auto e = evidence(db,source_,item,at);
   require(e.quote == f["object"].get_ref<const std::string&>(), "fact_quote_mismatch");
-  { auto s = db.prepare("SELECT 1 FROM memory_fact_evidence WHERE fact_id=? AND item_id=?");
+  { auto s = pg_fact::prepare(db,"SELECT 1 FROM memory_fact_evidence WHERE fact_id=? AND item_id=?");
     s.bind_text(1,id); s.bind_text(2,item);
     if (s.step()) { tx.commit(); return receipt(f,true); } }
-  { auto s = db.prepare("SELECT COUNT(*) FROM memory_fact_evidence WHERE fact_id=?"); s.bind_text(1,id);
+  { auto s = pg_fact::prepare(db,"SELECT COUNT(*) FROM memory_fact_evidence WHERE fact_id=?"); s.bind_text(1,id);
     require(s.step() && s.column_int(0) < max_evidence, "fact_evidence_limit"); }
   insert_evidence(db,source_,id,e,at);
   advance(db,source_,id,f["revision"].get<int64_t>(),f["status"].get<std::string>(),at);
@@ -559,6 +586,7 @@ Json FactStore::contradict(const Json& p) {
 }
 
 Json FactStore::read(const std::string& id, const std::string& pred, bool history, int limit, int budget) {
+  pg_fact::ReadScope pg_read(brain_.db());
   validate();
   if (!id.empty()) identifier(id);
   if (!pred.empty()) predicate_check(pred);
@@ -573,7 +601,7 @@ Json FactStore::read(const std::string& id, const std::string& pred, bool histor
   if (!pred.empty()) sql += " AND predicate=?";
   if (!history) sql += " AND status='active'";
   sql += " ORDER BY created_at DESC,fact_id LIMIT 101";
-  auto s = db.prepare(sql); int parameter = 1; s.bind_text(parameter++,source_);
+  auto s = pg_fact::prepare(db,sql); int parameter = 1; s.bind_text(parameter++,source_);
   if (!id.empty()) s.bind_text(parameter++,id);
   if (!pred.empty()) s.bind_text(parameter++,pred);
   const auto at = clock_now(); int scanned = 0; ReadWork work;
@@ -582,7 +610,7 @@ Json FactStore::read(const std::string& id, const std::string& pred, bool histor
     if (++scanned > max_candidates) { out["truncated"] = true; break; }
     auto f = load(db,source_,s.column_text(0),at,&work); if (f.is_null()) continue;
     f["relations"] = Json::array();
-    auto edges = db.prepare("SELECT from_id,to_id,relation FROM memory_fact_relations "
+    auto edges = pg_fact::prepare(db,"SELECT from_id,to_id,relation FROM memory_fact_relations "
         "WHERE source_id=? AND (from_id=? OR to_id=?) ORDER BY relation,from_id,to_id LIMIT 33");
     edges.bind_text(1,source_); edges.bind_text(2,s.column_text(0)); edges.bind_text(3,s.column_text(0));
     int n = 0;
@@ -609,6 +637,7 @@ Json FactStore::read(const std::string& id, const std::string& pred, bool histor
 }
 
 Json FactStore::conflicts(const std::string& id, const std::string& pred, int limit, int budget) {
+  pg_fact::ReadScope pg_read(brain_.db());
   validate();
   if (!id.empty()) identifier(id);
   if (!pred.empty()) predicate_check(pred);
@@ -636,7 +665,7 @@ Json FactStore::conflicts(const std::string& id, const std::string& pred, int li
   if (!id.empty()) sql += " AND (r.from_id=? OR r.to_id=?)";
   if (!pred.empty()) sql += " AND a.predicate=?";
   sql += " ORDER BY r.from_id COLLATE BINARY,r.to_id COLLATE BINARY LIMIT 101";
-  auto rows = db.prepare(sql);
+  auto rows = pg_fact::prepare(db,sql);
   int parameter = 1; rows.bind_text(parameter++,source_);
   if (!id.empty()) { rows.bind_text(parameter++,id); rows.bind_text(parameter++,id); }
   if (!pred.empty()) rows.bind_text(parameter++,pred);
@@ -676,6 +705,7 @@ Json FactStore::conflicts(const std::string& id, const std::string& pred, int li
 
 Json FactStore::recall(const std::string& query, const std::string& pred, int limit, int budget,
                        const std::string& match) {
+  pg_fact::ReadScope pg_read(brain_.db());
   // Validate the COMPLETE input before splitting: token boundaries must not
   // defeat sensitive-input checks or hide bytes outside the aggregate term cap.
   validate();
@@ -697,11 +727,13 @@ Json FactStore::recall(const std::string& query, const std::string& pred, int li
 }
 
 Json FactStore::recall_for_hook(const std::vector<std::string>& queries, int limit, int budget) {
+  pg_fact::ReadScope pg_read(brain_.db());
   return recall_queries(queries, "", limit, budget);
 }
 
 Json FactStore::recall_queries(const std::vector<std::string>& queries, const std::string& pred,
                               int limit, int budget, const std::string& match) {
+  pg_fact::ReadScope pg_read(brain_.db());
   validate();
   require(match.empty() || match == "all_terms" || match == "any_terms", "fact_invalid_match");
   require(queries.size() <= 8, "fact_invalid_query");
@@ -741,7 +773,7 @@ Json FactStore::recall_queries(const std::vector<std::string>& queries, const st
   }
   if (!pred.empty()) sql += " AND predicate=?";
   sql += " ORDER BY created_at DESC,fact_id COLLATE BINARY LIMIT 101";
-  auto rows = db.prepare(sql);
+  auto rows = pg_fact::prepare(db,sql);
   int parameter=1; rows.bind_text(parameter++,source_);
   for (const auto& query : queries) rows.bind_text(parameter++,query);
   if (!pred.empty()) rows.bind_text(parameter,pred);
@@ -759,7 +791,7 @@ Json FactStore::recall_queries(const std::vector<std::string>& queries, const st
           {"contradictions",Json::array()},{"conflict_state","no_live_recorded_conflict"}};
       // The query selects only this anchor, not the counterclaims: a valid
       // contradiction must remain visible even when its quote does not match.
-      auto edges = db.prepare(
+      auto edges = pg_fact::prepare(db,
           "SELECT r.from_id,r.to_id,r.created_at FROM memory_fact_relations r "
           "WHERE r.source_id=? AND r.relation='contradicts' AND (r.from_id=? OR r.to_id=?) "
           "ORDER BY r.from_id COLLATE BINARY,r.to_id COLLATE BINARY LIMIT 33");
@@ -773,7 +805,7 @@ Json FactStore::recall_queries(const std::vector<std::string>& queries, const st
         const auto other_id = from == id ? to : from;
         // Reject oversized/cross-predicate stored values before materializing
         // them. The public write API is bounded, but a damaged DB may not be.
-        auto eligible = db.prepare("SELECT 1 FROM memory_facts WHERE source_id=? AND fact_id=? "
+        auto eligible = pg_fact::prepare(db,"SELECT 1 FROM memory_facts WHERE source_id=? AND fact_id=? "
             "AND status='active' AND subject='user' AND predicate=? "
             "AND length(CAST(object AS BLOB)) BETWEEN 1 AND 4096");
         eligible.bind_text(1,source_); eligible.bind_text(2,other_id);
@@ -810,7 +842,7 @@ Json FactStore::set_archived(const Json& p,bool desired) {
   validate(); keys(p,{"fact_id","expected_revision"});
   const auto id=field(p,"fact_id");identifier(id);const auto expected=revision(p);
   auto& db=brain_.db();
-  require(sqlite3_get_autocommit(db.handle())!=0,"fact_transaction_active");
+  require((pg_fact::enabled(db)?!db.transaction_active():sqlite3_get_autocommit(db.handle())!=0),"fact_transaction_active");
   // Reject invalid operations before any backup or lazy schema change.
   { ReadSnapshot snapshot(db);
     const auto f=need(db,source_,id,clock_now());
@@ -829,10 +861,10 @@ Json FactStore::set_archived(const Json& p,bool desired) {
     tx.commit();auto out=receipt(f,true);out["archived"]=desired;return out;
   }
   if (desired) {
-    auto insert=db.prepare("INSERT INTO memory_fact_archive(fact_id,source_id,archived_at) VALUES(?,?,?)");
+    auto insert=pg_fact::prepare(db,"INSERT INTO memory_fact_archive(fact_id,source_id,archived_at) VALUES(?,?,?)");
     insert.bind_text(1,id);insert.bind_text(2,source_);insert.bind_int(3,at);insert.step_done();
   } else {
-    auto erase=db.prepare("DELETE FROM memory_fact_archive WHERE source_id=? AND fact_id=?");
+    auto erase=pg_fact::prepare(db,"DELETE FROM memory_fact_archive WHERE source_id=? AND fact_id=?");
     erase.bind_text(1,source_);erase.bind_text(2,id);erase.step_done();
     require(db.changes()==1,"fact_revision_conflict");
   }
@@ -858,7 +890,7 @@ Json FactStore::lifecycle_batch(const Json& p, bool apply) {
     selection.push_back({std::move(id),revision(item)});
   }
   auto& db=brain_.db();
-  if(apply)require(sqlite3_get_autocommit(db.handle())!=0,"fact_transaction_active");
+  if(apply)require((pg_fact::enabled(db)?!db.transaction_active():sqlite3_get_autocommit(db.handle())!=0),"fact_transaction_active");
   // Receipts contain only metadata, not copied user quotes. A preview's after
   // values are predictions, not a reservation or proof that anything was applied.
   auto inspect=[&](int64_t at) {
@@ -871,7 +903,7 @@ Json FactStore::lifecycle_batch(const Json& p, bool apply) {
     ReadWork work;
     for(const auto& item:selection) {
       // Bound damaged stored values before load() materializes the quote.
-      auto bound=db.prepare("SELECT 1 FROM memory_facts WHERE source_id=? AND fact_id=? "
+      auto bound=pg_fact::prepare(db,"SELECT 1 FROM memory_facts WHERE source_id=? AND fact_id=? "
           "AND subject='user' AND length(CAST(object AS BLOB)) BETWEEN 1 AND 4096");
       bound.bind_text(1,source_);bound.bind_text(2,item.id);
       require(bound.step(),"fact_not_found");
@@ -899,10 +931,10 @@ Json FactStore::lifecycle_batch(const Json& p, bool apply) {
     if(!item["change"].get<bool>())continue;
     const auto& id=item["fact_id"].get_ref<const std::string&>();
     if(desired) {
-      auto insert=db.prepare("INSERT INTO memory_fact_archive(fact_id,source_id,archived_at) VALUES(?,?,?)");
+      auto insert=pg_fact::prepare(db,"INSERT INTO memory_fact_archive(fact_id,source_id,archived_at) VALUES(?,?,?)");
       insert.bind_text(1,id);insert.bind_text(2,source_);insert.bind_int(3,at);insert.step_done();
     } else {
-      auto erase=db.prepare("DELETE FROM memory_fact_archive WHERE source_id=? AND fact_id=?");
+      auto erase=pg_fact::prepare(db,"DELETE FROM memory_fact_archive WHERE source_id=? AND fact_id=?");
       erase.bind_text(1,source_);erase.bind_text(2,id);erase.step_done();
       require(db.changes()==1,"fact_revision_conflict");
     }
@@ -915,6 +947,7 @@ Json FactStore::lifecycle_batch(const Json& p, bool apply) {
 
 Json FactStore::lifecycle(const std::string& id,const std::string& pred,
                           int days,int limit,int budget) {
+  pg_fact::ReadScope pg_read(brain_.db());
   validate();if(!id.empty())identifier(id);if(!pred.empty())predicate_check(pred);
   require(days>=1 && days<=36500,"fact_invalid_stale_days");
   require(limit>=1 && limit<=50 && budget>=512 && budget<=32768,"invalid_read_budget");
@@ -931,7 +964,7 @@ Json FactStore::lifecycle(const std::string& id,const std::string& pred,
   if(!id.empty())sql+=" AND fact_id=?";
   if(!pred.empty())sql+=" AND predicate=?";
   sql+=" ORDER BY created_at DESC,fact_id COLLATE BINARY LIMIT 101";
-  auto rows=db.prepare(sql);int i=1;rows.bind_text(i++,source_);
+  auto rows=pg_fact::prepare(db,sql);int i=1;rows.bind_text(i++,source_);
   if(!id.empty())rows.bind_text(i++,id);if(!pred.empty())rows.bind_text(i++,pred);
   ReadWork work;int scanned=0;
   try {
@@ -956,6 +989,7 @@ Json FactStore::lifecycle(const std::string& id,const std::string& pred,
 
 Json FactStore::lifecycle_candidates(const std::string& operation,const std::string& pred,
                                       int days,const std::string& after,int limit,int budget) {
+  pg_fact::ReadScope pg_read(brain_.db());
   validate();
   require(operation=="archive" || operation=="restore","fact_batch_invalid_operation");
   if(!pred.empty())predicate_check(pred);if(!after.empty())identifier(after);
@@ -988,7 +1022,7 @@ Json FactStore::lifecycle_candidates(const std::string& operation,const std::str
   if(module)sql+=std::string(" AND ")+(operation=="archive"?"NOT ":"")+
       "EXISTS(SELECT 1 FROM memory_fact_archive a WHERE a.source_id=f.source_id AND a.fact_id=f.fact_id)";
   sql+=" ORDER BY f.fact_id COLLATE BINARY LIMIT 101";
-  auto rows=db.prepare(sql);int parameter=1;rows.bind_text(parameter++,source_);
+  auto rows=pg_fact::prepare(db,sql);int parameter=1;rows.bind_text(parameter++,source_);
   if(!pred.empty())rows.bind_text(parameter++,pred);if(!after.empty())rows.bind_text(parameter++,after);
   ReadWork work;std::string consumed=after;int scanned=0;
   auto stop=[&](const char* reason) {
