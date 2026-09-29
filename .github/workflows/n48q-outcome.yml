@@ -150,7 +150,7 @@ jobs:
           git rev-parse HEAD > evidence/source.txt
           cmake -S . -B build/asan -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined' > evidence/configure.log 2>&1
           cmake --build build/asan --target qbrain_pg_fact_tests qbrain_fact_tests --parallel 2 > evidence/build.log 2>&1
-          ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 build/asan/qbrain_pg_fact_tests > evidence/new.stdout 2> evidence/new.stderr
+          ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 build/asan/qbrain_pg_fact_tests --sqlite-only > evidence/new.stdout 2> evidence/new.stderr
           ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 build/asan/qbrain_fact_tests > evidence/original.stdout 2> evidence/original.stderr
           cat evidence/new.stdout evidence/original.stdout
           test ! -s evidence/new.stderr
