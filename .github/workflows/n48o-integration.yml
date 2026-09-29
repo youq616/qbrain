@@ -2,7 +2,7 @@ name: N48O integrated PostgreSQL memory acceptance
 on:
   push:
     branches: [main, 'feature/n48o-pg-session-memory']
-    paths: ['CMakeLists.txt', 'include/qbrain/storage/**', 'src/qbrain/storage/**', 'include/qbrain/memory/**', 'src/qbrain/memory/**', 'tests/test_pg_memory.cpp', 'tests/test_pg_memory_scope.cpp', '.ci/test_pg_memory.py', '.ci/check_pg_memory_evidence.py', '.ci/check_pg_scope_evidence.py', '.ci/review_session_lifecycle.py', '.ci/run_pg_memory_gate.py', '.ci/check_session_lifecycle_evidence.py', '.github/workflows/n48o-integration.yml']
+    paths: ['CMakeLists.txt', 'include/qbrain/storage/**', 'src/qbrain/storage/**', 'include/qbrain/memory/**', 'src/qbrain/memory/**', 'tests/test_pg_memory.cpp', 'tests/test_pg_memory_scope.cpp', '.ci/test_pg_memory.py', '.ci/check_pg_memory_evidence.py', '.ci/check_pg_scope_evidence.py', '.ci/review_session_lifecycle.py', '.ci/run_pg_memory_gate.py', '.ci/check_source_archive.py', '.ci/test_source_archive.py', '.ci/test_source_gate_integration.py', '.ci/check_session_lifecycle_evidence.py', '.github/workflows/n48o-integration.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -39,6 +39,15 @@ jobs:
           mkdir evidence
           git rev-parse HEAD > evidence/source.txt
           git archive --format=zip --output=evidence/source.zip HEAD
+          git ls-tree --full-tree -r -z HEAD > evidence/source-tree.bin
+      - name: Source-tree gate self-tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .ci/test_source_archive.py --report evidence/source-tests-normal.json
+          python -O .ci/test_source_archive.py --report evidence/source-tests-optimized.json
+          python .ci/test_source_gate_integration.py --report evidence/source-gate-integration-normal.json
+          python -O .ci/test_source_gate_integration.py --report evidence/source-gate-integration-optimized.json
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         if: runner.os == 'Linux'
         with:
@@ -100,7 +109,8 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
         run: |
           set -euo pipefail
-          pin=$(python .ci/run_pg_memory_gate.py pin --artifact evidence --binary "build/n48o/${CONFIG}qbrain${SUFFIX}" --commit "$GITHUB_SHA" --platform "$PLATFORM")
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          pin=$(python .ci/run_pg_memory_gate.py pin --artifact evidence --binary "build/n48o/${CONFIG}qbrain${SUFFIX}" --commit "$GITHUB_SHA" --platform "$PLATFORM" --tree "$(git rev-parse HEAD^{tree})")
           [[ "$pin" =~ ^[0-9a-f]{64}$ ]]
           printf 'N48O_REVIEW_PIN=%s\n' "$pin" >> "$GITHUB_ENV"
           printf '%s\n' "$pin" > evidence/review-pin.sha256

@@ -18,11 +18,13 @@ import zipfile
 import check_pg_memory_evidence as memory
 import check_pg_scope_evidence as scope
 import check_session_lifecycle_evidence as session
+import check_source_archive as source_archive
 
 FILES = ('.ci/test_pg_memory.py', 'tests/test_pg_memory.cpp',
          'tests/test_pg_memory_scope.cpp', '.ci/check_pg_memory_evidence.py',
          '.ci/check_pg_scope_evidence.py', '.ci/review_session_lifecycle.py',
-         '.ci/run_pg_memory_gate.py', '.ci/check_session_lifecycle_evidence.py')
+         '.ci/run_pg_memory_gate.py', '.ci/check_session_lifecycle_evidence.py',
+         '.ci/check_source_archive.py')
 ROOT = Path(__file__).resolve().parents[1]
 CAP = 128 * 1024 * 1024
 
@@ -51,9 +53,11 @@ def encode(value):
     return memory.encode(value) + b'\n'
 
 
-def pin(artifact, binary, commit, platform):
+def pin(artifact, binary, commit, platform, tree):
     need(re.fullmatch('[0-9a-f]{40}', commit) is not None, 'commit identity')
     source = read(artifact / 'source.zip')
+    tree_manifest = source_archive.read_file(artifact / 'source-tree.bin', source_archive.MANIFEST_CAP)
+    full_source = source_archive.verify_bytes(source, tree_manifest, commit, tree, platform)
     with zipfile.ZipFile(artifact / 'source.zip') as archive:
         need(archive.comment == commit.encode(), 'archive commit')
         need(len(archive.namelist()) == len(set(archive.namelist())), 'duplicate archive member')
@@ -66,7 +70,9 @@ def pin(artifact, binary, commit, platform):
     programs = {'qbrain': binary,
                 'pg-memory-tests': binary.with_name('qbrain_pg_memory_tests' + suffix),
                 'pg-scope-tests': binary.with_name('qbrain_pg_memory_scope_tests' + suffix)}
-    identity = dict(schema='qbrain-n48o-pretest-pins-v1', commit=commit, platform=platform,
+    identity = dict(schema='qbrain-n48o-pretest-pins-v2', commit=commit, platform=platform,
+                    source_tree=tree, source_manifest_sha256=sha(tree_manifest),
+                    source_files=full_source['source_files'],
                     source_sha256=sha(source), components=components,
                     programs={k: sha(read(v)) for k, v in programs.items()})
     raw = encode(identity)
@@ -80,11 +86,17 @@ def identity(artifact, pin_sha256):
     raw = read(artifact / 'review-pins.json', 65536)
     need(sha(raw) == pin_sha256, 'external pretest pin mismatch')
     p = memory.decode(raw)
-    need(set(p) == {'schema', 'commit', 'platform', 'source_sha256', 'components', 'programs'}, 'pin fields')
-    need(p['schema'] == 'qbrain-n48o-pretest-pins-v1' and p['platform'] in ('linux', 'windows'), 'pin schema/platform')
+    need(set(p) == {'schema', 'commit', 'platform', 'source_sha256', 'components', 'programs',
+                    'source_tree', 'source_manifest_sha256', 'source_files'}, 'pin fields')
+    need(p['schema'] == 'qbrain-n48o-pretest-pins-v2' and p['platform'] in ('linux', 'windows'), 'pin schema/platform')
     need(re.fullmatch('[0-9a-f]{40}', p['commit']) is not None, 'pin commit')
     need(set(p['components']) == set(FILES) and set(p['programs']) == {'qbrain', 'pg-memory-tests', 'pg-scope-tests'}, 'pin inventory')
-    need(sha(read(artifact / 'source.zip')) == p['source_sha256'], 'source archive hash')
+    source = read(artifact / 'source.zip')
+    need(sha(source) == p['source_sha256'], 'source archive hash')
+    tree_manifest = source_archive.read_file(artifact / 'source-tree.bin', source_archive.MANIFEST_CAP)
+    need(sha(tree_manifest) == p['source_manifest_sha256'], 'source tree manifest hash')
+    full_source = source_archive.verify_bytes(source, tree_manifest, p['commit'], p['source_tree'], p['platform'])
+    need(type(p['source_files']) is int and p['source_files'] == full_source['source_files'], 'source file coverage')
     with zipfile.ZipFile(artifact / 'source.zip') as archive:
         need(archive.comment.decode() == p['commit'], 'source commit')
         need(len(archive.namelist()) == len(set(archive.namelist())), 'duplicate archive member')
@@ -157,8 +169,9 @@ def verify(artifact, pin_sha256, output):
             modes[mode]['rejected_mutations'] = memory.negatives(r, streams, p['platform'], mode, dump)
             modes[mode]['sqlite_lifecycle'] = lifecycle(artifact/'integrated'/('lifecycle-'+mode), p, mode)
         identity(artifact, pin_sha256)
-        result = dict(schema='qbrain-n48o-integrated-gate-v1', passed=True, commit=p['commit'], platform=p['platform'],
-                      pretest_pin_sha256=pin_sha256, native_checks=122, scope_checks=len(scope_result['checks']),
+        result = dict(schema='qbrain-n48o-integrated-gate-v2', passed=True, commit=p['commit'], platform=p['platform'],
+                      pretest_pin_sha256=pin_sha256, source_tree=p['source_tree'],
+                      source_files=p['source_files'], source_archive_sha256=p['source_sha256'], native_checks=122, scope_checks=len(scope_result['checks']),
                       rejected_scope_mutations=rejected_scope, modes=modes, final_database=final_db,
                       provenance_authenticated=False, real_client_consumption_verified=False, new_postgresql_execution=False)
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -175,14 +188,15 @@ if __name__ == '__main__':
     parser.add_argument('--artifact', type=Path, required=True)
     parser.add_argument('--binary', type=Path)
     parser.add_argument('--commit')
+    parser.add_argument('--tree')
     parser.add_argument('--platform', choices=('linux','windows'))
     parser.add_argument('--pin-sha256')
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
     try:
         if args.action == 'pin':
-            need(all((args.binary, args.commit, args.platform)), 'pin arguments')
-            print(pin(args.artifact, args.binary.resolve(strict=True), args.commit, args.platform))
+            need(all((args.binary, args.commit, args.platform, args.tree)), 'pin arguments')
+            print(pin(args.artifact, args.binary.resolve(strict=True), args.commit, args.platform, args.tree))
         else:
             need(args.pin_sha256 is not None and args.output is not None, 'verify arguments')
             print(json.dumps(verify(args.artifact, args.pin_sha256, args.output), ensure_ascii=False))
