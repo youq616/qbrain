@@ -568,6 +568,8 @@ int cmd_search(const std::vector<std::string>& args) {
     if (parsed.flags.count("--rerank-llm")) ctx.args["rerank_llm"] = "1";
     const auto directory_uri = parsed.value("--uri");
     if (!directory_uri.empty()) {
+      // Validate source/namespace/path before any embedding/provider call.
+      const auto scope = search::parse_directory_scope(b, directory_uri);
       search::DirectorySearchOpts opts;
       const auto scoped_limit = parsed.value("--limit");
       opts.limit = scoped_limit.empty() ? b.config().search_default_limit : std::stoi(scoped_limit);
@@ -582,7 +584,6 @@ int cmd_search(const std::vector<std::string>& args) {
         auto er = ai::embed_texts(b.config(), {parsed.query});
         if (er.ok && !er.vectors.empty()) { emb = er.vectors[0]; pemb = &emb; }
       }
-      const auto scope = search::parse_directory_scope(b, directory_uri);
       const auto hits = search::directory_search(b, parsed.query, pemb, scope, opts);
       nlohmann::json arr = nlohmann::json::array();
       std::ostringstream oss;
