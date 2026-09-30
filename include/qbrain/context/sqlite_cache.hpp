@@ -59,16 +59,29 @@ inline std::string trim_ddl(std::string sql) {
   return sql;
 }
 
+inline void idle(DB& db) {
+  if (db.transaction_active()) throw memory::Error("context_transaction_active");
+}
+inline void namespace_check(DB& db) {
+  auto temp = db.prepare("SELECT 1 FROM temp.sqlite_master WHERE type IN ('table','view') AND "
+    "name COLLATE NOCASE IN ('sources','pages','config','context_cache') LIMIT 1");
+  if (temp.step()) throw memory::Error("context_sqlite_schema_context");
+  auto core = db.prepare("SELECT count(*) FROM main.sqlite_master WHERE type='table' AND "
+    "name COLLATE NOCASE IN ('sources','pages','config')");
+  if (!core.step() || core.column_int(0)!=3) throw memory::Error("context_sqlite_schema_context");
+}
+
 inline Policy policy(DB& db) {
   if (db.backend_kind() != storage::BackendKind::sqlite) throw memory::Error("context_backend_unsupported");
-  auto table = db.prepare("SELECT type,sql FROM main.sqlite_master WHERE name='context_cache'");
+  namespace_check(db);
+  auto table = db.prepare("SELECT type,sql FROM main.sqlite_master WHERE name COLLATE NOCASE='context_cache'");
   const bool exists = table.step();
   if (exists && (table.column_text(0) != "table" || trim_ddl(table.column_text(1)) != cache_table))
     throw memory::Error("context_schema_version_unsupported");
   const std::array<std::string, 3> names = {"ctx_page_insert", "ctx_page_update", "ctx_page_delete"};
   std::map<std::string, std::string> found;
   auto rows = db.prepare("SELECT name,tbl_name,sql FROM main.sqlite_master WHERE type='trigger' "
-                        "AND name IN ('ctx_page_insert','ctx_page_update','ctx_page_delete')");
+                        "AND name COLLATE NOCASE IN ('ctx_page_insert','ctx_page_update','ctx_page_delete')");
   while (rows.step()) {
     if (rows.column_text(1) != "pages") throw memory::Error("context_schema_incomplete");
     found.emplace(rows.column_text(0), trim_ddl(rows.column_text(2)));
@@ -80,6 +93,7 @@ inline Policy policy(DB& db) {
   if (found.size() != names.size()) throw memory::Error("context_schema_incomplete");
   bool legacy = true, scoped = true;
   for (std::size_t i = 0; i != names.size(); ++i) {
+    if (!found.count(names[i])) throw memory::Error("context_schema_incomplete");
     legacy = legacy && found.at(names[i]) == legacy_triggers()[i];
     scoped = scoped && found.at(names[i]) == directory_triggers()[i];
   }
@@ -87,6 +101,21 @@ inline Policy policy(DB& db) {
   if (legacy) return Policy::source_v1;
   throw memory::Error("context_schema_incomplete");
 }
+
+struct ReadSnapshot {
+  DB& db; bool owned=false;
+  explicit ReadSnapshot(DB& value):db(value) {
+    if (db.backend_kind()!=storage::BackendKind::sqlite) return;
+    idle(db);
+    db.exec("BEGIN"); owned=true;
+    try { (void)policy(db); }
+    catch (...) { finish(); throw; }
+  }
+  void finish() { if (owned) { db.exec("ROLLBACK"); owned=false; } }
+  ~ReadSnapshot() { if (owned) try { db.exec("ROLLBACK"); } catch (...) {} }
+  ReadSnapshot(const ReadSnapshot&)=delete;
+  ReadSnapshot& operator=(const ReadSnapshot&)=delete;
+};
 
 inline void initialize_locked(DB& db) {
   // Caller has BEGIN IMMEDIATE and has revalidated evidence and permission.
