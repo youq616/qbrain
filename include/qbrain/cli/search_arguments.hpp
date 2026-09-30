@@ -28,7 +28,7 @@ struct SearchArguments {
 };
 
 inline SearchArguments parse_search_arguments(const std::vector<std::string>& args) {
-  const std::set<std::string> value_keys = {"--brain", "--limit", "--mode", "--query"};
+  const std::set<std::string> value_keys = {"--brain", "--limit", "--mode", "--query", "--uri"};
   const std::set<std::string> flag_keys = {"--json", "--no-vector", "--rerank", "--rerank-llm"};
   SearchArguments out;
   std::set<std::string> seen;
