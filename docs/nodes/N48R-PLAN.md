@@ -24,3 +24,12 @@ Record actual runs and failed attempts. PG is required for remote qualification,
 an optional successful skip. New original source/executable identities are fixed by CI.
 No user's actual device, provider account or brain is required. No claim of signed-in
 client semantic consumption or resolution of Issue40 without its own evidence.
+
+## Completion decision — 2026-09-30
+
+Status: done within the original bounded contract, after N48R-HARD-AUDIT.md PASS.
+Original runtime45a23853/full native36583542753 remains unchanged; independent
+supplement a4acb118/run36652734242 passes both native platforms. Local regression,
+sanitizer, complete archive/source identity and raw-output review completed.
+First supplemental Windows reviewer cleanup failure and all driver errors remain
+recorded. Actual merge is PR60; no full-project or signed-in-host claim.

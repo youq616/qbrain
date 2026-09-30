@@ -3,31 +3,28 @@
 Windows 原生 C++20 / PowerShell 记忆与知识库。SQLite 默认，PostgreSQL 显式启用；
 不要求 Docker、WSL 或 Python 常驻服务。Python 仅用于可选评测和开发验证。
 
-## N48Q：PostgreSQL 结构化事实、生命周期与显式使用回执
+## 最新模块 N48R：PostgreSQL Hook 接入
 
-现有事实 create/attach/promote/read/recall/conflicts/retract/supersede、归档恢复与
-生命周期批次，以及显式使用回执和原子批次，已补齐 PG 路径。保留完整用户证据、
-来源隔离、预期版本、历史与撤销记录；不自动推断事实、不自动提高 confidence。
+Hook 可以连接已有 public/UTF8/v13 PostgreSQL 库，不再要求同名本地 brain.db。
+空库、错误连接或未知版本不初始化、不迁移、不回退 SQLite。结构化事实与普通会话记忆
+在同一个自有只读快照中组合；撤回内容不能通过普通记忆通道复活，读取结束后才采集。
+PG 普通记忆去重绑定有效数据库描述，切换数据库不会错误沿用另一数据库的去重结果。
 
-受测整合提交 `28d64ae7` 已通过新的 Windows/Linux 原生 PG 验证与 ASan/UBSan。
-实际合并身份见 [PR59](https://github.com/youq616/qbrain/pull/59)，后续文档提交不冒充
-程序构建来源。[当前状态](CURRENT-STATUS.md) ·
-[中文说明](docs/integration/POSTGRES-STRUCTURED-FACTS.zh-CN.md) ·
-[分离自审](docs/nodes/N48Q-HARD-AUDIT.md) · [结果索引](docs/nodes/n48q-evidence/RESULT.json)。
+原运行候选45a23853完成双平台完整资格验证；补充a4acb118完成新鲜Windows/Linux实际PG
+和独立进程检查。本轮另完成本地回归、ASan/UBSan及原始工件源码/输出复核。
+[当前状态](CURRENT-STATUS.md) · [中文说明](docs/integration/POSTGRES-HOOKS.zh-CN.md) ·
+[分离自审](docs/nodes/N48R-HARD-AUDIT.md) · [结果](docs/nodes/n48r-evidence/RESULT.json)。
+实际合并身份见 [PR60](https://github.com/youq616/qbrain/pull/60)，文档提交不冒充程序构建。
 
-N48O 会话记忆、N48P 分层上下文与摘要缓存继续保留。N48Q 不包含 PG Hook 接入，
-也不证明真实登录客户端已经使用了记忆。使用回执始终是调用方陈述，不是模型消费认证。
+N48O会话记忆、N48P分层上下文、N48Q结构化事实/生命周期/回执继续保留。
+默认采集和MCP写许可不扩大；使用回执和Hook返回都不认证真实模型消费。
 
 ## 数据和发行边界
 
-**同一 DSN 下更换 --brain 名称不形成独立 PG 租户；source 不是 RLS。**
-使用真实数据前应分别配置可信数据库、角色、TLS 与备份，不把测试脚本用于生产库。
-SQLite 不自动迁移，模型外发仍需单独许可。本模块未修改默认采集或 MCP 写授权。
-
-CI 工件包含固定受测 EXE 和原始测试记录，不是一键安装器或免依赖软件包。
-Windows PG 程序需要可信 libpq 依赖及匹配的 Visual C++ x64 运行库，程序未签名。
-本轮不替换公开发行或旧固定 ZIP，不自动安装或操作用户电脑。
-
-真实客户端消费、代表性模型质量及全流程费用、剩余 PG/Hook、完整 DLP/RLS、
-签名稳定版和 Issue40 仍需独立验收，不能由单个模块通过替代。
-[完成路线](docs/COMPLETION-ROADMAP.md) · [上一 README](README-N48P.md) · [LICENSE](LICENSE)。
+**同一 DSN 更换 --brain 名称不是独立 PG 租户；source 不是 RLS。**
+数据库、角色、TLS与备份应独立配置；测试脚本只用于专门的一次性数据。
+程序未签名，需要可信libpq依赖和匹配的Visual C++ x64运行库；不是免依赖安装包。
+没有替换旧固定ZIP或公开Release，没有自动安装或操作用户电脑。
+真实客户端消费、代表性模型质量及全流程费用、其余既定功能、完整DLP/RLS、
+签名稳定版和Issue40仍独立待验收。N48R完成不代表整个项目结束。
+[完成路线](docs/COMPLETION-ROADMAP.md) · [上一README](README-N48Q.md) · [LICENSE](LICENSE)。
