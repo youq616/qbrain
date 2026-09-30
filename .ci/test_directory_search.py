@@ -38,6 +38,9 @@ def run(binary, output):
             "qbrain://default/resources/docs/","--no-vector","--json"]).stdout)
         need({x["slug"] for x in scoped}=={"docs/a","docs/sub/b"},
              "CLI recursively scoped resources")
+        unscoped=json.loads(call(["search","--query","needle","--no-vector","--json"]).stdout)
+        need("docs-neighbor/c" in {x["slug"] for x in unscoped},
+             "unscoped legacy search remains available")
         root=json.loads(call(["search","--query","needle","--uri",
             "qbrain://default/resources/","--no-vector","--json"]).stdout)
         need("docs-neighbor/c" in {x["slug"] for x in root},
