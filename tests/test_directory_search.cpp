@@ -77,7 +77,7 @@ void run() {
         std::vector<std::string>{"docs/session"},"memories namespace isolated");
 
   auto root=search::parse_directory_scope(b,"qbrain://alpha/resources/");
-  auto root_hits=slugs(search::directory_search(b,"needle",nullptr,root,opts));
+  auto root_hits=slugs(search::directory_search(b,"outside",nullptr,root,opts));
   check(std::find(root_hits.begin(),root_hits.end(),"docs-neighbor/c")!=root_hits.end(),
         "namespace root recursively includes sibling directories");
 
