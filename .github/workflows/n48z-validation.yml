@@ -11,6 +11,8 @@ on:
       - 'tests/test_directory_search.cpp'
       - '.ci/test_directory_search.py'
       - '.ci/directory_search_targets.cmake'
+      - 'scripts/build-cl.ps1'
+      - 'scripts/build-tests-cl.ps1'
       - '.github/workflows/n48z-validation.yml'
   workflow_dispatch:
 permissions:
@@ -19,6 +21,50 @@ env:
   PYTHONIOENCODING: utf-8
   PYTHONDONTWRITEBYTECODE: '1'
 jobs:
+  direct-msvc:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Pin direct-MSVC source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+      - name: Clean direct-MSVC production build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-cl.ps1 2>&1 | Tee-Object evidence/direct-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/cl/qbrain.exe evidence/qbrain.exe
+      - name: Direct-MSVC test link and unchanged full60
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 -SkipProductionBuild 2>&1 | Tee-Object evidence/direct-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/direct-tests.log').read_text(encoding='utf-8-sig'),60)))" | Tee-Object evidence/direct-groups.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Directory CLI checks on direct-MSVC executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .ci/test_directory_search.py --binary evidence/qbrain.exe --output evidence/process-normal | tee evidence/process-normal.log
+          python -O .ci/test_directory_search.py --binary evidence/qbrain.exe --output evidence/process-optimized | tee evidence/process-optimized.log
+          git diff --exit-code > evidence/after-diff.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48z-direct-msvc
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
   native:
     strategy:
       fail-fast: false
