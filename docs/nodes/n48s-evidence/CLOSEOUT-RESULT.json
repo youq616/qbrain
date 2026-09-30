@@ -1,0 +1,194 @@
+{
+  "binary_sha256": "c65f3e8e9e08d7ccf43c245193829af9334f0dfa19f00c447a713a0a243d879d",
+  "candidate": "9f9c34017cbc3c2ab787f145059e847f7b2cb8c3",
+  "candidate_files": 1554,
+  "complete_preservation_snapshots": 24,
+  "dependencies": {
+    "delayed": [
+      "libpq.dll"
+    ],
+    "eager": [
+      "kernel32.dll",
+      "ole32.dll",
+      "shell32.dll",
+      "winhttp.dll",
+      "ws2_32.dll"
+    ],
+    "format": "PE32+",
+    "machine": "AMD64",
+    "postgres_dependencies_bundled": false,
+    "scope": "direct_import_tables_only"
+  },
+  "files_read": 2086,
+  "full_project_complete": false,
+  "new_postgresql_execution": false,
+  "new_windows_execution": false,
+  "original_native_groups": 60,
+  "package_members": 61,
+  "package_sha256": "a326ed8e031903935e860a37b8a44f5eaa170a0c7becc697afe23c9b609c332c",
+  "product_commit": "e0a27f829d970c24ed8c566023ada0911c0042b3",
+  "product_files": 1546,
+  "product_tree": "534c86deabf43e30d3b2533cd3bf1f0728cf8400",
+  "qualification_stages": 27,
+  "real_client_consumption_verified": false,
+  "result": "PASS_FIXED_ARTIFACT_TOP_LEVEL_READBACK",
+  "retained_driver_steps": 55,
+  "reviewer_sha256": "bf173025b3556cc7ee0f4fed640eecdfef1ebe6c851ed4c0b1556a172973086d",
+  "schema": "qbrain-n48s-independent-outcome-v1",
+  "windows_candidate_crlf": 1538,
+  "windows_product_crlf": 1530,
+  "date": "2026-09-30",
+  "readback_modes": [
+    "normal",
+    "optimized"
+  ],
+  "local_new_tests_per_mode": {
+    "unittest_methods": 9,
+    "rejected_evidence_mutations": 89,
+    "skipped": 0
+  },
+  "local_retained_packaging_tests_per_mode": 50,
+  "original_windows_packaging_tests_per_mode": 13,
+  "original_portable_packaging_tests_per_mode": 50,
+  "original_ci_run": 36670250356,
+  "original_ci_candidate": "9f9c34017cbc3c2ab787f145059e847f7b2cb8c3",
+  "original_artifacts": {
+    "windows": {
+      "id": 11079172490,
+      "bytes": 49033893,
+      "sha256": "a9234464dae34718308d2e5723e3b309b57e76bec02528e24435d9c3fd1c1e2c"
+    },
+    "portable": {
+      "id": 11078098862,
+      "bytes": 13110131,
+      "sha256": "db39e80a58dce5e130f0b94d291e3de5b67de388f3942dbfae521e373b6c7b7e"
+    }
+  },
+  "backup_and_check_original_semantic_replays": 4,
+  "native_results": {
+    "evaluation_per_mode": 28,
+    "cost_bridge_per_mode": 27,
+    "original_acceptance_per_mode": 48,
+    "sqlite_backup_per_mode": {
+      "calls": 47,
+      "checks": 112
+    },
+    "sqlite_check_per_mode": {
+      "calls": 49,
+      "checks": 204
+    },
+    "pg_hook_per_mode": {
+      "calls": 127,
+      "checks": 262
+    },
+    "ps5_ps7_each": {
+      "installer_snapshot": 24,
+      "installer_recovery": 60,
+      "upgrade": 50,
+      "existing_receipts_calls": 98,
+      "existing_receipts_checks": 79
+    }
+  },
+  "contribution": "Offline fixed-run outcome reader, original source/package/raw snapshot binding, complete 27-stage command reconstruction, 89 evidence mutation cases, and delivery documentation; product runtime and original archives unchanged.",
+  "remote_pr": 61,
+  "remote_merged": false,
+  "local_supplement_pushed": false,
+  "reviewer_type": "separate_OpenAI_Codex_independent_outcome_reviewer_after_command_binding_repair",
+  "reviewer_initial_failures": [
+    "guide_source: independent expectation used LF rather than pinned Windows CRLF guide",
+    "upgrade_result: expected null instead of the original PowerShell empty failure string",
+    "adversarial all-snapshots mutation exposed missing raw CLI binding; repaired and regressed"
+  ],
+  "runtime_changed": false,
+  "new_native_execution_this_turn": false,
+  "original_native_evidence_replayed_not_rerun": true,
+  "test_sha256": "c04a39fec7ff979941356bbcaf2476a2a2400c377da1bf678f9dfa99c382baa4",
+  "previous_reviewer_sha256": "f1e418eb3583de479ec4417c43b3ce3a030a27ebefb27329acafb4068d8f8812",
+  "previous_test_sha256": "36479b238abf551a79831851d122c3088efc564e719c046d446e7c1143ff117a",
+  "publication_gate": "INDEPENDENT_REVIEW_PASS; remote_publication_not_yet_verified",
+  "command_binding_repair": {
+    "initial_verdict": "BLOCKED",
+    "finding": "Original reader accepted changed stage commands and Python interpreters while retaining the old successful reports and logs.",
+    "original_probe_cases": 6,
+    "original_probe_cases_accepted": 6,
+    "original_patch_sha256": "129b925b00e941a27a06d473e508514318dbb691b678bde5bb4e4ca4815daa93",
+    "original_local_tree": "8878e434305d76bd6f75719ca38eba91c090d07a",
+    "fixed_stage_command_contracts": 27,
+    "added_rejected_mutations_per_mode": 53,
+    "expected_commands_derived_from": "Fixed check_n48s_bundle.py source without producer imports; original CI layout pinned after external artifact-digest verification.",
+    "test_results": {
+      "normal": {
+        "errors": 0,
+        "failures": 0,
+        "mutation_count": 89,
+        "optimized": false,
+        "passed": true,
+        "product_executed": false,
+        "reviewer_sha256": "bf173025b3556cc7ee0f4fed640eecdfef1ebe6c851ed4c0b1556a172973086d",
+        "schema": "qbrain-n48s-independent-tests-v1",
+        "skipped": 0,
+        "test_sha256": "c04a39fec7ff979941356bbcaf2476a2a2400c377da1bf678f9dfa99c382baa4",
+        "tests_run": 9
+      },
+      "optimized": {
+        "errors": 0,
+        "failures": 0,
+        "mutation_count": 89,
+        "optimized": true,
+        "passed": true,
+        "product_executed": false,
+        "reviewer_sha256": "bf173025b3556cc7ee0f4fed640eecdfef1ebe6c851ed4c0b1556a172973086d",
+        "schema": "qbrain-n48s-independent-tests-v1",
+        "skipped": 0,
+        "test_sha256": "c04a39fec7ff979941356bbcaf2476a2a2400c377da1bf678f9dfa99c382baa4",
+        "tests_run": 9
+      }
+    },
+    "new_native_execution": false,
+    "independent_outcome_review": "PASS_FOR_FIXED_ARTIFACT_TOP_LEVEL_READBACK_SCOPE"
+  },
+  "qualification_command_binding": "all_27_top_level_stage_commands_only",
+  "nested_command_binding_verified": false,
+  "descendant_execution_verified": false,
+  "command_binding_scope": "27 top-level qualification/driver.json argv",
+  "nested_command_argv_fully_validated": false,
+  "scope_limitations": [
+    "Nested retained/driver.json argv and most business-report calls/commands argv are not independently reconstructed; some nested command metadata substitutions can pass.",
+    "Nested evidence receives only the documented identity, order, exit, log, raw-stream and selected snapshot/semantic checks.",
+    "This offline result does not certify every descendant execution or business assertion."
+  ],
+  "independent_outcome_review": {
+    "reviewer": "OpenAI Codex independent outcome reviewer, separate from closeout implementer",
+    "date": "2026-09-30",
+    "verdict": "PASS_FOR_BOUNDED_PUBLICATION",
+    "reviewed_content_tree": "3e0cb6c9b2acb1ddf1b5a5f02b8b1f94434cda94",
+    "reviewed_patch_sha256": "8e2906db201b75006c9bfddad92521a2c663563a8c6360384260d51bf5e66eaa",
+    "blocking_findings_remaining": 0,
+    "resolved_findings": [
+      "P1: top-level stage argv/interpreter false acceptance",
+      "P2: potential overinterpretation of nested command validation"
+    ],
+    "independently_executed_per_mode": {
+      "direct_reader": true,
+      "test_methods": 9,
+      "rejected_evidence_mutations": 89,
+      "skipped": 0,
+      "packaging_tests": 50,
+      "additional_command_mutations_rejected": 48
+    },
+    "identity_checks": [
+      "Original archives match GitHub-published SHA256 digests",
+      "Extracted raw files match archive bytes",
+      "Six-file tree reconstructed",
+      "Final patch cleanly applies to exact base tree"
+    ],
+    "scope": "Fixed original artifacts and all 27 top-level qualification/driver.json argv; documented nested identity/hash/snapshot checks only",
+    "limits": [
+      "No full nested argv reconstruction",
+      "No new Windows, PostgreSQL, native, user-host or model execution",
+      "No remote publication verified by this review"
+    ],
+    "final_review_record_only_changes": "This review record and audit/plan status are added after review; executable bytes stay fixed."
+  },
+  "publication_state_at_report_creation": "pre-publication; remote fields describe this report creation time, not a later GitHub ref update"
+}

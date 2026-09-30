@@ -1,0 +1,115 @@
+name: N48S unified Windows candidate
+on:
+  push:
+    branches: [main, 'delivery/n48s-unified-windows']
+    paths: ['tools/delivery/*n48s*', 'docs/integration/WINDOWS-CANDIDATE-N48S.zh-CN.md', '.github/workflows/n48s-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48s-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  portable:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Packaging tests in both Python modes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          for mode in normal optimized; do
+            opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
+            (cd tools/delivery && python "${opt[@]}" -m unittest -v test_package_n48s test_package_n48k test_package_n47x) 2>&1 | tee "evidence/tests-$mode.log"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48s-portable
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: e0a27f829d970c24ed8c566023ada0911c0042b3
+          path: product
+          persist-credentials: false
+      - name: Fixed source and disposable PostgreSQL
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          git -C product archive --format=zip --output="$((Get-Location).Path)/evidence/product-source.zip" HEAD
+          if (-not $env:PGROOT -or -not (Test-Path "$env:PGROOT\lib\libpq.lib")) { throw 'Native libpq required' }
+          $service=Get-Service 'postgresql-x64-*' | Select-Object -First 1
+          Set-Service $service.Name -StartupType Manual
+          Start-Service $service.Name
+          $env:PGHOST='127.0.0.1'; $env:PGPORT='5432'; $env:PGUSER='postgres'; $env:PGPASSWORD='root'
+          & "$env:PGROOT\bin\psql.exe" -X -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE qbrain_n48o LOGIN PASSWORD 'n48s-synthetic'"
+          if ($LASTEXITCODE -ne 0) { throw 'role creation failed' }
+          foreach ($db in @('qbrain_n48r_process','qbrain_n48r_empty')) {
+            & "$env:PGROOT\bin\createdb.exe" -O qbrain_n48o $db
+            if ($LASTEXITCODE -ne 0) { throw 'database creation failed' }
+          }
+          "$env:PGROOT\bin" | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+          "QBRAIN_PG_ROOT=$env:PGROOT" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          'PGHOST=127.0.0.1','PGPORT=5432','PGUSER=qbrain_n48o','PGPASSWORD=n48s-synthetic','PGDATABASE=qbrain_n48r_process','QBRAIN_PG_HOOK_TEST_DISPOSABLE=1' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          'QBRAIN_PG_HOOK_PROCESS_DSN=host=127.0.0.1 port=5432 dbname=qbrain_n48r_process user=qbrain_n48o password=n48s-synthetic connect_timeout=2' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          'QBRAIN_PG_HOOK_EMPTY_DSN=host=127.0.0.1 port=5432 dbname=qbrain_n48r_empty user=qbrain_n48o password=n48s-synthetic connect_timeout=2' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          & "$env:PGROOT\bin\postgres.exe" --version | Out-File evidence/postgres-version.txt -Encoding utf8
+      - name: Fresh original native product and registered60
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          powershell -NoProfile -ExecutionPolicy Bypass -File product/scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/native.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Dependency tests and deterministic full assembly
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m unittest discover -s tools/delivery -p test_package_n48s.py -v 2>&1 | Tee-Object evidence/tests-normal.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O -m unittest discover -s tools/delivery -p test_package_n48s.py -v 2>&1 | Tee-Object evidence/tests-optimized.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($copy in @('one','two')) {
+            python tools/delivery/package_n48s.py --source product --binary product/build/cl/qbrain.exe --native-log evidence/native.log --guide docs/integration/WINDOWS-CANDIDATE-N48S.zh-CN.md --output "evidence/$copy" 2>&1 | Tee-Object "evidence/assembly-$copy.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $package='evidence/one/qbrain-windows-x64-n48s-candidate.zip'
+          if ((Get-FileHash $package).Hash -cne (Get-FileHash evidence/two/qbrain-windows-x64-n48s-candidate.zip).Hash) { throw 'Assembly differs' }
+          python tools/delivery/package_n48s.py --source product --binary product/build/cl/qbrain.exe --native-log evidence/native.log --guide docs/integration/WINDOWS-CANDIDATE-N48S.zh-CN.md --verify $package 2>&1 | Tee-Object evidence/verification.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Expand-Archive -LiteralPath $package -DestinationPath under-test
+          Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-current-preview-b810d689/qbrain-windows-x64-n47x-preview.zip' -OutFile evidence/old-n47x.zip
+          if ((Get-FileHash evidence/old-n47x.zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d') { throw 'Baseline mismatch' }
+      - name: Actual extracted package Windows and PostgreSQL acceptance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python tools/delivery/check_n48s_bundle.py --source product --bundle under-test --package evidence/one/qbrain-windows-x64-n48s-candidate.zip --old evidence/old-n47x.zip --output evidence/qualification 2>&1 | Tee-Object evidence/qualification.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48s-windows
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error

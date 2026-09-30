@@ -1,0 +1,25 @@
+{
+  "schema": "qbrain-n48s-preacceptance-review-v1",
+  "date": "2026-09-30",
+  "reviewer": "Owner-authorized coordinator implementation self-review",
+  "initial_packager_blob": "4f2bf9963171065f56ac1c2b7a2e676c4ad58139",
+  "observed_findings": {
+    "numeric_zero_accepted_as_boolean_dependency_metadata": true,
+    "zero_raw_data_section_virtual_overlay_accepted": true
+  },
+  "repairs": [
+    "Compare dependency metadata by canonical typed JSON bytes.",
+    "Refuse virtual and raw section overlaps, raw header overlaps and wrapped section extents.",
+    "Check filesystem aliases before resolve and refuse qualification output inside source or bundle."
+  ],
+  "local_test_execution": {
+    "normal": {"tests": 50, "failed": 0},
+    "optimized": {"tests": 50, "failed": 0},
+    "new_test_methods": 13,
+    "retained_test_methods": 37
+  },
+  "test_fixture_correction": "A local test-string transfer doubled the null escape; corrected to exact remote bytes, then both full test modes rerun. The separately executed original overlay proof used true null bytes.",
+  "scope": "Packaging metadata and malformed PE input validation, not an observed product memory or user-data fault.",
+  "native_windows_acceptance_complete": false,
+  "full_project_complete": false
+}
