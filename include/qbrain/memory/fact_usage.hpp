@@ -2,6 +2,7 @@
 // Route-local SQLite use receipts. Reuses FactStore's public complete-evidence
 // validator; no use side effects are inserted into the original fact/Hook paths.
 #include "qbrain/memory/fact_store.hpp"
+#include "qbrain/memory/pg_fact_storage.hpp"
 #include "qbrain/util/hash.hpp"
 #include <algorithm>
 #include <chrono>
@@ -34,34 +35,39 @@ inline int64_t revision(const Json& p){
   return p["expected_revision"].get<int64_t>();
 }
 inline bool exists(DB& db,const char* name,const char* type="table"){
-  auto s=db.prepare("SELECT 1 FROM sqlite_master WHERE type=? AND name=?");
+  if(pg_fact::enabled(db))return pg_fact::exists(db,name,type);
+  auto s=pg_fact::prepare(db,"SELECT 1 FROM sqlite_master WHERE type=? AND name=?");
   s.bind_text(1,type);s.bind_text(2,name);return s.step();
 }
 struct ReadSnapshot {
-  DB::Statement pin;
-  explicit ReadSnapshot(DB& db):pin(db.prepare("SELECT COUNT(*) FROM sqlite_master")){
-    require(pin.step(),"fact_snapshot_unavailable");}
+  pg_fact::ReadScope pg;DB::Statement pin;
+  explicit ReadSnapshot(DB& db):pg(db){
+    if(!pg_fact::enabled(db)){pin=db.prepare("SELECT COUNT(*) FROM sqlite_master");
+      require(pin.step(),"fact_snapshot_unavailable");}
+  }
 };
 struct Tx {
-  DB& db;bool done=false;int old_timeout=0;
+  DB& db;bool done=false;int old_timeout=0;std::unique_ptr<pg_fact::WriteScope> pg;
   explicit Tx(DB& d):db(d){
-    {auto s=db.prepare("PRAGMA busy_timeout");if(s.step())old_timeout=int(s.column_int(0));}
+    if(pg_fact::enabled(db)){pg=std::make_unique<pg_fact::WriteScope>(db);return;}
+    {auto s=pg_fact::prepare(db,"PRAGMA busy_timeout");if(s.step())old_timeout=int(s.column_int(0));}
     db.exec("PRAGMA busy_timeout=2500");
     try{db.exec("BEGIN IMMEDIATE");}catch(...){db.exec("PRAGMA busy_timeout="+std::to_string(old_timeout));throw;}
   }
-  void commit(){db.exec("COMMIT");done=true;}
-  ~Tx(){if(!done){try{db.exec("ROLLBACK");}catch(...){}}
+  void commit(){if(pg){pg->commit();done=true;return;}db.exec("COMMIT");done=true;}
+  ~Tx(){if(pg)return;if(!done){try{db.exec("ROLLBACK");}catch(...){}}
     try{db.exec("PRAGMA busy_timeout="+std::to_string(old_timeout));}catch(...){}}
 };
 inline bool archive_ready(DB& db){
+  if(pg_fact::enabled(db))return pg_fact::archive_ready(db);
   if(!exists(db,"memory_fact_lifecycle_module")){
     require(!exists(db,"memory_fact_archive"),"fact_lifecycle_schema_conflict");return false;}
-  auto s=db.prepare("SELECT version FROM memory_fact_lifecycle_module");
+  auto s=pg_fact::prepare(db,"SELECT version FROM memory_fact_lifecycle_module");
   require(s.step() && s.column_int(0)==1 && !s.step(),"fact_lifecycle_version_unsupported");
   require(exists(db,"memory_fact_archive"),"fact_lifecycle_schema_incomplete");return true;
 }
 inline bool is_archived(DB& db,const std::string& source,const std::string& id){
-  auto s=db.prepare("SELECT archived_at,typeof(archived_at) FROM memory_fact_archive WHERE source_id=? AND fact_id=?");
+  auto s=pg_fact::prepare(db,"SELECT archived_at,typeof(archived_at) FROM memory_fact_archive WHERE source_id=? AND fact_id=?");
   s.bind_text(1,source);s.bind_text(2,id);if(!s.step())return false;
   require(s.column_text(1)=="integer" && !s.column_is_null(0) && s.column_int(0)>=0,"fact_lifecycle_invalid_metadata");return true;
 }
@@ -69,24 +75,31 @@ inline bool is_archived(DB& db,const std::string& source,const std::string& id){
 // stored here. The caller's report is never evidence of external consumption.
 constexpr int max_use_receipts = 4096;
 inline bool usage_ready(DB& db) {
+  if(pg_fact::enabled(db))return pg_fact::usage_ready(db);
   if (!exists(db,"memory_fact_usage_module")) {
     require(!exists(db,"memory_fact_usage"),"fact_usage_schema_conflict");
     return false;
   }
-  auto v=db.prepare("SELECT version,typeof(version) FROM memory_fact_usage_module");
+  auto v=pg_fact::prepare(db,"SELECT version,typeof(version) FROM memory_fact_usage_module");
   require(v.step() && v.column_text(1)=="integer" && v.column_int(0)==1 && !v.step(),
           "fact_usage_version_unsupported");
   require(exists(db,"memory_fact_usage") && exists(db,"idx_memory_fact_usage_fact","index"),
           "fact_usage_schema_incomplete");
-  auto cols=db.prepare("SELECT usage_id,source_id,fact_id,fact_revision,reported_at,withdrawn_at FROM memory_fact_usage LIMIT 0");
+  auto cols=pg_fact::prepare(db,"SELECT usage_id,source_id,fact_id,fact_revision,reported_at,withdrawn_at FROM memory_fact_usage LIMIT 0");
   cols.step();
   return true;
 }
 inline void usage_foreign_keys(DB& db) {
-  auto s=db.prepare("PRAGMA foreign_keys");
+  if(pg_fact::enabled(db)){pg_fact::validate_context(db);require(pg_fact::ready(db),"fact_not_found");return;}
+  auto s=pg_fact::prepare(db,"PRAGMA foreign_keys");
   require(s.step() && s.column_int(0)==1,"fact_usage_foreign_keys_required");
 }
 inline void initialize_usage(DB& db) {
+  if(pg_fact::enabled(db)){
+    {pg_fact::ReadScope snapshot(db);if(usage_ready(db))return;require(pg_fact::ready(db),"fact_not_found");}
+    pg_fact::WriteScope tx(db);require(pg_fact::ready(db),"fact_not_found");
+    if(!usage_ready(db))pg_fact::create_usage(db);tx.commit();return;
+  }
   {
     ReadSnapshot snapshot(db);
     if (usage_ready(db)) return;
@@ -165,14 +178,14 @@ inline std::vector<UsageEntry> usage_entries(DB& db,const std::string& source,
   // Reject exact BLOB scope aliases by indexed existence probes first. Keeping
   // the ordinary ordered scan on ONE index prefix avoids a temporary sort of
   // an arbitrarily large damaged set before the 4097-row sentinel can reject it.
-  for(const auto* query:{
+  if(!pg_fact::enabled(db))for(const auto* query:{
       "SELECT 1 FROM memory_fact_usage WHERE source_id=CAST(?1 AS BLOB)"
       " AND fact_id IN (?2,CAST(?2 AS BLOB)) LIMIT 1",
       "SELECT 1 FROM memory_fact_usage WHERE source_id=?1 AND fact_id=CAST(?2 AS BLOB) LIMIT 1"}) {
-    auto aliases=db.prepare(query);aliases.bind_text(1,source);aliases.bind_text(2,id);
+    auto aliases=pg_fact::prepare(db,query);aliases.bind_text(1,source);aliases.bind_text(2,id);
     require(!aliases.step(),"fact_usage_invalid_metadata");
   }
-  auto rows=db.prepare(std::string("SELECT ")+usage_entry_columns+
+  auto rows=pg_fact::prepare(db,std::string("SELECT ")+usage_entry_columns+
     " FROM memory_fact_usage WHERE source_id=?1 AND fact_id=?2 ORDER BY usage_id LIMIT 4097");
   rows.bind_text(1,source);rows.bind_text(2,id);
   std::vector<UsageEntry> entries;
@@ -189,9 +202,10 @@ inline std::optional<UsageEntry> find_usage(DB& db,const std::string& source,
     const std::string& uid) {
   // A requested ID may be damaged under a different fact. Check its source-wide
   // identity too, before deciding that insertion is a new receipt.
-  auto s=db.prepare(std::string("SELECT ")+usage_entry_columns+
-    " FROM memory_fact_usage WHERE source_id IN (?1,CAST(?1 AS BLOB))"
-    " AND usage_id IN (?2,CAST(?2 AS BLOB)) LIMIT 5");
+  auto s=pg_fact::prepare(db,std::string("SELECT ")+usage_entry_columns+
+    (pg_fact::enabled(db)?" FROM memory_fact_usage WHERE source_id=?1 AND usage_id=?2 LIMIT 5":
+     " FROM memory_fact_usage WHERE source_id IN (?1,CAST(?1 AS BLOB))"
+     " AND usage_id IN (?2,CAST(?2 AS BLOB)) LIMIT 5"));
   s.bind_text(1,source);s.bind_text(2,uid);
   std::optional<UsageEntry> found;
   while(s.step()) {
@@ -203,7 +217,7 @@ inline std::optional<UsageEntry> find_usage(DB& db,const std::string& source,
 inline int64_t stored_usage_revision(DB& db,const std::string& source,const std::string& id) {
   // Withdrawal is not a live-fact read: retired, archived and expired supported
   // facts keep their withdrawal right. Only stored revision integrity is needed.
-  auto s=db.prepare("SELECT revision,typeof(revision) FROM memory_facts WHERE source_id=? AND fact_id=?");
+  auto s=pg_fact::prepare(db,"SELECT revision,typeof(revision) FROM memory_facts WHERE source_id=? AND fact_id=?");
   s.bind_text(1,source);s.bind_text(2,id);
   require(s.step(),"fact_usage_not_found");
   require(s.column_text(1)=="integer" && s.column_int(0)>=1 && s.column_int(0)<=INT32_MAX,
@@ -245,7 +259,7 @@ inline Json FactUsageStore::report_use(const Json& p) {
   }
   if(!duplicate) {
     require(entries.size()<max_use_receipts,"fact_usage_capacity");
-    auto ins=db.prepare("INSERT INTO memory_fact_usage(source_id,usage_id,fact_id,fact_revision,reported_at) VALUES(?,?,?,?,?)");
+    auto ins=pg_fact::prepare(db,"INSERT INTO memory_fact_usage(source_id,usage_id,fact_id,fact_revision,reported_at) VALUES(?,?,?,?,?)");
     ins.bind_text(1,source_);ins.bind_text(2,uid);ins.bind_text(3,id);ins.bind_int(4,rev);ins.bind_int(5,at);ins.step_done();
   }
   auto out=usage_flags();out.update({{"status","reported"},{"source_id",source_},{"fact_id",id},
@@ -265,7 +279,7 @@ inline Json FactUsageStore::revoke_use(const Json& p) {
   const auto& found=existing->row;
   const auto at=found.revoked?found.withdrawn:std::max(clock_now(),found.at);
   if(!found.revoked) {
-    auto update=db.prepare("UPDATE memory_fact_usage SET withdrawn_at=? WHERE source_id=? AND usage_id=? AND fact_id=? AND withdrawn_at IS NULL");
+    auto update=pg_fact::prepare(db,"UPDATE memory_fact_usage SET withdrawn_at=? WHERE source_id=? AND usage_id=? AND fact_id=? AND withdrawn_at IS NULL");
     update.bind_int(1,at);update.bind_text(2,source_);update.bind_text(3,uid);update.bind_text(4,id);update.step_done();
     require(db.changes()==1,"fact_usage_write_conflict");
   }
