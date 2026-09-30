@@ -24,10 +24,10 @@ class QueryEmbeddingCache {
     std::chrono::milliseconds ttl{60000};
   };
   struct Identity {
-    std::string policy;  // SHA256; includes effective provider configuration
-    std::string key;     // SHA256 of exact query and resolved source
+    std::string policy;
+    std::string key;
     std::string model;
-    int dimensions = 0;  // 0 means provider-chosen width
+    int dimensions = 0;
   };
   struct Stats {
     std::uint64_t hits = 0, loads = 0, stored = 0, rejected = 0, evicted = 0;
@@ -68,7 +68,8 @@ class QueryEmbeddingCache {
           reset_locked();
           policy_ = id.policy;
         }
-        purge_locked(started);
+        // Admission time is not necessarily lookup time after a contended lock.
+        purge_locked(now_());
         for (auto it = entries_.begin(); it != entries_.end(); ++it) {
           if (it->key == id.key && it->value.model == id.model && it->dimensions == id.dimensions) {
             EmbedResult copy = it->value;
@@ -90,8 +91,7 @@ class QueryEmbeddingCache {
       std::lock_guard<std::mutex> lock(mutex_); bump(stats_.rejected);
       return result;
     }
-    const Time completed = now_();
-    if (expired(started, completed)) return result;
+    if (expired(started, now_())) return result;
     const std::size_t cost = id.key.size() + result.model.size() + result.vectors[0].size() * sizeof(float);
     if (cost > limits_.bytes) return result;
     try {
@@ -102,7 +102,9 @@ class QueryEmbeddingCache {
       entry.value.vectors.emplace_back(result.vectors[0].begin(), result.vectors[0].end());
       std::lock_guard<std::mutex> lock(mutex_);
       if (generation_ != ticket || saturated_ || policy_ != id.policy) return result;
-      purge_locked(completed);
+      const Time publication = now_();
+      if (expired(started, publication)) return result;
+      purge_locked(publication);
       // First successful concurrent insertion wins. This is not request coalescing.
       for (const auto& existing : entries_)
         if (existing.key == id.key && existing.value.model == id.model && existing.dimensions == id.dimensions)
