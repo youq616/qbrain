@@ -107,7 +107,9 @@ def main(binary, probe, output, wire):
             need(b'PRIVATE_EXCEPTION' not in p.stderr,'exception redaction')
             p,folder=observed('overflow',['many'],code=2);l,h,summary=inspect(folder)
             need(l['counts']==dict(started=520,finished=520,retained=512,dropped=8,pending=0,record_errors=0),'cap exact completed and dropped')
-            need(h['counts']['started']==0 and summary['recording_complete'] is False and p.stdout==b'all-api-results-success\n','cap loss not failed or billed mock')
+            # The native text-mode stdout uses CRLF on Windows and LF on POSIX.
+            # Keep the full byte assertion; do not strip or normalize captured output.
+            need(h['counts']['started']==0 and summary['recording_complete'] is False and p.stdout==(b'all-api-results-success\r\n' if os.name=='nt' else b'all-api-results-success\n'),'cap loss not failed or billed mock')
             sentinel=home/'occupied';sentinel.mkdir();(sentinel/'keep').write_bytes(b'unchanged')
             call(binary,['observe-model','--output',sentinel,'--','help'],2)
             need(list(p.name for p in sentinel.iterdir())==['keep'] and (sentinel/'keep').read_bytes()==b'unchanged','existing destination never overwritten')
