@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
  [ValidateSet('Install','Uninstall','Status')][string]$Action='Install',
- [Parameter(Mandatory=$true)][ValidateSet('Claude','Codex')][string]$HostName,
+ [Parameter(Mandatory=$true)][ValidateSet('Claude','Codex','Cursor')][string]$HostName,
  [Parameter(Mandatory=$true)][string]$ProjectPath,
  [string]$Binary='', [string]$BrainId='',
  [switch]$EnableCapture,
@@ -109,8 +109,8 @@ $id=(Hash ($hostKey+'|'+$project.ToLowerInvariant())).Substring(0,24)
 $owned=Safe (Join-Path $env:LOCALAPPDATA ('Qbrain\integrations\'+$id))
 $ownerPath=Join-Path $owned 'installation.json';$cfgPath=Join-Path $owned 'config.json'
 $journal=Join-Path $owned 'pending.json';$bridgePath=Join-Path $owned 'Invoke-QbrainJson.ps1'
-$target=if($hostKey -eq 'claude'){Join-Path $project '.claude\settings.local.json'}else{Join-Path $project '.codex\hooks.json'}
-$mcpPath=if($hostKey -eq 'claude'){Join-Path $project '.mcp.json'}else{Join-Path $project '.codex\config.toml'}
+$target=if($hostKey -eq 'claude'){Join-Path $project '.claude\settings.local.json'}elseif($hostKey -eq 'cursor'){Join-Path $project '.cursor\hooks.json'}else{Join-Path $project '.codex\hooks.json'}
+$mcpPath=if($hostKey -eq 'claude'){Join-Path $project '.mcp.json'}elseif($hostKey -eq 'cursor'){Join-Path $project '.cursor\mcp.json'}else{Join-Path $project '.codex\config.toml'}
 $allowed=@($target,$mcpPath,$ownerPath,$cfgPath,$bridgePath)
 foreach($p in $allowed){$null=Safe $p}
 # Known unsupported binary paths must fail before creating the owned directory.
@@ -168,13 +168,17 @@ function Input-Image($images,[string]$p){
 function Matching($o,$images=$null){
  try {
   $current=Parse (Input-Image $images $target)
+  if($hostKey -eq 'cursor'){
+   if(-not (Has $current 'version') -or ($current.version -isnot [int] -and $current.version -isnot [long]) -or $current.version -ne 1){return $false}
+  }
   if(-not (Has $current 'hooks')){return $false}
   foreach($e in $o.entries){
    if(-not (Has $current.hooks $e.event)){return $false}
+   if($hostKey -eq 'cursor' -and $current.hooks.($e.event) -isnot [Array]){return $false}
    $matches=@($current.hooks.($e.event)|Where-Object {Same $_ $e.group})
    if($matches.Count -ne 1){return $false}
   }
-  if($hostKey -eq 'claude'){
+  if($hostKey -ne 'codex'){
    $m=Parse (Input-Image $images $mcpPath);return (Has $m 'mcpServers') -and (Has $m.mcpServers $o.mcp.name) -and (Same $m.mcpServers.($o.mcp.name) $o.mcp.definition)
   }
   return ([string](Input-Image $images $mcpPath)).Contains([string]$o.mcp.block)
@@ -219,10 +223,16 @@ try {
  $rawTarget=$initial[$target]
  if($null -ne $rawTarget -and [string]::IsNullOrWhiteSpace($rawTarget)){throw 'Existing JSON settings are empty.'}
  $settings=Parse $rawTarget
+ if($hostKey -eq 'cursor'){
+  if(Has $settings 'version'){
+   if(($settings.version -isnot [int] -and $settings.version -isnot [long]) -or $settings.version -ne 1){throw 'Unsupported Cursor hooks version.'}
+  }elseif($null -ne $rawTarget){throw 'Existing Cursor hooks require version 1.'}
+  Set-Key $settings 'version' 1
+ }
  if(-not (Has $settings 'hooks')){Set-Key $settings 'hooks' ([pscustomobject]@{})}
  if($settings.hooks -isnot [pscustomobject]){throw 'hooks must be an object.'}
  $rawMcp=$initial[$mcpPath]
- if($hostKey -eq 'claude'){
+ if($hostKey -ne 'codex'){
   if($null -ne $rawMcp -and [string]::IsNullOrWhiteSpace($rawMcp)){throw 'Existing MCP settings are empty.'}
   $mcp=Parse $rawMcp
   if(-not (Has $mcp 'mcpServers')){Set-Key $mcp 'mcpServers' ([pscustomobject]@{})}
@@ -234,7 +244,7 @@ try {
    $rest=@($settings.hooks.($e.event)|Where-Object {-not (Same $_ $e.group)})
    if($rest.Count){Set-Key $settings.hooks $e.event $rest}else{$settings.hooks.PSObject.Properties.Remove($e.event)}
   }
-  if($hostKey -eq 'claude'){$mcp.mcpServers.PSObject.Properties.Remove($owner.mcp.name)}
+  if($hostKey -ne 'codex'){$mcp.mcpServers.PSObject.Properties.Remove($owner.mcp.name)}
   else{$rawMcp=$rawMcp.Replace([string]$owner.mcp.block,'')}
  }
  $changes=New-Object System.Collections.ArrayList
@@ -248,25 +258,34 @@ try {
   $bridgeSource=Join-Path $PSScriptRoot 'Invoke-QbrainJson.ps1'
   $cfg=[pscustomobject]@{version=1;host=$hostKey;project_root=$project;brain_id=$BrainId;source_id='default';enabled=$true;capture=[bool]$EnableCapture;fact_recall=[bool]$EnableFactRecall;fact_promotion=[bool]$EnableFactPromotion;extraction='local';recall_bytes=4096;max_items=8}
   $entry=[pscustomobject]@{type='command';command=$exe;args=@('hook','--config',$cfgPath);timeout=10}
-  if($hostKey -eq 'codex'){
+  if($hostKey -ne 'claude'){
    function Literal([string]$s){return "'"+$s.Replace("'","''")+"'"}
    $ps="[Console]::InputEncoding=New-Object Text.UTF8Encoding(`$false);[Console]::OutputEncoding=New-Object Text.UTF8Encoding(`$false);`$r=& "+(Literal $bridgePath)+' -FilePath '+(Literal $exe)+" -ArgumentList @('hook','--config',"+(Literal $cfgPath)+") -InputJson ([Console]::In.ReadToEnd());[Console]::Write(`$r.Stdout)"
+   # Cursor consumes stdout JSON; suppress only first-use module progress, not errors.
+   if($hostKey -eq 'cursor'){$ps="`$ProgressPreference='SilentlyContinue';"+$ps}
    $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($ps))
    $cmd='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+$encoded
    $entry=[pscustomobject]@{type='command';command=$cmd;commandWindows=$cmd;timeout=10}
+   if($hostKey -eq 'cursor'){$entry=[pscustomobject]@{type='command';command=$cmd;timeout=10}}
   }
   $entries=@()
-  foreach($ev in @('SessionStart','UserPromptSubmit','Stop','PreCompact','SessionEnd')){
+  $events=@('SessionStart','UserPromptSubmit','Stop','PreCompact','SessionEnd')
+  if($hostKey -eq 'cursor'){$events=@('sessionStart','beforeSubmitPrompt','afterAgentResponse','preCompact','sessionEnd')}
+  foreach($ev in $events){
    $handler=Parse (Json $entry);if($ev -eq 'SessionEnd'){$handler.timeout=3}
    $group=[pscustomobject]@{hooks=@($handler)}
-   $old=@();if(Has $settings.hooks $ev){$old=@($settings.hooks.($ev))}
+   if($hostKey -eq 'cursor'){$group=$handler}
+   $old=@();if(Has $settings.hooks $ev){
+    if($hostKey -eq 'cursor' -and $settings.hooks.($ev) -isnot [Array]){throw 'Cursor hook entries must be arrays.'}
+    $old=@($settings.hooks.($ev))
+   }
    Set-Key $settings.hooks $ev @($old+@($group))
    $entries+=,[pscustomobject]@{event=$ev;group=$group}
   }
   $name='qbrain_memory_'+$id
   $definition=[pscustomobject]@{command=$exe;args=@('serve','--brain',$BrainId,'--tool-profile','memory')}
   $mcpOwner=[pscustomobject]@{name=$name;definition=$definition;block=''}
-  if($hostKey -eq 'claude'){
+  if($hostKey -ne 'codex'){
    if(Has $mcp.mcpServers $name){throw 'MCP name collision.'};Set-Key $mcp.mcpServers $name $definition
   }else{
    # JSON basic strings are valid TOML basic strings; no interpolation of repo text.
@@ -281,7 +300,7 @@ try {
   Change $cfgPath (Json $cfg);Change $ownerPath (Json $owner)
  }
  Change $target (Json $settings)
- if($hostKey -eq 'claude'){Change $mcpPath (Json $mcp)}else{Change $mcpPath $rawMcp}
+ if($hostKey -ne 'codex'){Change $mcpPath (Json $mcp)}else{Change $mcpPath $rawMcp}
  # Preflight the actual journal before brain initialization or backup creation.
  $pending=[pscustomobject]@{version=1;changes=@($changes)}
  Validate-Journal $pending
