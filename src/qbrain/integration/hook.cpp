@@ -1,3 +1,8 @@
+#include "qbrain/integration/detail/hook_storage.hpp"
+#include "qbrain/memory/pg_fact_storage.hpp"
+#include "qbrain/memory/detail/composed_read.hpp"
+#include <cstdlib>
+#include <memory>
 #include "qbrain/integration/hook.hpp"
 #include "qbrain/integration/detail/fact_context.hpp"
 #include "qbrain/integration/detail/hook_trace.hpp"
@@ -120,14 +125,30 @@ nlohmann::json compose_fact_context(Brain& b,const std::string& source,const std
   auto& db=b.db();
   // The Hook owns this connection. Do not nest or accidentally commit a caller's
   // transaction. The first schema read pins a snapshot before either lane runs.
-  memory::FactStore store(b,source); // Validate SQLite/source before beginning a read.
+  memory::FactStore store(b,source); // Validate backend/source before owning a read.
   struct Snapshot {
-    storage::Database& db; bool active=true;
-    explicit Snapshot(storage::Database& d):db(d){db.exec("BEGIN");}
+    storage::Database& db; bool active=false;
+    std::unique_ptr<memory::pg_fact::ReadScope> pg;
+    explicit Snapshot(storage::Database& d):db(d) {
+      if (memory::pg_fact::enabled(db)) {
+        memory::pg_fact::idle(db); // Hook never borrows even a caller-owned read scope.
+        pg=std::make_unique<memory::pg_fact::ReadScope>(db);
+      } else {
+        if(db.transaction_active()) throw std::runtime_error("hook_transaction_active");
+        db.exec("BEGIN");active=true;
+        try {auto pin=db.prepare("SELECT COUNT(*) FROM sqlite_master");pin.step();}
+        catch(...) {try{db.exec("ROLLBACK");}catch(...){}active=false;throw;}
+      }
+    }
     ~Snapshot(){if(active)try{db.exec("ROLLBACK");}catch(...){}}
-    void finish(){db.exec("COMMIT");active=false;}
+    void finish(){
+      if(pg) {
+        // ROLLBACK ends this read-only observation; no writes can be committed.
+        pg.reset();
+        if(db.transaction_active()) throw std::runtime_error("hook_snapshot_close_failed");
+      } else {db.exec("COMMIT");active=false;}
+    }
   } snapshot(db);
-  {auto pin=db.prepare("SELECT COUNT(*) FROM sqlite_master");pin.step();}
   const auto facts=store.recall_for_hook(selected,limit,32768);
   J payload={{"source_id",source},{"untrusted_data",true},
       {"fact_scope","direct_active_assertions"},{"fact_groups",J::array()},
@@ -142,7 +163,9 @@ nlohmann::json compose_fact_context(Brain& b,const std::string& source,const std
   auto memory_queries=kind=="SessionStart"?std::vector<std::string>{""}:selected;
   std::set<std::string> emitted;
   for(const auto& query:memory_queries) {
-    const auto memories=memory::read(b,source,query,16,32768);
+    const auto memories=memory::pg_fact::enabled(db)
+        ? memory::detail::read_in_fact_snapshot(b,source,query,16,32768)
+        : memory::read(b,source,query,16,32768);
     for(const auto& item:memories["items"]) {
       const auto id=item["item_id"].get<std::string>();
       if(seen.count(id)||emitted.count(id))continue;
@@ -215,11 +238,18 @@ int run_hook(const std::vector<std::string>& args) {
     if(fact_promotion && (!boolean(cfg,"capture",false)||mode!="local"))
       throw std::runtime_error("fact_promotion_requires_local_capture");
     if(fact_promotion){trace["fact_promotion_enabled"]=true;trace["fact_promotion_status"]="not_run";}
-    if(!fs::is_regular_file(util::brain_db_path(brain)))throw std::runtime_error("uninitialized");
+    const char* pg_env=std::getenv("QBRAIN_PG_DSN");
+    const bool pg_requested=pg_env && *pg_env;
+    if(!pg_requested && !fs::is_regular_file(util::brain_db_path(brain)))throw std::runtime_error("uninitialized");
     Lock guard(path.parent_path()/"runtime.lock");
-    const auto key=util::sha256_hex(host+"\n"+brain+"\n"+source+"\n"+session);
+    const auto session_identity=host+"\n"+brain+"\n"+source+"\n"+session;
+    auto key=util::sha256_hex(session_identity);
     TraceCheckpoint checkpoint{path.parent_path(),host,kind,key,trace,output};
-    Brain b(brain);b.open();
+    Brain b(brain);
+    if(pg_requested) {
+      detail::open_existing_postgres(b,pg_env); // No implicit PG schema initialization or SQLite fallback.
+      key=util::sha256_hex(session_identity+"\npostgres\n"+b.db().backend_file_path());
+    } else b.open();
     const auto state_path=path.parent_path()/"recall-state.json";
     J state={{"version",1},{"sessions",J::object()}};
     if(fs::exists(state_path))try{state=load(state_path);}catch(...){state={{"version",1},{"sessions",J::object()}};}
