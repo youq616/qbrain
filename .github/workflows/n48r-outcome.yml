@@ -1,0 +1,108 @@
+name: N48R independent Hook outcome
+on:
+  push:
+    branches: [main, 'feature/n48r-pg-hook']
+    paths: ['.ci/review_pg_hook_closeout.py', '.github/workflows/n48r-outcome.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48r-outcome-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Pin unchanged runtime and exact integrated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          git ls-tree --full-tree -r -z HEAD > evidence/source-tree.bin
+          git diff --exit-code 45a238534e67c173b6baa4f2ed257f6117b72044 HEAD -- src include tests CMakeLists.txt .ci/pg_hook_targets.cmake .ci/test_pg_hooks.py .ci/run_pg_hook_gate.py .github/workflows/n48r-validation.yml > evidence/runtime-diff.txt
+      - name: Disposable PostgreSQL Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pg_bin="$(dirname "$(find /usr/lib/postgresql -path '*/bin/initdb' | sort -V | tail -1)")"
+          "$pg_bin/initdb" -D "$RUNNER_TEMP/n48r-review-pg" -U postgres --auth=trust --encoding=UTF8 --no-locale > evidence/pg-init.log
+          mkdir "$RUNNER_TEMP/n48r-socket"
+          "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/n48r-review-pg" -l "$GITHUB_WORKSPACE/evidence/pg-server.log" -o "-h 127.0.0.1 -p 55432 -k $RUNNER_TEMP/n48r-socket" -w start
+          export PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres
+          "$pg_bin/psql" -X -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE qbrain_n48o LOGIN PASSWORD 'n48r-review-synthetic'"
+          for db in qbrain_n48r_native qbrain_n48r_empty qbrain_n48r_review_normal_a qbrain_n48r_review_normal_b qbrain_n48r_review_optimized_a qbrain_n48r_review_optimized_b; do
+            "$pg_bin/createdb" -O qbrain_n48o "$db"
+          done
+          echo "$pg_bin" >> "$GITHUB_PATH"
+          printf 'PGHOST=127.0.0.1\nPGPORT=55432\nPGUSER=qbrain_n48o\nPGPASSWORD=n48r-review-synthetic\n' >> "$GITHUB_ENV"
+          "$pg_bin/postgres" --version > evidence/postgres-version.txt
+      - name: Disposable PostgreSQL Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if (-not $env:PGROOT -or -not (Test-Path "$env:PGROOT\lib\libpq.lib")) { throw 'Native PostgreSQL required' }
+          $service=Get-Service 'postgresql-x64-*' | Select-Object -First 1
+          Set-Service $service.Name -StartupType Manual
+          Start-Service $service.Name
+          $env:PGHOST='127.0.0.1'; $env:PGPORT='5432'; $env:PGUSER='postgres'; $env:PGPASSWORD='root'
+          & "$env:PGROOT\bin\psql.exe" -X -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE qbrain_n48o LOGIN PASSWORD 'n48r-review-synthetic'"
+          if ($LASTEXITCODE -ne 0) { throw 'role failed' }
+          foreach($db in @('qbrain_n48r_native','qbrain_n48r_empty','qbrain_n48r_review_normal_a','qbrain_n48r_review_normal_b','qbrain_n48r_review_optimized_a','qbrain_n48r_review_optimized_b')) {
+            & "$env:PGROOT\bin\createdb.exe" -O qbrain_n48o $db
+            if ($LASTEXITCODE -ne 0) { throw 'database failed' }
+          }
+          "$env:PGROOT\bin" | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+          "QBRAIN_PG_ROOT=$env:PGROOT" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          'PGHOST=127.0.0.1','PGPORT=5432','PGUSER=qbrain_n48o','PGPASSWORD=n48r-review-synthetic' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          & "$env:PGROOT\bin\postgres.exe" --version | Out-File evidence/postgres-version.txt -Encoding utf8
+      - name: Fresh product and original Hook assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/outcome -DCMAKE_BUILD_TYPE=Release -DQBRAIN_WITH_PG=ON -DQBRAIN_REQUIRE_PG=ON -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/pg_hook_targets.cmake" > evidence/configure.log 2>&1
+          cmake --build build/outcome --config Release --target qbrain qbrain_pg_hook_tests qbrain_hook_fact_tests --parallel 2 > evidence/build.log 2>&1
+          ctest --test-dir build/outcome -C Release -R 'qbrain_(hook_fact|pg_hook_sqlite)_unit' --output-on-failure | tee evidence/core.log
+          suffix=''; config=''; if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; config='Release/'; fi
+          cp "build/outcome/${config}qbrain${suffix}" "evidence/qbrain${suffix}"
+          export QBRAIN_PG_HOOK_TEST_DISPOSABLE=1
+          export QBRAIN_PG_HOOK_DSN="host=127.0.0.1 port=$PGPORT dbname=qbrain_n48r_native user=qbrain_n48o password=n48r-review-synthetic connect_timeout=2"
+          export QBRAIN_PG_HOOK_EMPTY_DSN="host=127.0.0.1 port=$PGPORT dbname=qbrain_n48r_empty user=qbrain_n48o password=n48r-review-synthetic connect_timeout=2"
+          "build/outcome/${config}qbrain_pg_hook_tests${suffix}" | tee evidence/native-hook.json
+      - name: Independent admission privacy and two-database dedup
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=''; if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; fi
+          export QBRAIN_N48R_REVIEW_DISPOSABLE=1
+          python -c "import pathlib,hashlib,json; print(json.dumps({str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [*pathlib.Path('evidence').glob('qbrain*'),pathlib.Path('.ci/review_pg_hook_closeout.py')]}))" > evidence/before.json
+          for mode in normal optimized; do
+            opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
+            python "${opt[@]}" .ci/review_pg_hook_closeout.py --binary "evidence/qbrain${suffix}" --output "evidence/sqlite-$mode" | tee "evidence/sqlite-$mode.log"
+            python "${opt[@]}" .ci/review_pg_hook_closeout.py --binary "evidence/qbrain${suffix}" --postgres --output "evidence/postgres-$mode" | tee "evidence/postgres-$mode.log"
+          done
+          python -c "import pathlib,hashlib,json; b=json.loads(pathlib.Path('evidence/before.json').read_text()); exit(0 if all(hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()==h for p,h in b.items()) else 1)"
+          git diff --exit-code -- src include tests .ci/review_pg_hook_closeout.py > evidence/after-diff.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48r-outcome-${{ matrix.os }}
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error

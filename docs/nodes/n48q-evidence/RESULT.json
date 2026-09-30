@@ -1,0 +1,103 @@
+{
+  "schema": "qbrain-n48q-final-outcome-v1",
+  "date": "2026-09-30",
+  "verdict": "PASS_BOUNDED_SOURCE_MODULE",
+  "reviewer": "ChatGPT coordinator: owner-authorized separate post-implementation self-review; not a subagent or third party",
+  "base_main": "cfa00185dc0575b1dbf7c418082608f7563a3b91",
+  "runtime_candidate": "4f8b470f32df106c9bb596f24252ffb800773b47",
+  "runtime_tree": "927600dc124416fe0701b03d21e28274f3e83b27",
+  "qualified_supplement": "28d64ae7bb93eaf33b6db48c25314fe721bc4823",
+  "qualified_tree": "511b6a9c5aae6edf2a3a001e4dd1d966badb59cf",
+  "original_qualification": {
+    "run_id": 36558149579,
+    "jobs": [109372212580, 109372212790],
+    "result": "completed/success",
+    "windows_original_test_groups": 60,
+    "retained_driver_steps_per_platform": 55,
+    "new_local_archive_replay_claimed": false
+  },
+  "supplementary_qualification": {
+    "run_id": 36647177198,
+    "attempt": 1,
+    "result": "completed/success",
+    "jobs": {
+      "linux": 109673779812,
+      "windows": 109673780089,
+      "sanitizer": 109673780019
+    },
+    "runtime_and_original_native_tests_unchanged_check": "git diff --exit-code 4f8b470f32df106c9bb596f24252ffb800773b47 HEAD -- src include tests CMakeLists.txt",
+    "after_run_tracked_file_diff_passed": true,
+    "full_decoded_native_and_sanitizer_logs_read": true,
+    "per_platform": {
+      "native_fact_assertions": 228,
+      "native_fact_sqlite_assertions": 83,
+      "native_fact_postgres_and_setup_assertions": 145,
+      "retained_context_assertions": 198,
+      "retained_memory_assertions": 122,
+      "retained_scope_assertions": 112,
+      "core_ctest_groups": 6,
+      "per_python_mode": {
+        "original_fact_process": {"recorded_calls": 105, "checks": 304},
+        "independent_sqlite": {"product_calls": 41, "checks": 123},
+        "independent_postgres": {"recorded_calls": 64, "product_calls": 41, "psql_calls": 23, "checks": 174}
+      }
+    },
+    "sanitizer": {
+      "compiler": "Clang",
+      "address_sanitizer": true,
+      "undefined_behavior_sanitizer": true,
+      "postgres_enabled": false,
+      "new_sqlite_assertions": 83,
+      "original_scenarios": 15,
+      "original_assertions": 380,
+      "new_stderr_bytes": 0,
+      "original_stderr_bytes": 0,
+      "executed_locally": false
+    }
+  },
+  "platform_identity_as_recorded_by_ci": {
+    "linux": {
+      "os": "Ubuntu 24.04",
+      "postgresql_version": "16.15",
+      "binary_sha256": "dec7d42d9147b14730df1cbcb4be8d093dca0a6192a641a05a62d81e47c6e8ba",
+      "reviewer_sha256": "fcc4fbcf668739d2d7658e507898d28bba1c26c6968ae4ecfc26ba2417452578"
+    },
+    "windows": {
+      "os": "Windows Server 2022",
+      "postgresql_version": "14.24",
+      "binary_sha256": "ce50003b8a93b75b84f281340f9f3068e22f284eed16eb17f6c8f46d094e93dd",
+      "reviewer_sha256": "9f932fc9e1e48e253e742cfec48fd4b8c7a7ce36d64e646dac1cbe27bbe5824f"
+    }
+  },
+  "artifacts_as_reported_by_github": [
+    {"platform":"windows","artifact_id":11069941088,"bytes":15526049,"sha256":"4738dc20c5daa00b2dfaf261d243ffe1e14b203373e5172cec25e3f46c0ffba4"},
+    {"platform":"linux","artifact_id":11068764480,"bytes":16261520,"sha256":"e5dfaf8d8761f311255159d5985ecd0b8d0a9122a73a4afcf8ef6c386a2200d6"},
+    {"platform":"sanitizer","artifact_id":11069810350,"bytes":3446,"sha256":"a29c0299d4b83d74eb76ed4a3fce3f31dd2a97e834e30b015531944e431befca"}
+  ],
+  "initial_supplement_failure": {
+    "commit": "55517ba66d74c2e0d7950d7cec5e8f93ce3324ca",
+    "run_id": 36646969799,
+    "sanitizer_job": 109672077104,
+    "artifact_id": 11069350312,
+    "reason": "PG-disabled sanitizer invocation omitted the test's required --sqlite-only flag",
+    "fix": "Correct workflow invocation; no product, assertion or timeout change",
+    "old_failed_run_preserved": true
+  },
+  "scope": {
+    "new_independent_process_reviewer_committed": true,
+    "new_native_workflow_committed": true,
+    "runtime_modified_during_this_closeout": false,
+    "tests_executed_on_real_native_postgresql": true,
+    "local_terminal_execution_available": false,
+    "new_local_build_or_execution": false,
+    "local_artifact_unpack_or_rehash": false,
+    "additional_full_artifact_replay": false,
+    "owner_machine_execution": false,
+    "synthetic_data_only": true,
+    "paid_provider_requests": false,
+    "host_consumption_verified": false,
+    "complete_pg_hook_integration": false,
+    "whole_project_complete": false,
+    "new_signed_release": false
+  }
+}
