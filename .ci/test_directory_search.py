@@ -50,7 +50,7 @@ def run(binary, output):
         need({x["slug"] for x in vector}=={"docs/a","docs/sub/b"},
              "CLI vector-enabled scope stays bounded")
         bad=call(["search","--query","needle","--uri",
-                  "qbrain://default/resources/docs","--json"],1)
+                  "qbrain://default/resources/docs","--json"],2)
         need(b"directory_uri_required" in bad.stderr or
              b"directory_uri_required" in bad.stdout,
              "invalid directory emits explicit error")
