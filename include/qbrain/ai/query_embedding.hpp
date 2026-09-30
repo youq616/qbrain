@@ -4,9 +4,20 @@
 #include "qbrain/ai/embedding_policy.hpp"
 #include "qbrain/ai/embed.hpp"
 #include "qbrain/util/hash.hpp"
-#include <nlohmann/json.hpp>
+#include <initializer_list>
+#include <string_view>
 
 namespace qbrain::ai {
+namespace query_cache_detail {
+inline std::string fingerprint(std::initializer_list<std::string_view> fields) {
+  std::string bytes;
+  for (const auto field : fields) {
+    bytes += std::to_string(field.size()); bytes += ':';
+    bytes.append(field.data(), field.size());
+  }
+  return util::sha256_hex(bytes);
+}
+} // namespace query_cache_detail
 inline EmbedResult query_embedding(Brain& brain, const std::string& query,
                                    const std::string& resolved_source) {
   auto& cache = brain.query_embedding_cache();
@@ -22,11 +33,11 @@ inline EmbedResult query_embedding(Brain& brain, const std::string& query,
       resolved_source.size() > 64 || config.embedding_provider.size() > 256 ||
       config.embedding_base_url.size() > 8192 || key.size() > 65536 || (!mock && key.empty()))
     return cache.get_or_load(false, {}, invoke);
-  using J = nlohmann::json;
   QueryEmbeddingCache::Identity id;
-  id.policy = util::sha256_hex(J::array({"qbrain-query-vector-v1", config.embedding_provider,
-    config.embedding_base_url, config.embedding_model, config.embedding_dimensions, key, mock}).dump());
-  id.key = util::sha256_hex(J::array({"qbrain-query-source-v1", resolved_source, query}).dump());
+  const std::string dimensions = std::to_string(config.embedding_dimensions);
+  id.policy = query_cache_detail::fingerprint({"qbrain-query-vector-v1", config.embedding_provider,
+    config.embedding_base_url, config.embedding_model, dimensions, key, mock ? "1" : "0"});
+  id.key = query_cache_detail::fingerprint({"qbrain-query-source-v1", resolved_source, query});
   id.model = mock ? "mock-embedding" : config.embedding_model;
   id.dimensions = mock ? 3 : config.embedding_dimensions;
   return cache.get_or_load(true, std::move(id), invoke);
