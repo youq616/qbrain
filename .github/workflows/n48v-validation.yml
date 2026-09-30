@@ -1,0 +1,142 @@
+name: N48V query vector cache
+on:
+  push:
+    branches: ['feature/n48v-query-vector-cache']
+    paths: ['include/qbrain/ai/query_embedding*', 'tests/test_query_embedding*', '.ci/*n48v*', '.ci/query_embedding_targets.cmake', '.ci/test_query_embedding_http.py', '.github/workflows/n48v-validation.yml', 'include/qbrain/core/brain.hpp', 'src/qbrain/core/brain.cpp', 'src/qbrain/ops/handlers.cpp']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48v-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  prepare:
+    if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/feature/n48v-query-vector-cache'
+    runs-on: windows-2022
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      tested_sha: ${{ steps.materialize.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Materialize only the three exact query integrations
+        id: materialize
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/feature/n48v-query-vector-cache
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git -c core.autocrlf=false checkout-index --all --force
+          python .ci/stage_n48v_runtime.py --output integration-evidence
+          git diff --check
+          git add -- include/qbrain/core/brain.hpp src/qbrain/core/brain.cpp src/qbrain/ops/handlers.cpp
+          if ! git diff --cached --quiet; then
+            git config user.name 'qbrain-source-assembly'
+            git config user.email 'qbrain-source-assembly@users.noreply.github.com'
+            git commit -m 'feat(n48v): materialize exact Brain-owned query cache integration'
+            test "$(git ls-remote origin "$GITHUB_REF" | cut -f1)" = "$GITHUB_SHA"
+            git push origin HEAD:refs/heads/feature/n48v-query-vector-cache
+          fi
+          git rev-parse HEAD > integration-evidence/tested-sha.txt
+          git rev-parse HEAD^{tree} > integration-evidence/tested-tree.txt
+          git diff --binary e0a27f829d970c24ed8c566023ada0911c0042b3 HEAD > integration-evidence/recoverable.patch
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48v-source-integration
+          path: integration-evidence/
+          retention-days: 30
+  native:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.tested_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Exact tested source and unchanged protected branches' paths
+        shell: bash
+        env:
+          TESTED_SHA: ${{ needs.prepare.outputs.tested_sha }}
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA"
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          git ls-tree -r -z HEAD > evidence/source-tree.bin
+          git diff --binary e0a27f829d970c24ed8c566023ada0911c0042b3 HEAD > evidence/recoverable.patch
+          git diff --exit-code e0a27f829d970c24ed8c566023ada0911c0042b3 HEAD -- src/qbrain/context include/qbrain/context src/qbrain/storage include/qbrain/storage tools/delivery .github/workflows/n48s-validation.yml .github/workflows/n48t-validation.yml .github/workflows/n48u-validation.yml tests/test_context_preflight.cpp tests/test_context_coverage.cpp tests/test_context_invalidation.cpp .ci/context_invalidation_targets.cmake docs/nodes/N48S-CLOSEOUT-PLAN.md docs/nodes/N48S-HARD-AUDIT.md docs/nodes/n48s-evidence/CLOSEOUT-RESULT.json docs/integration/N48S-REVIEW-AND-DELIVERY.zh-CN.md > evidence/protected-diff.txt
+      - name: Fresh complete product and query targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/n48v -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/query_embedding_targets.cmake" > evidence/configure.log 2>&1
+          cmake --build build/n48v --config Debug --target qbrain qbrain_query_cache_tests qbrain_query_cache_integration_tests qbrain_query_cache_http_tests qbrain_context_tests qbrain_memory_tests qbrain_fact_tests qbrain_hook_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
+      - name: Cache state tests and original regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=''; config=''; if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; config='Debug/'; fi
+          cp "build/n48v/${config}qbrain${suffix}" "evidence/qbrain${suffix}"
+          "build/n48v/${config}qbrain_query_cache_tests${suffix}" | tee evidence/cache.json
+          "build/n48v/${config}qbrain_query_cache_integration_tests${suffix}" | tee evidence/integration.json
+          ctest --test-dir build/n48v -C Debug -R '^qbrain_(query_cache|query_cache_integration|context|memory|fact|hook_fact|multiterm|usage_batch|usage_batch_ownership)_unit$' --output-on-failure | tee evidence/ctest.log
+          for mode in normal optimized; do
+            opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
+            python "${opt[@]}" .ci/test_context_process.py --binary "evidence/qbrain${suffix}" --report "evidence/context-$mode.json" > "evidence/context-$mode.log"
+            python "${opt[@]}" .ci/test_hooks.py --binary "evidence/qbrain${suffix}" > "evidence/hooks-$mode.log"
+            python "${opt[@]}" .ci/test_memory_cycle.py --binary "evidence/qbrain${suffix}" > "evidence/memory-$mode.log"
+            if [ "$RUNNER_OS" = Windows ]; then
+              python "${opt[@]}" .ci/test_query_embedding_http.py --binary "build/n48v/${config}qbrain_query_cache_http_tests${suffix}" --output "evidence/http-$mode" | tee "evidence/http-$mode.log"
+            fi
+          done
+          git diff --exit-code > evidence/after-diff.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48v-${{ matrix.os }}
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
+  sanitizer:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.tested_sha }}
+          persist-credentials: false
+      - name: Instrumented cache and registered operations
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          CC=clang CXX=clang++ cmake -S . -B build/asan -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/query_embedding_targets.cmake" -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined' > evidence/configure.log 2>&1
+          cmake --build build/asan --target qbrain_query_cache_tests qbrain_query_cache_integration_tests --parallel 2 > evidence/build.log 2>&1
+          build/asan/qbrain_query_cache_tests > evidence/cache.json 2> evidence/cache.stderr
+          build/asan/qbrain_query_cache_integration_tests > evidence/integration.json 2> evidence/integration.stderr
+          test ! -s evidence/cache.stderr
+          test ! -s evidence/integration.stderr
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48v-sanitizer
+          path: evidence/
+          retention-days: 30

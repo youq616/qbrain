@@ -1,7 +1,9 @@
 #pragma once
 #include "qbrain/core/types.hpp"
 #include "qbrain/storage/database.hpp"
+#include "qbrain/ai/query_embedding_cache.hpp"
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -28,6 +30,10 @@ class Brain {
   storage::Database& db() { return db_; }
   const Config& config() const { return config_; }
   Config& config() { return config_; }
+  ai::QueryEmbeddingCache& query_embedding_cache() {
+    if (!query_embeddings_) query_embeddings_ = std::make_unique<ai::QueryEmbeddingCache>();
+    return *query_embeddings_;
+  }
 
   void load_config();
   void save_config_value(const std::string& key, const std::string& value,
@@ -253,6 +259,7 @@ class Brain {
   std::string db_path_;
   storage::Database db_;
   Config config_;
+  std::unique_ptr<ai::QueryEmbeddingCache> query_embeddings_ = std::make_unique<ai::QueryEmbeddingCache>();
   std::optional<bool> embedding_available_override_;
   Page row_to_page(storage::Database::Statement& st);
 };
