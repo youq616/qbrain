@@ -1,0 +1,11 @@
+# Additive registration, without changing the original global target inventory.
+function(qbrain_add_runtime_observation_tests)
+  find_package(Threads REQUIRED)
+  add_executable(qbrain_runtime_observation_tests "${CMAKE_SOURCE_DIR}/tests/test_runtime_observation.cpp")
+  target_link_libraries(qbrain_runtime_observation_tests PRIVATE qbrain_ai qbrain_util Threads::Threads)
+  add_test(NAME qbrain_runtime_observation_unit COMMAND qbrain_runtime_observation_tests)
+  set_tests_properties(qbrain_runtime_observation_unit PROPERTIES TIMEOUT 60)
+  add_executable(qbrain_runtime_observation_http "${CMAKE_SOURCE_DIR}/tests/test_runtime_observation_http.cpp")
+  target_link_libraries(qbrain_runtime_observation_http PRIVATE qbrain_ai qbrain_core qbrain_search qbrain_jobs qbrain_ai Threads::Threads)
+endfunction()
+cmake_language(DEFER CALL qbrain_add_runtime_observation_tests)

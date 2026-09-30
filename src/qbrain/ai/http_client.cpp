@@ -1,4 +1,5 @@
 #include "qbrain/ai/http_client.hpp"
+#include "qbrain/accounting/runtime_observation.hpp"
 #include "qbrain/ai/detail/http_diagnostics.hpp"
 #ifdef QBRAIN_HTTP_DIAGNOSTICS
 #include <atomic>
@@ -198,6 +199,8 @@ DWORD await(AsyncState& state, DWORD expected, Clock::time_point deadline, DWORD
 HttpResponse network_error(DWORD code) {
   if (code == ERROR_WINHTTP_TIMEOUT)
     return failure(HttpFailure::timeout, "HTTP request deadline exceeded");
+  if (code == ERROR_WINHTTP_OPERATION_CANCELLED || code == ERROR_OPERATION_ABORTED)
+    return failure(HttpFailure::cancelled, "HTTP request cancelled");
   // Numeric OS codes are useful diagnostics; URLs, headers and bodies are not.
   return failure(HttpFailure::transport, "HTTP transport failed (" + std::to_string(code) + ")");
 }
@@ -224,9 +227,9 @@ bool release_http_session_for_tests() noexcept {
 }  // namespace detail
 #endif
 
-HttpResponse http_post_json(std::string_view base_url, std::string_view path,
+static HttpResponse http_post_json_impl(std::string_view base_url, std::string_view path,
                             std::string_view bearer_token, std::string_view json_body,
-                            int timeout_ms, std::size_t max_response_bytes) {
+                            int timeout_ms, std::size_t max_response_bytes, bool& send_invoked) {
 #ifdef _WIN32
   const auto deadline = Clock::now() + std::chrono::milliseconds(timeout_ms > 0 ? timeout_ms : 0);
 #endif
@@ -286,6 +289,7 @@ HttpResponse http_post_json(std::string_view base_url, std::string_view path,
 #endif
   state->handle_lifetime = state;
   if (Clock::now() >= deadline) return network_error(ERROR_WINHTTP_TIMEOUT);
+  send_invoked = true; // Invocation, not proof of server receipt.
   if (!WinHttpSendRequest(request.value, state->headers.c_str(), static_cast<DWORD>(state->headers.size()),
       state->outbound.empty() ? WINHTTP_NO_REQUEST_DATA : state->outbound.data(),
       static_cast<DWORD>(state->outbound.size()), static_cast<DWORD>(state->outbound.size()), context))
@@ -347,5 +351,20 @@ HttpResponse http_post_json(std::string_view base_url, std::string_view path,
 #else
   return failure(HttpFailure::unsupported_platform, "HTTP client only implemented on Windows");
 #endif
+}
+HttpResponse http_post_json(std::string_view base_url, std::string_view path,
+                            std::string_view bearer_token, std::string_view json_body,
+                            int timeout_ms, std::size_t max_response_bytes) {
+  accounting::observation::Attempt attempt(path);
+  bool send_invoked = false;
+  try {
+    auto response = http_post_json_impl(base_url, path, bearer_token, json_body,
+                                      timeout_ms, max_response_bytes, send_invoked);
+    attempt.finish(response, send_invoked);
+    return response;
+  } catch (...) {
+    attempt.finish_exception(send_invoked);
+    throw;
+  }
 }
 }  // namespace qbrain::ai

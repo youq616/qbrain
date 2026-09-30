@@ -1,0 +1,99 @@
+name: N48W runtime HTTP observation
+on:
+  push:
+    branches: ['feature/n48w-runtime-observation']
+    paths: ['include/qbrain/accounting/runtime_observation.hpp', 'include/qbrain/accounting/observation_command.hpp', 'include/qbrain/ai/http_client.hpp', 'src/qbrain/ai/http_client.cpp', 'src/qbrain/main.cpp', 'tests/test_runtime_observation*', '.ci/test_runtime_observation.py', '.ci/runtime_observation_targets.cmake', '.github/workflows/n48w-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48w-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Pin new candidate and unchanged protected paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          git ls-tree -r -z HEAD > evidence/source-tree.bin
+          git diff --binary e0a27f829d970c24ed8c566023ada0911c0042b3 HEAD > evidence/recoverable.patch
+          git diff --exit-code e0a27f829d970c24ed8c566023ada0911c0042b3 HEAD -- src/qbrain/context include/qbrain/context src/qbrain/storage include/qbrain/storage src/qbrain/ops src/qbrain/core include/qbrain/core tools/delivery .github/workflows/n48s-validation.yml .github/workflows/n48t-validation.yml .github/workflows/n48u-validation.yml .ci/query_embedding_targets.cmake > evidence/protected-diff.txt
+      - name: Fresh complete program and original transport targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/n48w -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/runtime_observation_targets.cmake" > evidence/configure.log 2>&1
+          cmake --build build/n48w --config Debug --target qbrain qbrain_runtime_observation_tests qbrain_runtime_observation_http qbrain_http_tests qbrain_http_probe qbrain_context_tests qbrain_memory_tests qbrain_fact_tests qbrain_hook_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
+      - name: Exact usage outcomes and retained regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=''; config=''; if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; config='Debug/'; fi
+          for name in qbrain qbrain_runtime_observation_tests qbrain_runtime_observation_http qbrain_http_probe; do
+            cp "build/n48w/${config}${name}${suffix}" "evidence/${name}${suffix}"
+          done
+          "evidence/qbrain_runtime_observation_tests${suffix}" > evidence/native.json
+          ctest --test-dir build/n48w -C Debug -R '^qbrain_(runtime_observation|http_input|context|memory|fact|hook_fact|multiterm|usage_batch|usage_batch_ownership)_unit$' --output-on-failure | tee evidence/ctest.log
+          for mode in normal optimized; do
+            opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
+            extra=(); if [ "$RUNNER_OS" = Windows ]; then extra=(--http-binary "evidence/qbrain_runtime_observation_http${suffix}"); fi
+            python "${opt[@]}" .ci/test_runtime_observation.py --binary "evidence/qbrain${suffix}" --output "evidence/process-$mode" "${extra[@]}" > "evidence/process-$mode.log" 2>&1
+            python "${opt[@]}" .ci/test_context_process.py --binary "evidence/qbrain${suffix}" --report "evidence/context-$mode.json" > "evidence/context-$mode.log" 2>&1
+            python "${opt[@]}" .ci/test_hooks.py --binary "evidence/qbrain${suffix}" > "evidence/hooks-$mode.log" 2>&1
+            python "${opt[@]}" .ci/test_memory_cycle.py --binary "evidence/qbrain${suffix}" > "evidence/memory-$mode.log" 2>&1
+          done
+          if [ "$RUNNER_OS" = Windows ]; then
+            python .ci/test_http_transport.py --probe "evidence/qbrain_http_probe${suffix}" --report evidence/original-http.json > evidence/original-http.log 2>&1
+          fi
+          python -c "import pathlib,hashlib,json; print(json.dumps({p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in pathlib.Path('evidence').glob('qbrain*') if p.is_file()}))" > evidence/binary-hashes.json
+          git diff --exit-code > evidence/after-diff.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48w-${{ matrix.os }}
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
+  sanitizer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Full instrumented observation and original transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          CC=clang CXX=clang++ cmake -S . -B build/asan -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/runtime_observation_targets.cmake" -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined' > evidence/configure.log 2>&1
+          cmake --build build/asan --target qbrain_runtime_observation_tests qbrain_http_tests --parallel 2 > evidence/build.log 2>&1
+          build/asan/qbrain_runtime_observation_tests > evidence/native.json 2> evidence/native.stderr
+          build/asan/qbrain_http_tests > evidence/original-http.txt 2> evidence/original-http.stderr
+          test ! -s evidence/native.stderr
+          test ! -s evidence/original-http.stderr
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48w-sanitizer
+          path: evidence/
+          retention-days: 30

@@ -7,7 +7,7 @@ namespace qbrain::ai {
 
 enum class HttpFailure {
   none, invalid_request, transport, timeout, response_too_large, http_status,
-  unsupported_platform
+  unsupported_platform, cancelled
 };
 
 struct HttpResponse {
