@@ -3,6 +3,7 @@ Uses real CLI/Hook processes and independent SQL/state observations. No producer
 """
 from __future__ import annotations
 import argparse
+from contextlib import closing
 import hashlib
 import json
 import os
@@ -78,7 +79,7 @@ def main(binary: Path, output: Path, postgres: bool):
                     if read:
                         query = "SELECT coalesce(json_agg(t),'[]'::json)::text FROM (" + query + ') t'
                     return invoke(['psql', '-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-c', query], e, project, parsed=read)
-                with sqlite3.connect(local) as db:
+                with closing(sqlite3.connect(local)) as db, db:
                     db.row_factory = sqlite3.Row
                     cursor = db.execute(query)
                     return [dict(r) for r in cursor] if read else None
