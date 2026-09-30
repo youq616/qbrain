@@ -15,7 +15,14 @@ OLD_SHA="c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d"
 
 def execute(source, bundle, package, old, output):
     p.z.need(os.name=="nt","native Windows required")
-    source,bundle,package,old=[x.resolve(strict=True) for x in (source,bundle,package,old)]
+    source=p.old.regular(source,True).resolve(strict=True)
+    bundle=p.old.regular(bundle,True).resolve(strict=True)
+    package=p.old.regular(package).resolve(strict=True)
+    old=p.old.regular(old).resolve(strict=True)
+    output=output.absolute()
+    p.old.regular(output.parent,True)
+    p.z.need(output != source and source not in output.parents and
+             output != bundle and bundle not in output.parents, "output inside input")
     p.z.need(p.old.git(source,"rev-parse","HEAD").decode().strip()==p.SOURCE,"fixed product source")
     p.z.need(p.old.git(source,"rev-parse","HEAD^{tree}").decode().strip()==p.TREE,"fixed product tree")
     original=p.old.read(package,p.z.MAX_ARCHIVE);package_hash=p.z.sha(original)

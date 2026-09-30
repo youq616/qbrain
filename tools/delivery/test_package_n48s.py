@@ -35,6 +35,19 @@ class PackagingTests(unittest.TestCase):
             dependencies=p.dependencies(self.binary),compiler_reproducibility_verified=False)
     def expected(self):
         return p.expected(self.binary,self.files,self.guide,self.build)
+    def test_boolean_metadata_and_section_overlay(self):
+        self.build["dependencies"]["postgres_dependencies_bundled"]=0
+        with self.assertRaises(ValueError):self.expected()
+        raw=image();section=0x98+240
+        struct.pack_into("<H",raw,0x86,2)
+        raw[section+40:section+48]=b".bss\0\0\0\0"
+        struct.pack_into("<IIII",raw,section+48,512,0x1000,0,0)
+        with self.assertRaises(ValueError):p.dependencies(bytes(raw))
+        # Disjoint virtual addresses do not permit aliasing raw section bytes.
+        raw=image();struct.pack_into("<H",raw,0x86,2)
+        raw[section+40:section+80]=raw[section:section+40]
+        struct.pack_into("<I",raw,section+40+12,0x3000)
+        with self.assertRaises(ValueError):p.dependencies(bytes(raw))
     def test_valid_dependencies(self):
         self.assertEqual(p.dependencies(self.binary)["eager"],["kernel32.dll"])
         self.assertEqual(p.dependencies(self.binary)["delayed"],["libpq.dll"])

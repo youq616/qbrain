@@ -47,8 +47,16 @@ def dependencies(raw: bytes) -> dict:
     for i in range(count):
         base = opt+opt_size+i*40
         vs, va, length, offset = unpack("<IIII", base+8)
-        z.need(offset+length <= len(raw), "PE section bounds")
-        sections.append((va, max(vs, length), length, offset))
+        span=max(vs,length)
+        z.need(va > 0 and span > 0 and va+span <= 2**32 and
+               offset+length <= len(raw), "PE section bounds")
+        if length:
+            z.need(offset >= opt+opt_size+count*40, "PE raw section overlaps headers")
+        for old_va,old_span,old_size,old_off in sections:
+            z.need(va+span <= old_va or old_va+old_span <= va, "PE virtual section overlap")
+            if length and old_size:
+                z.need(offset+length <= old_off or old_off+old_size <= offset, "PE raw section overlap")
+        sections.append((va, span, length, offset))
     def rva(address, length):
         matches = [off+address-va for va, span, size, off in sections
                    if va <= address and address-va+length <= size]
@@ -128,7 +136,7 @@ def expected(binary, files, guide, build):
                          "compiler_reproducibility_verified"}, "build fields")
     z.need(build["schema"] == "qbrain-n48s-build-v1" and build["product_source"] == SOURCE
            and build["product_tree"] == TREE and build["binary_sha256"] == z.sha(binary)
-           and build["dependencies"] == deps
+           and z.encoded(build["dependencies"]) == z.encoded(deps)
            and build["compiler_reproducibility_verified"] is False, "build identity")
     z.need(re.fullmatch("[0-9a-f]{64}", build["native_log_sha256"]) is not None, "native log digest")
     groups = build["native_groups"]
