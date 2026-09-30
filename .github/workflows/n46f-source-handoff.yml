@@ -1,0 +1,22 @@
+name: Offline N46F source handoff
+on:
+  push:
+    branches: ['handoff/n46f-offline-source']
+    paths: ['tools/handoff/export_n46f_source.py', 'tests/test_export_n46f_source.py', '.github/workflows/n46f-source-handoff.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-export:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Roundtrip two synthetic commits and verify rejection boundaries
+        run: python -B -m unittest discover -s tests -p test_export_n46f_source.py -v
