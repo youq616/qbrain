@@ -8,14 +8,14 @@ permissions:
   contents: read
 concurrency:
   group: n48v-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 env:
   PYTHONIOENCODING: utf-8
   PYTHONDONTWRITEBYTECODE: '1'
 jobs:
   prepare:
     if: github.repository == 'youq616/qbrain' && github.ref == 'refs/heads/feature/n48v-query-vector-cache'
-    runs-on: ubuntu-24.04
+    runs-on: windows-2022
     timeout-minutes: 5
     permissions:
       contents: write
@@ -32,6 +32,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF" = refs/heads/feature/n48v-query-vector-cache
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git -c core.autocrlf=false checkout-index --all --force
           python .ci/stage_n48v_runtime.py --output integration-evidence
           git diff --check
           git add -- include/qbrain/core/brain.hpp src/qbrain/core/brain.cpp src/qbrain/ops/handlers.cpp
