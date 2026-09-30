@@ -1,0 +1,119 @@
+name: N48Y native Cursor hooks
+on:
+  push:
+    branches: ['feature/n48y-cursor-hooks']
+    paths: ['src/qbrain/integration/hook.cpp', 'include/qbrain/integration/detail/cursor_hook.hpp', 'include/qbrain/integration/detail/hook_trace.hpp', 'scripts/Install-QbrainMemory.ps1', '.ci/cursor_hook_targets.cmake', '.ci/test_cursor*', 'tests/test_cursor_hooks.cpp', '.github/workflows/n48y-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48y-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Pin exact source and unchanged active-feature paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          git ls-tree -r -z HEAD > evidence/source-tree.bin
+          git diff --binary e0a27f829d970c24ed8c566023ada0911c0042b3 HEAD > evidence/recoverable.patch
+          git diff --exit-code e0a27f829d970c24ed8c566023ada0911c0042b3 HEAD -- src/qbrain/main.cpp src/qbrain/ai src/qbrain/accounting src/qbrain/search src/qbrain/context src/qbrain/storage src/qbrain/core src/qbrain/ops include/qbrain/ai include/qbrain/accounting include/qbrain/context include/qbrain/storage include/qbrain/core tools/delivery > evidence/protected-diff.txt
+      - name: Fresh complete native program and original core tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/cursor -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/cursor_hook_targets.cmake" > evidence/configure.log 2>&1
+          cmake --build build/cursor --config Debug --target qbrain qbrain_cursor_hook_tests qbrain_hook_trace_tests qbrain_hook_fact_tests qbrain_memory_tests qbrain_fact_tests qbrain_context_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
+      - name: Real adapter and unchanged process regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=''; config=''; if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; config='Debug/'; fi
+          cp "build/cursor/${config}qbrain${suffix}" "evidence/qbrain${suffix}"
+          cp "build/cursor/${config}qbrain_cursor_hook_tests${suffix}" "evidence/qbrain_cursor_hook_tests${suffix}"
+          "evidence/qbrain_cursor_hook_tests${suffix}" > evidence/cursor-native.json
+          ctest --test-dir build/cursor -C Debug -R '^qbrain_(cursor_hook|hook_trace|hook_fact|memory|fact|context|multiterm|usage_batch|usage_batch_ownership)_unit$' --output-on-failure | tee evidence/ctest.log
+          for mode in normal optimized; do
+            opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
+            python "${opt[@]}" .ci/test_cursor_hooks.py --binary "evidence/qbrain${suffix}" --output "evidence/cursor-$mode" | tee "evidence/cursor-$mode.log"
+            python "${opt[@]}" .ci/test_hooks.py --binary "evidence/qbrain${suffix}" > "evidence/hooks-$mode.log"
+            python "${opt[@]}" .ci/test_context_process.py --binary "evidence/qbrain${suffix}" --report "evidence/context-$mode.json" > "evidence/context-$mode.log"
+            python "${opt[@]}" .ci/test_memory_cycle.py --binary "evidence/qbrain${suffix}" > "evidence/memory-$mode.log"
+          done
+      - name: Actual project installation under PowerShell 5 and 7
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $exe=(Resolve-Path evidence/qbrain.exe).ProviderPath
+          $ps5=Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
+          $ps7=(Get-Command pwsh).Source
+          foreach($shell in @(@('ps5',$ps5),@('ps7',$ps7))){
+            $label=$shell[0];$program=$shell[1]
+            & $program -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .ci/test_cursor_install.ps1 -Binary $exe -Report "evidence/cursor-install-$label.json" *> "evidence/cursor-install-$label.log"
+            if($LASTEXITCODE -ne 0){throw "Cursor $label failed"}
+            foreach($old in @('test_install_hooks','test_install_consent','test_hook_fact_install','test_promotion_install')){
+              & $program -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".ci/$old.ps1" -Binary $exe *> "evidence/$old-$label.log"
+              if($LASTEXITCODE -ne 0){throw "$old $label failed"}
+            }
+            & $program -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .ci/test_installer_recovery.ps1 -Binary $exe -Report "evidence/recovery-$label.json" *> "evidence/recovery-$label.log"
+            if($LASTEXITCODE -ne 0){throw "Recovery $label failed"}
+          }
+      - name: Evidence source remains exact
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code > evidence/after-diff.txt
+          python -c "from pathlib import Path; import hashlib,json; print(json.dumps({str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in list(Path('evidence').glob('qbrain*'))+[Path('.ci/test_cursor_hooks.py'),Path('.ci/test_cursor_install.ps1'),Path('scripts/Install-QbrainMemory.ps1')]}))" > evidence/tested-hashes.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48y-${{ matrix.os }}
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
+  sanitizer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Fully linked adapter and original Hook sanitizers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          CC=clang CXX=clang++ cmake -S . -B build/asan -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/cursor_hook_targets.cmake" -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined' > evidence/configure.log 2>&1
+          cmake --build build/asan --target qbrain_cursor_hook_tests qbrain_hook_trace_tests qbrain_hook_fact_tests --parallel 2 > evidence/build.log 2>&1
+          for test in cursor_hook hook_trace hook_fact; do
+            build/asan/qbrain_${test}_tests > evidence/$test.stdout 2> evidence/$test.stderr
+            test ! -s evidence/$test.stderr
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48y-sanitizer
+          path: evidence/
+          retention-days: 30
