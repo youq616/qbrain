@@ -140,7 +140,7 @@ void print_help() {
       "  list [--limit N] [--type t]\n"
       "  capture \"text\" | --file f | --stdin\n"
       "  import <path>\n"
-      "  search \"query\" [--limit N] [--json] [--no-vector] [--mode m] [--rerank]\n"
+      "  search \"query\" [--uri qbrain://source/resources/path/] [--limit N] [--json] [--no-vector] [--mode m] [--rerank]\n"
       "  search --query <literal> [options] | search [options] -- <literal words>\n"
       "  think \"question\" [--json] [--save]\n"
       "  graph <slug> [--depth N]\n"
