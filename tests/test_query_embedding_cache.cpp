@@ -110,6 +110,23 @@ void limits_and_time() {
   check(full.stats().entries==64 && full.stats().bytes<=1048576, "production entry bound");
   for(int which=0;which<4;++which){bool rejected=false;auto lim=Cache::Limits{};if(which==0)lim.entries=0;if(which==1)lim.entries=65;if(which==2)lim.bytes=1048577;if(which==3)lim.ttl=std::chrono::milliseconds(0);try{Cache bad(lim);}catch(const std::invalid_argument&){rejected=true;}check(rejected,"invalid constructor bounds rejected");}
 }
+void boundary_crossings() {
+  long long tick=0;bool cross=false;int loads=0;
+  Cache c(Cache::Limits{},[&]{const auto before=tick;if(cross){tick=60000;cross=false;}return Cache::Time{}+std::chrono::milliseconds(before);});
+  c.get_or_load(true,id(),[&]{++loads;return good(1);});
+  tick=59999;cross=true;
+  auto r=c.get_or_load(true,id(),[&]{++loads;return good(2);});
+  check(loads==2 && r.vectors[0][0]==2,"expiry crossed between admission and lookup cannot serve old vector");
+  int reads=0;
+  Cache late(Cache::Limits{},[&]{++reads;return Cache::Time{}+std::chrono::milliseconds(reads<=2?0:reads==3?59999:60000);});
+  r=late.get_or_load(true,id(),[]{return good();});
+  check(r.ok && late.stats().entries==0,"expiry crossed before insertion preserves result but not cache");
+  Cache maximum;
+  const auto load_wide=[] {auto x=good();x.vectors[0].assign(16384,1);return x;};
+  for(int i=0;i<20;++i){auto identity=id();identity.dimensions=16384;const char* hex="0123456789abcdef";identity.key[62]=hex[i/16];identity.key[63]=hex[i%16];maximum.get_or_load(true,identity,load_wide);}
+  const std::size_t cost=64+5+16384*sizeof(float);
+  check(maximum.stats().entries==1048576/cost && maximum.stats().bytes==(1048576/cost)*cost,"maximum-width vectors obey payload budget below entry cap");
+}
 void generation_and_reentrancy() {
   Cache c;int loads=0;
   c.get_or_load(true,id(),[&]{++loads;c.clear();return good();});
@@ -135,4 +152,4 @@ void concurrent_misses() {
   c.get_or_load(true,id(),[&]{++loads;return good();});check(loads==8, "subsequent concurrent result hit");
 }
 }
-int main(){try{basic();invalid_results();limits_and_time();generation_and_reentrancy();concurrent_misses();std::cout<<J({{"schema","qbrain-n48v-cache-tests-v1"},{"passed",true},{"check_count",checks.size()},{"checks",checks},{"provider_network_requests",0}}).dump()<<'\n';return 0;}catch(const std::exception& e){std::cout<<J({{"passed",false},{"checks",checks},{"failure",e.what()}}).dump()<<'\n';return 1;}}
+int main(){try{basic();invalid_results();limits_and_time();boundary_crossings();generation_and_reentrancy();concurrent_misses();std::cout<<J({{"schema","qbrain-n48v-cache-tests-v1"},{"passed",true},{"check_count",checks.size()},{"checks",checks},{"provider_network_requests",0}}).dump()<<'\n';return 0;}catch(const std::exception& e){std::cout<<J({{"passed",false},{"checks",checks},{"failure",e.what()}}).dump()<<'\n';return 1;}}
