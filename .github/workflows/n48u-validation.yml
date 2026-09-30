@@ -103,6 +103,7 @@ jobs:
         run: |
           set -euo pipefail
           suffix=''; if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; fi
+          export QBRAIN_PG_CONTEXT_TEST_DISPOSABLE=1
           export QBRAIN_PG_CONTEXT_PROCESS_DSN="host=127.0.0.1 port=$PGPORT dbname=qbrain_n48p_process user=qbrain_n48o password=n48u-synthetic-only connect_timeout=2"
           for mode in normal optimized; do
             opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
