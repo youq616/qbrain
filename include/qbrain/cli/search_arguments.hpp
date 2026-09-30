@@ -72,6 +72,9 @@ inline SearchArguments parse_search_arguments(const std::vector<std::string>& ar
   } else out.query = util::trim(positional);
   if (util::trim(out.query).empty()) throw std::invalid_argument("search_query_required");
 
+  if (out.values.count("--uri") && out.value("--uri").empty())
+    throw std::invalid_argument("missing_search_value");
+
   const auto limit = out.value("--limit");
   if (!limit.empty()) {
     // Empty retains the old configuration default. Other values must fit int;
