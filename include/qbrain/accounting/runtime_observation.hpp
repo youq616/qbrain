@@ -61,8 +61,10 @@ inline Usage project_usage(Api kind,const ai::HttpResponse& response) noexcept {
       else if(s=="incomplete")u.provider=ProviderState::incomplete;
       else if(s=="queued"||s=="in_progress")u.provider=ProviderState::pending;
     }
-    if(has_error)u.provider=ProviderState::failed;
+    // An error object cannot promote queued/unknown Responses status into a
+    // terminal billable snapshot. Classify terminality before error projection.
     if(kind==Api::responses && (u.provider==ProviderState::pending || u.provider==ProviderState::unknown)){u.state=UsageState::unsupported;return u;}
+    if(has_error)u.provider=ProviderState::failed;
     if(!j.contains("usage")||j["usage"].is_null())return u;
     const auto& usage=j["usage"];
     if(kind==Api::chat || kind==Api::responses) {

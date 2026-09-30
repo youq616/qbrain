@@ -45,6 +45,12 @@ void quantities(){
   for(auto state:{"queued","in_progress","unexpected"}){
     response={200,Json{{"object","response"},{"status",state},{"usage",{{"input_tokens",100},{"output_tokens",20}}}}.dump(),{},ai::HttpFailure::none};
     check(obs::project_usage(obs::Api::responses,response).tokens==Values{},"nonterminal response never priced as complete usage");
+    auto with_error=Json::parse(response.body);with_error["error"]={{"message","PRIVATE_NONTERMINAL_ERROR"}};
+    with_error["usage"]["total_tokens"]=120;
+    with_error["usage"]["input_tokens_details"]={{"cached_tokens",30},{"cache_write_tokens",10}};
+    response.body=with_error.dump();
+    u=obs::project_usage(obs::Api::responses,response);
+    check(u.state==obs::UsageState::unsupported&&u.tokens==Values{},"error object cannot promote nonterminal status into priced usage");
   }
 }
 void capture_and_cost(){
