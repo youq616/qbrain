@@ -146,7 +146,10 @@ Json summary(Brain& b,const std::string& source,const std::string& uri,const std
   if(!pg::enabled(b.db()))backup_before_upgrade(b.db());
   Tx tx(b.db());
   if(pg::enabled(b.db()) && !b.source_exists(source))throw Error("invalid_source");
-  if(snapshot(b,u).signature!=ss.signature)throw Error("evidence_changed");
+  const auto current=snapshot(b,u);
+  // The selected-page digest alone does not bind the 257th-row coverage sentinel.
+  if(current.signature!=ss.signature || current.count!=ss.count || current.partial!=ss.partial)
+    throw Error("evidence_changed");
   if(method=="model"&&b.get_config_value("context.external_summary").value_or("")!="allow")throw Error("external_summary_denied");
   if(pg::enabled(b.db()))pg::initialize_locked(b.db());
   else sqlite_cache::initialize_locked(b.db());
