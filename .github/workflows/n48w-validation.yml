@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: n48w-${{ github.ref }}
+  group: n48w-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 env:
   PYTHONIOENCODING: utf-8
