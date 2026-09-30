@@ -77,3 +77,14 @@ bootstrap trigger SHA is not claimed as the tested source SHA. The complete reco
 diff and tree are saved. No hidden compile-time patch, protected-branch write, force
 push, merge or frozen PG action is involved. Design review accepts this bounded
 publication mechanism; the exact local assembled tree must match final remote tree.
+
+
+## Publication resolution before native qualification
+
+The bootstrap prepare job remained queued. The coordinator therefore published the
+four already-tested files directly through GitHub Git objects, verifying the complete
+assembled tree against the local index before a normal fast-forward commit. The new
+workflow has no prepare/write job: all jobs are contents:read and checkout github.sha.
+The earlier bootstrap and its pending job are retained, not claimed successful or
+silently cancelled. The exact-source recipe remains only as recovery documentation;
+it is not run during compilation. Frozen PR65 and other branches remain unchanged.

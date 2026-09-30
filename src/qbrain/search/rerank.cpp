@@ -1,4 +1,5 @@
 #include "qbrain/search/rerank.hpp"
+#include "qbrain/accounting/logical_observation.hpp"
 #include "qbrain/util/utf8_display.hpp"
 #include "qbrain/ai/chat.hpp"
 #include "qbrain/ai/http_client.hpp"
@@ -311,9 +312,13 @@ LlmAttempt reorder_from_content(const std::string& content,
 // Sends {model, query, documents: [{title, text}...]} and receives
 // {results: [{index, relevance_score}...]} sorted by score descending.
 LlmAttempt request_native_rerank(const Config& cfg, const std::string& query,
-                                 const std::vector<SearchHit>& baseline, int timeout_ms) {
+                                 const std::vector<SearchHit>& baseline, int timeout_ms,
+                                 accounting::logical::Call& observation) {
   auto key = resolve_api_key(cfg, true);
-  if (key.empty()) return {false, {}, FailureReason::transport_error};
+  if (key.empty()) {
+    observation.path(accounting::logical::Path::missing_credentials);
+    return {false, {}, FailureReason::transport_error};
+  }
 
   nlohmann::json body;
   body["model"] = cfg.rerank_model.empty() ? cfg.chat_model : cfg.rerank_model;
@@ -409,7 +414,12 @@ std::string rerank_audit_path() {
 std::vector<SearchHit> apply_reranker(const Config& cfg, const std::string& query,
                                       std::vector<SearchHit> results,
                                       const RerankerOpts& opts) {
-  if (!opts.enabled || results.empty() || opts.top_n_in <= 0) return results;
+  return accounting::logical::invoke(accounting::logical::Kind::rerank, [&](auto& observation) {
+  if (!opts.enabled || results.empty() || opts.top_n_in <= 0) {
+    observation.path(results.empty()?accounting::logical::Path::empty_input:accounting::logical::Path::disabled);
+    return results;
+  }
+  observation.path(accounting::logical::Path::local_baseline);
 
   // N39: the rerank LLM call uses the independent rerank configuration
   // (falling back to chat per rerank_config); capture it for tests.
@@ -428,15 +438,18 @@ std::vector<SearchHit> apply_reranker(const Config& cfg, const std::string& quer
       LlmAttempt attempt;
       try {
         if (opts.llm_fn_for_test) {
+          observation.path(accounting::logical::Path::callback);
           attempt = reorder_from_callback(opts.llm_fn_for_test(query, head), head);
         } else if (opts.llm_response_for_test) {
+          observation.path(accounting::logical::Path::callback);
           attempt = reorder_from_content(opts.llm_response_for_test(query, head), head);
         } else {
+          observation.path(accounting::logical::Path::remote_candidate);
           const int timeout_ms = opts.timeout_ms > 0
                                      ? std::min(opts.timeout_ms, kMaxRerankTimeoutMs)
                                      : kMaxRerankTimeoutMs;
           if (cfg.rerank_api_type == "native")
-            attempt = request_native_rerank(effective, query, head, timeout_ms);
+            attempt = request_native_rerank(effective, query, head, timeout_ms, observation);
           else
             attempt = request_llm_reorder(effective, query, head, timeout_ms);
         }
@@ -444,6 +457,7 @@ std::vector<SearchHit> apply_reranker(const Config& cfg, const std::string& quer
         attempt = {false, {}, FailureReason::local_exception};
       }
 
+      observation.fallback(!attempt.ok);
       if (!attempt.ok) {
         log_rerank_failure(attempt.failure_reason, query, original.size());
       } else {
@@ -452,6 +466,7 @@ std::vector<SearchHit> apply_reranker(const Config& cfg, const std::string& quer
     }
 
     if (baseline.empty()) {
+      observation.fallback(true);
       auto fallback = original;
       sanitize_fallback_scores(fallback);
       log_rerank_failure(FailureReason::empty_guard, query, original.size());
@@ -459,6 +474,7 @@ std::vector<SearchHit> apply_reranker(const Config& cfg, const std::string& quer
       return fallback;
     }
     if (baseline.size() != original.size()) {
+      observation.fallback(true);
       auto fallback = original;
       sanitize_fallback_scores(fallback);
       log_rerank_failure(FailureReason::size_guard, query, original.size());
@@ -469,12 +485,14 @@ std::vector<SearchHit> apply_reranker(const Config& cfg, const std::string& quer
     apply_positive_truncation(baseline, opts.top_n_out);
     return baseline;
   } catch (...) {
+    observation.fallback(true);
     auto fallback = original;
     sanitize_fallback_scores(fallback);
     log_rerank_failure(FailureReason::local_exception, query, original.size());
     apply_positive_truncation(fallback, opts.top_n_out);
     return fallback;
   }
+  });
 }
 
 }  // namespace qbrain::search

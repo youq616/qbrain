@@ -3,6 +3,7 @@
 #include "qbrain/maintenance/sqlite_check.hpp"
 #include "qbrain/accounting/token_cost.hpp"
 #include "qbrain/accounting/observation_command.hpp"
+#include "qbrain/accounting/logical_command.hpp"
 #include "qbrain/accounting/cost_comparison.hpp"
 #include "qbrain/accounting/provider_usage.hpp"
 #include "qbrain/accounting/stream_usage.hpp"
@@ -12,6 +13,8 @@
 namespace {
 // Dispatch the explicit isolated checker before registry/default-brain setup.
 int dispatch(int argc,char** argv) {
+  if(argc>1 && std::string(argv[1])=="observe-model")
+    return qbrain::accounting::logical::command(argc,argv,dispatch);
   if(argc>1 && std::string(argv[1])=="observe")
     return qbrain::accounting::observation::command(argc,argv,dispatch);
   if(argc>1 && std::string(argv[1])=="database") {
