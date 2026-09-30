@@ -60,6 +60,13 @@ def run(binary, output):
         need(b"duplicate_search_argument" in dup.stderr or
              b"duplicate_search_argument" in dup.stdout,
              "duplicate uri rejected before brain work")
+        empty_uri=call(["search","--query","needle","--uri=","--json"],2)
+        need(b"missing_search_value" in empty_uri.stderr or b"missing_search_value" in empty_uri.stdout,
+             "empty uri rejected rather than unscoped fallback")
+        empty_limit=json.loads(call(["search","--query","needle","--uri",
+            "qbrain://default/resources/docs/","--limit=","--no-vector","--json"]).stdout)
+        need({x["slug"] for x in empty_limit}=={"docs/a","docs/sub/b"},
+             "empty limit keeps configured default")
     report={"schema":"qbrain-n48z-directory-process-v1","passed":True,
             "commands":commands,"checks":checks,"command_count":len(commands),
             "check_count":len(checks),"paid_requests":0,"postgres_executed":False}
