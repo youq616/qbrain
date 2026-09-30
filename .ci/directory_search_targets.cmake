@@ -1,0 +1,6 @@
+function(qbrain_add_directory_search_tests)
+  add_executable(qbrain_directory_search_tests "${CMAKE_SOURCE_DIR}/tests/test_directory_search.cpp")
+  target_link_libraries(qbrain_directory_search_tests PRIVATE qbrain_cli qbrain_ops qbrain_search qbrain_core qbrain_ai qbrain_jobs)
+  add_test(NAME qbrain_directory_search_unit COMMAND qbrain_directory_search_tests)
+endfunction()
+cmake_language(DEFER CALL qbrain_add_directory_search_tests)

@@ -1,0 +1,136 @@
+name: N48Z scoped recursive directory search
+on:
+  push:
+    branches: ['feature/n48z-directory-search']
+    paths:
+      - 'src/qbrain/search/directory.cpp'
+      - 'include/qbrain/search/directory.hpp'
+      - 'src/qbrain/cli/commands.cpp'
+      - 'include/qbrain/cli/search_arguments.hpp'
+      - 'CMakeLists.txt'
+      - 'tests/test_directory_search.cpp'
+      - '.ci/test_directory_search.py'
+      - '.ci/directory_search_targets.cmake'
+      - 'scripts/build-cl.ps1'
+      - 'scripts/build-tests-cl.ps1'
+      - '.github/workflows/n48z-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  direct-msvc:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Pin direct-MSVC source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+      - name: Clean direct-MSVC production build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-cl.ps1 2>&1 | Tee-Object evidence/direct-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/cl/qbrain.exe evidence/qbrain.exe
+      - name: Direct-MSVC test link and unchanged full60
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tests-cl.ps1 -SkipProductionBuild 2>&1 | Tee-Object evidence/direct-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/direct-tests.log').read_text(encoding='utf-8-sig'),60)))" | Tee-Object evidence/direct-groups.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Directory CLI checks on direct-MSVC executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .ci/test_directory_search.py --binary evidence/qbrain.exe --output evidence/process-normal | tee evidence/process-normal.log
+          python -O .ci/test_directory_search.py --binary evidence/qbrain.exe --output evidence/process-optimized | tee evidence/process-optimized.log
+          git diff --exit-code > evidence/after-diff.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48z-direct-msvc
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Pin source and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          cmake -S . -B build/n48z -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/directory_search_targets.cmake" > evidence/configure.log 2>&1
+          cmake --build build/n48z --config Debug --target qbrain qbrain_directory_search_tests qbrain_context_tests qbrain_memory_tests qbrain_fact_tests qbrain_hook_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
+      - name: New search and unchanged process regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=''; config=''
+          if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; config='Debug/'; fi
+          cp "build/n48z/${config}qbrain${suffix}" "evidence/qbrain${suffix}"
+          "build/n48z/${config}qbrain_directory_search_tests${suffix}" | tee evidence/directory-native.json
+          ctest --test-dir build/n48z -C Debug -R '^qbrain_(directory_search|context|memory|fact|hook_fact|multiterm|usage_batch|usage_batch_ownership)_unit$' --output-on-failure | tee evidence/ctest.log
+          for mode in normal optimized; do
+            opt=()
+            if [ "$mode" = optimized ]; then opt=(-O); fi
+            python "${opt[@]}" .ci/test_directory_search.py --binary "evidence/qbrain${suffix}" --output "evidence/process-$mode" | tee "evidence/process-$mode.log"
+            python "${opt[@]}" .ci/test_context_process.py --binary "evidence/qbrain${suffix}" --report "evidence/context-$mode.json" > "evidence/context-$mode.log"
+            python "${opt[@]}" .ci/test_hooks.py --binary "evidence/qbrain${suffix}" > "evidence/hooks-$mode.log"
+            python "${opt[@]}" .ci/test_memory_cycle.py --binary "evidence/qbrain${suffix}" > "evidence/memory-$mode.log"
+          done
+          git diff --exit-code > evidence/after-diff.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48z-${{ matrix.os }}
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
+  sanitizer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: ASan UBSan focused search
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          CC=clang CXX=clang++ cmake -S . -B build/asan -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/directory_search_targets.cmake" -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined' > evidence/configure.log 2>&1
+          cmake --build build/asan --target qbrain_directory_search_tests --parallel 2 > evidence/build.log 2>&1
+          build/asan/qbrain_directory_search_tests > evidence/directory.json 2> evidence/directory.stderr
+          test ! -s evidence/directory.stderr
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48z-sanitizer
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
