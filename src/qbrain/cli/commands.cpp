@@ -569,7 +569,8 @@ int cmd_search(const std::vector<std::string>& args) {
     const auto directory_uri = parsed.value("--uri");
     if (!directory_uri.empty()) {
       search::DirectorySearchOpts opts;
-      opts.limit = std::stoi(ctx.args["limit"]);
+      const auto scoped_limit = parsed.value("--limit");
+      opts.limit = scoped_limit.empty() ? b.config().search_default_limit : std::stoi(scoped_limit);
       opts.rrf_k = b.config().search_rrf_k;
       opts.mode = parsed.value("--mode", "balanced");
       opts.rerank = parsed.flags.count("--rerank") != 0;
