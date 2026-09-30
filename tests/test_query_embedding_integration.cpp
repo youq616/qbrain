@@ -1,6 +1,7 @@
 // Actual registered operations and Brain lifetime; synthetic embeddings only.
 #include "qbrain/ai/query_embedding.hpp"
 #include "qbrain/ops/registry.hpp"
+#include <nlohmann/json.hpp>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
@@ -84,7 +85,15 @@ void run(){
   ai::embed_texts(b.config(),{"again"});ai::embed_texts(b.config(),{"one","two"});
   check(b.query_embedding_cache().stats().loads==before.loads && b.query_embedding_cache().stats().hits==before.hits,"indexing and batch API unchanged");
   ai::query_embedding(b,std::string(262145,'x'),"alpha");check(b.query_embedding_cache().stats().entries==0,"oversized query bypasses retention");
-  auto q=b.db().prepare("SELECT count(*) FROM sqlite_master WHERE type='table'");q.step();check(q.column_int(0)==tables_before,"no cache database table");
+  for(const auto& raw:std::vector<std::string>{std::string("nonutf8-")+char(0xff),std::string("a\0b",3)}){
+    auto expected=ai::embed_texts(b.config(),{raw});before=b.query_embedding_cache().stats();
+    auto a=ai::query_embedding(b,raw,"alpha");auto again=ai::query_embedding(b,raw,"alpha");
+    check(a.ok && a.vectors==expected.vectors && again.vectors==expected.vectors,"byte query preserves original mock result");
+    check(b.query_embedding_cache().stats().loads==before.loads+1 && b.query_embedding_cache().stats().hits==before.hits+1,"byte query safely cached without JSON coercion");
+  }
+  check(ai::query_cache_detail::fingerprint({"ab","c"})!=ai::query_cache_detail::fingerprint({"a","bc"}),"length framing distinguishes concatenation aliases");
+  check(ai::query_cache_detail::fingerprint({"a",std::string_view("b\0c",3)})!=ai::query_cache_detail::fingerprint({"a","b"}),"length framing retains NUL suffix");
+  {auto q=b.db().prepare("SELECT count(*) FROM sqlite_master WHERE type='table'");q.step();check(q.column_int(0)==tables_before,"no cache database table");}
   {Brain other("query-cache-test");setup(other);other.save_config_value("search.query_embedding_cache","1",false);ai::query_embedding(other,"again","alpha");check(other.query_embedding_cache().stats().loads==1,"same-name Brain objects isolated");}
   ai::query_embedding(b,"again","alpha");b.close();check(b.query_embedding_cache().stats().entries==0,"close clears cache");
   setup(b);check(b.query_embedding_cache().stats().entries==0,"reopen does not reuse address-identity cache");
