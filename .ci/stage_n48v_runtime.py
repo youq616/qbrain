@@ -15,11 +15,11 @@ FILES = {
     'src/qbrain/core/brain.cpp': '032613c6920e7cebf2105f06ab65a290e03bf59f',
     'src/qbrain/ops/handlers.cpp': 'e7733c5f01f9fc5f5e0025b171f50dbd8996929f',
 }
-# The first assembler's published output, not a permissive arbitrary current tree.
-FIRST_GENERATED = {
-    'include/qbrain/core/brain.hpp': 'c57aafc312b1644520b2210cb3b75bb890ee590f',
-    'src/qbrain/core/brain.cpp': '3a444be87edaaae354870c7d61f48e03c7e715f8',
-    'src/qbrain/ops/handlers.cpp': 'ff17ed2acdb01397c61701c6311f1bfa66f3aa7f',
+# Only exact earlier outputs of this reviewed assembler, never arbitrary current edits.
+PRIOR_GENERATED = {
+    'include/qbrain/core/brain.hpp': {'c57aafc312b1644520b2210cb3b75bb890ee590f', '42f7d2e493dc9e33c13fb95724be5daadaab1984'},
+    'src/qbrain/core/brain.cpp': {'3a444be87edaaae354870c7d61f48e03c7e715f8', 'e2f07c67f93a8e86a77187fc5279deab24e9c385'},
+    'src/qbrain/ops/handlers.cpp': {'ff17ed2acdb01397c61701c6311f1bfa66f3aa7f'},
 }
 
 def blob(raw):
@@ -49,11 +49,13 @@ def main(output):
                 '    return *query_embeddings_;\n'
                 '  }\n')
             changed = replace(changed, '  Config config_;\n',
-                '  Config config_;\n  std::unique_ptr<ai::QueryEmbeddingCache> query_embeddings_;\n')
+                '  Config config_;\n'
+                '  std::unique_ptr<ai::QueryEmbeddingCache> query_embeddings_ = std::make_unique<ai::QueryEmbeddingCache>();\n')
         elif name.endswith('brain.cpp'):
             for anchor in ['void Brain::open_at(const std::string& db_path) {\n',
-                           'void Brain::open_pg(const std::string& dsn) {\n',
-                           'void Brain::close() {\n', 'void Brain::load_config() {\n']:
+                           'void Brain::open_pg(const std::string& dsn) {\n']:
+                changed = replace(changed, anchor, anchor + '  query_embedding_cache().clear();\n')
+            for anchor in ['void Brain::close() {\n', 'void Brain::load_config() {\n']:
                 changed = replace(changed, anchor, anchor + '  if (query_embeddings_) query_embeddings_->clear();\n')
         else:
             changed = replace(changed, '#include "qbrain/ai/embed.hpp"\n',
@@ -62,10 +64,9 @@ def main(output):
                 'auto er = ai::query_embedding(*ctx.brain, q, opts.source_id);', 2)
         result = changed.encode('utf8')
         head_bytes = subprocess.check_output(['git', 'show', 'HEAD:' + name])
-        if head_bytes not in (raw, result) and blob(head_bytes) != FIRST_GENERATED[name]:
+        if head_bytes not in (raw, result) and blob(head_bytes) not in PRIOR_GENERATED[name]:
             raise ValueError('refuse unrelated current content: ' + name)
-        working = Path(name).read_bytes()
-        if working != head_bytes:
+        if Path(name).read_bytes() != head_bytes:
             raise ValueError('refuse uncommitted source edits: ' + name)
         updates[name] = result
         patch.extend(difflib.unified_diff(original.splitlines(True), changed.splitlines(True),
