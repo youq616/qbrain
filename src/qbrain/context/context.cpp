@@ -22,7 +22,7 @@ Uri parse(Brain& b,const std::string& source,std::string uri) {
   auto rest=uri.substr(root.size());if(rest.empty())return u;
   const auto slash=rest.find('/');if(slash==std::string::npos)throw Error("invalid_uri");
   u.space=rest.substr(0,slash);u.path=rest.substr(slash+1);
-  if(!std::set<std::string>{"memories","resources","skills"}.count(u.space))throw Error("invalid_namespace");
+  if(u.space!="memories"&&u.space!="resources"&&u.space!="skills")throw Error("invalid_namespace");
   std::size_t start=0;
   while(start<u.path.size()) {auto end=u.path.find('/',start);if(end==std::string::npos)end=u.path.size();
     const auto part=u.path.substr(start,end-start);if(part.empty()||part=="."||part=="..")throw Error("invalid_uri");start=end+1;}
@@ -36,9 +36,11 @@ std::string filter(const Uri& u) {
 bool ready(DB& db) {return pg::enabled(db)?pg::ready(db):sqlite_cache::policy(db)!=sqlite_cache::Policy::absent;}
 struct Tx {DB& db;bool done=false;explicit Tx(DB& d):db(d){if(pg::enabled(db))pg::begin_write(db);else db.exec("BEGIN IMMEDIATE");}void commit(){db.exec("COMMIT");done=true;}~Tx(){if(!done)try{db.exec("ROLLBACK");}catch(...){}}};
 void backup_before_upgrade(DB& db) {
-  if(sqlite_cache::policy(db)==sqlite_cache::Policy::directory_v2)return;
+  const auto policy=sqlite_cache::policy(db);
+  if(policy==sqlite_cache::Policy::directory_v2)return;
   auto path=db.backend_file_path();std::random_device r;
-  if(!path.empty()&&!db.backup_to(path+".pre-context-v2-"+std::to_string(r())+".bak"))throw Error("context_backup_failed");
+  const std::string marker=policy==sqlite_cache::Policy::absent?".pre-context-v1-":".pre-context-v2-";
+  if(!path.empty()&&!db.backup_to(path+marker+std::to_string(r())+".bak"))throw Error("context_backup_failed");
 }
 struct Snapshot {std::string signature,l0,l1;J refs=J::array();int count=0;bool partial=false;};
 Snapshot snapshot(Brain& b,const Uri& u) {
