@@ -40,6 +40,8 @@ inline Api api(std::string_view path) noexcept {
 struct Usage {
   UsageState state=UsageState::unavailable;
   ProviderState provider=ProviderState::unknown;
+  std::optional<bool> provider_error_present;
+  bool provider_status_conflict=false;
   std::optional<Amount> input,output,total;
   Values tokens{};
 };
@@ -53,6 +55,7 @@ inline Usage project_usage(Api kind,const ai::HttpResponse& response) noexcept {
     const auto j=util::parse_unique_json(response.body,1048576,24);
     if(!j.is_object()){u.state=UsageState::invalid;return u;}
     const bool has_error=j.contains("error")&&!j["error"].is_null();
+    u.provider_error_present=has_error;
     if(kind==Api::responses && j.value("object",Json())=="response") {
       const auto s=j.value("status",Json());
       if(s=="completed")u.provider=ProviderState::completed;
@@ -64,7 +67,12 @@ inline Usage project_usage(Api kind,const ai::HttpResponse& response) noexcept {
     // An error object cannot promote queued/unknown Responses status into a
     // terminal billable snapshot. Classify terminality before error projection.
     if(kind==Api::responses && (u.provider==ProviderState::pending || u.provider==ProviderState::unknown)){u.state=UsageState::unsupported;return u;}
-    if(has_error)u.provider=ProviderState::failed;
+    // Status and error presence are separate observations. Never overwrite an
+    // explicit Responses status. Only completed+error contradicts a success label;
+    // cancellation/incompleteness may legitimately carry diagnostic metadata.
+    u.provider_status_conflict=kind==Api::responses &&
+      u.provider==ProviderState::completed && has_error;
+    if(has_error && kind!=Api::responses)u.provider=ProviderState::failed;
     if(!j.contains("usage")||j["usage"].is_null())return u;
     const auto& usage=j["usage"];
     if(kind==Api::chat || kind==Api::responses) {
@@ -85,7 +93,11 @@ inline Usage project_usage(Api kind,const ai::HttpResponse& response) noexcept {
       // Embedding input total is not disjoint cache evidence; no guessed zero buckets.
       u.state=UsageState::embedding_input_only;
     }
-  }catch(...){const auto provider=u.provider;u={};u.provider=provider;u.state=UsageState::invalid;}
+  }catch(...){
+    const auto provider=u.provider;const auto error=u.provider_error_present;
+    const bool conflict=u.provider_status_conflict;u={};u.provider=provider;
+    u.provider_error_present=error;u.provider_status_conflict=conflict;u.state=UsageState::invalid;
+  }
   return u;
 }
 inline Outcome outcome(const ai::HttpResponse& r) noexcept {
@@ -116,6 +128,8 @@ inline Json json(const Event& e) {
     {"http_status",e.http_status?Json(e.http_status):Json(nullptr)},
     {"elapsed_ms",e.complete?Json(e.elapsed_ms):Json(nullptr)},
     {"usage",{{"state",name(e.usage.state)},{"provider_state",name(e.usage.provider)},
+      {"provider_error_present",e.usage.provider_error_present?Json(*e.usage.provider_error_present):Json(nullptr)},
+      {"provider_status_conflict",e.usage.provider_status_conflict},
       {"input_inclusive",quantity(e.usage.input)},{"output_inclusive",quantity(e.usage.output)},
       {"total_inclusive",quantity(e.usage.total)},{"tokens",normalized(e.usage.tokens,false)}}},
     {"retry_relation",nullptr},{"price",nullptr},{"cost",nullptr}};
@@ -146,13 +160,24 @@ class Collector {
       }
     }catch(...){/* no exception from observation may replace a provider result */}
   }
-  Json report(bool seal=false,int command_exit=0) {
-    std::lock_guard lock(mutex_);if(seal)sealed_=true;
+  Json report(bool seal=false,std::optional<int> dispatch_return=std::nullopt,bool dispatch_exception=false) {
+    std::lock_guard lock(mutex_);
+    // First seal freezes dispatch evidence too. No same-process report can certify
+    // final process exit or output delivered after its own write.
+    if(seal&&!sealed_){
+      dispatch_return_=dispatch_exception?std::nullopt:dispatch_return;
+      dispatch_exception_=dispatch_exception;sealed_=true;
+    }
+    const auto returned=sealed_?dispatch_return_:(dispatch_exception?std::nullopt:dispatch_return);
+    const bool threw=sealed_?dispatch_exception_:dispatch_exception;
     Json events=Json::array(),totals=Json::object();
     for(const auto& e:events_){events.push_back(json(e));auto k=name(e.result);totals[k]=totals.value(k,Amount(0))+1;}
     const bool complete=sealed_&&dropped_==0&&io_errors_==0&&started_==finished_;
-    return {{"schema","qbrain-runtime-observation-v1"},{"scope","same_process_http_post_json_invocations"},
-      {"sealed",sealed_},{"command_exit",command_exit},{"recording_complete",complete},
+    return {{"schema","qbrain-runtime-observation-v2"},{"scope","same_process_http_post_json_invocations"},
+      {"sealed",sealed_},{"dispatch_state",threw?"exception":returned?"returned":"not_observed"},
+      {"dispatch_return",returned?Json(*returned):Json(nullptr)},
+      {"process_exit",nullptr},{"stdout_complete",nullptr},{"stderr_complete",nullptr},
+      {"completion_scope","http_attempt_records_only"},{"recording_complete",complete},
       {"counts",{{"started",started_},{"finished",finished_},{"retained",events_.size()},
                  {"dropped",dropped_},{"pending",started_-finished_},{"io_errors",io_errors_}}},
       {"transport_counts",totals},{"records",events},
@@ -164,6 +189,7 @@ class Collector {
   void write(const Event& e)noexcept{if(writer_)try{writer_(e);}catch(...){++io_errors_;}}
   std::mutex mutex_;Writer writer_;std::size_t cap_;std::vector<Event> events_;
   Amount started_=0,finished_=0,dropped_=0,io_errors_=0;bool sealed_=false;
+  std::optional<int> dispatch_return_;bool dispatch_exception_=false;
 };
 inline std::mutex active_mutex;
 inline std::shared_ptr<Collector> active_collector;

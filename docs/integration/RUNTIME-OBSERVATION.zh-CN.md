@@ -59,3 +59,37 @@ observed_record_cost只描述保留记录的已知小计与缺项，不代表整
 Windows客户端、未执行真实PG。显式OS取消由传输错误码识别；没有新增取消API。硬终止
 和超时清理不能冒充成功取消。原生记录、新SHA和非作者审查分别关联，不挪用PR64结果。
 PR61/62/63、d57验收及冻结的PG测试上传均不受本分支修改。无合并/部署/新运行包。
+
+## PR65 P2：报告 v2 的状态与完成范围
+
+新版生成 `qbrain-runtime-observation-v2`、`qbrain-observation-start-v2` 和
+`qbrain-observation-cost-v2`。原 assignments 费率格式仍为 v1。旧观测 v1 中
+`command_exit` 和被 error 覆盖的 provider 状态有歧义，因此新版离线计价不自动将旧
+报告升级为新证据；原文件应保留。不能只手改 schema 名称获得新语义。
+
+`usage.provider_state` 保留明确 Responses 状态（completed、failed、cancelled、
+incomplete；queued/in_progress 仍汇为 pending）。`provider_error_present` 只记录
+非空 error 字段有无，未能读取时为 null；不保存错误内容、代码、类型或哈希。
+`completed` 同时带非空 error 时，`provider_status_conflict=true`，费用账本的结果
+保持 unknown，绝不推断成功或失败。cancelled/incomplete 可以带有错误信息而不改变
+原状态；费用账本原有三态枚举把明确 failed/cancelled 归为 failure，provider 原状态
+仍独立保留。已报告的合法终态数量可用于显式估算，不认证账单或实际生成结果；
+非终态加 error 仍不提供最终用量。
+
+`dispatch_state` 区分 returned、exception、not_observed；`dispatch_return` 仅为
+被调用命令分派函数实际返回的整数，没有返回时是 null。它不是进程退出码。
+`process_exit`、`stdout_complete`、`stderr_complete` 永远为 null，因为当前进程在
+退出和最后一次标准流刷新之前写报告，不能自行证明最终退出或输出送达。
+异常分派不会伪装成“函数返回了 2”；外层命令仍按原规则返回错误。
+
+`recording_complete` 的算法没有改变，只在 `completion_scope=http_attempt_records_only`
+内描述已捕获的 HTTP 尝试记录。它可以为 true，而外部父进程随后观测到 SIGPIPE。
+例如 Linux 管道读端提前关闭时，help／init 在最终 stdout 刷新时可终止；本修复
+不忽略信号、不提前刷新、不重试输出，也不改变原命令的终止行为。只有实际父进程
+在 wait 后才能单独记录真实退出状态；不得把它填回同进程报告冒充原始观测。
+离线计价也保留这些未知完成字段，金额不是“命令已成功执行”的证明。
+
+开发回归入口：`.ci/test_observation_semantics.py --binary EXE
+--semantics-binary SEMANTICS_TEST_EXE --output NEW_DIRECTORY`。测试使用临时 HOME、
+真实无读端管道和 Windows 数字回环服务器，不触及真实数据库或付费模型。
+POSIX 信号检查与 Windows 无读端句柄检查分别报告，不能相互替代。

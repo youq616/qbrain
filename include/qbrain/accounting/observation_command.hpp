@@ -17,7 +17,8 @@ inline Event parse_event(const Json& j) {
   if(e.complete){need(j["send_invoked"].is_boolean(),"observation_send");e.send_invoked=j["send_invoked"].get<bool>();e.elapsed_ms=integer(j["elapsed_ms"],std::numeric_limits<Amount>::max());}
   else need(j["send_invoked"].is_null()&&j["elapsed_ms"].is_null(),"observation_pending");
   if(!j["http_status"].is_null()){e.http_status=int(integer(j["http_status"],599));need(e.http_status>=100&&e.complete,"observation_status");}
-  exact(j["usage"],{"state","provider_state","input_inclusive","output_inclusive","total_inclusive","tokens"});
+  exact(j["usage"],{"state","provider_state","provider_error_present","provider_status_conflict",
+                     "input_inclusive","output_inclusive","total_inclusive","tokens"});
   const auto& u=j["usage"];found=false;
   for(auto v:{UsageState::unavailable,UsageState::recognized,UsageState::embedding_input_only,UsageState::invalid,UsageState::unsupported})
     if(u["state"]==name(v)){e.usage.state=v;found=true;}
@@ -25,13 +26,24 @@ inline Event parse_event(const Json& j) {
   for(auto v:{ProviderState::unknown,ProviderState::completed,ProviderState::failed,ProviderState::cancelled,ProviderState::incomplete,ProviderState::pending})
     if(u["provider_state"]==name(v)){e.usage.provider=v;found=true;}
   need(found,"observation_provider_state");
+  need(u["provider_error_present"].is_null()||u["provider_error_present"].is_boolean(),"observation_error_presence");
+  if(!u["provider_error_present"].is_null())e.usage.provider_error_present=u["provider_error_present"].get<bool>();
+  need(u["provider_status_conflict"].is_boolean(),"observation_status_conflict");
+  e.usage.provider_status_conflict=u["provider_status_conflict"].get<bool>();
+  const bool conflict=e.kind==Api::responses && e.usage.provider==ProviderState::completed &&
+    e.usage.provider_error_present==true;
+  need(e.usage.provider_status_conflict==conflict,"observation_status_conflict");
+  if(e.usage.provider!=ProviderState::unknown || e.usage.state==UsageState::recognized ||
+     e.usage.state==UsageState::embedding_input_only)
+    need(e.usage.provider_error_present.has_value(),"observation_error_presence");
   e.usage.input=usage_import::count(u,"input_inclusive");e.usage.output=usage_import::count(u,"output_inclusive");e.usage.total=usage_import::count(u,"total_inclusive");
   e.usage.tokens=amounts(u["tokens"],false);
   need(j["retry_relation"].is_null()&&j["price"].is_null()&&j["cost"].is_null(),"observation_private_or_unpriced_fields");
   if(e.usage.state!=UsageState::recognized){for(auto x:e.usage.tokens)need(!x,"observation_unknown_tokens");}
   if(e.usage.state!=UsageState::recognized&&e.usage.state!=UsageState::embedding_input_only)
     need(!e.usage.input&&!e.usage.output&&!e.usage.total,"observation_unknown_usage");
-  if(e.result!=Outcome::http_completed){need(e.usage.state==UsageState::unavailable&&e.usage.provider==ProviderState::unknown,"observation_failure_usage");}
+  if(e.result!=Outcome::http_completed){need(e.usage.state==UsageState::unavailable&&e.usage.provider==ProviderState::unknown&&
+    !e.usage.provider_error_present.has_value()&&!e.usage.provider_status_conflict,"observation_failure_usage");}
   if(e.result==Outcome::http_completed)need(e.http_status>=200&&e.http_status<300,"observation_status");
   usage_import::subset(e.usage.tokens[1],e.usage.input);usage_import::subset(e.usage.tokens[2],e.usage.input);
   usage_import::equality(e.usage.tokens[3],e.usage.output);
@@ -54,12 +66,20 @@ inline Event parse_event(const Json& j) {
   need(json(e)==j,"observation_noncanonical");return e;
 }
 inline std::vector<Event> validate_report(const Json& r) {
-  exact(r,{"schema","scope","sealed","command_exit","recording_complete","counts","transport_counts","records",
+  need(r.is_object()&&r.value("schema",Json())=="qbrain-runtime-observation-v2","observation_schema");
+  exact(r,{"schema","scope","sealed","dispatch_state","dispatch_return","process_exit","stdout_complete","stderr_complete",
+           "completion_scope","recording_complete","counts","transport_counts","records",
            "retry_attempts","total_estimate","currency","price_basis","billing_verified","all_provider_calls_observed",
            "server_receipt_verified","application_success_verified"});
-  need(r["schema"]=="qbrain-runtime-observation-v1"&&r["scope"]=="same_process_http_post_json_invocations","observation_schema");
+  need(r["scope"]=="same_process_http_post_json_invocations","observation_schema");
   need(r["sealed"].is_boolean()&&r["recording_complete"].is_boolean(),"observation_booleans");
-  need(r["command_exit"].is_number_integer()&&r["command_exit"]>=std::numeric_limits<int>::min()&&r["command_exit"]<=std::numeric_limits<int>::max(),"observation_command_exit");
+  if(r["dispatch_state"]=="returned")
+    need(r["dispatch_return"].is_number_integer()&&r["dispatch_return"]>=std::numeric_limits<int>::min()&&
+         r["dispatch_return"]<=std::numeric_limits<int>::max(),"observation_dispatch_return");
+  else need((r["dispatch_state"]=="exception"||r["dispatch_state"]=="not_observed")&&
+            r["dispatch_return"].is_null(),"observation_dispatch_return");
+  need(r["process_exit"].is_null()&&r["stdout_complete"].is_null()&&r["stderr_complete"].is_null()&&
+       r["completion_scope"]=="http_attempt_records_only","observation_completion_claim");
   for(const auto* field:{"billing_verified","all_provider_calls_observed","server_receipt_verified","application_success_verified"})
     need(r[field].is_boolean()&&!r[field].get<bool>(),"observation_claim");
   need(r["retry_attempts"].is_null()&&r["total_estimate"].is_null()&&r["currency"].is_null()&&r["price_basis"]=="unassigned","observation_unpriced");
@@ -90,13 +110,17 @@ inline Json price(const Json& capture,const Json& supplied) {
     need(sequence>0&&used.insert(sequence).second,"observation_assignment_sequence");const auto& e=events[sequence-1];
     std::string state="unknown"; // HTTP200 cannot certify application success.
     if(e.complete&&e.result!=Outcome::http_completed)state="failure";
-    if(e.usage.provider==ProviderState::failed||e.usage.provider==ProviderState::cancelled)state="failure";
+    if(!e.usage.provider_status_conflict &&
+       (e.usage.provider==ProviderState::failed||e.usage.provider==ProviderState::cancelled))state="failure";
     input["calls"].push_back({{"call_id",a["call_id"]},{"attempt",a["attempt"]},{"stage",a["stage"]},{"rate_id",a["rate_id"]},
       {"outcome",state},{"tokens",normalized(e.usage.tokens,false)}});
   }
   const auto priced=accounting::report(input);
-  return {{"schema","qbrain-observation-cost-v1"},{"scope","retained_runtime_http_records"},
+  return {{"schema","qbrain-observation-cost-v2"},{"scope","retained_runtime_http_records"},
     {"recording_complete",capture["recording_complete"]},{"capture_counts",capture["counts"]},
+    {"completion_scope",capture["completion_scope"]},{"dispatch_state",capture["dispatch_state"]},
+    {"dispatch_return",capture["dispatch_return"]},{"process_exit",nullptr},
+    {"stdout_complete",nullptr},{"stderr_complete",nullptr},{"application_success_verified",false},
     {"total_estimate",capture["recording_complete"].get<bool>()?priced["summary"]["total_estimate"]:Json(nullptr)},
     {"observed_record_cost",priced},{"rate_applicability_verified",false},{"retry_labels","caller_supplied_not_inferred"},
     {"billing_verified",false},{"all_provider_calls_observed",false},{"provider_requests_sent",0}};
@@ -112,18 +136,18 @@ int command(int argc,char** argv,Invoke&& invoke) {
     }
     need(argc>=6&&std::string(argv[2])=="--output"&&std::string(argv[4])=="--"&&std::string(argv[5])!="observe","observation_arguments");
     const auto output=io::path(argv[3]);io::new_directory(output);io::new_directory(output/"attempts");
-    io::write_new(output/"started.json",Json{{"schema","qbrain-observation-start-v1"},{"scope","same_process_http_post_json_invocations"},
+    io::write_new(output/"started.json",Json{{"schema","qbrain-observation-start-v2"},{"scope","same_process_http_post_json_invocations"},
       {"argv_recorded",false},{"private_content_recorded",false},{"abrupt_exit_is_unknown",true}}.dump()+"\n");
     auto collector=std::make_shared<Collector>([output](const Event& e){
       io::write_new(output/"attempts"/(std::to_string(e.sequence)+(e.complete?".finish.json":".start.json")),json(e).dump()+"\n");
     });
     std::vector<char*> forwarded;forwarded.push_back(argv[0]);for(int i=5;i<argc;++i)forwarded.push_back(argv[i]);forwarded.push_back(nullptr);
-    int code=2;std::exception_ptr failure;
+    std::optional<int> code;std::exception_ptr failure;
     { Session session(collector);try{code=invoke(int(forwarded.size()-1),forwarded.data());}catch(...){failure=std::current_exception();} }
-    Json final=collector->report(true,code);io::write_new(output/"report.json",final.dump()+"\n");
+    Json final=collector->report(true,code,bool(failure));io::write_new(output/"report.json",final.dump()+"\n");
     if(failure){std::cerr<<"{\"error\":{\"code\":\"observed_command_exception\"}}\n";return 2;}
     if(!final["recording_complete"].get<bool>()){std::cerr<<"{\"error\":{\"code\":\"observation_incomplete\"}}\n";return 2;}
-    return code;
+    return *code;
   }catch(const Error& e){std::cerr<<Json{{"error",{{"code",e.what()}}}}.dump()<<'\n';return 2;}
   catch(...){std::cerr<<"{\"error\":{\"code\":\"observation_io_or_input_error\"}}\n";return 2;}
 }

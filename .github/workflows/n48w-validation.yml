@@ -2,7 +2,7 @@ name: N48W runtime HTTP observation
 on:
   push:
     branches: ['feature/n48w-runtime-observation']
-    paths: ['include/qbrain/accounting/runtime_observation.hpp', 'include/qbrain/accounting/observation_command.hpp', 'include/qbrain/ai/http_client.hpp', 'src/qbrain/ai/http_client.cpp', 'src/qbrain/main.cpp', 'tests/test_runtime_observation*', '.ci/test_runtime_observation.py', '.ci/runtime_observation_targets.cmake', '.github/workflows/n48w-validation.yml']
+    paths: ['include/qbrain/accounting/runtime_observation.hpp', 'include/qbrain/accounting/observation_command.hpp', 'include/qbrain/ai/http_client.hpp', 'src/qbrain/ai/http_client.cpp', 'src/qbrain/main.cpp', 'tests/test_runtime_observation*', 'tests/test_observation_semantics.cpp', '.ci/test_observation_semantics.py', '.ci/test_runtime_observation.py', '.ci/runtime_observation_targets.cmake', '.github/workflows/n48w-validation.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -41,21 +41,23 @@ jobs:
         run: |
           set -euo pipefail
           cmake -S . -B build/n48w -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/runtime_observation_targets.cmake" > evidence/configure.log 2>&1
-          cmake --build build/n48w --config Debug --target qbrain qbrain_runtime_observation_tests qbrain_runtime_observation_http qbrain_http_tests qbrain_http_probe qbrain_context_tests qbrain_memory_tests qbrain_fact_tests qbrain_hook_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
+          cmake --build build/n48w --config Debug --target qbrain qbrain_observation_semantics_tests qbrain_runtime_observation_tests qbrain_runtime_observation_http qbrain_http_tests qbrain_http_probe qbrain_context_tests qbrain_memory_tests qbrain_fact_tests qbrain_hook_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
       - name: Exact usage outcomes and retained regression
         shell: bash
         run: |
           set -euo pipefail
           suffix=''; config=''; if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; config='Debug/'; fi
-          for name in qbrain qbrain_runtime_observation_tests qbrain_runtime_observation_http qbrain_http_probe; do
+          for name in qbrain qbrain_observation_semantics_tests qbrain_runtime_observation_tests qbrain_runtime_observation_http qbrain_http_probe; do
             cp "build/n48w/${config}${name}${suffix}" "evidence/${name}${suffix}"
           done
           "evidence/qbrain_runtime_observation_tests${suffix}" > evidence/native.json
-          ctest --test-dir build/n48w -C Debug -R '^qbrain_(runtime_observation|http_input|context|memory|fact|hook_fact|multiterm|usage_batch|usage_batch_ownership)_unit$' --output-on-failure | tee evidence/ctest.log
+          "evidence/qbrain_observation_semantics_tests${suffix}" > evidence/semantics-native.json
+          ctest --test-dir build/n48w -C Debug -R '^qbrain_(runtime_observation|observation_semantics|http_input|context|memory|fact|hook_fact|multiterm|usage_batch|usage_batch_ownership)_unit$' --output-on-failure | tee evidence/ctest.log
           for mode in normal optimized; do
             opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
             extra=(); if [ "$RUNNER_OS" = Windows ]; then extra=(--http-binary "evidence/qbrain_runtime_observation_http${suffix}"); fi
             python "${opt[@]}" .ci/test_runtime_observation.py --binary "evidence/qbrain${suffix}" --output "evidence/process-$mode" "${extra[@]}" > "evidence/process-$mode.log" 2>&1
+            python "${opt[@]}" .ci/test_observation_semantics.py --binary "evidence/qbrain${suffix}" --semantics-binary "evidence/qbrain_observation_semantics_tests${suffix}" --output "evidence/semantics-$mode" > "evidence/semantics-$mode.log" 2>&1
             python "${opt[@]}" .ci/test_context_process.py --binary "evidence/qbrain${suffix}" --report "evidence/context-$mode.json" > "evidence/context-$mode.log" 2>&1
             python "${opt[@]}" .ci/test_hooks.py --binary "evidence/qbrain${suffix}" > "evidence/hooks-$mode.log" 2>&1
             python "${opt[@]}" .ci/test_memory_cycle.py --binary "evidence/qbrain${suffix}" > "evidence/memory-$mode.log" 2>&1
@@ -86,11 +88,13 @@ jobs:
           mkdir evidence
           git rev-parse HEAD > evidence/source.txt
           CC=clang CXX=clang++ cmake -S . -B build/asan -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/runtime_observation_targets.cmake" -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined' > evidence/configure.log 2>&1
-          cmake --build build/asan --target qbrain_runtime_observation_tests qbrain_http_tests --parallel 2 > evidence/build.log 2>&1
+          cmake --build build/asan --target qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_http_tests --parallel 2 > evidence/build.log 2>&1
           build/asan/qbrain_runtime_observation_tests > evidence/native.json 2> evidence/native.stderr
+          build/asan/qbrain_observation_semantics_tests > evidence/semantics-native.json 2> evidence/semantics-native.stderr
           build/asan/qbrain_http_tests > evidence/original-http.txt 2> evidence/original-http.stderr
           test ! -s evidence/native.stderr
           test ! -s evidence/original-http.stderr
+          test ! -s evidence/semantics-native.stderr
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
