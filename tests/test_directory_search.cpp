@@ -101,7 +101,7 @@ void run() {
       "qbrain://alpha/unknown/docs/",
       "qbrain://missing/resources/docs/",
       "qbrain://alpha/resources/../",
-      "qbrain://alpha/resources/docs%2f/"}) {
+      "qbrain://alpha/resources/docs%2f/",\n      "qbrain://alpha/resources//",\n      "qbrain://alpha/resources/docs//"}) {
     bool rejected=false;
     try { (void)search::parse_directory_scope(b,bad); }
     catch (const std::invalid_argument&) { rejected=true; }
