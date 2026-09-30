@@ -1,0 +1,107 @@
+name: N48V isolated link repair verification
+on:
+  push:
+    branches: ['validation/n48v-http-linkage']
+    paths: ['.github/workflows/n48v-link-recovery.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48v-link-recovery-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  TESTED_SHA: d57e6b32398fca4e59d80dcfab7c5af119dde2be
+  TESTED_TREE: d58cab818439b6246eead47acbf68fc914228fa2
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: d57e6b32398fca4e59d80dcfab7c5af119dde2be
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Pin source and one-file build-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$TESTED_TREE"
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          printf '%s\n' "$GITHUB_SHA" > evidence/workflow-trigger.txt
+          test "$(git diff --name-only e45434644d1eabeeb55e6f95b732ef806ae73076 HEAD)" = .ci/query_embedding_targets.cmake
+          git diff --binary e45434644d1eabeeb55e6f95b732ef806ae73076 HEAD > evidence/link-fix.patch
+          git archive --format=zip --output=evidence/source.zip HEAD
+          git ls-tree -r -z HEAD > evidence/source-tree.bin
+      - name: Complete default SQLite product and every original N48V target
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/recovery -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/query_embedding_targets.cmake" > evidence/configure.log 2>&1
+          cmake --build build/recovery --config Debug --target qbrain qbrain_query_cache_tests qbrain_query_cache_integration_tests qbrain_query_cache_http_tests qbrain_context_tests qbrain_memory_tests qbrain_fact_tests qbrain_hook_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
+      - name: Native assertions and unchanged regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=''; config=''; if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; config='Debug/'; fi
+          cp "build/recovery/${config}qbrain${suffix}" "evidence/qbrain${suffix}"
+          cp "build/recovery/${config}qbrain_query_cache_http_tests${suffix}" "evidence/query-http-tests${suffix}"
+          "build/recovery/${config}qbrain_query_cache_tests${suffix}" | tee evidence/cache.json
+          "build/recovery/${config}qbrain_query_cache_integration_tests${suffix}" | tee evidence/integration.json
+          ctest --test-dir build/recovery -C Debug -R '^qbrain_(query_cache|query_cache_integration|context|memory|fact|hook_fact|multiterm|usage_batch|usage_batch_ownership)_unit$' --output-on-failure | tee evidence/ctest.log
+          for mode in normal optimized; do
+            opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
+            python "${opt[@]}" .ci/test_context_process.py --binary "evidence/qbrain${suffix}" --report "evidence/context-$mode.json" > "evidence/context-$mode.log"
+            python "${opt[@]}" .ci/test_hooks.py --binary "evidence/qbrain${suffix}" > "evidence/hooks-$mode.log"
+            python "${opt[@]}" .ci/test_memory_cycle.py --binary "evidence/qbrain${suffix}" > "evidence/memory-$mode.log"
+            if [ "$RUNNER_OS" = Windows ]; then
+              python "${opt[@]}" .ci/test_query_embedding_http.py --binary "evidence/query-http-tests${suffix}" --output "evidence/http-$mode" | tee "evidence/http-$mode.log"
+            fi
+          done
+          git diff --exit-code > evidence/after-diff.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48v-link-recovery-${{ matrix.os }}
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
+  sanitizer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: d57e6b32398fca4e59d80dcfab7c5af119dde2be
+          persist-credentials: false
+      - name: Exact-source integrated ASan and UBSan
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA"
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          printf '%s\n' "$GITHUB_SHA" > evidence/workflow-trigger.txt
+          CC=clang CXX=clang++ cmake -S . -B build/asan -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/query_embedding_targets.cmake" -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined' > evidence/configure.log 2>&1
+          cmake --build build/asan --target qbrain_query_cache_tests qbrain_query_cache_integration_tests --parallel 2 > evidence/build.log 2>&1
+          build/asan/qbrain_query_cache_tests > evidence/cache.json 2> evidence/cache.stderr
+          build/asan/qbrain_query_cache_integration_tests > evidence/integration.json 2> evidence/integration.stderr
+          test ! -s evidence/cache.stderr
+          test ! -s evidence/integration.stderr
+          git diff --exit-code > evidence/after-diff.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48v-link-recovery-sanitizer
+          path: evidence/
+          retention-days: 30
