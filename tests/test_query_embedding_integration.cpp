@@ -5,8 +5,11 @@
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
+#include <type_traits>
 using namespace qbrain;
 using J=nlohmann::json;
+static_assert(std::is_nothrow_move_constructible_v<Brain>);
+static_assert(std::is_nothrow_move_assignable_v<Brain>);
 namespace {
 J checks=J::array();
 void check(bool ok,const char* name){checks.push_back({{"name",name},{"passed",ok}});if(!ok)throw std::runtime_error(name);}
@@ -17,7 +20,7 @@ void env(const char* key,const char* value){
   if(*value)setenv(key,value,1);else unsetenv(key);
 #endif
 }
-void setup(Brain& b){b.open_at(":memory:");b.ensure_source("alpha");b.ensure_source("beta");b.save_config_value("embed.auto","false",false);}
+void setup(Brain& b){b.open_at(":memory:");b.ensure_source("alpha");b.ensure_source("beta");b.save_config_value("embed.auto","false",false);b.config().embedding_api_key.clear();b.config().chat_api_key.clear();}
 J search(Brain& b,const std::string& query="needle",const std::string& source="alpha",bool remote=false,const std::string& mode="balanced",bool no_vector=false){
   ops::OpContext ctx;ctx.brain=&b;ctx.remote=remote;ctx.via_mcp=remote;ctx.args={{"query",query},{"source_id",source},{"mode",mode}};
   if(no_vector)ctx.args["no_vector"]="true";
@@ -45,7 +48,6 @@ void run(){
   auto thought=ops::global_registry().call("think",think);
   check(thought.ok && b.query_embedding_cache().stats().hits==hits+1,"registered think shares authorized query vector");
   auto thought_json=J::parse(thought.json);check(thought_json.value("degraded",false),"think without key remains gather-only");
-  // Result caching would incorrectly leave this old title/snippet visible.
   b.db().exec("UPDATE pages SET title='needle changed evidence' WHERE id="+std::to_string(p.id));
   auto changed=search(b);check(!changed.empty() && changed[0]["title"]=="needle changed evidence","cache hit still reads live page data");
   b.soft_delete(in.slug,"alpha");check(search(b).empty(),"cache hit cannot return deleted page");
@@ -97,6 +99,17 @@ void run(){
   {Brain other("query-cache-test");setup(other);other.save_config_value("search.query_embedding_cache","1",false);ai::query_embedding(other,"again","alpha");check(other.query_embedding_cache().stats().loads==1,"same-name Brain objects isolated");}
   ai::query_embedding(b,"again","alpha");b.close();check(b.query_embedding_cache().stats().entries==0,"close clears cache");
   setup(b);check(b.query_embedding_cache().stats().entries==0,"reopen does not reuse address-identity cache");
+  b.save_config_value("search.query_embedding_cache","1",false);
+  auto expected=ai::query_embedding(b,"move-query","alpha");auto* cache=&b.query_embedding_cache();
+  Brain moved(std::move(b));
+  check(moved.is_open() && !b.is_open() && &moved.query_embedding_cache()==cache,"Brain move preserves database and sole cache ownership");
+  hits=moved.query_embedding_cache().stats().hits;
+  check(ai::query_embedding(moved,"move-query","alpha").vectors==expected.vectors && moved.query_embedding_cache().stats().hits==hits+1,"moved cache retains its same-query same-database hit");
+  setup(b);b.save_config_value("search.query_embedding_cache","1",false);ai::query_embedding(b,"move-query","alpha");
+  check(&b.query_embedding_cache()!=cache && b.query_embedding_cache().stats().loads==1,"moved-from Brain can reopen with independent empty cache");
+  Brain assigned("assignment-target");setup(assigned);assigned=std::move(moved);
+  check(assigned.is_open() && !moved.is_open() && &assigned.query_embedding_cache()==cache,"move assignment transfers only one cache owner");
+  assigned.close();check(assigned.query_embedding_cache().stats().entries==0,"moved Brain close still clears retained vectors");
   env("QBRAIN_EMBED_MOCK","");
 }
 }
