@@ -1,0 +1,122 @@
+name: N48U PostgreSQL directory cache
+on:
+  push:
+    branches: ['feature/n48u-pg-directory-cache']
+    paths: ['include/qbrain/context/pg_context.hpp', 'include/qbrain/context/pg_directory_policy.hpp', 'tests/test_pg_directory_predicate.cpp', '.ci/pg_directory_targets.cmake', '.github/workflows/n48u-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48u-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Pin source and protected-path identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          git ls-tree -r -z HEAD > evidence/source-tree.bin
+          git diff --exit-code e0a27f829d970c24ed8c566023ada0911c0042b3 HEAD -- src include/qbrain/storage include/qbrain/context/context.hpp tests/test_pg_context.cpp tests/test_context.cpp tools/delivery docs/nodes/N48S-CLOSEOUT-PLAN.md docs/nodes/N48S-HARD-AUDIT.md docs/nodes/n48s-evidence/CLOSEOUT-RESULT.json docs/integration/N48S-REVIEW-AND-DELIVERY.zh-CN.md > evidence/protected-diff.txt
+      - name: Disposable PostgreSQL Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pg_bin="$(dirname "$(find /usr/lib/postgresql -path '*/bin/initdb' | sort -V | tail -1)")"
+          "$pg_bin/initdb" -D "$RUNNER_TEMP/n48u-pg" -U postgres --auth=trust --encoding=UTF8 --no-locale > evidence/pg-init.log
+          mkdir "$RUNNER_TEMP/n48u-socket"
+          "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/n48u-pg" -l "$GITHUB_WORKSPACE/evidence/pg-server.log" -o "-h 127.0.0.1 -p 55432 -k $RUNNER_TEMP/n48u-socket" -w start
+          export PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres
+          "$pg_bin/psql" -X -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE qbrain_n48o LOGIN PASSWORD 'n48u-synthetic-only'"
+          for db in qbrain_n48u_readonly qbrain_n48p_native qbrain_n48p_process qbrain_n48o_native qbrain_n48o_process qbrain_n48q_native; do
+            "$pg_bin/createdb" -O qbrain_n48o "$db"
+          done
+          echo "$pg_bin" >> "$GITHUB_PATH"
+          printf 'PGHOST=127.0.0.1\nPGPORT=55432\nPGUSER=qbrain_n48o\nPGPASSWORD=n48u-synthetic-only\n' >> "$GITHUB_ENV"
+          "$pg_bin/postgres" --version > evidence/postgres-version.txt
+      - name: Disposable PostgreSQL Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if (-not $env:PGROOT -or -not (Test-Path "$env:PGROOT\lib\libpq.lib")) { throw 'Native PostgreSQL required' }
+          $service=Get-Service 'postgresql-x64-*' | Select-Object -First 1
+          Set-Service $service.Name -StartupType Manual
+          Start-Service $service.Name
+          $env:PGHOST='127.0.0.1'; $env:PGPORT='5432'; $env:PGUSER='postgres'; $env:PGPASSWORD='root'
+          & "$env:PGROOT\bin\psql.exe" -X -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE qbrain_n48o LOGIN PASSWORD 'n48u-synthetic-only'"
+          if ($LASTEXITCODE -ne 0) { throw 'role failed' }
+          foreach($db in @('qbrain_n48u_readonly','qbrain_n48p_native','qbrain_n48p_process','qbrain_n48o_native','qbrain_n48o_process','qbrain_n48q_native')) {
+            & "$env:PGROOT\bin\createdb.exe" -O qbrain_n48o $db
+            if ($LASTEXITCODE -ne 0) { throw 'database failed' }
+          }
+          "$env:PGROOT\bin" | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+          "QBRAIN_PG_ROOT=$env:PGROOT" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          'PGHOST=127.0.0.1','PGPORT=5432','PGUSER=qbrain_n48o','PGPASSWORD=n48u-synthetic-only' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          & "$env:PGROOT\bin\postgres.exe" --version | Out-File evidence/postgres-version.txt -Encoding utf8
+      - name: Fresh native product and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/n48u -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=ON -DQBRAIN_REQUIRE_PG=ON -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/pg_directory_targets.cmake" > evidence/configure.log 2>&1
+          cmake --build build/n48u --config Debug --target qbrain qbrain_pg_directory_predicate_tests qbrain_pg_context_tests qbrain_pg_fact_tests qbrain_pg_memory_tests qbrain_pg_memory_scope_tests qbrain_memory_tests qbrain_context_tests qbrain_fact_tests qbrain_hook_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
+      - name: Read-only PG predicate and unchanged native regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=''; config=''; if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; config='Debug/'; fi
+          cp "build/n48u/${config}qbrain${suffix}" "evidence/qbrain${suffix}"
+          cp "build/n48u/${config}qbrain_pg_directory_predicate_tests${suffix}" "evidence/predicate-tests${suffix}"
+          export QBRAIN_PG_DIRECTORY_READONLY_TEST=1
+          "evidence/predicate-tests${suffix}" > evidence/read-only-predicate.json
+          export QBRAIN_PG_CONTEXT_TEST_DISPOSABLE=1
+          export QBRAIN_PG_CONTEXT_TEST_DSN="host=127.0.0.1 port=$PGPORT dbname=qbrain_n48p_native user=qbrain_n48o password=n48u-synthetic-only connect_timeout=2"
+          "build/n48u/${config}qbrain_pg_context_tests${suffix}" > evidence/original-context.json
+          export QBRAIN_PG_MEMORY_TEST_DISPOSABLE=1
+          export QBRAIN_PG_MEMORY_TEST_DSN="host=127.0.0.1 port=$PGPORT dbname=qbrain_n48o_native user=qbrain_n48o password=n48u-synthetic-only connect_timeout=2"
+          "build/n48u/${config}qbrain_pg_memory_tests${suffix}" > evidence/original-memory.json
+          "build/n48u/${config}qbrain_pg_memory_scope_tests${suffix}" > evidence/original-scope.json
+          export QBRAIN_PG_FACT_TEST_DISPOSABLE=1
+          export QBRAIN_PG_FACT_TEST_DSN="host=127.0.0.1 port=$PGPORT dbname=qbrain_n48q_native user=qbrain_n48o password=n48u-synthetic-only connect_timeout=2"
+          "build/n48u/${config}qbrain_pg_fact_tests${suffix}" > evidence/original-facts.json
+          ctest --test-dir build/n48u -C Debug -R '^qbrain_(memory|context|fact|hook_fact|multiterm|usage_batch|usage_batch_ownership|pg_fact_sqlite)_unit$' --output-on-failure | tee evidence/core-ctest.log
+      - name: Unchanged public CLI regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=''; if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; fi
+          export QBRAIN_PG_CONTEXT_TEST_DISPOSABLE=1
+          export QBRAIN_PG_CONTEXT_PROCESS_DSN="host=127.0.0.1 port=$PGPORT dbname=qbrain_n48p_process user=qbrain_n48o password=n48u-synthetic-only connect_timeout=2"
+          for mode in normal optimized; do
+            opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
+            PGDATABASE=qbrain_n48p_process python "${opt[@]}" .ci/test_pg_context.py --binary "evidence/qbrain${suffix}" --output "evidence/original-context-$mode" | tee "evidence/original-context-$mode.log"
+            python "${opt[@]}" .ci/test_context_process.py --binary "evidence/qbrain${suffix}" --report "evidence/sqlite-context-$mode.json" > "evidence/sqlite-context-$mode.log"
+            python "${opt[@]}" .ci/test_hooks.py --binary "evidence/qbrain${suffix}" > "evidence/hooks-$mode.log"
+            python "${opt[@]}" .ci/test_memory_cycle.py --binary "evidence/qbrain${suffix}" > "evidence/memory-$mode.log"
+          done
+          git diff --exit-code > evidence/after-diff.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48u-${{ matrix.os }}
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error

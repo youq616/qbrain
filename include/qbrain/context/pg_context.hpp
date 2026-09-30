@@ -2,6 +2,7 @@
 // N48P PostgreSQL dialect/lifetime for existing layered context; no raw PG handles.
 #include "qbrain/context/context.hpp"
 #include <map>
+#include "qbrain/context/pg_directory_policy.hpp"
 
 namespace qbrain::context::pg {
 using DB = storage::Database;
@@ -56,13 +57,14 @@ BEGIN
  RETURN NULL;
 END;
 )SQL";
-inline bool ready(DB& db) {
+enum class CachePolicy { absent, source_v1, directory_v2 };
+inline CachePolicy cache_policy(DB& db) {
   auto tables=db.prepare("SELECT c.relname,c.relkind FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n "
     "ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ('context_module','context_cache')");
   std::map<std::string,std::string> relations;
   while(tables.step()) relations.emplace(tables.column_text(0),tables.column_text(1));
   auto functions=db.prepare("SELECT p.oid,p.prosrc,p.prosecdef,p.pronargs,p.prorettype='pg_catalog.trigger'::regtype,"
-    "l.lanname,pg_catalog.array_to_string(p.proconfig,',') FROM pg_catalog.pg_proc p "
+    "l.lanname,pg_catalog.array_to_string(p.proconfig,','),p.proisstrict,p.provolatile,p.proparallel,p.proleakproof,p.prokind FROM pg_catalog.pg_proc p "
     "JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace JOIN pg_catalog.pg_language l ON l.oid=p.prolang "
     "WHERE n.nspname='public' AND p.proname='qbrain_context_invalidate_v1'");
   const bool has_function=functions.step();
@@ -71,7 +73,7 @@ inline bool ready(DB& db) {
     "WHERE t.tgrelid='public.pages'::regclass AND NOT t.tgisinternal "
     "AND t.tgname IN ('ctx_page_insert','ctx_page_update','ctx_page_delete','ctx_page_truncate')");
   if(relations.empty()) {
-    need(!has_function && !triggers.step(),"context_schema_conflict"); return false;
+    need(!has_function && !triggers.step(),"context_schema_conflict"); return CachePolicy::absent;
   }
   need(relations==std::map<std::string,std::string>{{"context_module","r"},{"context_cache","r"}},
        "context_schema_version_unsupported");
@@ -92,9 +94,13 @@ inline bool ready(DB& db) {
   need(columns==expected,"context_schema_version_unsupported");
   auto v=db.prepare("SELECT version FROM public.context_module");
   need(v.step() && v.column_int(0)==1 && !v.step(),"context_schema_version_unsupported");
-  need(has_function && functions.column_text(1)==trigger_body && functions.column_text(2)=="f" &&
+  const bool legacy=has_function && functions.column_text(1)==trigger_body;
+  const bool scoped=has_function && functions.column_text(1)==directory_policy::body();
+  need(has_function && (legacy || scoped) && functions.column_text(2)=="f" &&
        functions.column_int(3)==0 && functions.column_text(4)=="t" && functions.column_text(5)=="plpgsql" &&
-       functions.column_text(6)=="search_path=pg_catalog", "context_schema_incomplete");
+       functions.column_text(6)=="search_path=pg_catalog" && functions.column_text(7)=="f" &&
+       functions.column_text(8)=="v" && functions.column_text(9)=="u" &&
+       functions.column_text(10)=="f" && functions.column_text(11)=="f", "context_schema_incomplete");
   const auto function_id=functions.column_int(0);
   need(!functions.step(),"context_schema_incomplete");
   std::map<std::string,int64_t> actual_triggers;
@@ -106,11 +112,32 @@ inline bool ready(DB& db) {
   }
   need(actual_triggers==std::map<std::string,int64_t>{{"ctx_page_insert",5},{"ctx_page_update",17},
        {"ctx_page_delete",9},{"ctx_page_truncate",32}},"context_schema_incomplete");
-  return true;
+  // Do not alter the behavior of extra caller-owned trigger dependents during upgrade.
+  auto users=db.prepare("SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgfoid=?::oid");
+  users.bind_int(1,function_id);
+  need(users.step() && users.column_int(0)==4,"context_schema_incomplete");
+  return legacy ? CachePolicy::source_v1 : CachePolicy::directory_v2;
 }
+inline bool ready(DB& db) { return cache_policy(db)!=CachePolicy::absent; }
 inline void initialize_locked(DB& db) {
   // Called only after begin_write + source/evidence/consent revalidation.
-  if(ready(db)) return;
+  need(enabled(db) && db.transaction_active(),"context_transaction_required");
+  namespace_check(db);
+  const auto policy=cache_policy(db);
+  if(policy==CachePolicy::directory_v2) return;
+  const auto install=[](DB& target,bool replace) {
+    target.exec(std::string(replace?"CREATE OR REPLACE FUNCTION ":"CREATE FUNCTION ")+
+      "public.qbrain_context_invalidate_v1() RETURNS trigger LANGUAGE plpgsql "
+      "VOLATILE CALLED ON NULL INPUT SECURITY INVOKER PARALLEL UNSAFE SET search_path=pg_catalog AS $qbrain$"+
+      directory_policy::body()+"$qbrain$");
+  };
+  if(policy==CachePolicy::source_v1) {
+    // All names/flags/dependents were checked under the caller's publication locks.
+    // Replacement preserves OID, owner and ACL; neither triggers nor unknown objects are dropped.
+    install(db,true);
+    db.exec("UPDATE public.context_cache SET dirty=1,l0='',l1='',refs_json='[]'");
+    return;
+  }
   db.exec(R"SQL(
 CREATE TABLE public.context_module(version BIGINT PRIMARY KEY CHECK(version=1));
 INSERT INTO public.context_module VALUES(1);
@@ -122,8 +149,7 @@ CREATE TABLE public.context_cache(
  dirty BIGINT NOT NULL DEFAULT 0 CHECK(dirty IN (0,1)),
  partial BIGINT NOT NULL DEFAULT 0 CHECK(partial IN (0,1)), PRIMARY KEY(source_id,uri));
 )SQL");
-  db.exec(std::string("CREATE FUNCTION public.qbrain_context_invalidate_v1() RETURNS trigger LANGUAGE plpgsql "
-                     "SECURITY INVOKER SET search_path=pg_catalog AS $qbrain$")+trigger_body+"$qbrain$");
+  install(db,false);
   for(const auto& item:std::map<std::string,std::string>{{"insert","INSERT"},{"update","UPDATE"},{"delete","DELETE"},{"truncate","TRUNCATE"}})
     db.exec("CREATE TRIGGER ctx_page_"+item.first+" AFTER "+item.second+" ON public.pages FOR EACH "+
             (item.first=="truncate"?"STATEMENT":"ROW")+" EXECUTE FUNCTION public.qbrain_context_invalidate_v1()");
