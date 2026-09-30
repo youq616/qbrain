@@ -261,6 +261,8 @@ try {
   if($hostKey -ne 'claude'){
    function Literal([string]$s){return "'"+$s.Replace("'","''")+"'"}
    $ps="[Console]::InputEncoding=New-Object Text.UTF8Encoding(`$false);[Console]::OutputEncoding=New-Object Text.UTF8Encoding(`$false);`$r=& "+(Literal $bridgePath)+' -FilePath '+(Literal $exe)+" -ArgumentList @('hook','--config',"+(Literal $cfgPath)+") -InputJson ([Console]::In.ReadToEnd());[Console]::Write(`$r.Stdout)"
+   # Cursor consumes stdout JSON; suppress only first-use module progress, not errors.
+   if($hostKey -eq 'cursor'){$ps="`$ProgressPreference='SilentlyContinue';"+$ps}
    $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($ps))
    $cmd='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+$encoded
    $entry=[pscustomobject]@{type='command';command=$cmd;commandWindows=$cmd;timeout=10}

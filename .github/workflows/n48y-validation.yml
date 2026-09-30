@@ -72,7 +72,9 @@ jobs:
             & $program -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .ci/test_cursor_install.ps1 -Binary $exe -Report "evidence/cursor-install-$label.json" *> "evidence/cursor-install-$label.log"
             if($LASTEXITCODE -ne 0){throw "Cursor $label failed"}
             foreach($old in @('test_install_hooks','test_install_consent','test_hook_fact_install','test_promotion_install')){
-              & $program -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ".ci/$old.ps1" -Binary $exe *> "evidence/$old-$label.log"
+              $oldArgs=@('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',".ci/$old.ps1",'-Binary',$exe)
+              if($old -in @('test_hook_fact_install','test_promotion_install')){$oldArgs+=@('-Report',"evidence/$old-$label.json")}
+              & $program @oldArgs *> "evidence/$old-$label.log"
               if($LASTEXITCODE -ne 0){throw "$old $label failed"}
             }
             & $program -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .ci/test_installer_recovery.ps1 -Binary $exe -Report "evidence/recovery-$label.json" *> "evidence/recovery-$label.log"
