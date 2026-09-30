@@ -196,6 +196,8 @@ DirectoryScope parse_directory_scope(Brain& brain, const std::string& uri) {
   if (space != "resources" && space != "skills" && space != "memories")
     throw std::invalid_argument("invalid_directory_namespace");
   auto prefix = uri.substr(space_end + 1);
+  if (!prefix.empty() && (prefix.front() == '/' || prefix.find("//") != std::string::npos))
+    throw std::invalid_argument("invalid_directory_uri");
   if (!prefix.empty() && prefix.back() == '/') prefix.pop_back();
   if (!prefix.empty()) {
     std::size_t start = 0;
