@@ -2,7 +2,7 @@ name: N48T SQLite directory cache
 on:
   push:
     branches: ['feature/n48t-directory-cache']
-    paths: ['src/qbrain/context/context.cpp', 'include/qbrain/context/sqlite_cache.hpp', 'tests/test_context_invalidation.cpp', 'tests/test_context_preflight.cpp', '.ci/test_context_invalidation.py', '.ci/context_invalidation_targets.cmake', '.github/workflows/n48t-validation.yml']
+    paths: ['src/qbrain/context/context.cpp', 'include/qbrain/context/sqlite_cache.hpp', 'include/qbrain/storage/database.hpp', 'src/qbrain/storage/transaction_state.cpp', 'tests/test_context_invalidation.cpp', 'tests/test_context_preflight.cpp', '.ci/test_context_invalidation.py', '.ci/context_invalidation_targets.cmake', '.github/workflows/n48t-validation.yml']
   workflow_dispatch:
 permissions:
   contents: read

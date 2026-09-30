@@ -34,3 +34,18 @@ regression; confirm exact remote blobs/tree; execute fresh Windows/Linux native 
 retain failures; request/review non-author outcome against the actual new SHA. No merge,
 deployment, package rewrite or project-completion claim. Self-checks are not non-author
 review. N48S PR61 head4fb5f7bcc4d5871b7eef409963806ba58b486ae1 and its six files are excluded.
+
+## Follow-up found before final acceptance
+
+A separate probe of25d499730bcfe819ae545a84b436b37fc689f73e found that SQLite can hold
+an implicit INSERT/RETURNING writer while get_autocommit is1. The old facade's explicit
+transaction predicate returned false; the owned BEGIN/ROLLBACK adopted that transaction,
+called the synthetic provider once and removed both pending caller rows. Thus25d is not
+accepted even if its then-current CI passes. The observed failure is retained.
+
+Design amendment: add a separate storage-facade transaction_pending() predicate using
+both autocommit and sqlite3_txn_state across all SQLite databases; keep the existing
+transaction_active() semantics unchanged for other callers/backends. Context admission
+uses the stronger predicate. Extend regression with pending reads/writers/attached
+writers, an idle prepared-statement positive control and a callback-created pending
+writer. All applicable tests/CI must bind to the new final SHA, not25d. No N48S change.

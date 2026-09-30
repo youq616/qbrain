@@ -60,7 +60,7 @@ inline std::string trim_ddl(std::string sql) {
 }
 
 inline void idle(DB& db) {
-  if (db.transaction_active()) throw memory::Error("context_transaction_active");
+  if (db.transaction_pending()) throw memory::Error("context_transaction_active");
 }
 inline void namespace_check(DB& db) {
   auto temp = db.prepare("SELECT 1 FROM temp.sqlite_master WHERE type IN ('table','view') AND "

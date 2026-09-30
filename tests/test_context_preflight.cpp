@@ -61,6 +61,48 @@ void ownership(){
   denied(b,begin,"context_transaction_active");b.db().exec("ROLLBACK");check(state(b)==committed,"caller can rollback its own work");
  }
 }
+void implicit_ownership(){
+ {
+  Brain b;init(b);auto pending=b.db().prepare("INSERT INTO config(key,value) VALUES('owner.one','keep'),('owner.two','keep') RETURNING key");
+  check(pending.step()&&sqlite3_get_autocommit(b.db().handle())!=0,"implicit writer with autocommit enabled");
+  denied(b,"implicit-main-writer","context_transaction_active");
+  check(sqlite3_txn_state(b.db().handle(),nullptr)==SQLITE_TXN_WRITE,"pending writer transaction survives");
+  check(query(b,"SELECT key FROM config WHERE key LIKE 'owner.%' ORDER BY key",1).size()==2,"pending caller rows survive");
+  check(pending.step()&&!pending.step(),"caller can complete pending writer");
+  check(query(b,"SELECT key FROM config WHERE key LIKE 'owner.%' ORDER BY key",1).size()==2,"caller rows commit on caller completion");
+ }
+ {
+  Brain b;init(b);auto pending=b.db().prepare("SELECT key FROM config ORDER BY key");
+  check(pending.step()&&sqlite3_txn_state(b.db().handle(),nullptr)==SQLITE_TXN_READ,"implicit reader is active");
+  denied(b,"implicit-reader","context_transaction_active");check(pending.step(),"caller read cursor still usable");
+ }
+ {
+  Brain b;init(b);b.db().exec("ATTACH ':memory:' AS peer;CREATE TABLE peer.owned(v)");
+  auto pending=b.db().prepare("INSERT INTO peer.owned VALUES(1),(2) RETURNING v");
+  check(pending.step()&&sqlite3_txn_state(b.db().handle(),"main")==SQLITE_TXN_NONE,"attached writer without main transaction");
+  denied(b,"implicit-attached-writer","context_transaction_active");
+  check(query(b,"SELECT v FROM peer.owned ORDER BY v",1).size()==2,"attached caller data survives");
+  check(pending.step()&&!pending.step(),"attached caller can finish its writer");
+ }
+ {
+  Brain b;init(b);auto idle=b.db().prepare("SELECT slug FROM pages");int calls=0;
+  auto provider=[&](const auto&,int){++calls;return answer();};
+  check(context::summary(b,"alpha",uri,"model",provider)["status"]=="cached"&&calls==1,"unstepped statement is not a pending transaction");
+  check(idle.step(),"idle caller statement remains usable");
+  observations.push_back({{"case","idle-prepared-positive"},{"provider_calls",calls}});
+ }
+ {
+  Brain b;init(b);storage::Database::Statement pending;int calls=0;J after;
+  auto provider=[&](const auto&,int){++calls;pending=b.db().prepare("INSERT INTO config(key,value) VALUES('late.one','keep'),('late.two','keep') RETURNING key");check(pending.step(),"callback starts implicit writer");after=state(b);return answer();};
+  const auto code=failure([&]{context::summary(b,"alpha",uri,"model",provider);});
+  check(code=="context_transaction_active"&&calls==1,"late implicit writer blocks publication only");
+  check(state(b)==after&&sqlite3_txn_state(b.db().handle(),nullptr)==SQLITE_TXN_WRITE,"late caller transaction/data untouched");
+  check(pending.step()&&!pending.step(),"late caller can complete pending writer");
+  check(query(b,"SELECT key FROM config WHERE key LIKE 'late.%' ORDER BY key",1).size()==2,"late caller rows commit normally");
+  observations.push_back({{"case","late-implicit-writer"},{"provider_calls",calls},{"error",code}});
+ }
+}
+
 void shadows(){
  for(const auto& name:{"sources","pages","config","context_cache","PaGeS"}){
   Brain b;init(b);b.db().exec(std::string("CREATE TEMP TABLE ")+name+"(untrusted TEXT)");denied(b,std::string("temp-")+name,"context_sqlite_schema_context");
@@ -103,7 +145,7 @@ void callback_changes(){
 }
 }
 int main(int argc,char** argv){try{
- exact_repro();if(argc==1){malformed();ownership();shadows();valid_callbacks();callback_changes();}
+ exact_repro();if(argc==1){malformed();ownership();implicit_ownership();shadows();valid_callbacks();callback_changes();}
  else if(argc!=2||std::string(argv[1])!="--repro-only")throw std::runtime_error("invalid arguments");
  std::cout<<J({{"schema","qbrain-context-preflight-v1"},{"passed",true},{"checks",checks},{"observations",observations},{"real_provider_calls",0}}).dump()<<'\n';return 0;
  }catch(const std::exception& e){std::cout<<J({{"schema","qbrain-context-preflight-v1"},{"passed",false},{"checks",checks},{"error",e.what()},{"observations",observations},{"real_provider_calls",0}}).dump()<<'\n';return 1;}}
