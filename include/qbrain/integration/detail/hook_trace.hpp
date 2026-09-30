@@ -15,9 +15,9 @@ inline bool trace_choice(std::string_view value, std::initializer_list<std::stri
 inline void trace_require(bool ok) {
   if (!ok) throw std::runtime_error("invalid_hook_trace_metadata");
 }
-// These ten names are a closed set, never a path supplied by an event or caller.
+// These fifteen names are a closed set, never a path supplied by an event or caller.
 inline std::string hook_trace_filename(std::string_view host, std::string_view event) {
-  trace_require(trace_choice(host,{"claude","codex"}) &&
+  trace_require(trace_choice(host,{"claude","codex","cursor"}) &&
     trace_choice(event,{"SessionStart","UserPromptSubmit","Stop","PreCompact","SessionEnd"}));
   return "trace-" + std::string(host) + "-" + std::string(event) + ".json";
 }

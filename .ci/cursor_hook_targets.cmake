@@ -1,0 +1,6 @@
+function(qbrain_add_cursor_tests)
+  add_executable(qbrain_cursor_hook_tests "${CMAKE_SOURCE_DIR}/tests/test_cursor_hooks.cpp")
+  target_link_libraries(qbrain_cursor_hook_tests PRIVATE qbrain_util)
+  add_test(NAME qbrain_cursor_hook_unit COMMAND qbrain_cursor_hook_tests)
+endfunction()
+cmake_language(DEFER CALL qbrain_add_cursor_tests)
