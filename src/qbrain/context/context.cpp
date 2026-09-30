@@ -22,7 +22,7 @@ Uri parse(Brain& b,const std::string& source,std::string uri) {
   auto rest=uri.substr(root.size());if(rest.empty())return u;
   const auto slash=rest.find('/');if(slash==std::string::npos)throw Error("invalid_uri");
   u.space=rest.substr(0,slash);u.path=rest.substr(slash+1);
-  if(u.space!="memories"&&u.space!="resources"&&u.space!="skills")throw Error("invalid_namespace");
+  if(!std::set<std::string>{"memories","resources","skills"}.count(u.space))throw Error("invalid_namespace");
   std::size_t start=0;
   while(start<u.path.size()) {auto end=u.path.find('/',start);if(end==std::string::npos)end=u.path.size();
     const auto part=u.path.substr(start,end-start);if(part.empty()||part=="."||part=="..")throw Error("invalid_uri");start=end+1;}
