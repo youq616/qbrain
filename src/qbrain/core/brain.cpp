@@ -127,6 +127,7 @@ void Brain::open() {
 }
 
 void Brain::open_at(const std::string& db_path) {
+  query_embeddings_.clear();
   db_path_.clear();
   // ---- N38 PG wiring (plan D2): explicit opt-in backend selection --------
   // When QBRAIN_PG_DSN is non-empty, the PG backend replaces SQLite for this
@@ -170,6 +171,7 @@ void Brain::open_at(const std::string& db_path) {
 }
 
 void Brain::open_pg(const std::string& dsn) {
+  query_embeddings_.clear();
 #if defined(QBRAIN_WITH_PG)
   // N38 PG open path (plan D2), shared by the QBRAIN_PG_DSN branch of
   // open_at() and the explicit-DSN test/harness seam n38_open_pg_brain():
@@ -210,6 +212,7 @@ void Brain::open_pg(const std::string& dsn) {
 }
 
 void Brain::close() {
+  query_embeddings_.clear();
   db_.close();
   db_path_.clear();
 }
@@ -305,6 +308,7 @@ std::string resolve_api_key(const Config& c, bool for_chat) {
 }
 
 void Brain::load_config() {
+  query_embeddings_.clear();
   config_ = load_file_config();
   config_.brain_id = brain_id_;
   // overlay DB config keys
