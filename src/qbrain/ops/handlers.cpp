@@ -4,6 +4,7 @@
 #include "qbrain/util/utf8_display.hpp"
 #include "qbrain/ai/chat.hpp"
 #include "qbrain/ai/embed.hpp"
+#include "qbrain/ai/query_embedding.hpp"
 #include "qbrain/codeintel/scan.hpp"
 #include "qbrain/cycle/dream.hpp"
 #include "qbrain/graph/analytics.hpp"
@@ -738,7 +739,7 @@ void register_search_ops() {
     // no_vector accepts "1"/"true" from CLI and MCP bool mapping
     auto nv = arg(ctx, "no_vector");
     if (nv != "1" && nv != "true" && opts.mode != "conservative") {
-      auto er = ai::embed_texts(ctx.brain->config(), {q});
+      auto er = ai::query_embedding(*ctx.brain, q, opts.source_id);
       if (er.ok && !er.vectors.empty()) {
         emb = er.vectors[0];
         pemb = &emb;
@@ -793,7 +794,7 @@ void register_search_ops() {
     }
     std::vector<float> emb;
     std::vector<float>* pemb = nullptr;
-    auto er = ai::embed_texts(ctx.brain->config(), {q});
+    auto er = ai::query_embedding(*ctx.brain, q, opts.source_id);
     if (er.ok && !er.vectors.empty()) {
       emb = er.vectors[0];
       pemb = &emb;

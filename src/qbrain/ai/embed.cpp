@@ -1,4 +1,5 @@
 #include "qbrain/ai/embed.hpp"
+#include "qbrain/accounting/logical_observation.hpp"
 #include "qbrain/ai/detail/embedding_response.hpp"
 #include "qbrain/ai/http_client.hpp"
 #include "qbrain/core/brain.hpp"
@@ -126,19 +127,23 @@ std::vector<float> mock_image_vector(std::string_view bytes) {
 }  // namespace
 
 EmbedResult embed_texts(const Config& cfg, const std::vector<std::string>& texts) {
+  return accounting::logical::invoke(accounting::logical::Kind::text_embedding, [&](auto& observation) {
   EmbedResult r;
   r.model = cfg.embedding_model;
   if (texts.empty()) {
+    observation.path(accounting::logical::Path::empty_input);
     r.ok = true;
     return r;
   }
   if (texts.size() > EMBED_MAX_BATCH || !valid_embedding_model(cfg.embedding_model) ||
       cfg.embedding_dimensions < 0 ||
       static_cast<std::size_t>(cfg.embedding_dimensions) > EMBED_MAX_DIMENSIONS) {
+    observation.path(accounting::logical::Path::invalid_input);
     r.error = "invalid embedding request";
     return r;
   }
   if (embedding_mock_enabled()) {
+    observation.path(accounting::logical::Path::mock);
     r.ok = true;
     r.model = "mock-embedding";
     r.vectors.reserve(texts.size());
@@ -150,9 +155,11 @@ EmbedResult embed_texts(const Config& cfg, const std::vector<std::string>& texts
   }
   auto key = resolve_api_key(cfg, false);
   if (key.empty()) {
+    observation.path(accounting::logical::Path::missing_credentials);
     r.error = "missing embedding API key";
     return r;
   }
+  observation.path(accounting::logical::Path::remote_candidate);
   json body;
   body["model"] = cfg.embedding_model;
   body["input"] = texts;
@@ -170,12 +177,16 @@ EmbedResult embed_texts(const Config& cfg, const std::vector<std::string>& texts
   }
   return detail::parse_embedding_response(resp.body, cfg.embedding_model, texts.size(),
                                            cfg.embedding_dimensions);
+  });
 }
 
 ImageEmbedResult embed_image(const Config& cfg, std::string_view image_bytes) {
+  return accounting::logical::invoke(accounting::logical::Kind::image_embedding, [&](auto& observation) {
+  observation.path(accounting::logical::Path::invalid_input);
   ImageEmbedResult r;
   r.model = cfg.embedding_model;
   auto degrade = [&](const std::string& message, bool no_credentials) {
+    observation.fallback(true);
     r.unavailable = true;
     r.no_credentials = no_credentials;
     r.error = redact_provider_error(message, cfg, resolve_api_key(cfg, false));
@@ -187,6 +198,7 @@ ImageEmbedResult embed_image(const Config& cfg, std::string_view image_bytes) {
     return degrade("image exceeds size limit", false);
   }
   if (embedding_mock_enabled()) {
+    observation.path(accounting::logical::Path::mock);
     r.ok = true;
     r.mock = true;
     r.model = "mock-image-embedding";
@@ -194,7 +206,11 @@ ImageEmbedResult embed_image(const Config& cfg, std::string_view image_bytes) {
     return r;
   }
   const std::string key = resolve_api_key(cfg, false);
-  if (key.empty()) return degrade("no provider credentials", true);
+  if (key.empty()) {
+    observation.path(accounting::logical::Path::missing_credentials);
+    return degrade("no provider credentials", true);
+  }
+  observation.path(accounting::logical::Path::remote_candidate);
   // Local magic sniff only to label the data URL; no image_meta dependency.
   std::string mime = "image/png";
   if (image_bytes.size() >= 3 && static_cast<unsigned char>(image_bytes[0]) == 0xFF &&
@@ -225,6 +241,7 @@ ImageEmbedResult embed_image(const Config& cfg, std::string_view image_bytes) {
   r.vector = std::move(parsed.vectors[0]);
   r.ok = true;
   return r;
+  });
 }
 
 }  // namespace qbrain::ai

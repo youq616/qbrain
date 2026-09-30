@@ -15,4 +15,11 @@ bool Database::transaction_active() const {
 #endif
   throw std::runtime_error("transaction state unavailable");
 }
+bool Database::transaction_pending() const {
+  if (!is_open()) return false;
+  if (backend_kind() == BackendKind::sqlite)
+    return sqlite3_get_autocommit(handle()) == 0 ||
+           sqlite3_txn_state(handle(), nullptr) != SQLITE_TXN_NONE;
+  return transaction_active();
+}
 } // namespace qbrain::storage

@@ -1,0 +1,159 @@
+name: N49A combined verified source qualification
+on:
+  push:
+    branches: ['integration/n49a-verified-core']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n49a-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  cmake:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Pin combined tree and unchanged build closures
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          test "$(git rev-parse HEAD)" = '${{ github.sha }}'
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          git ls-tree -r -z HEAD > evidence/source-tree.bin
+          git archive --format=zip --output=evidence/source.zip HEAD
+          python .ci/check_n49a_sources.py > evidence/source-closure.json
+      - name: Fresh combined CMake product and all portable registered targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/n49a -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/verified_integration_targets.cmake" > evidence/configure.log 2>&1
+          cmake --build build/n49a --config Debug --target qbrain qbrain_verified_integration_tests qbrain_context_invalidation_tests qbrain_context_preflight_tests qbrain_context_coverage_tests qbrain_query_cache_tests qbrain_query_cache_integration_tests qbrain_query_cache_http_tests qbrain_logical_observation_tests qbrain_logical_observation_http_tests qbrain_logical_rerank_move_tests qbrain_logical_rerank_regression qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_runtime_observation_http qbrain_memory_tests qbrain_context_tests qbrain_http_tests qbrain_http_probe qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests qbrain_promotion_tests qbrain_lifecycle_tests qbrain_lifecycle_batch_tests qbrain_lifecycle_candidate_tests qbrain_strict_json_tests qbrain_hook_trace_tests qbrain_hook_diagnostic_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests qbrain_pg_fact_tests qbrain_pg_context_tests qbrain_pg_hook_tests --parallel 2 > evidence/build.log 2>&1
+          if [ "$RUNNER_OS" = Windows ]; then
+            cmake --build build/n49a --config Debug --target qbrain_tests --parallel 2 > evidence/full60-build.log 2>&1
+            build/n49a/Debug/qbrain_tests.exe > evidence/full60.log 2>&1
+            python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/full60.log').read_text(encoding='utf-8-sig'),60)))" > evidence/full60-verified.txt
+          fi
+      - name: Fresh combined CTests and original normal/optimized process tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir build/n49a -C Debug -E '^qbrain_unit$' --output-on-failure | tee evidence/ctest.log
+          bindir=build/n49a; suffix=''
+          if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49a/Debug; suffix=.exe; fi
+          "$bindir/qbrain_pg_context_tests$suffix" --sqlite-only > evidence/pg-context-sqlite.json
+          python .ci/run_n49a_process.py --bin-dir "$bindir" --output evidence/process > evidence/process-summary.json
+          mkdir evidence/binaries
+          for target in qbrain qbrain_verified_integration_tests qbrain_context_invalidation_tests qbrain_context_preflight_tests qbrain_context_coverage_tests qbrain_query_cache_tests qbrain_query_cache_integration_tests qbrain_query_cache_http_tests qbrain_logical_observation_tests qbrain_logical_observation_http_tests qbrain_logical_rerank_move_tests qbrain_logical_rerank_regression qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_runtime_observation_http qbrain_http_probe; do
+            cp "$bindir/$target$suffix" evidence/binaries/
+          done
+      - name: Historical comparison fixture for original 55-step gate
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-current-preview-b810d689/qbrain-windows-x64-n47x-preview.zip' -OutFile baseline.zip
+          if ((Get-FileHash baseline.zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d') { throw 'Historical baseline digest mismatch' }
+          Expand-Archive baseline.zip baseline
+          python .ci/run_n48i_checks.py --binary build/n49a/Debug/qbrain.exe --baseline baseline/qbrain.exe --output evidence/original55 | Tee-Object evidence/original55-summary.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import json,sys; r=json.load(open('evidence/original55-summary.json',encoding='utf-8-sig')); sys.exit(0 if r['result']=='PASS' and r['steps']==55 else 1)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify no tracked source was modified by tests
+        if: always()
+        shell: bash
+        run: git diff --exit-code > evidence/after-diff.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n49a-cmake-${{ matrix.os }}
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
+  direct-msvc:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Fresh original direct-MSVC production and original60
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory evidence | Out-Null
+          git rev-parse HEAD | Set-Content evidence/source.txt
+          git rev-parse 'HEAD^{tree}' | Set-Content evidence/tree.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          python .ci/check_n49a_sources.py > evidence/source-closure.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          powershell -NoProfile -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/full60.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/full60.log').read_text(encoding='utf-8-sig'),60)))" > evidence/full60-verified.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Link and run cross-tests against exact direct production objects
+        shell: pwsh
+        run: |
+          powershell -NoProfile -File .ci/build_n49a_direct_tests.ps1 2>&1 | Tee-Object evidence/direct-cross.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/cl/qbrain.exe evidence/qbrain.exe
+          Copy-Item build/cl/qbrain_tests.exe evidence/qbrain_tests.exe
+          Copy-Item build/n49a-direct/qbrain_verified_integration_tests.exe evidence/qbrain_verified_integration_tests.exe
+          Copy-Item build/n49a-direct/linked-production-objects.json evidence/
+          python .ci/test_n49a_wire.py --binary evidence/qbrain_verified_integration_tests.exe --output evidence/wire-normal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -O .ci/test_n49a_wire.py --binary evidence/qbrain_verified_integration_tests.exe --output evidence/wire-optimized
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --exit-code > evidence/after-diff.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n49a-direct-msvc
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
+  sanitizer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Fresh fully linked combined ASan and UBSan gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          CC=clang CXX=clang++ cmake -S . -B build/asan -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/verified_integration_targets.cmake" -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined' > evidence/configure.log 2>&1
+          cmake --build build/asan --target qbrain_verified_integration_tests qbrain_context_invalidation_tests qbrain_context_preflight_tests qbrain_context_coverage_tests qbrain_query_cache_tests qbrain_query_cache_integration_tests qbrain_logical_observation_tests qbrain_logical_rerank_move_tests qbrain_runtime_observation_tests qbrain_observation_semantics_tests --parallel 2 > evidence/build.log 2>&1
+          for target in qbrain_verified_integration_tests qbrain_context_invalidation_tests qbrain_context_preflight_tests qbrain_context_coverage_tests qbrain_query_cache_tests qbrain_query_cache_integration_tests qbrain_logical_observation_tests qbrain_logical_rerank_move_tests qbrain_runtime_observation_tests qbrain_observation_semantics_tests; do
+            "build/asan/$target" > "evidence/$target.json" 2> "evidence/$target.stderr"
+            test ! -s "evidence/$target.stderr"
+          done
+          git diff --exit-code > evidence/after-diff.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n49a-sanitizer
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error

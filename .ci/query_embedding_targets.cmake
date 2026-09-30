@@ -1,0 +1,19 @@
+# Additive targets only; original root registration and tests stay unchanged.
+function(qbrain_add_query_cache_tests)
+  find_package(Threads REQUIRED)
+  add_executable(qbrain_query_cache_tests "${CMAKE_SOURCE_DIR}/tests/test_query_embedding_cache.cpp")
+  target_include_directories(qbrain_query_cache_tests PRIVATE "${CMAKE_SOURCE_DIR}/include" "${CMAKE_SOURCE_DIR}/third_party")
+  target_link_libraries(qbrain_query_cache_tests PRIVATE Threads::Threads)
+  add_test(NAME qbrain_query_cache_unit COMMAND qbrain_query_cache_tests)
+  set_tests_properties(qbrain_query_cache_unit PROPERTIES TIMEOUT 45)
+  foreach(kind integration http)
+    add_executable(qbrain_query_cache_${kind}_tests "${CMAKE_SOURCE_DIR}/tests/test_query_embedding_${kind}.cpp")
+    # Brain-only HTTP clients must directly link its implementation dependencies.
+    # Do not rely on Registry handlers to pull objects from these static libraries.
+    target_link_libraries(qbrain_query_cache_${kind}_tests PRIVATE
+      qbrain_ops qbrain_core qbrain_search qbrain_jobs qbrain_ai Threads::Threads)
+  endforeach()
+  add_test(NAME qbrain_query_cache_integration_unit COMMAND qbrain_query_cache_integration_tests)
+  set_tests_properties(qbrain_query_cache_integration_unit PROPERTIES TIMEOUT 90)
+endfunction()
+cmake_language(DEFER CALL qbrain_add_query_cache_tests)

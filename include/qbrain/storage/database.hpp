@@ -51,6 +51,8 @@ class Database {
 
   // Native transaction state only; no handle escapes the storage facade.
   bool transaction_active() const;
+  // Also includes implicit SQLite read/write transactions in any attached database.
+  bool transaction_pending() const;
 
   void exec(std::string_view sql);
   int64_t last_insert_rowid() const;

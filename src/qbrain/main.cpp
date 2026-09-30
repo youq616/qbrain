@@ -2,6 +2,8 @@
 #include "qbrain/maintenance/sqlite_backup.hpp"
 #include "qbrain/maintenance/sqlite_check.hpp"
 #include "qbrain/accounting/token_cost.hpp"
+#include "qbrain/accounting/observation_command.hpp"
+#include "qbrain/accounting/logical_command.hpp"
 #include "qbrain/accounting/cost_comparison.hpp"
 #include "qbrain/accounting/provider_usage.hpp"
 #include "qbrain/accounting/stream_usage.hpp"
@@ -11,6 +13,10 @@
 namespace {
 // Dispatch the explicit isolated checker before registry/default-brain setup.
 int dispatch(int argc,char** argv) {
+  if(argc>1 && std::string(argv[1])=="observe-model")
+    return qbrain::accounting::logical::command(argc,argv,dispatch);
+  if(argc>1 && std::string(argv[1])=="observe")
+    return qbrain::accounting::observation::command(argc,argv,dispatch);
   if(argc>1 && std::string(argv[1])=="database") {
     std::vector<std::string> args;for(int i=2;i<argc;++i)args.emplace_back(argv[i]);
     return qbrain::maintenance::check::command(args);
@@ -42,7 +48,7 @@ int dispatch(int argc,char** argv) {
   if(argc==1 || (argc>1 && (std::string(argv[1])=="help" || std::string(argv[1])=="--help" || std::string(argv[1])=="-h")))
     std::cout<<"Additional command: opencode preview|install|status|audit|uninstall-preview|uninstall|recovery-preview|recover|reconcile-preview|reconcile --project PATH.\n";
   if(argc==1 || (argc>1 && (std::string(argv[1])=="help" || std::string(argv[1])=="--help" || std::string(argv[1])=="-h")))
-    std::cout<<"Additional command: cost report|import|import-stream|compare (bounded JSON from stdin; no network or brain access).\nAdditional command: backup create|verify|restore (explicit SQLite file; restore to a new directory only).\nAdditional command: database check --database PATH [--timeout-ms N] (read-only deep SQLite/FTS inspection).\n";
+    std::cout<<"Additional command: observe --output NEW_DIRECTORY -- EXISTING_COMMAND (metadata-only HTTP records); observe cost --report PATH --assignments PATH.\nAdditional command: cost report|import|import-stream|compare (bounded JSON from stdin; no network or brain access).\nAdditional command: backup create|verify|restore (explicit SQLite file; restore to a new directory only).\nAdditional command: database check --database PATH [--timeout-ms N] (read-only deep SQLite/FTS inspection).\n";
   return result;
 }
 }
