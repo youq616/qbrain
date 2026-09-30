@@ -1,5 +1,6 @@
 #include "qbrain/context/context.hpp"
 #include "qbrain/context/pg_context.hpp"
+#include "qbrain/context/sqlite_cache.hpp"
 #include "qbrain/util/utf8_display.hpp"
 #include "qbrain/util/hash.hpp"
 #include <chrono>
@@ -32,23 +33,12 @@ std::string filter(const Uri& u) {
   if(u.space=="skills")return "type='skill'";
   return "type NOT IN ('session_fragment','skill')";
 }
-bool ready(DB& db) {if(pg::enabled(db))return pg::ready(db);auto s=db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='context_cache'");return s.step();}
+bool ready(DB& db) {return pg::enabled(db)?pg::ready(db):sqlite_cache::policy(db)!=sqlite_cache::Policy::absent;}
 struct Tx {DB& db;bool done=false;explicit Tx(DB& d):db(d){if(pg::enabled(db))pg::begin_write(db);else db.exec("BEGIN IMMEDIATE");}void commit(){db.exec("COMMIT");done=true;}~Tx(){if(!done)try{db.exec("ROLLBACK");}catch(...){}}};
-void init(DB& db) {
-  if(ready(db))return;
+void backup_before_upgrade(DB& db) {
+  if(sqlite_cache::policy(db)==sqlite_cache::Policy::directory_v2)return;
   auto path=db.backend_file_path();std::random_device r;
-  if(!path.empty()&&!db.backup_to(path+".pre-context-v1-"+std::to_string(r())+".bak"))throw Error("context_backup_failed");
-  Tx tx(db);if(!ready(db))db.exec(R"SQL(
-CREATE TABLE context_cache(source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,uri TEXT NOT NULL,
- signature TEXT NOT NULL,l0 TEXT NOT NULL,l1 TEXT NOT NULL,refs_json TEXT NOT NULL,page_count INTEGER NOT NULL,
- method TEXT NOT NULL,dirty INTEGER NOT NULL DEFAULT 0,partial INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(source_id,uri));
-CREATE TRIGGER ctx_page_insert AFTER INSERT ON pages BEGIN
- UPDATE context_cache SET dirty=1,l0='',l1='',refs_json='[]' WHERE source_id=NEW.source_id; END;
-CREATE TRIGGER ctx_page_update AFTER UPDATE ON pages BEGIN
- UPDATE context_cache SET dirty=1,l0='',l1='',refs_json='[]' WHERE source_id=NEW.source_id OR source_id=OLD.source_id; END;
-CREATE TRIGGER ctx_page_delete AFTER DELETE ON pages BEGIN
- UPDATE context_cache SET dirty=1,l0='',l1='',refs_json='[]' WHERE source_id=OLD.source_id; END;
-)SQL");tx.commit();
+  if(!path.empty()&&!db.backup_to(path+".pre-context-v2-"+std::to_string(r())+".bak"))throw Error("context_backup_failed");
 }
 struct Snapshot {std::string signature,l0,l1;J refs=J::array();int count=0;bool partial=false;};
 Snapshot snapshot(Brain& b,const Uri& u) {
@@ -147,12 +137,13 @@ Json summary(Brain& b,const std::string& source,const std::string& uri,const std
     if(l0.size()>400||l1.size()>8000||!util::valid_utf8(l0)||!util::valid_utf8(l1)||memory::contains_sensitive_material(l0+l1))throw Error("invalid_summary");
     ss.l0=l0;ss.l1=l1;
   }
-  if(!pg::enabled(b.db()))init(b.db());
+  if(!pg::enabled(b.db()))backup_before_upgrade(b.db());
   Tx tx(b.db());
   if(pg::enabled(b.db()) && !b.source_exists(source))throw Error("invalid_source");
   if(snapshot(b,u).signature!=ss.signature)throw Error("evidence_changed");
   if(method=="model"&&b.get_config_value("context.external_summary").value_or("")!="allow")throw Error("external_summary_denied");
   if(pg::enabled(b.db()))pg::initialize_locked(b.db());
+  else sqlite_cache::initialize_locked(b.db());
   auto s=b.db().prepare("INSERT INTO context_cache(source_id,uri,signature,l0,l1,refs_json,page_count,method,dirty,partial) VALUES(?,?,?,?,?,?,?,?,0,?) ON CONFLICT(source_id,uri) DO UPDATE SET signature=excluded.signature,l0=excluded.l0,l1=excluded.l1,refs_json=excluded.refs_json,page_count=excluded.page_count,method=excluded.method,dirty=0,partial=excluded.partial");
   s.bind_text(1,source);s.bind_text(2,u.full);s.bind_text(3,ss.signature);s.bind_text(4,ss.l0);s.bind_text(5,ss.l1);s.bind_text(6,ss.refs.dump());s.bind_int(7,ss.count);s.bind_text(8,method);s.bind_int(9,ss.partial?1:0);s.step_done();tx.commit();
   return {{"uri",u.full},{"status","cached"},{"method",method},{"provider_calls",method=="model"?1:0},{"input_tokens",response.input_tokens<0?J(nullptr):J(response.input_tokens)},
