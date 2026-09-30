@@ -1,8 +1,9 @@
 # N48Q — PostgreSQL structured facts, lifecycle and explicit-use receipts
 
 2026-09-29. Base cfa00185dc0575b1dbf7c418082608f7563a3b91.
-Status: approved after N48Q-PLAN-AUDIT.md. Owner delegates implementation decisions
-and continuing project closeout; original requirements are not silently deferred.
+Status: done for the bounded source module after N48Q-HARD-AUDIT.md.
+Owner delegates implementation decisions and continuing project closeout;
+original requirements are not silently deferred.
 
 ## Scope
 Extend the existing FactStore and explicit-use APIs to PostgreSQL: evidence-backed
@@ -42,3 +43,15 @@ with different brain labels is not a tenant boundary; logical source is not RLS.
 Raw SQL schema owners are trusted, not sandboxed. Revert additive PG paths without
 automatically dropping optional tables. No signed/stable/full-project claim until
 separate original acceptance requirements are actually closed.
+
+## Acceptance clarification and closure — 2026-09-30
+
+The unavailable local execution container is not described as a successful local
+build. Under the approved N48Q-CLOSEOUT-PLAN.md, fresh native compilation, SQLite
+and actual PostgreSQL process review, and Clang ASan/UBSan were executed on real
+GitHub Actions runners. Completed run36647177198 qualifies28d64ae7/tree511b6a9c;
+original full regression run36558149579 remains bound to the identical runtime4f8b470f.
+This explicitly substitutes remote native execution for the local execution location
+in item6, not fewer checks or a fake PG service. See the outcome audit for exact
+counts, the initial workflow invocation failure and limits. Later closure changes
+only documentation/history/result indices. Actual merge identity belongs to PR59.
