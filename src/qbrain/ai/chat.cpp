@@ -1,4 +1,5 @@
 #include "qbrain/ai/chat.hpp"
+#include "qbrain/accounting/logical_observation.hpp"
 #include "qbrain/ai/http_client.hpp"
 #include "qbrain/core/brain.hpp"
 #include <algorithm>
@@ -12,13 +13,16 @@ namespace qbrain::ai {
 
 ChatResult chat_complete(const Config& cfg, const std::vector<ChatMessage>& messages,
                          double temperature, int timeout_ms) {
+  return accounting::logical::invoke(accounting::logical::Kind::chat, [&](auto& observation) {
   ChatResult r;
   auto key = resolve_api_key(cfg, true);
   if (key.empty()) {
+    observation.path(accounting::logical::Path::missing_credentials);
     r.error = "missing chat API key";
     r.failure_kind = ChatFailureKind::configuration;
     return r;
   }
+  observation.path(accounting::logical::Path::remote_candidate);
   const bool use_responses =
       cfg.chat_endpoint.empty() || cfg.chat_endpoint == "responses";
   json body;
@@ -108,6 +112,7 @@ ChatResult chat_complete(const Config& cfg, const std::vector<ChatMessage>& mess
     r.failure_kind = ChatFailureKind::malformed_response;
   }
   return r;
+  });
 }
 
 }  // namespace qbrain::ai

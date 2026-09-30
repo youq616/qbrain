@@ -1,0 +1,126 @@
+name: N48X logical model observation
+on:
+  push:
+    branches: ['feature/n48x-logical-observation']
+    paths: ['include/qbrain/accounting/logical*', 'src/qbrain/ai/chat.cpp', 'src/qbrain/ai/embed.cpp',
+            'src/qbrain/search/rerank.cpp', 'src/qbrain/main.cpp', 'tests/test_logical*',
+            '.ci/logical_observation_targets.cmake', '.ci/test_logical_observation.py',
+            '.github/workflows/n48x-validation.yml', '.ci/stage_n48x_runtime.py']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n48x-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Pin new source and untouched parent sidecar
+        env:
+          TESTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA"
+          git rev-parse HEAD > evidence/source.txt
+          git rev-parse HEAD^{tree} > evidence/tree.txt
+          git archive --format=zip --output=evidence/source.zip HEAD
+          git ls-tree -r -z HEAD > evidence/source-tree.bin
+          git diff --binary 0e3c12390ee0f7c2bd8ee9881b6630f4346038fd HEAD > evidence/recoverable.patch
+          git diff --exit-code 0e3c12390ee0f7c2bd8ee9881b6630f4346038fd HEAD -- include/qbrain/accounting/runtime_observation.hpp include/qbrain/accounting/observation_command.hpp include/qbrain/accounting/token_cost.hpp include/qbrain/accounting/provider_usage.hpp src/qbrain/ai/http_client.cpp include/qbrain/ai/http_client.hpp src/qbrain/context include/qbrain/context src/qbrain/storage include/qbrain/storage src/qbrain/core include/qbrain/core src/qbrain/ops tools/delivery .github/workflows/n48w-validation.yml .ci/runtime_observation_targets.cmake tests/test_runtime_observation.cpp tests/test_observation_semantics.cpp .ci/test_observation_semantics.py .ci/test_runtime_observation.py tests/test_rerank.cpp tests/test_n39.cpp > evidence/protected-diff.txt
+      - name: Complete program and original targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/n48x -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/logical_observation_targets.cmake" > evidence/configure.log 2>&1
+          cmake --build build/n48x --config Debug --target qbrain qbrain_logical_observation_tests qbrain_logical_rerank_move_tests qbrain_logical_observation_http_tests qbrain_logical_rerank_regression qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_runtime_observation_http qbrain_http_tests qbrain_http_probe qbrain_context_tests qbrain_memory_tests qbrain_fact_tests qbrain_hook_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
+          if [ "$RUNNER_OS" = Windows ]; then
+            cmake --build build/n48x --config Debug --target qbrain_tests --parallel 2 > evidence/full-windows-build.log 2>&1
+          fi
+      - name: New logical lifecycle and unchanged regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=''; config=''; if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; config='Debug/'; fi
+          for target in qbrain qbrain_logical_observation_tests qbrain_logical_rerank_move_tests qbrain_logical_observation_http_tests qbrain_logical_rerank_regression qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_runtime_observation_http qbrain_http_tests qbrain_http_probe; do
+            cp "build/n48x/${config}${target}${suffix}" "evidence/${target}${suffix}"
+          done
+          "evidence/qbrain_logical_rerank_move_tests${suffix}" > evidence/rerank-move.json
+          if [ "$RUNNER_OS" = Windows ]; then
+            cmake -S . -B build/n48x-move-release -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/logical_observation_targets.cmake" > evidence/move-release-configure.log 2>&1
+            cmake --build build/n48x-move-release --config Release --target qbrain_logical_rerank_move_tests --parallel 2 > evidence/move-release-build.log 2>&1
+            cp build/n48x-move-release/Release/qbrain_logical_rerank_move_tests.exe evidence/qbrain_logical_rerank_move_release.exe
+            evidence/qbrain_logical_rerank_move_release.exe > evidence/rerank-move-release.json
+            python -c "import json; r=json.load(open('evidence/rerank-move-release.json')); assert r['passed'] is True and r['fault_minimum_bytes']==0 and all(c['all_allocation_attempts']==0 for c in r['cases'])"
+          fi
+          "evidence/qbrain_logical_observation_tests${suffix}" > evidence/logical-native.json
+          "evidence/qbrain_runtime_observation_tests${suffix}" > evidence/original-observation.json
+          "evidence/qbrain_observation_semantics_tests${suffix}" > evidence/original-semantics.json
+          ctest --test-dir build/n48x -C Debug -R '^qbrain_(logical_observation_unit|logical_rerank_regression|logical_rerank_move_unit|runtime_observation_unit|observation_semantics_unit|http_input_unit|context_unit|memory_unit|fact_unit|hook_fact_unit|multiterm_unit|usage_batch_unit|usage_batch_ownership_unit)$' --output-on-failure | tee evidence/ctest.log
+          if [ "$RUNNER_OS" = Windows ]; then
+            "build/n48x/Debug/qbrain_tests.exe" > evidence/windows-original-groups.log 2>&1
+          fi
+          for mode in normal optimized; do
+            opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
+            wire=(); extra=()
+            if [ "$RUNNER_OS" = Windows ]; then wire=(--wire); extra=(--http-binary "evidence/qbrain_runtime_observation_http${suffix}"); fi
+            python "${opt[@]}" .ci/test_logical_observation.py --binary "evidence/qbrain${suffix}" --probe "evidence/qbrain_logical_observation_http_tests${suffix}" --output "evidence/logical-$mode" "${wire[@]}" > "evidence/logical-$mode.log" 2>&1
+            python "${opt[@]}" .ci/test_runtime_observation.py --binary "evidence/qbrain${suffix}" --output "evidence/observation-$mode" "${extra[@]}" > "evidence/observation-$mode.log" 2>&1
+            python "${opt[@]}" .ci/test_observation_semantics.py --binary "evidence/qbrain${suffix}" --semantics-binary "evidence/qbrain_observation_semantics_tests${suffix}" --output "evidence/semantics-$mode" > "evidence/semantics-$mode.log" 2>&1
+            python "${opt[@]}" .ci/test_context_process.py --binary "evidence/qbrain${suffix}" --report "evidence/context-$mode.json" > "evidence/context-$mode.log" 2>&1
+            python "${opt[@]}" .ci/test_hooks.py --binary "evidence/qbrain${suffix}" > "evidence/hooks-$mode.log" 2>&1
+            python "${opt[@]}" .ci/test_memory_cycle.py --binary "evidence/qbrain${suffix}" > "evidence/memory-$mode.log" 2>&1
+          done
+          if [ "$RUNNER_OS" = Windows ]; then
+            python .ci/test_http_transport.py --probe evidence/qbrain_http_probe.exe --report evidence/original-http.json > evidence/original-http.log 2>&1
+          fi
+          python -c "import pathlib,hashlib,json; print(json.dumps({p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in pathlib.Path('evidence').glob('qbrain*') if p.is_file()}))" > evidence/binary-hashes.json
+          git diff --exit-code > evidence/after-diff.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48x-${{ matrix.os }}
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
+  sanitizer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Full linked logical and original semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/source.txt
+          CC=clang CXX=clang++ cmake -S . -B build/asan -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/logical_observation_targets.cmake" -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined' > evidence/configure.log 2>&1
+          cmake --build build/asan --target qbrain_logical_rerank_move_tests qbrain_logical_observation_tests qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_http_tests --parallel 2 > evidence/build.log 2>&1
+          for target in qbrain_logical_rerank_move_tests qbrain_logical_observation_tests qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_http_tests; do
+            "build/asan/$target" > "evidence/$target.json" 2> "evidence/$target.stderr"
+            test ! -s "evidence/$target.stderr"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qbrain-n48x-sanitizer
+          path: evidence/
+          retention-days: 30
