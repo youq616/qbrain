@@ -39,3 +39,18 @@ frozen GitHub.create_blob -> tests/test_pg_directory_cache.cpp action remain
 untouched. No merge, deployment, real data, paid provider or new toolkit. New
 non-author review is still needed for the published repair; existing tests and
 review records are not erased.
+
+## Test portability amendment before accepting Windows
+
+Author review of Microsoft's STL vector move constructor found its Debug iterator
+proxy allocation, unrelated to SearchHit storage. The first 70460 test incorrectly
+assumed every library move is allocation-free in every build. Keep that candidate's
+records. In MSVC Debug, reject allocations >= sizeof(SearchHit), still reject every
+vector payload/string deep copy and require original vector/title buffer identity.
+Report both all allocations and rejected-scope allocations, never call a proxy move
+zero-allocation. All other builds retain rejection of every allocation. Add a native
+Windows Release build of the same real reranker test with threshold explicitly zero;
+its complete 182 checks and zero total call allocations must pass. Do not change STL
+flags, production ABI, existing tests, signals or error handling to mask Debug behavior.
+Reference: https://github.com/microsoft/STL/blob/main/stl/inc/vector (move constructor).
+This supplements, rather than substitutes for, the requested no-copy regression.

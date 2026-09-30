@@ -61,6 +61,13 @@ jobs:
             cp "build/n48x/${config}${target}${suffix}" "evidence/${target}${suffix}"
           done
           "evidence/qbrain_logical_rerank_move_tests${suffix}" > evidence/rerank-move.json
+          if [ "$RUNNER_OS" = Windows ]; then
+            cmake -S . -B build/n48x-move-release -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/logical_observation_targets.cmake" > evidence/move-release-configure.log 2>&1
+            cmake --build build/n48x-move-release --config Release --target qbrain_logical_rerank_move_tests --parallel 2 > evidence/move-release-build.log 2>&1
+            cp build/n48x-move-release/Release/qbrain_logical_rerank_move_tests.exe evidence/qbrain_logical_rerank_move_release.exe
+            evidence/qbrain_logical_rerank_move_release.exe > evidence/rerank-move-release.json
+            python -c "import json; r=json.load(open('evidence/rerank-move-release.json')); assert r['passed'] is True and r['fault_minimum_bytes']==0 and all(c['all_allocation_attempts']==0 for c in r['cases'])"
+          fi
           "evidence/qbrain_logical_observation_tests${suffix}" > evidence/logical-native.json
           "evidence/qbrain_runtime_observation_tests${suffix}" > evidence/original-observation.json
           "evidence/qbrain_observation_semantics_tests${suffix}" > evidence/original-semantics.json
