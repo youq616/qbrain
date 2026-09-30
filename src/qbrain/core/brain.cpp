@@ -127,7 +127,7 @@ void Brain::open() {
 }
 
 void Brain::open_at(const std::string& db_path) {
-  if (query_embeddings_) query_embeddings_->clear();
+  query_embedding_cache().clear();
   db_path_.clear();
   // ---- N38 PG wiring (plan D2): explicit opt-in backend selection --------
   // When QBRAIN_PG_DSN is non-empty, the PG backend replaces SQLite for this
@@ -171,7 +171,7 @@ void Brain::open_at(const std::string& db_path) {
 }
 
 void Brain::open_pg(const std::string& dsn) {
-  if (query_embeddings_) query_embeddings_->clear();
+  query_embedding_cache().clear();
 #if defined(QBRAIN_WITH_PG)
   // N38 PG open path (plan D2), shared by the QBRAIN_PG_DSN branch of
   // open_at() and the explicit-DSN test/harness seam n38_open_pg_brain():

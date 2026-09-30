@@ -259,7 +259,7 @@ class Brain {
   std::string db_path_;
   storage::Database db_;
   Config config_;
-  std::unique_ptr<ai::QueryEmbeddingCache> query_embeddings_;
+  std::unique_ptr<ai::QueryEmbeddingCache> query_embeddings_ = std::make_unique<ai::QueryEmbeddingCache>();
   std::optional<bool> embedding_available_override_;
   Page row_to_page(storage::Database::Statement& st);
 };
