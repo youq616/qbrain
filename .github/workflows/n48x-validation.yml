@@ -48,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           cmake -S . -B build/n48x -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/logical_observation_targets.cmake" > evidence/configure.log 2>&1
-          cmake --build build/n48x --config Debug --target qbrain qbrain_logical_observation_tests qbrain_logical_observation_http_tests qbrain_logical_rerank_regression qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_runtime_observation_http qbrain_http_tests qbrain_http_probe qbrain_context_tests qbrain_memory_tests qbrain_fact_tests qbrain_hook_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
+          cmake --build build/n48x --config Debug --target qbrain qbrain_logical_observation_tests qbrain_logical_rerank_move_tests qbrain_logical_observation_http_tests qbrain_logical_rerank_regression qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_runtime_observation_http qbrain_http_tests qbrain_http_probe qbrain_context_tests qbrain_memory_tests qbrain_fact_tests qbrain_hook_fact_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests --parallel 2 > evidence/build.log 2>&1
           if [ "$RUNNER_OS" = Windows ]; then
             cmake --build build/n48x --config Debug --target qbrain_tests --parallel 2 > evidence/full-windows-build.log 2>&1
           fi
@@ -57,13 +57,14 @@ jobs:
         run: |
           set -euo pipefail
           suffix=''; config=''; if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; config='Debug/'; fi
-          for target in qbrain qbrain_logical_observation_tests qbrain_logical_observation_http_tests qbrain_logical_rerank_regression qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_runtime_observation_http qbrain_http_tests qbrain_http_probe; do
+          for target in qbrain qbrain_logical_observation_tests qbrain_logical_rerank_move_tests qbrain_logical_observation_http_tests qbrain_logical_rerank_regression qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_runtime_observation_http qbrain_http_tests qbrain_http_probe; do
             cp "build/n48x/${config}${target}${suffix}" "evidence/${target}${suffix}"
           done
+          "evidence/qbrain_logical_rerank_move_tests${suffix}" > evidence/rerank-move.json
           "evidence/qbrain_logical_observation_tests${suffix}" > evidence/logical-native.json
           "evidence/qbrain_runtime_observation_tests${suffix}" > evidence/original-observation.json
           "evidence/qbrain_observation_semantics_tests${suffix}" > evidence/original-semantics.json
-          ctest --test-dir build/n48x -C Debug -R '^qbrain_(logical_observation_unit|logical_rerank_regression|runtime_observation_unit|observation_semantics_unit|http_input_unit|context_unit|memory_unit|fact_unit|hook_fact_unit|multiterm_unit|usage_batch_unit|usage_batch_ownership_unit)$' --output-on-failure | tee evidence/ctest.log
+          ctest --test-dir build/n48x -C Debug -R '^qbrain_(logical_observation_unit|logical_rerank_regression|logical_rerank_move_unit|runtime_observation_unit|observation_semantics_unit|http_input_unit|context_unit|memory_unit|fact_unit|hook_fact_unit|multiterm_unit|usage_batch_unit|usage_batch_ownership_unit)$' --output-on-failure | tee evidence/ctest.log
           if [ "$RUNNER_OS" = Windows ]; then
             "build/n48x/Debug/qbrain_tests.exe" > evidence/windows-original-groups.log 2>&1
           fi
@@ -105,8 +106,8 @@ jobs:
           mkdir evidence
           git rev-parse HEAD > evidence/source.txt
           CC=clang CXX=clang++ cmake -S . -B build/asan -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/logical_observation_targets.cmake" -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined' > evidence/configure.log 2>&1
-          cmake --build build/asan --target qbrain_logical_observation_tests qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_http_tests --parallel 2 > evidence/build.log 2>&1
-          for target in qbrain_logical_observation_tests qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_http_tests; do
+          cmake --build build/asan --target qbrain_logical_rerank_move_tests qbrain_logical_observation_tests qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_http_tests --parallel 2 > evidence/build.log 2>&1
+          for target in qbrain_logical_rerank_move_tests qbrain_logical_observation_tests qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_http_tests; do
             "build/asan/$target" > "evidence/$target.json" 2> "evidence/$target.stderr"
             test ! -s "evidence/$target.stderr"
           done

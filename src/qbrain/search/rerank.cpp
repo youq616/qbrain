@@ -417,7 +417,7 @@ std::vector<SearchHit> apply_reranker(const Config& cfg, const std::string& quer
   return accounting::logical::invoke(accounting::logical::Kind::rerank, [&](auto& observation) {
   if (!opts.enabled || results.empty() || opts.top_n_in <= 0) {
     observation.path(results.empty()?accounting::logical::Path::empty_input:accounting::logical::Path::disabled);
-    return results;
+    return std::move(results);
   }
   observation.path(accounting::logical::Path::local_baseline);
 
