@@ -1,4 +1,5 @@
 """Static source-contract tests, independent of all runtime fixtures."""
+import argparse
 import copy
 import hashlib
 import json
@@ -208,7 +209,137 @@ def repair_controls(checks):
             raise RuntimeError('failed combined process lost partial/request evidence')
         checks.append('failed combined process retains partial commands and synthetic request evidence')
 
-def installer_export_controls(checks):
+def require_failed_capability(row, timeout):
+    """Missing diagnostics must remain a hard failure, with the row preserved."""
+    if not isinstance(row,dict) or not isinstance(row.get('program'),dict):
+        raise RuntimeError('synthetic capability row missing program metadata: '+json.dumps(row))
+    cap=row['program'].get('capability')
+    if not isinstance(cap,dict):
+        raise RuntimeError('synthetic capability row missing capability metadata: '+json.dumps(row))
+    for key in ('stdout','stderr'):
+        if not isinstance(cap.get(key),dict) or not isinstance(cap[key].get('path'),str):
+            raise RuntimeError('synthetic capability row missing '+key+' identity: '+json.dumps(row))
+    if row.get('passed') is not False or cap.get('passed') is not False:
+        raise RuntimeError('synthetic capability failure was accepted')
+    if Path(cap['stdout']['path']).read_bytes()!=b'PARTIAL\0\xff' or Path(cap['stderr']['path']).read_bytes()!=b'ERROR\0\xfe':
+        raise RuntimeError('capability failure lost exact raw streams')
+    if 'exit' not in cap:
+        raise RuntimeError('capability failure missing explicit exit metadata')
+    if timeout:
+        valid=cap['exit'] is None and cap.get('timed_out') is True
+    else:
+        valid=type(cap['exit']) is int and cap['exit']==17 and ('timed_out' not in cap or cap['timed_out'] is False)
+    if not valid:
+        raise RuntimeError('capability failure exit/timeout metadata changed')
+    return cap
+
+def synthetic_capability_case(evidence, name, *, timeout=False, wrong_executable=False, before_row=False):
+    """Use fake files only as identities; every attempted execution is intercepted."""
+    root=evidence/name;root.mkdir(exist_ok=False)
+    transcript=[];row=None;failure=None;spec=None;alias=None;resolved=None;fixture_hash=None;fixture_identities={}
+    original_run=combined_driver.subprocess.run
+    try:
+        (root/'segment').mkdir()
+        fake=root/'powershell.exe';fake.write_bytes(b'synthetic identity only; never executed')
+        alias=root/'segment'/'..'/'powershell.exe'
+        resolved=alias.resolve(strict=True);fixture_hash=hashlib.sha256(fake.read_bytes()).hexdigest()
+        if alias==resolved or not alias.samefile(resolved):raise RuntimeError('synthetic alias control is not distinct and same-file')
+        decoy=root/'pwsh.exe';decoy.write_bytes(b'different synthetic identity; never executed')
+        marker=root/'binary.marker';marker.write_bytes(b'synthetic binary identity')
+        executable=decoy if wrong_executable else alias
+        spec=dict(name=name,executable=str(executable),shell_executable=str(executable),expected_shell_major=5,
+            binary=str(marker),binary_sha256=hashlib.sha256(marker.read_bytes()).hexdigest(),expected_exit=0,
+            prefix=str(root/'capture'),arguments=['-File','synthetic-never-executed.ps1'])
+        fixture_identities={str(path):hashlib.sha256(path.read_bytes()).hexdigest() for path in (fake,decoy,marker)}
+        if before_row:del spec['binary']
+        (root/'SPEC.json').write_text(json.dumps(spec,indent=2)+'\n')
+        def backend(argv,**kwargs):
+            # Retain the attempted call before any filesystem identity operation.
+            event=dict(argv=[str(arg)[:32768] for arg in argv[:16]],argv_count=len(argv),
+                argv_truncated=len(argv)>16 or any(len(str(arg))>32768 for arg in argv),
+                fixture_spelling=str(alias),fixture_resolved=str(resolved),stage='intercepted')
+            transcript.append(event)
+            try:
+                if event['argv_truncated']:raise AssertionError('synthetic intercepted argv exceeds diagnostic bound')
+                event['stage']='same-file';observed=Path(argv[0]);same=observed.samefile(resolved);event['same_file']=same
+                event['stage']='resolve';event['observed_resolved']=str(observed.resolve(strict=True))
+                event['stage']='hash';event['fixture_sha256']=hashlib.sha256(resolved.read_bytes()).hexdigest()
+                event['stage']='identity'
+                if not same or event['fixture_sha256']!=fixture_hash:raise AssertionError('unexpected synthetic probe executable')
+                if any(k.upper()=='PSMODULEPATH' for k in kwargs['env']):raise AssertionError('module path reached child probe')
+                version=[str(observed),'-NoProfile','-NonInteractive','-Command','[Console]::Write($PSVersionTable.PSVersion.ToString())']
+                if list(argv)==version:
+                    event['stage']='version';return subprocess.CompletedProcess(argv,0,b'5.1.0.0',b'')
+                expected=[str(observed),'-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',
+                    str((root/'capture.program-version.capability.ps1').resolve()),'-ProbePath',
+                    str((root/'capture.program-version.capability.input').resolve())]
+                if list(argv)!=expected:raise AssertionError('original test must not run after failed probe')
+                event['stage']='injected-timeout' if timeout else 'injected-error'
+                if timeout:raise subprocess.TimeoutExpired(argv,30,output=b'PARTIAL\x00\xff',stderr=b'ERROR\x00\xfe')
+                return subprocess.CompletedProcess(argv,17,b'PARTIAL\x00\xff',b'ERROR\x00\xfe')
+            except BaseException as error:
+                event['exception']=dict(type=type(error).__name__,message=str(error));raise
+        combined_driver.subprocess.run=backend
+        row=capture_command(spec,root/'ROW.json')
+        return row,transcript
+    except BaseException as error:
+        failure=dict(type=type(error).__name__,message=str(error));raise
+    finally:
+        combined_driver.subprocess.run=original_run
+        record=dict(specification=spec,row=row,exception=failure,interceptions=transcript,
+            fixture_spelling=str(alias),fixture_resolved=str(resolved),fixture_sha256=fixture_hash,
+            fixture_after_sha256=None,fixture_identities=fixture_identities,fixture_after_identities={},
+            postconditions_passed=False,file_inventory_complete=False,diagnostic_errors=[])
+        def persist_control():
+            raw=(json.dumps(record,indent=2)+'\n').encode('utf-8')
+            (root/'CONTROL.json').write_bytes(raw)
+            return dict(path='CONTROL.json',bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+        # Flush the already captured row/call/error before any optional read.
+        persist_control()
+        def diagnostic_error(stage,path,error):
+            value=dict(stage=stage,path=str(path),type=type(error).__name__,message=str(error))
+            record['diagnostic_errors'].append(value)
+            return value
+        if not fixture_identities:
+            diagnostic_error('initial-fixture-identity',root,RuntimeError('initial fixture identities unavailable'))
+        for path in fixture_identities:
+            try:record['fixture_after_identities'][path]=hashlib.sha256(Path(path).read_bytes()).hexdigest()
+            except Exception as error:
+                record['fixture_after_identities'][path]=None
+                diagnostic_error('post-fixture-hash',path,error)
+        if resolved is not None:record['fixture_after_sha256']=record['fixture_after_identities'].get(str(resolved))
+        record['postconditions_passed']=not record['diagnostic_errors'] and record['fixture_after_identities']==fixture_identities
+        if not record['postconditions_passed'] and not record['diagnostic_errors']:
+            diagnostic_error('post-fixture-identity',root,RuntimeError('synthetic fixture identity changed'))
+        files=[];total=0
+        try:paths=sorted(root.iterdir())
+        except Exception as error:
+            paths=[];diagnostic_error('inventory-list',root,error)
+        if len(paths)>24:
+            diagnostic_error('inventory-bound',root,RuntimeError('synthetic diagnostic file count exceeded'))
+            paths=paths[:24]
+        inventory_errors=len(record['diagnostic_errors'])
+        for path in paths:
+            if path.name in ('CONTROL.json','FILES.json'):continue
+            item=dict(path=path.name,bytes=None,sha256=None)
+            try:
+                if not path.is_file():continue
+                size=path.stat().st_size;item['bytes']=size
+                if size>1024*1024-total:raise RuntimeError('synthetic diagnostic byte budget exceeded')
+                total+=size;item['sha256']=hashlib.sha256(path.read_bytes()).hexdigest()
+            except Exception as error:item['inspection_error']=diagnostic_error('inventory-file',path,error)
+            files.append(item)
+        record['file_inventory_complete']=len(record['diagnostic_errors'])==inventory_errors and not any(x['stage'] in ('inventory-list','inventory-bound') for x in record['diagnostic_errors'])
+        control=persist_control();files.append(control)
+        (root/'FILES.json').write_text(json.dumps(files,indent=2)+'\n')
+        if not record['postconditions_passed'] or not record['file_inventory_complete']:
+            # A pending original exception still propagates unchanged. A captured
+            # failed row is preserved verbatim and named in the hard failure.
+            if failure is None:
+                primary=row.get('error') if isinstance(row,dict) else None
+                raise RuntimeError('synthetic diagnostic finalization failed; captured error='+str(primary)+'; see '+str(root/'CONTROL.json'))
+
+def installer_export_controls(checks, evidence):
     def reject(name,call):
         try:call()
         except (ValueError,OSError):checks.append(name+' rejected')
@@ -226,26 +357,117 @@ def installer_export_controls(checks):
         for field,replacement in [('powershell_version','7.0.0'),('sha256','0'*64),('command_name','other'),('module_name','other')]:
             changed={**value,field:replacement}
             reject('capability '+field,lambda:combined_driver.validate_powershell_capability(changed,'5.1.0.0',digest))
-        fake=root/'powershell.exe';fake.write_bytes(b'synthetic identity only; never executed')
-        marker=root/'binary.marker';marker.write_bytes(b'synthetic binary identity')
-        original_run=combined_driver.subprocess.run
+        baseline_rows={}
         for timeout in (False,True):
             name='capability-timeout' if timeout else 'capability-error'
-            def backend(argv,**kwargs):
-                if Path(argv[0])!=fake:raise AssertionError('unexpected synthetic probe executable')
-                if any(k.upper()=='PSMODULEPATH' for k in kwargs['env']):raise AssertionError('module path reached child probe')
-                if '-Command' in argv:return subprocess.CompletedProcess(argv,0,b'5.1.0.0',b'')
-                if '-File' not in argv or not any(str(a).endswith('.capability.ps1') for a in argv):raise AssertionError('original test must not run after failed probe')
-                if timeout:raise subprocess.TimeoutExpired(argv,30,output=b'PARTIAL\x00\xff',stderr=b'ERROR\x00\xfe')
-                return subprocess.CompletedProcess(argv,17,b'PARTIAL\x00\xff',b'ERROR\x00\xfe')
-            spec=dict(name=name,executable=str(fake),shell_executable=str(fake),expected_shell_major=5,binary=str(marker),binary_sha256=hashlib.sha256(marker.read_bytes()).hexdigest(),expected_exit=0,prefix=str(root/name),arguments=['-File','synthetic-never-executed.ps1'])
-            try:
-                combined_driver.subprocess.run=backend;row=capture_command(spec,root/(name+'.json'))
-            finally:combined_driver.subprocess.run=original_run
-            cap=row['program']['capability']
-            if row['passed'] or cap['passed'] or Path(cap['stdout']['path']).read_bytes()!=b'PARTIAL\0\xff' or Path(cap['stderr']['path']).read_bytes()!=b'ERROR\0\xfe':raise RuntimeError('capability failure lost raw streams')
-            if timeout and not cap.get('timed_out'):raise RuntimeError('probe timeout status missing')
+            row,transcript=synthetic_capability_case(evidence,name,timeout=timeout)
+            baseline_rows[timeout]=row
+            require_failed_capability(row,timeout)
+            if [event['stage'] for event in transcript]!=['version','injected-timeout' if timeout else 'injected-error']:
+                raise RuntimeError('synthetic capability failure injection was not observed: '+json.dumps(transcript))
             checks.append('synthetic '+name+' preserves exact raw streams and remains failed')
+            checks.append('synthetic '+name+' uses same-file alias and observes both required probe calls')
+        metadata_cases=[(True,'missing-exit','exit',None,True),(True,'non-null-exit','exit',0,False),
+            (True,'missing-timeout','timed_out',None,True),(True,'string-timeout','timed_out','false',False),
+            (True,'integer-timeout','timed_out',1,False),(True,'false-timeout','timed_out',False,False),
+            (False,'missing-exit','exit',None,True),(False,'string-exit','exit','17',False),
+            (False,'boolean-exit','exit',True,False),(False,'true-timeout','timed_out',True,False),
+            (False,'string-timeout','timed_out','false',False),(False,'integer-timeout','timed_out',0,False),
+            (False,'null-timeout','timed_out',None,False)]
+        for timeout,label,field,value,remove in metadata_cases:
+            changed=copy.deepcopy(baseline_rows[timeout]);cap=changed['program']['capability']
+            if remove:cap.pop(field,None)
+            else:cap[field]=value
+            name=('timeout-' if timeout else 'error-')+label
+            (evidence/(name+'.json')).write_text(json.dumps(changed,indent=2)+'\n')
+            try:require_failed_capability(changed,timeout)
+            except RuntimeError as error:
+                if str(error) not in ('capability failure missing explicit exit metadata','capability failure exit/timeout metadata changed'):raise
+                (evidence/(name+'.stderr')).write_text(str(error)+'\n')
+            else:raise RuntimeError('malformed '+name+' metadata accepted')
+            checks.append('malformed '+name+' metadata rejected with row retained')
+        explicit_false=copy.deepcopy(baseline_rows[False]);explicit_false['program']['capability']['timed_out']=False
+        require_failed_capability(explicit_false,False)
+        checks.append('non-timeout explicit Boolean false remains accepted with integer exit17')
+        for field in ('program','capability'):
+            changed=copy.deepcopy(row)
+            if field=='program':del changed['program']
+            else:del changed['program']['capability']
+            (evidence/('missing-'+field+'.json')).write_text(json.dumps(changed,indent=2)+'\n')
+            try:require_failed_capability(changed,True)
+            except RuntimeError as error:
+                if 'missing '+field+' metadata' not in str(error):raise
+                (evidence/('missing-'+field+'.stderr')).write_text(str(error)+'\n')
+            else:raise RuntimeError('missing '+field+' metadata accepted')
+            checks.append('missing '+field+' metadata fails descriptively with complete row retained')
+        wrong,transcript=synthetic_capability_case(evidence,'unexpected-executable',wrong_executable=True)
+        if wrong.get('passed') is not False or wrong.get('error')!='unexpected synthetic probe executable' or 'program' in wrong:
+            raise RuntimeError('unexpected synthetic executable was not rejected before version metadata')
+        if len(transcript)!=1 or transcript[0]['same_file'] or transcript[0]['stage']!='identity':raise RuntimeError('wrong executable injection not observed')
+        checks.append('wrong executable rejected before version metadata with complete diagnostic row')
+        target=(evidence/'identity-error'/'powershell.exe').resolve();injected=[];original_samefile=Path.samefile
+        def fail_observed_identity(path,other):
+            resolved_target=target.resolve(strict=True)
+            if path==resolved_target and other==resolved_target:
+                injected.append(dict(path=str(path),other=str(other)))
+                raise OSError('synthetic observed identity stat failure')
+            return original_samefile(path,other)
+        try:
+            Path.samefile=fail_observed_identity
+            failed,transcript=synthetic_capability_case(evidence,'identity-error')
+        finally:
+            Path.samefile=original_samefile
+            (evidence/'identity-error-injection.json').write_text(json.dumps(injected,indent=2)+'\n')
+        retained=json.loads((evidence/'identity-error/CONTROL.json').read_bytes())
+        if len(injected)!=1 or failed.get('passed') is not False or failed.get('error')!='synthetic observed identity stat failure':
+            raise RuntimeError('early identity failure injection was not observed and rejected')
+        if len(transcript)!=1 or retained['interceptions']!=transcript or transcript[0]['argv'][0]!=str(target.resolve(strict=True)) or transcript[0]['stage']!='same-file':
+            raise RuntimeError('early identity failure lost intercepted argv/stage')
+        if transcript[0].get('exception')!={'type':'OSError','message':'synthetic observed identity stat failure'} or transcript[0]['argv_truncated']:
+            raise RuntimeError('early identity failure lost available exception or complete bounded argv')
+        checks.append('early same-file exception retains every intercepted argv stage and exception')
+        native_capture=capture_command;native_read=Path.read_bytes;read_failures=[]
+        def capture_with_persistent_read_error(spec,result):
+            target=Path(spec['executable']).resolve(strict=True)
+            def failed_read(path):
+                if path==target:
+                    read_failures.append(dict(path=str(path),buffered_control=(evidence/'persistent-read-error/CONTROL.json').is_file()))
+                    raise OSError('synthetic persistent fixture read failure')
+                return native_read(path)
+            Path.read_bytes=failed_read
+            return native_capture(spec,result)
+        try:
+            globals()['capture_command']=capture_with_persistent_read_error
+            try:synthetic_capability_case(evidence,'persistent-read-error')
+            except RuntimeError as error:
+                if 'synthetic diagnostic finalization failed; captured error=synthetic persistent fixture read failure' not in str(error):raise
+                (evidence/'persistent-read-error.stderr').write_text(str(error)+'\n')
+            else:raise RuntimeError('persistent fixture read error was accepted')
+        finally:
+            Path.read_bytes=native_read;globals()['capture_command']=native_capture
+            (evidence/'persistent-read-injection.json').write_text(json.dumps(read_failures,indent=2)+'\n')
+        retained=json.loads((evidence/'persistent-read-error/CONTROL.json').read_bytes())
+        failed=json.loads((evidence/'persistent-read-error/ROW.json').read_bytes())
+        inventory=json.loads((evidence/'persistent-read-error/FILES.json').read_bytes())
+        if len(read_failures)<3 or read_failures[0]['buffered_control'] or not all(x['buffered_control'] for x in read_failures[1:]):
+            raise RuntimeError('persistent read injection did not prove buffering before post/inventory reads')
+        if failed.get('passed') is not False or failed.get('error')!='synthetic persistent fixture read failure' or retained['row']!=failed:
+            raise RuntimeError('persistent read error lost the original failed row')
+        if len(retained['interceptions'])!=1 or retained['interceptions'][0]['stage']!='hash' or retained['interceptions'][0].get('exception')!={'type':'OSError','message':'synthetic persistent fixture read failure'}:
+            raise RuntimeError('persistent read failure lost intercepted argv/stage/exception')
+        if retained['postconditions_passed'] or retained['file_inventory_complete'] or {x['stage'] for x in retained['diagnostic_errors']}!={'post-fixture-hash','inventory-file'}:
+            raise RuntimeError('persistent read failure falsely completed diagnostic inspection')
+        if not any(x['path']=='powershell.exe' and x.get('inspection_error') and x['sha256'] is None for x in inventory):
+            raise RuntimeError('persistent inventory error was not retained')
+        checks.append('persistent fixture read failure flushes complete row transcript before post-read and inventory errors')
+        try:synthetic_capability_case(evidence,'before-row-error',before_row=True)
+        except KeyError as error:
+            if error.args!=('binary',):raise
+        else:raise RuntimeError('pre-row error fixture unexpectedly accepted')
+        early=json.loads((evidence/'before-row-error/CONTROL.json').read_bytes())
+        if early['row'] is not None or early['exception']!={'type':'KeyError','message':"'binary'"} or early['interceptions']:
+            raise RuntimeError('pre-row failure did not preserve complete available diagnostics')
+        checks.append('pre-row failure retains specification fixture identities and exception without execution')
         fixtures=root/'fixtures';result=source_gate.materialize_prior_fixtures(ROOT,fixtures)
         source_gate.verify_prior_fixtures(fixtures,result['manifest_sha256'])
         bridge=fixtures/'Invoke-QbrainJson.ps1';raw=bridge.read_bytes()
@@ -310,7 +532,7 @@ def installer_export_controls(checks):
         checks.append('manifest overflow retains numeric bytes count archive and part diagnostics')
         return dict(expanded_manifest_bytes=expanded_size,expanded_manifest_entries=24000,exact_manifest_bytes=source_gate.MAX_MANIFEST,maximum_outer_zip_bytes=envelope_size,outer_tool_ceiling_bytes=32*source_gate.BLOCK,preflight_budget_bytes=source_gate.MIN_FREE)
 
-def main():
+def main(evidence):
     raw=(ROOT/INVENTORY).read_bytes()
     if b'\r\n' in raw: raw=raw.replace(b'\r\n', b'\n')
     _, expected=contract(raw)
@@ -393,7 +615,15 @@ def main():
         if row['passed'] or row.get('actual_exit')!=0:raise RuntimeError('exit0 missing report accepted')
         checks.append('successful child cannot omit required report')
     repair_controls(checks)
-    measurements=installer_export_controls(checks)
-    print(json.dumps(dict(passed=True,checks=checks,check_count=len(checks),installer_export_measurements=measurements)))
+    measurements=installer_export_controls(checks,evidence)
+    print(json.dumps(dict(passed=True,checks=checks,check_count=len(checks),installer_export_measurements=measurements,synthetic_evidence=str(evidence))))
 
-if __name__=='__main__':main()
+if __name__=='__main__':
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--evidence',type=Path,help='New directory retaining synthetic probe evidence on success and failure')
+    args=parser.parse_args()
+    if args.evidence is None:evidence=Path(tempfile.mkdtemp(prefix='n49c-contract-evidence-')).resolve()
+    else:
+        evidence=args.evidence.resolve();evidence.mkdir(parents=True,exist_ok=False)
+    print('Synthetic contract evidence: '+str(evidence),file=sys.stderr)
+    main(evidence)

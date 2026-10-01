@@ -87,8 +87,8 @@ jobs:
         if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
         "$bindir/qbrain_pg_context_tests$suffix" --sqlite-only > evidence/pg-context-sqlite.json
         python .ci/run_n49a_process.py --bin-dir "$bindir" --output evidence/process > evidence/process-summary.json
-        python .ci/test_n49c_source_contract.py > evidence/source-contract-tests.json
-        python -O .ci/test_n49c_source_contract.py > evidence/source-contract-tests-optimized.json
+        python .ci/test_n49c_source_contract.py --evidence evidence/source-contract-normal > evidence/source-contract-tests.json 2> evidence/source-contract-tests.stderr
+        python -O .ci/test_n49c_source_contract.py --evidence evidence/source-contract-optimized > evidence/source-contract-tests-optimized.json 2> evidence/source-contract-tests-optimized.stderr
         for mode in normal optimized; do
           opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
           python "${opt[@]}" .ci/test_directory_search.py --binary "$bindir/qbrain$suffix" --output "evidence/directory-$mode" > "evidence/directory-$mode.log"
