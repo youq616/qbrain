@@ -208,6 +208,108 @@ def repair_controls(checks):
             raise RuntimeError('failed combined process lost partial/request evidence')
         checks.append('failed combined process retains partial commands and synthetic request evidence')
 
+def installer_export_controls(checks):
+    def reject(name,call):
+        try:call()
+        except (ValueError,OSError):checks.append(name+' rejected')
+        else:raise RuntimeError(name+' accepted')
+    with tempfile.TemporaryDirectory(prefix='n49c-installer-export-controls-',dir=tempfile.gettempdir()) as tmp:
+        root=Path(tmp)
+        env={**os.environ,'PSModulePath':'synthetic-module-sentinel','PSMODULEPATH':'synthetic-module-sentinel','pSmOdUlEpAtH':'synthetic-module-sentinel','N49C_KEEP':'synthetic-required-value'}
+        child="import os,sys;sys.exit(1 if any(k.upper()=='PSMODULEPATH' for k in os.environ) or os.environ.get('N49C_KEEP')!='synthetic-required-value' else 0)"
+        if run_clean([sys.executable,'-c',child],env):raise RuntimeError('actual module-path-scrub child failed')
+        checks.append('mixed-case PSModulePath absent in actual child with unrelated setting retained')
+        digest=hashlib.sha256(b'synthetic').hexdigest()
+        value=dict(powershell_version='5.1.0.0',pshome=str(root),command_name='Get-FileHash',command_type='Function',module_name='Microsoft.PowerShell.Utility',module_version='3.1.0.0',module_path=str(root/'synthetic-module.psm1'),sha256=digest)
+        combined_driver.validate_powershell_capability(value,'5.1.0.0',digest)
+        checks.append('synthetic PowerShell capability metadata validates independently held digest')
+        for field,replacement in [('powershell_version','7.0.0'),('sha256','0'*64),('command_name','other'),('module_name','other')]:
+            changed={**value,field:replacement}
+            reject('capability '+field,lambda:combined_driver.validate_powershell_capability(changed,'5.1.0.0',digest))
+        fake=root/'powershell.exe';fake.write_bytes(b'synthetic identity only; never executed')
+        marker=root/'binary.marker';marker.write_bytes(b'synthetic binary identity')
+        original_run=combined_driver.subprocess.run
+        for timeout in (False,True):
+            name='capability-timeout' if timeout else 'capability-error'
+            def backend(argv,**kwargs):
+                if Path(argv[0])!=fake:raise AssertionError('unexpected synthetic probe executable')
+                if any(k.upper()=='PSMODULEPATH' for k in kwargs['env']):raise AssertionError('module path reached child probe')
+                if '-Command' in argv:return subprocess.CompletedProcess(argv,0,b'5.1.0.0',b'')
+                if '-File' not in argv or not any(str(a).endswith('.capability.ps1') for a in argv):raise AssertionError('original test must not run after failed probe')
+                if timeout:raise subprocess.TimeoutExpired(argv,30,output=b'PARTIAL\x00\xff',stderr=b'ERROR\x00\xfe')
+                return subprocess.CompletedProcess(argv,17,b'PARTIAL\x00\xff',b'ERROR\x00\xfe')
+            spec=dict(name=name,executable=str(fake),shell_executable=str(fake),expected_shell_major=5,binary=str(marker),binary_sha256=hashlib.sha256(marker.read_bytes()).hexdigest(),expected_exit=0,prefix=str(root/name),arguments=['-File','synthetic-never-executed.ps1'])
+            try:
+                combined_driver.subprocess.run=backend;row=capture_command(spec,root/(name+'.json'))
+            finally:combined_driver.subprocess.run=original_run
+            cap=row['program']['capability']
+            if row['passed'] or cap['passed'] or Path(cap['stdout']['path']).read_bytes()!=b'PARTIAL\0\xff' or Path(cap['stderr']['path']).read_bytes()!=b'ERROR\0\xfe':raise RuntimeError('capability failure lost raw streams')
+            if timeout and not cap.get('timed_out'):raise RuntimeError('probe timeout status missing')
+            checks.append('synthetic '+name+' preserves exact raw streams and remains failed')
+        fixtures=root/'fixtures';result=source_gate.materialize_prior_fixtures(ROOT,fixtures)
+        source_gate.verify_prior_fixtures(fixtures,result['manifest_sha256'])
+        bridge=fixtures/'Invoke-QbrainJson.ps1';raw=bridge.read_bytes()
+        if not (fixtures/'P.ps1').is_file() or not (fixtures/'K.ps1').is_file() or b'\r' in raw or len(raw)!=4005:raise RuntimeError('pinned sibling layout/bytes mismatch')
+        checks.append('both accepted prior fixtures have exact pinned raw sibling bridge')
+        bridge.unlink();reject('missing prior companion',lambda:source_gate.verify_prior_fixtures(fixtures,result['manifest_sha256']));bridge.write_bytes(raw+b' ')
+        reject('changed prior companion',lambda:source_gate.verify_prior_fixtures(fixtures,result['manifest_sha256']));bridge.write_bytes(raw)
+        reject('mismatched historical companion pin',lambda:source_gate.pinned_fixture_blob(ROOT,source_gate.PRIOR_P,'scripts/Invoke-QbrainJson.ps1','0'*40,source_gate.PRIOR_BRIDGE_SHA256,4005))
+        value={'files':[{'path':f'synthetic-{i:05d}','sha256':'a'*64} for i in range(24000)]}
+        encoded=source_gate.encode_manifest(value)
+        if not 2*source_gate.BLOCK<len(encoded)<source_gate.MAX_MANIFEST or json.loads(encoded)!=value:raise RuntimeError('expanded manifest lost entries')
+        expanded_size=len(encoded)
+        checks.append('manifest above former 2 MiB cap retains every synthetic entry')
+        overhead=len(source_gate.encode_manifest({'x':''}));exact={'x':'a'*(source_gate.MAX_MANIFEST-overhead)}
+        encoded=source_gate.encode_manifest(exact)
+        if len(encoded)!=source_gate.MAX_MANIFEST:raise RuntimeError('exact manifest capacity failed')
+        path=root/'maximum-manifest.json';path.write_bytes(encoded)
+        if source_gate.bounded_manifest(path)!=encoded:raise RuntimeError('exact-cap bounded read failed')
+        checks.append('exact 8 MiB manifest serialization and bounded read accepted')
+        reject('one-byte-over manifest serialization',lambda:source_gate.encode_manifest({'x':exact['x']+'a'}))
+        path.write_bytes(encoded+b' ');reject('one-byte-over manifest pre-read',lambda:source_gate.bounded_manifest(path));path.write_bytes(encoded)
+        envelope=root/'maximum-envelope.zip'
+        with zipfile.ZipFile(envelope,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=0) as z:
+            with z.open('evidence.part','w') as out:
+                for _ in range(20):out.write(b'x'*source_gate.BLOCK)
+            z.write(path,'manifest.json')
+        if envelope.stat().st_size>=32*source_gate.BLOCK:raise RuntimeError('maximum outer ZIP exceeds tool ceiling')
+        envelope_size=envelope.stat().st_size
+        checks.append('actual 20 plus 8 MiB outer ZIP remains below 32 MiB with framing')
+        if source_gate.MIN_FREE!=3*source_gate.MAX_ARCHIVE+16*source_gate.MAX_MANIFEST+64*source_gate.BLOCK:raise RuntimeError('staging budget arithmetic mismatch')
+        disk=source_gate.shutil.disk_usage;temporary=source_gate.tempfile.TemporaryDirectory
+        def forbidden_stage(*a,**kw):raise AssertionError('staged below revised resource budget')
+        try:
+            source_gate.shutil.disk_usage=lambda p:type('Usage',(),{'free':source_gate.MIN_FREE-1})()
+            source_gate.tempfile.TemporaryDirectory=forbidden_stage
+            identity=dict(commit='1'*40,tree='2'*40,run_id='1',run_attempt='1',job_key='synthetic',job_label='synthetic')
+            reject('consumer one byte below revised 1152 MiB budget',lambda:source_gate.verify_downloaded_artifacts([{}],identity,'0'*64))
+            evidence=root/'tiny-evidence';evidence.mkdir();(evidence/'a').write_bytes(b'a')
+            reject('producer one byte below revised 1152 MiB budget',lambda:source_gate.package_evidence(evidence,root/'no-capacity',identity))
+        finally:source_gate.shutil.disk_usage=disk;source_gate.tempfile.TemporaryDirectory=temporary
+        try:
+            source_gate.shutil.disk_usage=lambda p:type('Usage',(),{'free':source_gate.MIN_FREE})()
+            result=source_gate.package_evidence(evidence,root/'exact-capacity',identity)
+            partroot=Path(result['parts_root']);downloaded=[]
+            for index,directory in enumerate(sorted(partroot.iterdir())):
+                archive=root/f'exact-budget-{index}.zip'
+                with zipfile.ZipFile(archive,'w') as z:
+                    for name in ('evidence.part','manifest.json'):z.write(directory/name,name)
+                downloaded.append(dict(index=index,name='synthetic'+f'-part{index:02d}',run_id='1',run_attempt='1',head_sha='1'*40,path=str(archive),sha256=source_gate.hash_file(archive)))
+            source_gate.verify_downloaded_artifacts(downloaded,identity,result['manifest_sha256'])
+        finally:source_gate.shutil.disk_usage=disk
+        checks.append('producer and consumer accept exact synthetic 1152 MiB budget')
+        old=source_gate.MAX_MANIFEST
+        try:
+            source_gate.MAX_MANIFEST=10
+            try:source_gate.package_evidence(evidence,root/'measured-overflow',identity)
+            except source_gate.ManifestBudgetExceeded as error:
+                d=error.diagnostics
+                if d['manifest_attempted_bytes']<=d['manifest_limit_bytes'] or d['member_count']!=1 or d['part_count']!=1 or d['archive_size']<=0:raise RuntimeError('numeric overflow diagnostics incomplete')
+            else:raise RuntimeError('overflow fixture unexpectedly accepted')
+        finally:source_gate.MAX_MANIFEST=old
+        checks.append('manifest overflow retains numeric bytes count archive and part diagnostics')
+        return dict(expanded_manifest_bytes=expanded_size,expanded_manifest_entries=24000,exact_manifest_bytes=source_gate.MAX_MANIFEST,maximum_outer_zip_bytes=envelope_size,outer_tool_ceiling_bytes=32*source_gate.BLOCK,preflight_budget_bytes=source_gate.MIN_FREE)
+
 def main():
     raw=(ROOT/INVENTORY).read_bytes()
     if b'\r\n' in raw: raw=raw.replace(b'\r\n', b'\n')
@@ -291,6 +393,7 @@ def main():
         if row['passed'] or row.get('actual_exit')!=0:raise RuntimeError('exit0 missing report accepted')
         checks.append('successful child cannot omit required report')
     repair_controls(checks)
-    print(json.dumps(dict(passed=True,checks=checks,check_count=len(checks))))
+    measurements=installer_export_controls(checks)
+    print(json.dumps(dict(passed=True,checks=checks,check_count=len(checks),installer_export_measurements=measurements)))
 
 if __name__=='__main__':main()

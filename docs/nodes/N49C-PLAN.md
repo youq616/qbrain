@@ -552,3 +552,82 @@ Run focused launcher, source-contract and multipart controls in normal and optim
 All four jobs will rerun fresh at the repaired actual remote commit, with unchanged original60/original55, direct MSVC/cross/process, PS5/PS7 transport/install/ownership matrix, loopback wire and 15 leak-enabled ASan/UBSan gates. Windows host/client, real Cursor account, PostgreSQL and paid-provider qualification remain outside scope. A separate final outcome review must inspect downloaded raw evidence before completion.
 
 Rollback is preservation: if any repair gate or review fails, keep the currently published candidate and all evidence, do not advance the branch, and correct only the approved additive qualification scope. No main merge, release or deployment is proposed.
+
+
+# Installer environment, fixture closure and evidence capacity amendment
+
+Status: approved for bounded implementation; fresh native qualification remains pending.
+
+Separate non-author plan review approved this amendment on 2026-10-01. Exact approved plan SHA256: `50c6a4d1da8cd168e583944e584c180e8d4fdb2da9194ab92fbb97247e775ef7`. Review report SHA256: `98cf05bf9ae40f4b3572d4c0ff8758029bf9b03db64e70360065fca966c3417b`.
+
+## Exact failed candidate and observations
+
+Actual candidate `b4a8b6f57a956a8b2dcfd2c3598d471794082238`, tree `a1b465d1946c5ec7549c163d595180902854a18f`; workflow run `36862337992`, attempt 1.
+
+- Direct MSVC job `110369326785` completed production/original60, cross and combined normal/optimized process gates, then failed the installer aggregate. Complete independently anchored multipart evidence contains all 44 rows; 18 failed, 26 passed. Expected old-fixture exit 1 did not substitute for required reports or their validators
+- Most PS5 failures explicitly report unavailable `Get-FileHash`, followed by missing dependent reports. PS7 current-installer and recovery gates passed. The exact inherited module-path value was not retained, so its contents are not asserted as proven
+- Microsoft's official [PSModulePath documentation](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_psmodulepath?view=powershell-7.6) describes a PS7-to-Python-to-PS5 module-autoload incompatibility and recommends omitting `PSModulePath` from the child environment. The existing call chain matches this documented risk; new native capability evidence is required
+- PS7 prior snapshot and case rows explicitly report the missing sibling `fixtures/Invoke-QbrainJson.ps1`. The prior snapshot recorded 0/24 cases passed for this missing dependency, not the intended baseline behavior
+- Windows CMake job `110369326758` logged original55 PASS with 55 steps and passed its final source gate, then failed complete evidence export with `manifest limit exceeded`. Only the small packager diagnostic was published. Its diagnostic/log contains no actual member count or serialized-manifest byte count. Complete Windows raw evidence remains unavailable; the test summary alone does not qualify it
+- Linux CMake and all 15 sanitizer gates succeeded at this parent with verified raw evidence. Those results do not qualify a repair child
+
+All parent failures, available raw streams/rows/parts and unavailable-export limits remain preserved. No old oversized/403 artifact is recovered through another route.
+
+## Bounded source scope
+
+Use a clean descendant of actual b4a8b6. Only these five existing additive paths may change:
+
+1. `.ci/check_n49c_sources.py`: process-local module-path isolation and bounded manifest capacity/serialization
+2. `.ci/test_n49c_process.py`: actual PowerShell capability evidence in the existing raw capture controller
+3. `.ci/test_n49c_source_contract.py`: focused negative/resource/environment controls
+4. `.ci/run_n49c_installers.ps1`: exact missing prior-fixture companion materialization and identity evidence
+5. `docs/nodes/N49C-PLAN.md`: append the approved technical amendment, with native outcome still pending
+
+Preserve all 1,622 inherited mappings and the same 14 additive-path inventory. Do not alter the current installer, prior installer bytes, any inherited tests/validators, workflow commands, original60/original55, 44-row count or expected exits, P/K/R identities, runtime/build code, source-freeze checks, or 15 sanitizer targets. The workflow's existing 16 indexed uploads remain sufficient. No main merge, release, deployment or real client/provider/PG operation is proposed.
+
+## A. PowerShell child environment and native capability evidence
+
+Remove all case spellings of `PSModulePath` only from the environment passed to qualification child processes, retaining all existing credential/DSN/config isolation. Do not set persistent environment variables, install/import an alternative module, edit registry/profile settings, provide a substitute `Get-FileHash`, or print the old environment value.
+
+Extend the existing actual-shell probe for PS5/PS7 to invoke the exact already resolved shell under the same scrubbed environment. Use an argv-safe temporary probe script and a known tiny synthetic file. Record separate raw probe stdout/stderr, argv, exit, shell executable/hash/full version, observed PSHOME, `Get-Command Get-FileHash` command/module/version/location metadata, and the command's actual SHA256 result for the known file. Verify that result against an independently computed Python digest and bind the reported shell version to the existing version probe. Hash the reported module file when present; missing/unusable required command or inconsistent result makes the row fail. Probe files and outputs remain evidence, not tracked source. No private environment values are included.
+
+The same capability evidence is required for the actual harness shell of Python readback rows. Preserve every matrix row and continue collecting independent rows after failures. Do not mistake a capability probe for completion of the original tests.
+
+Portable controls must prove mixed-case module-path sentinels are absent in an actual sanitized child while unrelated required executable-path values remain. Probe-validation controls reject wrong digest/version/command metadata and preserve raw probe errors. Real PS5/PS7 command availability can be established only by fresh native execution.
+
+## B. Complete immutable fixture dependency closure
+
+The complete 44-row call graph uses nine existing PowerShell producers, five existing Python checker/self-test files, the current installer and current process bridge, plus the inline recovery shell-identity reader. Their current-checkout dependencies remain available in the fully bound candidate checkout and unchanged. The existing helper uses only built-in PowerShell/.NET and the explicitly supplied freshly built B executable; it has no further sibling-script dependency.
+
+P and K each require one missing sibling at their actual `$PSScriptRoot`: `Invoke-QbrainJson.ps1`. Independently verify it from both exact accepted commits:
+
+| Fixture | Accepted commit | Companion path | Git blob | Raw bytes | SHA256 |
+| --- | --- | --- | --- | --- | --- |
+| P | `3ebecf26946ae6ddd04fb018085ffc023b5fcab0` | `scripts/Invoke-QbrainJson.ps1` | `8b3c4e6f04ce57dbf79cb245c94a5e5cd1a1125f` | 4,005 | `00c2a059665f816adfe5e0a686606991046c92dc778b3c110437f697356855dc` |
+| K | `98b45d264696a23552ca14d12218555c57087528` | `scripts/Invoke-QbrainJson.ps1` | `8b3c4e6f04ce57dbf79cb245c94a5e5cd1a1125f` | 4,005 | `00c2a059665f816adfe5e0a686606991046c92dc778b3c110437f697356855dc` |
+
+Both raw companion blobs are identical LF bytes. Materialize their verified shared copy at `fixtures/Invoke-QbrainJson.ps1`, adjacent to the already pinned `P.ps1` and `K.ps1`. Do not rename, rewrite or normalize that bridge. Verify both commits' blob IDs, byte lengths, SHA256 and equality before the one copy. Record an external fixture-input manifest and check installed fixture bytes remain unchanged after the matrix.
+
+Keep P as its exact raw Git installer bytes. Keep K's existing explicitly approved raw-LF verification followed by the one exact installer LF-to-CRLF conversion; the exception does not extend to the bridge. R remains the exact pinned release ZIP with its existing full script directory, already including its bridge. R's old executable is not executed; every producer continues using fresh B. Current I keeps its unchanged current-checkout installer and bridge. Do not broaden fetches to unrelated history or introduce a different baseline.
+
+Add controls rejecting a missing, changed or mismatched companion and proving the materialized companion is in both installers' sibling location with exact bytes. Re-run the unchanged old-fixture validators; do not adjust expected baseline case outcomes to accommodate a missing dependency.
+
+## C. Explicit manifest-capacity amendment
+
+The observed export exceeded 2 MiB, but its exact size/count is unavailable. An 8 MiB cap is a conservative, finite fourfold capacity increase, not a claim that the old manifest is known to fit or that the next export is guaranteed. It is selected within the external materializer envelope:
+
+- Each data part stays at most 20 MiB; at most 16 parts and 320 MiB compressed archive remain unchanged
+- Each complete manifest copy may be at most 8 MiB; each part artifact's uncompressed payload is therefore at most 28 MiB, leaving 4 MiB for outer ZIP framing/overhead below the 32 MiB tool limit
+- Keep the 2 GiB total uncompressed evidence bound, exact file/member/mode/size/hash inventory, 1 MiB streaming reads and all independent C/T/run/job/manifest/artifact bindings
+- Increase producer and consumer pre-staging free-space requirements from 1,056 to 1,152 MiB: three 320 MiB archive/part/reconstruction allocations + sixteen 8 MiB manifest copies + 64 MiB headroom. Retain the later reconstruction guard as an additional check
+- Serialize manifest JSON incrementally with a hard byte budget, rejecting before building a larger encoded buffer. Keep pre-open regular-file/size checks and race-checked bounded reads for every first/subsequent manifest. Do not relax hash, equality, provenance, member, mutation or archive validation
+- If any bound is exceeded, fail closed without dropping a member, hash, path or report. Add safe numeric diagnostics for member count, observed/attempted serialized manifest bytes, byte cap, archive size and part count, so another capacity failure is measurable
+- Before every supported download, compare the independently fetched actual outer artifact ZIP size to the 32 MiB ceiling, then verify its official ZIP digest. Actual artifact size/hash, not the 28 MiB calculation alone, is authoritative
+
+Controls must cover manifests larger than the former 2 MiB limit but within the new cap without lost entries, exact-cap success, one-byte-over rejection before unbounded allocation/read, producer/consumer low-space checks at the revised budget, and unchanged missing/reordered/tampered part/member/provenance rejection. Exercise outer ZIP overhead with a bounded synthetic maximum-envelope fixture and require its actual ZIP bytes to remain below 32 MiB. Preserve the failed parent export as unqualified; only new complete native exports can qualify the repair.
+
+## Verification and publication sequence
+
+First obtain separate approval of this plan. Then implement only the five approved additive paths and run focused normal/optimized controls, exact inherited inventory/source gates, fixture closure checks, and unchanged combined portable driver checks when source-equivalent retained binaries are used. Label reuse honestly; no rebuild or Windows proof is implied.
+
+Freeze the exact local candidate/tree and obtain separate source/local review. Create only an unreferenced remote child if approved; independently bind its complete actual tree and sole parent before normal non-force fast-forward. Re-run all four native jobs fresh at the actual new C/T, preserving all original gates. Retain complete supported multipart outputs and independently anchor the actual job-log manifest hash and official artifact metadata. Obtain separate raw-evidence outcome review before any completion claim. Final reports stay outside frozen source; pending source notices stay pending.

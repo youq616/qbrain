@@ -25,6 +25,24 @@ def seed_fixture_sources(db):
             for source in ('alpha','beta'):
                 conn.execute('INSERT INTO sources(id,name) VALUES(?,?)',(source,source))
 
+POWERSHELL_CAPABILITY_PROBE = r'''param([Parameter(Mandatory=$true)][string]$ProbePath)
+$ErrorActionPreference='Stop'
+$command=Get-Command Get-FileHash -ErrorAction Stop
+$hash=Get-FileHash -LiteralPath $ProbePath -Algorithm SHA256 -ErrorAction Stop
+$value=[ordered]@{powershell_version=$PSVersionTable.PSVersion.ToString();pshome=$PSHOME;command_name=$command.Name;command_type=[string]$command.CommandType;module_name=$command.ModuleName;module_version=[string]$command.Module.Version;module_path=[string]$command.Module.Path;sha256=$hash.Hash.ToLowerInvariant()}
+$bytes=(New-Object Text.UTF8Encoding($false)).GetBytes(($value|ConvertTo-Json -Compress))
+[Console]::OpenStandardOutput().Write($bytes,0,$bytes.Length)
+'''
+
+def validate_powershell_capability(value,version,digest):
+    if not isinstance(value,dict) or value.get('powershell_version')!=version:raise ValueError('PowerShell capability version mismatch')
+    if value.get('command_name')!='Get-FileHash' or value.get('command_type') not in ('Function','Cmdlet'):
+        raise ValueError('required Get-FileHash command metadata missing')
+    if value.get('module_name')!='Microsoft.PowerShell.Utility' or not all(isinstance(value.get(k),str) and value[k] for k in ('module_version','module_path','pshome')):
+        raise ValueError('PowerShell utility module metadata missing')
+    if value.get('sha256')!=digest:raise ValueError('actual Get-FileHash result mismatch')
+    return True
+
 def capture_command(spec, result_path):
     """Capture fixed qualification argv without a shell, with exact byte streams."""
     prefix=Path(spec['prefix']).resolve();prefix.parent.mkdir(parents=True,exist_ok=True)
@@ -57,9 +75,34 @@ def capture_command(spec, result_path):
                 text=(p.stdout+p.stderr).decode('utf-8-sig').strip()
                 match=re.fullmatch(r'(?:Python\s+)?(\d+\.\d+(?:\.\d+)*(?:[a-zA-Z0-9.+-]*)?)',text)
                 if p.returncode or not match:raise ValueError('cannot verify actual executable version: '+label)
-                return dict(executable=str(program),executable_sha256=sha(program.read_bytes()),
+                info=dict(executable=str(program),executable_sha256=sha(program.read_bytes()),
                     kind='powershell' if powershell else 'python',version=match[1],major=int(match[1].split('.')[0]),
                     probe_argv=args,probe_exit=p.returncode,stdout_sha256=sha(p.stdout),stderr_sha256=sha(p.stderr))
+                record['program' if label=='program-version' else 'harness_shell']=info
+                if powershell:
+                    probe=Path(str(prefix)+'.'+label+'.capability.ps1');probe.write_bytes(POWERSHELL_CAPABILITY_PROBE.encode('utf-8'))
+                    known=Path(str(prefix)+'.'+label+'.capability.input');known.write_bytes(b'SYNTHETIC_N49C_POWERSHELL_CAPABILITY\n')
+                    expected=sha(known.read_bytes())
+                    argv=[str(program),'-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',str(probe),'-ProbePath',str(known)]
+                    capability=dict(passed=False,argv=argv,probe_script=identity(probe),known_input=identity(known),expected_sha256=expected,module_path_environment_removed=not any(k.upper()=='PSMODULEPATH' for k in environment))
+                    info['capability']=capability
+                    timed_out=False
+                    try:p=subprocess.run(argv,env=environment,capture_output=True,timeout=30)
+                    except subprocess.TimeoutExpired as error:
+                        timed_out=True;p=subprocess.CompletedProcess(argv,None,error.stdout or b'',error.stderr or b'')
+                    for key,raw in [('stdout',p.stdout),('stderr',p.stderr)]:
+                        path=Path(str(prefix)+'.'+label+'.capability.'+key);path.write_bytes(raw);capability[key]=identity(path)
+                    capability['exit']=p.returncode
+                    if timed_out:
+                        capability['timed_out']=True
+                        raise ValueError('PowerShell capability probe timed out: '+label)
+                    if p.returncode or p.stderr:raise ValueError('actual PowerShell Get-FileHash capability probe failed: '+label)
+                    value=json.loads(p.stdout.decode('utf-8-sig'));capability['observed']=value
+                    validate_powershell_capability(value,info['version'],expected)
+                    capability['module_file']=identity(value['module_path'])
+                    if identity(known)['sha256']!=expected or identity(probe)['sha256']!=capability['probe_script']['sha256']:raise ValueError('PowerShell capability input changed')
+                    capability['passed']=True
+                return info
             record['program']=version(executable,'program-version')
             record['harness_shell']=record['program'] if executable==shell else version(shell,'harness-version')
             before=identity(binary);record['binary_before']=before

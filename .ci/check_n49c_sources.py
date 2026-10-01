@@ -35,7 +35,7 @@ def git(*args):
 BLOCKED_ENV = re.compile(r'^(QBRAIN|PG|CURSOR|OPENAI|ANTHROPIC|GH_TOKEN|GITHUB_TOKEN|AWS_|AZURE_|GOOGLE_|GCP_|ZHIPU|GEMINI|COHERE|MISTRAL|DEEPSEEK|HF_|HUGGINGFACE|OPENROUTER|GIT_CONFIG_)|(?:^|_)(?:API_KEY|TOKEN|SECRET|PASSWORD|PASSWD|DSN|DATABASE_URL)(?:_|$)', re.I)
 
 def clean_environment(source, home):
-    value={k:v for k,v in source.items() if not BLOCKED_ENV.search(k)}
+    value={k:v for k,v in source.items() if not BLOCKED_ENV.search(k) and k.upper()!='PSMODULEPATH'}
     for key in ('BASH_ENV','ENV'):
         value.pop(key,None)
     for key in ('HOME','USERPROFILE','APPDATA','LOCALAPPDATA','XDG_CONFIG_HOME','XDG_DATA_HOME','XDG_CACHE_HOME'):
@@ -81,8 +81,8 @@ PART_BYTES = 20*BLOCK
 MAX_PARTS = 16
 MAX_ARCHIVE = PART_BYTES*MAX_PARTS
 MAX_RAW = 2048*BLOCK
-MAX_MANIFEST = 2*BLOCK
-MIN_FREE = 1056*BLOCK
+MAX_MANIFEST = 8*BLOCK
+MIN_FREE = 1152*BLOCK
 IDENTITY_KEYS = ('commit','tree','run_id','run_attempt','job_key','job_label')
 
 def hash_file(path):
@@ -154,6 +154,65 @@ def bounded_manifest(path):
         after=os.fstat(f.fileno());current=path.lstat()
         need(snapshot(after)==snapshot(opened)==snapshot(current),'manifest changed during bounded read')
     return b''.join(chunks)
+
+class ManifestBudgetExceeded(ValueError):
+    def __init__(self,attempted,limit):
+        super().__init__('manifest limit exceeded')
+        self.diagnostics=dict(manifest_attempted_bytes=attempted,manifest_limit_bytes=limit)
+
+def encode_manifest(value):
+    """Enforce the UTF-8 budget before growing the complete encoded buffer."""
+    raw=bytearray()
+    for text in json.JSONEncoder(sort_keys=True,indent=2).iterencode(value):
+        for offset in range(0,len(text),BLOCK//4):
+            chunk=text[offset:offset+BLOCK//4].encode('utf-8')
+            if len(raw)+len(chunk)>MAX_MANIFEST:raise ManifestBudgetExceeded(len(raw)+len(chunk),MAX_MANIFEST)
+            raw.extend(chunk)
+    if len(raw)+1>MAX_MANIFEST:raise ManifestBudgetExceeded(len(raw)+1,MAX_MANIFEST)
+    raw.extend(b'\n');return bytes(raw)
+
+PRIOR_P = '3ebecf26946ae6ddd04fb018085ffc023b5fcab0'
+PRIOR_K = '98b45d264696a23552ca14d12218555c57087528'
+PRIOR_BRIDGE_BLOB = '8b3c4e6f04ce57dbf79cb245c94a5e5cd1a1125f'
+PRIOR_BRIDGE_SHA256 = '00c2a059665f816adfe5e0a686606991046c92dc778b3c110437f697356855dc'
+
+def pinned_fixture_blob(repository,commit,path,blob,digest,size):
+    raw=subprocess.check_output(['git','show',commit+':'+path],cwd=repository)
+    need(len(raw)==size and hashlib.sha256(raw).hexdigest()==digest,'fixture byte identity mismatch')
+    need(hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==blob,'fixture Git identity mismatch')
+    return raw
+
+def materialize_prior_fixtures(repository,output):
+    output=Path(output);output.mkdir(parents=True,exist_ok=True)
+    need(not any(output.iterdir()),'fresh prior-fixture directory required')
+    p=pinned_fixture_blob(repository,PRIOR_P,'scripts/Install-QbrainMemory.ps1','ff7042fa94b3d6a7b85e06572557fe575ad18c74','1b14e2b57f6de84a0f95f8876dd65b8df96479bf10e58e35a58fe0dec1ee4d74',14474)
+    k=pinned_fixture_blob(repository,PRIOR_K,'scripts/Install-QbrainMemory.ps1','90bf59912a58203de600c2ecaf970c7c5a183236','bde21f5c1aabb7b517a1324f3fb076b482a5652387eaab26a1050bb0feb97dd2',14924)
+    bridge_p=pinned_fixture_blob(repository,PRIOR_P,'scripts/Invoke-QbrainJson.ps1',PRIOR_BRIDGE_BLOB,PRIOR_BRIDGE_SHA256,4005)
+    bridge_k=pinned_fixture_blob(repository,PRIOR_K,'scripts/Invoke-QbrainJson.ps1',PRIOR_BRIDGE_BLOB,PRIOR_BRIDGE_SHA256,4005)
+    need(bridge_p==bridge_k and b'\r' not in bridge_p,'prior companion mismatch')
+    need(b'\r' not in k,'K raw must be LF only')
+    executed=k.replace(b'\n',b'\r\n')
+    need(hashlib.sha256(executed).hexdigest()=='d802c230d2e5b0938b81baa115d5cf5b475aa855fce0df28f0305f00575fcc51','K executed identity mismatch')
+    files={'P.ps1':p,'K.raw.ps1':k,'K.ps1':executed,'Invoke-QbrainJson.ps1':bridge_p}
+    records={}
+    for name,raw in files.items():
+        (output/name).write_bytes(raw);records[name]=dict(size=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+    value=dict(schema='qbrain-n49c-prior-fixtures-v1',sources={'P':PRIOR_P,'K':PRIOR_K},bridge_blob=PRIOR_BRIDGE_BLOB,files=records)
+    raw=encode_manifest(value);(output/'P-K-INPUTS.json').write_bytes(raw)
+    result=dict(manifest_sha256=hashlib.sha256(raw).hexdigest(),files=records)
+    verify_prior_fixtures(output,result['manifest_sha256']);return result
+
+def verify_prior_fixtures(output,manifest_sha256):
+    output=Path(output);raw=bounded_manifest(output/'P-K-INPUTS.json')
+    need(hashlib.sha256(raw).hexdigest()==manifest_sha256,'prior fixture manifest changed')
+    m=json.loads(raw)
+    need(m['sources']=={'P':PRIOR_P,'K':PRIOR_K} and m['bridge_blob']==PRIOR_BRIDGE_BLOB,'prior fixture source mismatch')
+    need(set(m['files'])=={'P.ps1','K.raw.ps1','K.ps1','Invoke-QbrainJson.ps1'},'prior fixture set mismatch')
+    for name,row in m['files'].items():
+        p=output/name;need(p.is_file() and not p.is_symlink(),'missing or invalid prior fixture')
+        need(p.stat().st_size==row['size'] and hash_file(p)==row['sha256'],'prior fixture changed: '+name)
+    need(m['files']['Invoke-QbrainJson.ps1']=={'size':4005,'sha256':PRIOR_BRIDGE_SHA256},'companion pin mismatch')
+    return True
 
 class BoundedArchive:
     def __init__(self,file,limit):self.file=file;self.limit=limit
@@ -258,10 +317,13 @@ def package_evidence(evidence,staging,identity,part_bytes=PART_BYTES):
             parts.append(dict(index=i,file=p.name,size=count,sha256=hash_file(p)))
     for row in rows:row.pop('snapshot')
     m=dict(schema='qbrain-n49c-evidence-parts-v1',identity=identity,archive=dict(size=archive.stat().st_size,sha256=hash_file(archive)),uncompressed_bytes=total,files=rows,parts=parts)
-    raw=(json.dumps(m,sort_keys=True,indent=2)+'\n').encode('utf-8');need(len(raw)<=MAX_MANIFEST,'manifest limit exceeded')
+    try:raw=encode_manifest(m)
+    except ManifestBudgetExceeded as error:
+        error.diagnostics.update(member_count=len(rows),archive_size=archive.stat().st_size,part_count=len(parts))
+        raise
     for i in range(len(parts)):(parts_root/f'{i:02d}'/'manifest.json').write_bytes(raw)
     digest=hashlib.sha256(raw).hexdigest();verify_evidence_parts(parts_root,identity,digest,part_bytes)
-    return dict(passed=True,part_count=len(parts),manifest_sha256=digest,archive_sha256=m['archive']['sha256'],parts_root=str(parts_root),identity=identity)
+    return dict(passed=True,part_count=len(parts),manifest_sha256=digest,manifest_bytes=len(raw),manifest_limit_bytes=MAX_MANIFEST,member_count=len(rows),archive_sha256=m['archive']['sha256'],archive_size=m['archive']['size'],parts_root=str(parts_root),identity=identity)
 
 def verify_downloaded_artifacts(records,expected,manifest_sha256,part_bytes=PART_BYTES):
     """Records/digests and expected identities must come from independent GitHub reads."""
@@ -409,6 +471,7 @@ if __name__ == '__main__':
             raise SystemExit(0)
         except Exception as exc:
             result=dict(passed=False,error=str(exc),identity=identity,complete_evidence_export=False)
+            result.update(getattr(exc,'diagnostics',{}))
             if args.package_diagnostic:
                 args.package_diagnostic.parent.mkdir(parents=True,exist_ok=True)
                 args.package_diagnostic.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')

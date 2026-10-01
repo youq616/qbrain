@@ -11,7 +11,7 @@ $driverHome=Join-Path ([IO.Path]::GetTempPath()) ('n49c-driver-'+[Guid]::NewGuid
 foreach($key in @('HOME','USERPROFILE','APPDATA','LOCALAPPDATA','XDG_CONFIG_HOME','XDG_DATA_HOME','XDG_CACHE_HOME')){[Environment]::SetEnvironmentVariable($key,$driverHome,'Process')}
 $env:PYTHONDONTWRITEBYTECODE='1';$env:PYTHONIOENCODING='utf-8'
 $env:GIT_CONFIG_GLOBAL='NUL';$env:GIT_CONFIG_SYSTEM='NUL'
-$script:postconditionsComplete=$false;$script:fatalFailure=$false;$script:currentShell=''
+$script:postconditionsComplete=$false;$script:fatalFailure=$false;$script:currentShell='';$script:fixtureSealHash=$null;$fixtureFiles=@()
 
 $root=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $binaryPath=(Resolve-Path -LiteralPath $Binary).Path
@@ -24,7 +24,7 @@ $source=(& git -C $root rev-parse HEAD).Trim()
 $fixture=Join-Path $out 'fixtures';New-Item -ItemType Directory $fixture | Out-Null
 function Save-Matrix {
  $complete=($script:postconditionsComplete -and -not $script:fatalFailure -and $rows.Count -eq 44 -and @($rows | Where-Object {-not $_.passed}).Count -eq 0)
- $value=[ordered]@{schema='qbrain-n49c-installers-v2';passed=$complete;postconditions_complete=$script:postconditionsComplete;fatal_failure=$script:fatalFailure;expected_rows=44;source=$source;binary=$binaryPath;binary_sha256=$binaryHash;rows=@($rows.ToArray());real_client=$false;postgres_executed=$false}
+ $value=[ordered]@{schema='qbrain-n49c-installers-v2';passed=$complete;postconditions_complete=$script:postconditionsComplete;fatal_failure=$script:fatalFailure;expected_rows=44;source=$source;binary=$binaryPath;binary_sha256=$binaryHash;fixture_seal_sha256=$script:fixtureSealHash;rows=@($rows.ToArray());real_client=$false;postgres_executed=$false}
  [IO.File]::WriteAllText((Join-Path $out 'MATRIX.json'),($value|ConvertTo-Json -Depth 30),(New-Object Text.UTF8Encoding($false)))
 }
 function Run-Gate([string]$Name,[string]$Exe,[object[]]$Arguments,[int]$Expected,[int]$Major){
@@ -47,21 +47,11 @@ function Run-Gate([string]$Name,[string]$Exe,[object[]]$Arguments,[int]$Expected
 
 try {
  $materialize=@'
-import hashlib,pathlib,subprocess,sys
+import pathlib,sys,json
 root,out=map(pathlib.Path,sys.argv[1:])
-def blob(sha,expected):
- raw=subprocess.check_output(['git','show',sha+':scripts/Install-QbrainMemory.ps1'],cwd=root)
- actual=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
- if actual!=expected:raise ValueError('fixture Git identity mismatch')
- return raw
-p=blob('3ebecf26946ae6ddd04fb018085ffc023b5fcab0','ff7042fa94b3d6a7b85e06572557fe575ad18c74')
-(out/'P.ps1').write_bytes(p)
-k=blob('98b45d264696a23552ca14d12218555c57087528','90bf59912a58203de600c2ecaf970c7c5a183236')
-if len(k)!=14924 or b'\r' in k or hashlib.sha256(k).hexdigest()!='bde21f5c1aabb7b517a1324f3fb076b482a5652387eaab26a1050bb0feb97dd2':raise ValueError('K raw fixture identity mismatch')
-(out/'K.raw.ps1').write_bytes(k)
-k=k.replace(b'\n',b'\r\n')
-if hashlib.sha256(k).hexdigest()!='d802c230d2e5b0938b81baa115d5cf5b475aa855fce0df28f0305f00575fcc51':raise ValueError('K executed fixture identity mismatch')
-(out/'K.ps1').write_bytes(k)
+sys.path.insert(0,str(root/'.ci'))
+from check_n49c_sources import materialize_prior_fixtures
+print(json.dumps(materialize_prior_fixtures(root,out),sort_keys=True))
 '@
  & python -c $materialize $root $fixture
  if($LASTEXITCODE -ne 0){throw 'Exact fixture materialization failed'}
@@ -72,6 +62,13 @@ if hashlib.sha256(k).hexdigest()!='d802c230d2e5b0938b81baa115d5cf5b475aa855fce0d
  $r=Join-Path $fixture 'recovery-prior/scripts/Install-QbrainMemory.ps1'
  if((Get-FileHash $r -Algorithm SHA256).Hash.ToLowerInvariant() -cne '99d864bf1e87c75a2b7c22a7f2c27d3b25210a153ef10516e9fff366313a22a6'){throw 'Recovery installer identity mismatch'}
  $i=Join-Path $root 'scripts/Install-QbrainMemory.ps1';$p=Join-Path $fixture 'P.ps1';$k=Join-Path $fixture 'K.ps1'
+ $fixtureFiles=@(Get-ChildItem -LiteralPath $fixture -Recurse -File)+@((Get-Item -LiteralPath $i),(Get-Item -LiteralPath (Join-Path $root 'scripts/Invoke-QbrainJson.ps1')))
+ $fixtureFiles=@($fixtureFiles | ForEach-Object {[pscustomobject]@{path=$_.FullName;bytes=$_.Length;sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}})
+ $fixtureSeal=Join-Path $out 'FIXTURE-INPUTS.json'
+ [IO.File]::WriteAllText($fixtureSeal,([ordered]@{source=$source;files=$fixtureFiles}|ConvertTo-Json -Depth 10),(New-Object Text.UTF8Encoding($false)))
+ $script:fixtureSealHash=(Get-FileHash -LiteralPath $fixtureSeal -Algorithm SHA256).Hash.ToLowerInvariant()
+ $priorManifest=Join-Path $fixture 'P-K-INPUTS.json'
+ $priorManifestHash=(Get-FileHash -LiteralPath $priorManifest -Algorithm SHA256).Hash.ToLowerInvariant()
  $ps5=Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe';$ps7=(Get-Command pwsh).Source
  foreach($shell in @(@(5,$ps5),@(7,$ps7))){
   $major=[int]$shell[0];$program=[string]$shell[1];$label='ps'+$major
@@ -107,6 +104,19 @@ if hashlib.sha256(k).hexdigest()!='d802c230d2e5b0938b81baa115d5cf5b475aa855fce0d
    Run-Gate "$label-$test" 'python' @((Join-Path $root ".ci/$test.py")) 0 $major
    Run-Gate "$label-$test-optimized" 'python' @('-O',(Join-Path $root ".ci/$test.py")) 0 $major
   }
+ }
+ $verifyPrior=@'
+import pathlib,sys
+root,out=map(pathlib.Path,sys.argv[1:3]);sys.path.insert(0,str(root/'.ci'))
+from check_n49c_sources import verify_prior_fixtures
+verify_prior_fixtures(out,sys.argv[3])
+'@
+ & python -c $verifyPrior $root $fixture $priorManifestHash
+ if($LASTEXITCODE -ne 0){throw 'Pinned prior fixture identity changed'}
+ if((Get-FileHash -LiteralPath $fixtureSeal -Algorithm SHA256).Hash.ToLowerInvariant() -cne $script:fixtureSealHash){throw 'Fixture input seal changed'}
+ foreach($file in $fixtureFiles){
+  if(-not (Test-Path -LiteralPath $file.path -PathType Leaf)){throw 'Fixture input disappeared'}
+  if((Get-Item -LiteralPath $file.path).Length -ne $file.bytes -or (Get-FileHash -LiteralPath $file.path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $file.sha256){throw 'Fixture input changed'}
  }
  if((Get-FileHash $binaryPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $binaryHash){throw 'Combined executable changed'}
  if($rows.Count -ne 44 -or @($rows | Where-Object {-not $_.passed}).Count){throw 'Installer matrix contains missing or failed gates'}
