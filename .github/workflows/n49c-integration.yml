@@ -1,0 +1,306 @@
+name: N49C integrated client and retrieval qualification
+permissions:
+  contents: read
+concurrency:
+  group: n49c-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  cmake:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+        - ubuntu-24.04
+        - windows-2022
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ github.sha }}
+        persist-credentials: false
+        fetch-depth: 1
+    - name: Exact candidate ancestry and independent inventory binding
+      shell: bash
+      run: |
+        set -euo pipefail
+        test "$(git rev-parse HEAD)" = '${{ github.sha }}'
+        if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+          git fetch --no-tags --no-recurse-submodules --unshallow origin '${{ github.sha }}'
+        fi
+        test "$(git rev-parse --is-shallow-repository)" = false
+        python -c "import hashlib,subprocess,sys; raw=subprocess.check_output(['git','show','HEAD:docs/nodes/n49c-evidence/INPUT-INVENTORY.json']);sys.exit(0 if hashlib.sha256(raw).hexdigest()=='5e0e87d28d2acb2a2409682b9d9618fc2a6bf43bba2b2c2392f7a6ba4ba40b0e' else 1)"
+        echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+      id: source_identity
+    - name: Pin combined tree and unchanged build closures
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir evidence
+        test "$(git rev-parse HEAD)" = '${{ github.sha }}'
+        git rev-parse HEAD > evidence/source.txt
+        git rev-parse HEAD^{tree} > evidence/tree.txt
+        git ls-tree -r -z HEAD > evidence/source-tree.bin
+        git archive --format=zip --output=evidence/source.zip HEAD
+        python .ci/check_n49c_sources.py > evidence/source-closure.json
+    - name: Fresh combined CMake product and all portable registered targets
+      shell: bash
+      run: |
+        set -euo pipefail
+        script="$RUNNER_TEMP/n49c-cmake-3.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        cmake -S . -B build/n49c -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/client_retrieval_integration_targets.cmake" > evidence/configure.log 2>&1
+        cmake --build build/n49c --config Debug --target qbrain qbrain_client_retrieval_integration_tests qbrain_directory_search_tests qbrain_cursor_hook_tests qbrain_verified_integration_tests qbrain_context_invalidation_tests qbrain_context_preflight_tests qbrain_context_coverage_tests qbrain_query_cache_tests qbrain_query_cache_integration_tests qbrain_query_cache_http_tests qbrain_logical_observation_tests qbrain_logical_observation_http_tests qbrain_logical_rerank_move_tests qbrain_logical_rerank_regression qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_runtime_observation_http qbrain_memory_tests qbrain_context_tests qbrain_http_tests qbrain_http_probe qbrain_retrieval_tests qbrain_embedding_tests qbrain_embedding_queue_tests qbrain_cjk_tests qbrain_fact_tests qbrain_conflict_tests qbrain_recall_tests qbrain_hook_fact_tests qbrain_promotion_tests qbrain_lifecycle_tests qbrain_lifecycle_batch_tests qbrain_lifecycle_candidate_tests qbrain_strict_json_tests qbrain_hook_trace_tests qbrain_hook_diagnostic_tests qbrain_multiterm_tests qbrain_usage_batch_tests qbrain_usage_batch_ownership_tests qbrain_pg_fact_tests qbrain_pg_context_tests qbrain_pg_hook_tests --parallel 2 > evidence/build.log 2>&1
+        if [ "$RUNNER_OS" = Windows ]; then
+          cmake --build build/n49c --config Debug --target qbrain_tests --parallel 2 > evidence/full60-build.log 2>&1
+          build/n49c/Debug/qbrain_tests.exe > evidence/full60.log 2>&1
+          python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/full60.log').read_text(encoding='utf-8-sig'),60)))" > evidence/full60-verified.txt
+        fi
+        N49C_CLEAN_COMMAND
+        python .ci/check_n49c_sources.py --run-clean -- bash -euo pipefail "$script"
+    - name: Fresh combined CTests and original normal/optimized process tests
+      shell: bash
+      run: |
+        set -euo pipefail
+        script="$RUNNER_TEMP/n49c-cmake-4.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        ctest --test-dir build/n49c -C Debug -E '^qbrain_unit$' --output-on-failure | tee evidence/ctest.log
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        "$bindir/qbrain_pg_context_tests$suffix" --sqlite-only > evidence/pg-context-sqlite.json
+        python .ci/run_n49a_process.py --bin-dir "$bindir" --output evidence/process > evidence/process-summary.json
+        python .ci/test_n49c_source_contract.py > evidence/source-contract-tests.json
+        python -O .ci/test_n49c_source_contract.py > evidence/source-contract-tests-optimized.json
+        for mode in normal optimized; do
+          opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
+          python "${opt[@]}" .ci/test_directory_search.py --binary "$bindir/qbrain$suffix" --output "evidence/directory-$mode" > "evidence/directory-$mode.log"
+          python "${opt[@]}" .ci/test_cursor_hooks.py --binary "$bindir/qbrain$suffix" --output "evidence/cursor-$mode" > "evidence/cursor-$mode.log"
+          wire=(); if [ "$RUNNER_OS" = Windows ]; then wire=(--wire); fi
+          python "${opt[@]}" .ci/test_n49c_process.py --binary "$bindir/qbrain$suffix" --output "evidence/combined-$mode" "${wire[@]}" > "evidence/combined-$mode.log"
+        done
+        mkdir evidence/binaries
+        for target in qbrain qbrain_client_retrieval_integration_tests qbrain_directory_search_tests qbrain_cursor_hook_tests qbrain_verified_integration_tests qbrain_context_invalidation_tests qbrain_context_preflight_tests qbrain_context_coverage_tests qbrain_query_cache_tests qbrain_query_cache_integration_tests qbrain_query_cache_http_tests qbrain_logical_observation_tests qbrain_logical_observation_http_tests qbrain_logical_rerank_move_tests qbrain_logical_rerank_regression qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_runtime_observation_http qbrain_http_probe; do
+          cp "$bindir/$target$suffix" evidence/binaries/
+        done
+        N49C_CLEAN_COMMAND
+        python .ci/check_n49c_sources.py --run-clean -- bash -euo pipefail "$script"
+    - name: Historical comparison fixture for original 55-step gate
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $script=Join-Path $env:RUNNER_TEMP 'n49c-cmake-5.ps1'
+        $body=@'
+        $ErrorActionPreference = 'Stop'
+        Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-current-preview-b810d689/qbrain-windows-x64-n47x-preview.zip' -OutFile baseline.zip
+        if ((Get-FileHash baseline.zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d') { throw 'Historical baseline digest mismatch' }
+        Expand-Archive baseline.zip baseline
+        python .ci/run_n48i_checks.py --binary build/n49c/Debug/qbrain.exe --baseline baseline/qbrain.exe --output evidence/original55 | Tee-Object evidence/original55-summary.json
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python -c "import json,sys; r=json.load(open('evidence/original55-summary.json',encoding='utf-8-sig')); sys.exit(0 if r['result']=='PASS' and r['steps']==55 else 1)"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        '@
+        [IO.File]::WriteAllText($script,$body,(New-Object Text.UTF8Encoding($false)))
+        python .ci/check_n49c_sources.py --run-clean -- pwsh -NoProfile -NonInteractive -File $script
+        if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+    - name: Verify frozen HEAD tree index worktree and canonical bytes
+      if: always()
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p evidence
+        git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$RUNNER_TEMP/n49c-frozen-source-gate.py"
+        python "$RUNNER_TEMP/n49c-frozen-source-gate.py" --repository "$GITHUB_WORKSPACE" --final --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' > evidence/final-source-identity.json 2> evidence/final-source-identity.stderr
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}
+        path: evidence/
+        retention-days: 30
+        if-no-files-found: error
+  direct-msvc:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ github.sha }}
+        persist-credentials: false
+        fetch-depth: 1
+    - name: Exact candidate ancestry and independent inventory binding
+      shell: bash
+      run: |
+        set -euo pipefail
+        test "$(git rev-parse HEAD)" = '${{ github.sha }}'
+        if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+          git fetch --no-tags --no-recurse-submodules --unshallow origin '${{ github.sha }}'
+        fi
+        test "$(git rev-parse --is-shallow-repository)" = false
+        python -c "import hashlib,subprocess,sys; raw=subprocess.check_output(['git','show','HEAD:docs/nodes/n49c-evidence/INPUT-INVENTORY.json']);sys.exit(0 if hashlib.sha256(raw).hexdigest()=='5e0e87d28d2acb2a2409682b9d9618fc2a6bf43bba2b2c2392f7a6ba4ba40b0e' else 1)"
+        echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+      id: source_identity
+    - name: Fresh original direct-MSVC production and original60
+      shell: pwsh
+      run: |
+        $script=Join-Path $env:RUNNER_TEMP 'n49c-direct-msvc-2.ps1'
+        $body=@'
+        $ErrorActionPreference = 'Stop'
+        New-Item -ItemType Directory evidence | Out-Null
+        git rev-parse HEAD | Set-Content evidence/source.txt
+        git rev-parse 'HEAD^{tree}' | Set-Content evidence/tree.txt
+        git archive --format=zip --output=evidence/source.zip HEAD
+        python .ci/check_n49c_sources.py > evidence/source-closure.json
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        powershell -NoProfile -File scripts/build-tests-cl.ps1 2>&1 | Tee-Object evidence/full60.log
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/full60.log').read_text(encoding='utf-8-sig'),60)))" > evidence/full60-verified.txt
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        '@
+        [IO.File]::WriteAllText($script,$body,(New-Object Text.UTF8Encoding($false)))
+        python .ci/check_n49c_sources.py --run-clean -- pwsh -NoProfile -NonInteractive -File $script
+        if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+    - name: Link and run cross-tests against exact direct production objects
+      shell: pwsh
+      run: |
+        $script=Join-Path $env:RUNNER_TEMP 'n49c-direct-msvc-3.ps1'
+        $body=@'
+        powershell -NoProfile -File .ci/build_n49a_direct_tests.ps1 2>&1 | Tee-Object evidence/direct-cross.log
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        powershell -NoProfile -File .ci/build_n49c_direct_tests.ps1 2>&1 | Tee-Object evidence/direct-client-retrieval.log
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Copy-Item build/n49c-direct/qbrain_client_retrieval_integration_tests.exe evidence/
+        Copy-Item build/cl/qbrain.exe evidence/qbrain.exe
+        Copy-Item build/cl/qbrain_tests.exe evidence/qbrain_tests.exe
+        Copy-Item build/n49a-direct/qbrain_verified_integration_tests.exe evidence/qbrain_verified_integration_tests.exe
+        Copy-Item build/n49a-direct/linked-production-objects.json evidence/
+        python .ci/test_n49a_wire.py --binary evidence/qbrain_verified_integration_tests.exe --output evidence/wire-normal
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python -O .ci/test_n49a_wire.py --binary evidence/qbrain_verified_integration_tests.exe --output evidence/wire-optimized
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        git diff --exit-code > evidence/after-diff.txt
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        '@
+        [IO.File]::WriteAllText($script,$body,(New-Object Text.UTF8Encoding($false)))
+        python .ci/check_n49c_sources.py --run-clean -- pwsh -NoProfile -NonInteractive -File $script
+        if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+    - name: Direct executable client and directory process gates
+      shell: bash
+      run: |
+        set -euo pipefail
+        script="$RUNNER_TEMP/n49c-direct-msvc-4.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        for mode in normal optimized; do
+          opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
+          python "${opt[@]}" .ci/test_directory_search.py --binary evidence/qbrain.exe --output "evidence/directory-$mode" > "evidence/directory-$mode.log"
+          python "${opt[@]}" .ci/test_cursor_hooks.py --binary evidence/qbrain.exe --output "evidence/cursor-$mode" > "evidence/cursor-$mode.log"
+          python "${opt[@]}" .ci/test_n49c_process.py --binary evidence/qbrain.exe --output "evidence/combined-$mode" --wire > "evidence/combined-$mode.log"
+        done
+        N49C_CLEAN_COMMAND
+        python .ci/check_n49c_sources.py --run-clean -- bash -euo pipefail "$script"
+    - name: Both-shell complete installer ownership and transport matrix
+      shell: pwsh
+      run: |
+        $script=Join-Path $env:RUNNER_TEMP 'n49c-direct-msvc-5.ps1'
+        $body=@'
+        pwsh -NoProfile -File .ci/run_n49c_installers.ps1 -Binary evidence/qbrain.exe -Output evidence/installers
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        '@
+        [IO.File]::WriteAllText($script,$body,(New-Object Text.UTF8Encoding($false)))
+        python .ci/check_n49c_sources.py --run-clean -- pwsh -NoProfile -NonInteractive -File $script
+        if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+    - name: Verify frozen HEAD tree index worktree and canonical bytes
+      if: always()
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p evidence
+        git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$RUNNER_TEMP/n49c-frozen-source-gate.py"
+        python "$RUNNER_TEMP/n49c-frozen-source-gate.py" --repository "$GITHUB_WORKSPACE" --final --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' > evidence/final-source-identity.json 2> evidence/final-source-identity.stderr
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: qbrain-n49c-direct-msvc
+        path: evidence/
+        retention-days: 30
+        if-no-files-found: error
+  sanitizer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ github.sha }}
+        persist-credentials: false
+    - name: Exact candidate ancestry and independent inventory binding
+      shell: bash
+      run: |
+        set -euo pipefail
+        test "$(git rev-parse HEAD)" = '${{ github.sha }}'
+        if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+          git fetch --no-tags --no-recurse-submodules --unshallow origin '${{ github.sha }}'
+        fi
+        test "$(git rev-parse --is-shallow-repository)" = false
+        python -c "import hashlib,subprocess,sys; raw=subprocess.check_output(['git','show','HEAD:docs/nodes/n49c-evidence/INPUT-INVENTORY.json']);sys.exit(0 if hashlib.sha256(raw).hexdigest()=='5e0e87d28d2acb2a2409682b9d9618fc2a6bf43bba2b2c2392f7a6ba4ba40b0e' else 1)"
+        echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+      id: source_identity
+    - name: Fresh fully linked combined ASan and UBSan gates
+      shell: bash
+      run: |
+        set -euo pipefail
+        script="$RUNNER_TEMP/n49c-sanitizer-2.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        mkdir evidence
+        git rev-parse HEAD > evidence/source.txt
+        git rev-parse HEAD^{tree} > evidence/tree.txt
+        git archive --format=zip --output=evidence/source.zip HEAD
+        git ls-tree -r -z HEAD > evidence/source-tree.bin
+        python .ci/check_n49c_sources.py > evidence/source-closure.json
+        CC=clang CXX=clang++ cmake -S . -B build/asan -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/client_retrieval_integration_targets.cmake" -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined' > evidence/configure.log 2>&1
+        for target in qbrain_verified_integration_tests qbrain_context_invalidation_tests qbrain_context_preflight_tests qbrain_context_coverage_tests qbrain_query_cache_tests qbrain_query_cache_integration_tests qbrain_logical_observation_tests qbrain_logical_rerank_move_tests qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_directory_search_tests qbrain_cursor_hook_tests qbrain_hook_trace_tests qbrain_hook_fact_tests qbrain_client_retrieval_integration_tests; do
+          printf '{"status":"not_started"}\n' > "evidence/$target.status.json"
+        done
+        cmake --build build/asan --target qbrain_verified_integration_tests qbrain_context_invalidation_tests qbrain_context_preflight_tests qbrain_context_coverage_tests qbrain_query_cache_tests qbrain_query_cache_integration_tests qbrain_logical_observation_tests qbrain_logical_rerank_move_tests qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_directory_search_tests qbrain_cursor_hook_tests qbrain_hook_trace_tests qbrain_hook_fact_tests qbrain_client_retrieval_integration_tests --parallel 2 > evidence/build.log 2>&1
+        export ASAN_OPTIONS=detect_leaks=1:halt_on_error=1
+        export UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1
+        printf '%s\n' "$ASAN_OPTIONS" > evidence/asan-options.txt
+        printf '%s\n' "$UBSAN_OPTIONS" > evidence/ubsan-options.txt
+        mkdir evidence/binaries
+        for target in qbrain_verified_integration_tests qbrain_context_invalidation_tests qbrain_context_preflight_tests qbrain_context_coverage_tests qbrain_query_cache_tests qbrain_query_cache_integration_tests qbrain_logical_observation_tests qbrain_logical_rerank_move_tests qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_directory_search_tests qbrain_cursor_hook_tests qbrain_hook_trace_tests qbrain_hook_fact_tests qbrain_client_retrieval_integration_tests; do
+          cp "build/asan/$target" evidence/binaries/
+          sha256sum "build/asan/$target" >> evidence/binary-hashes.txt
+          printf '{"status":"running"}\n' > "evidence/$target.status.json"
+          code=0
+          "build/asan/$target" > "evidence/$target.json" 2> "evidence/$target.stderr" || code=$?
+          printf '{"status":"completed","exit":%s}\n' "$code" > "evidence/$target.status.json"
+          test "$code" -eq 0
+          test ! -s "evidence/$target.stderr"
+        done
+        git diff --exit-code > evidence/after-diff.txt
+        N49C_CLEAN_COMMAND
+        python .ci/check_n49c_sources.py --run-clean -- bash -euo pipefail "$script"
+    - name: Verify frozen HEAD tree index worktree and canonical bytes
+      if: always()
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p evidence
+        git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$RUNNER_TEMP/n49c-frozen-source-gate.py"
+        python "$RUNNER_TEMP/n49c-frozen-source-gate.py" --repository "$GITHUB_WORKSPACE" --final --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' > evidence/final-source-identity.json 2> evidence/final-source-identity.stderr
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: qbrain-n49c-sanitizer
+        path: evidence/
+        retention-days: 30
+        if-no-files-found: error
+'on':
+  push:
+    branches:
+    - integration/n49c-client-retrieval
+  workflow_dispatch: null

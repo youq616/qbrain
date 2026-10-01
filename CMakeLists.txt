@@ -172,6 +172,7 @@ qbrain_lib(search
   src/qbrain/search/vector.cpp
   src/qbrain/search/rrf.cpp
   src/qbrain/search/hybrid.cpp
+  src/qbrain/search/directory.cpp
   src/qbrain/search/rerank.cpp
 )
 target_link_libraries(qbrain_search PUBLIC qbrain_core qbrain_util qbrain_ai)

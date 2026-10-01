@@ -156,7 +156,7 @@ $testList = ($tests | ForEach-Object { "`"$_`"" }) -join " "
 $testObjList = ($selected | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_) + ".obj" }) -join " "
 $prodObjs = @(
   "paths","hash","log","string_util","time_util","database","migrate","pg_backend","transaction_state","types","brain",
-  "extract","traverse","analytics","scan","astlite","packs","lint","store","image_meta","vector","rrf","hybrid","rerank","minions","embedding_queue","dream",
+  "extract","traverse","analytics","scan","astlite","packs","lint","store","image_meta","vector","rrf","hybrid","directory","rerank","minions","embedding_queue","dream",
   "chunker","markdown","import","http_client","embed","chat","registry","handlers","memory_ops","session_memory","fact_store","hook","diagnostics","context","context_ops",
   "inbox_watch","live_sync","jsonrpc","server","auth","http_server","commands","sqlite3"
 ) | ForEach-Object { "`"$ObjDir\$_.obj`"" }

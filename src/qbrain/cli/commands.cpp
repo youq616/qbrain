@@ -2,6 +2,7 @@
 #include "qbrain/integration/hook.hpp"
 #include "qbrain/cli/app.hpp"
 #include "qbrain/cli/search_arguments.hpp"
+#include "qbrain/search/directory.hpp"
 #include "qbrain/memory/session_memory.hpp"
 #include "qbrain/util/hash.hpp"
 #include <map>
@@ -139,7 +140,7 @@ void print_help() {
       "  list [--limit N] [--type t]\n"
       "  capture \"text\" | --file f | --stdin\n"
       "  import <path>\n"
-      "  search \"query\" [--limit N] [--json] [--no-vector] [--mode m] [--rerank]\n"
+      "  search \"query\" [--uri qbrain://source/resources/path/] [--limit N] [--json] [--no-vector] [--mode m] [--rerank]\n"
       "  search --query <literal> [options] | search [options] -- <literal words>\n"
       "  think \"question\" [--json] [--save]\n"
       "  graph <slug> [--depth N]\n"
@@ -565,6 +566,41 @@ int cmd_search(const std::vector<std::string>& args) {
     if (!mode.empty()) ctx.args["mode"] = mode;
     if (parsed.flags.count("--rerank")) ctx.args["rerank"] = "1";
     if (parsed.flags.count("--rerank-llm")) ctx.args["rerank_llm"] = "1";
+    const auto directory_uri = parsed.value("--uri");
+    if (!directory_uri.empty()) {
+      // Validate source/namespace/path before any embedding/provider call.
+      const auto scope = search::parse_directory_scope(b, directory_uri);
+      search::DirectorySearchOpts opts;
+      const auto scoped_limit = parsed.value("--limit");
+      opts.limit = scoped_limit.empty() ? b.config().search_default_limit : std::stoi(scoped_limit);
+      opts.rrf_k = b.config().search_rrf_k;
+      opts.mode = parsed.value("--mode", "balanced");
+      opts.rerank = parsed.flags.count("--rerank") != 0;
+      opts.rerank_llm = parsed.flags.count("--rerank-llm") != 0;
+      opts.config = &b.config();
+      std::vector<float> emb;
+      std::vector<float>* pemb = nullptr;
+      if (!parsed.flags.count("--no-vector") && opts.mode != "conservative") {
+        auto er = ai::embed_texts(b.config(), {parsed.query});
+        if (er.ok && !er.vectors.empty()) { emb = er.vectors[0]; pemb = &emb; }
+      }
+      const auto hits = search::directory_search(b, parsed.query, pemb, scope, opts);
+      nlohmann::json arr = nlohmann::json::array();
+      std::ostringstream oss;
+      int rank = 1;
+      for (const auto& h : hits) {
+        arr.push_back({{"rank",rank},{"source_id",h.source_id},{"page_id",h.page_id},
+                       {"slug",h.slug},{"title",h.title},{"score",h.score},
+                       {"rerank_score",h.rerank_score},{"snippet",h.snippet}});
+        oss << rank << ". " << h.slug << "  (" << h.score << ")\n   "
+            << h.title << "\n   " << h.snippet << "\n";
+        ++rank;
+      }
+      std::cout << (parsed.flags.count("--json") ? arr.dump(2)
+                                                  : (oss.str().empty() ? "(no results)\n" : oss.str()));
+      if (parsed.flags.count("--json")) std::cout << "\n";
+      return 0;
+    }
     auto r = ops::global_registry().call("search", ctx);
     std::cout << (parsed.flags.count("--json") ? r.json : r.text);
     return r.ok ? 0 : r.exit_code;

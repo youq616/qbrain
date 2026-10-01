@@ -1,0 +1,11 @@
+# One immutable registration of every accepted module, plus N49C cross checks.
+include("${CMAKE_SOURCE_DIR}/.ci/verified_integration_targets.cmake")
+include("${CMAKE_SOURCE_DIR}/.ci/directory_search_targets.cmake")
+include("${CMAKE_SOURCE_DIR}/.ci/cursor_hook_targets.cmake")
+function(qbrain_add_client_retrieval_integration_tests)
+  add_executable(qbrain_client_retrieval_integration_tests "${CMAKE_SOURCE_DIR}/tests/test_client_retrieval_integration.cpp")
+  target_link_libraries(qbrain_client_retrieval_integration_tests PRIVATE qbrain_ops qbrain_memory qbrain_core qbrain_search qbrain_jobs qbrain_ai Threads::Threads)
+  add_test(NAME qbrain_client_retrieval_integration_unit COMMAND qbrain_client_retrieval_integration_tests)
+  set_tests_properties(qbrain_client_retrieval_integration_unit PROPERTIES TIMEOUT 90)
+endfunction()
+cmake_language(DEFER CALL qbrain_add_client_retrieval_integration_tests)
