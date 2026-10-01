@@ -10,6 +10,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -136,6 +137,225 @@ def evidence_identity(identity):
     need(all(isinstance(identity[k],str) and identity[k] for k in IDENTITY_KEYS),'identity values required')
     need(all(re.fullmatch('[0-9a-f]{40}',identity[k]) for k in ('commit','tree')),'invalid source identity')
     need(identity['run_id'].isdigit() and identity['run_attempt'].isdigit(),'invalid run identity')
+
+PHASE_IDS = ('checkout','source_identity','source_capture','cmake_build','ctests','sqlite_context',
+ 'n49a_process','contract_normal','contract_optimized','directory_normal','cursor_normal','combined_normal',
+ 'directory_optimized','cursor_optimized','combined_optimized','binary_capture','baseline_fixture','original55')
+BOOTSTRAP_PHASES = PHASE_IDS[:2]
+WINDOWS_PHASES = ('baseline_fixture','original55')
+BINARY_PHASES = {'ctests','sqlite_context','n49a_process','directory_normal','cursor_normal','combined_normal',
+ 'directory_optimized','cursor_optimized','combined_optimized','binary_capture','original55'}
+
+def phase_clock():
+    return dict(utc_ns=time.time_ns(),monotonic_ns=time.monotonic_ns())
+
+def phase_write(path,value):
+    raw=(json.dumps(value,sort_keys=True,indent=2)+'\n').encode('utf-8')
+    with Path(path).open('xb') as stream:
+        stream.write(raw);stream.flush()
+    return hashlib.sha256(raw).hexdigest()
+
+def phase_file(path):
+    path=Path(path).resolve(strict=True);before=path.stat()
+    need(stat.S_ISREG(before.st_mode),'phase input must be a regular file')
+    digest=hash_file(path);after=path.stat()
+    need((before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns)==
+         (after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns),'phase file changed while hashing')
+    return dict(path=str(path),bytes=after.st_size,sha256=digest)
+
+def phase_descriptor(value):
+    need(isinstance(value,dict) and set(value)=={'path','bytes','sha256'},'complete phase file descriptor required')
+    need(isinstance(value['path'],str) and Path(value['path']).is_absolute(),'absolute phase file path required')
+    need(type(value['bytes']) is int and value['bytes']>=0,'phase file byte count must be an integer')
+    need(isinstance(value['sha256'],str) and re.fullmatch('[0-9a-f]{64}',value['sha256']) is not None,'phase file digest required')
+
+def phase_timestamp(value):
+    need(isinstance(value,dict) and set(value)=={'utc_ns','monotonic_ns'},'complete UTC and monotonic phase timestamps required')
+    need(all(type(value[k]) is int for k in value),'phase timestamps must be integers')
+
+def phase_streams(folder,result):
+    files=[]
+    for key in ('stdout','stderr'):
+        need(key in result,'missing phase '+key+' descriptor')
+        descriptor=result[key];phase_descriptor(descriptor)
+        expected=Path(folder)/(key+'.raw')
+        need(descriptor['path']==str(expected),'phase '+key+' path substitution')
+        need(stat.S_ISREG(expected.lstat().st_mode) and expected.resolve(strict=True)==expected,'phase raw path must be an exact regular file')
+        need(phase_file(expected)==descriptor,'phase retained '+key+' bytes changed')
+        files.append(expected)
+    need(not files[0].samefile(files[1]),'phase stdout and stderr must be distinct files')
+
+def phase_check(identity,platform,phase=None):
+    evidence_identity(identity)
+    need(platform in ('Linux','Windows'),'unknown phase platform')
+    label='qbrain-n49c-cmake-'+('windows-2022' if platform=='Windows' else 'ubuntu-24.04')
+    need(identity['job_key']=='cmake' and identity['job_label']==label,'phase job/platform mismatch')
+    if phase is not None:
+        need(phase in PHASE_IDS and phase not in BOOTSTRAP_PHASES,'unknown command phase')
+        need(platform=='Windows' or phase not in WINDOWS_PHASES,'Windows-only phase on another platform')
+
+def phase_start(root,identity,platform,phase,script,binary=None):
+    """Record metadata only. The native Actions step retains process ownership."""
+    phase_check(identity,platform,phase)
+    need((binary is not None)==(phase in BINARY_PHASES),'phase binary applicability mismatch')
+    folder=Path(root).resolve()/phase;folder.mkdir(parents=True,exist_ok=False)
+    started=dict(schema='n49c-phase-start-v1',identity=identity,platform=platform,phase=phase,
+        status='started',clock=phase_clock(),script_path=str(script),binary_path=str(binary) if binary else None,
+        process_ownership='native-actions-step; no independent descendant-cleanup claim')
+    phase_write(folder/'STARTING.json',started)
+    for name in ('stdout.raw','stderr.raw'):
+        with (folder/name).open('xb'):pass
+    print('N49C_PHASE_START '+phase,flush=True,file=sys.stderr)
+    started.update(script=phase_file(script),binary=phase_file(binary) if binary else None)
+    return phase_write(folder/'START.json',started)
+
+def phase_finish(root,identity,platform,phase,start_sha,exit_code,produced_binary=None):
+    phase_check(identity,platform,phase)
+    need(type(exit_code) is int and 0<=exit_code<=255,'observed phase exit must be an integer shell status')
+    folder=Path(root).resolve()/phase;folder.mkdir(parents=True,exist_ok=True)
+    returned=dict(schema='n49c-phase-return-v1',identity=identity,platform=platform,phase=phase,
+        observed_exit=exit_code,clock=phase_clock())
+    # Save the real launcher return before reading/hashing optional evidence.
+    return_sha=phase_write(folder/'RETURN.json',returned)
+    result=dict(schema='n49c-phase-result-v1',identity=identity,platform=platform,phase=phase,
+        observed_exit=exit_code,return_sha256=return_sha,start_sha256=start_sha,
+        passed=False,record_complete=False,process_cleanup='runner-managed; not independently verified')
+    try:
+        raw=bounded_manifest(folder/'START.json')
+        need(hashlib.sha256(raw).hexdigest()==start_sha,'phase start digest mismatch')
+        started=json.loads(raw)
+        need(started['identity']==identity and started['platform']==platform and started['phase']==phase,'phase start identity mismatch')
+        need(started['schema']=='n49c-phase-start-v1' and started['status']=='started','phase start shape mismatch')
+        phase_timestamp(started['clock']);phase_timestamp(returned['clock'])
+        need(type(started['clock']['monotonic_ns']) is int and returned['clock']['monotonic_ns']>=started['clock']['monotonic_ns'],'phase monotonic clock mismatch')
+        result['elapsed_ns']=returned['clock']['monotonic_ns']-started['clock']['monotonic_ns']
+        for key in ('stdout','stderr'):result[key]=phase_file(folder/(key+'.raw'))
+        phase_streams(folder,result);phase_descriptor(started['script'])
+        result['script']=phase_file(started['script']['path'])
+        need(result['script']==started['script'],'phase script changed')
+        if started['binary'] is not None:
+            phase_descriptor(started['binary'])
+            result['binary']=phase_file(started['binary']['path'])
+            need(result['binary']==started['binary'],'phase binary changed')
+        need((produced_binary is not None)==(phase=='cmake_build'),'produced binary applicability mismatch')
+        if produced_binary is not None:result['produced_binary']=phase_file(produced_binary)
+        result['record_complete']=True;result['passed']=exit_code==0
+    except Exception as error:result['error']=str(error)
+    digest=phase_write(folder/'RESULT.json',result)
+    print('N49C_PHASE_FINISH '+phase+' observed_exit='+str(exit_code)+' metadata_complete='+str(result['record_complete']).lower(),flush=True,file=sys.stderr)
+    return result,digest
+
+def phase_reconcile(root,identity,platform,actions,output):
+    try:phase_check(identity,platform)
+    except (ValueError,TypeError,AttributeError) as error:
+        known={key:identity.get(key) or None for key in IDENTITY_KEYS}
+        rows=[dict(phase=p,native=actions.get(p) if isinstance(actions,dict) else None,
+            passed=False,status='bootstrap_identity_unavailable',observed_exit=None,clock=None) for p in PHASE_IDS]
+        result=dict(schema='n49c-phase-ledger-v1',kind='bootstrap_failure',identity=known,
+            identity_validated=False,unavailable_identity_fields=[k for k,v in known.items() if v is None],
+            platform=platform,expected_ids=list(PHASE_IDS),rows=rows,passed=False,export_qualified=False,
+            reconciliation_completed=False,
+            failures=['strict source/run/job identity unavailable or invalid: '+str(error)])
+        phase_write(output,result)
+        return result
+    need(isinstance(actions,dict) and len(actions)<=len(PHASE_IDS)+1,'bounded native step outcomes required')
+    need(set(actions)<=set(PHASE_IDS)|{'phase_ledger'},'unknown native phase ID')
+    root=Path(root).resolve();rows=[];failures=[];binary_hash=None;last_return=None
+    if root.exists():
+        extra=sorted(p.name for p in root.iterdir() if p.name not in PHASE_IDS)
+        if extra:failures.append('unknown retained phase IDs: '+','.join(extra))
+    for phase in PHASE_IDS:
+        row=dict(phase=phase,passed=False,native=actions.get(phase),status='unqualified',observed_exit=None);rows.append(row)
+        try:
+            native=row['native']
+            if platform=='Linux' and phase in WINDOWS_PHASES:
+                need(isinstance(native,dict),'missing native outcome')
+                need(native.get('outcome')=='skipped' and native.get('conclusion')=='skipped','Windows-only phase unexpectedly ran')
+                need(not (root/phase).exists(),'unexpected Windows-only phase evidence')
+                row.update(passed=True,status='not_applicable');continue
+            if phase in BOOTSTRAP_PHASES:
+                need(isinstance(native,dict),'missing native outcome')
+                row.update(kind='bootstrap_actions_outcome',observed_exit=None,clock=None)
+                need(not (root/phase).exists(),'unexpected bootstrap command record')
+                need(native.get('outcome')=='success' and native.get('conclusion')=='success','bootstrap native outcome not successful')
+                row.update(passed=True,status='native_success');continue
+            folder=root/phase
+            returned=None;return_raw=None
+            if (folder/'RETURN.json').exists():
+                return_raw=bounded_manifest(folder/'RETURN.json');returned=json.loads(return_raw)
+                need(returned.get('schema')=='n49c-phase-return-v1','phase return schema mismatch')
+                need(returned['identity']==identity and returned['phase']==phase and returned['platform']==platform,'phase return identity mismatch')
+                need(type(returned.get('observed_exit')) is int and 0<=returned['observed_exit']<=255,'malformed phase observed exit')
+                phase_timestamp(returned['clock'])
+                row.update(observed_exit=returned['observed_exit'],return_sha256=hashlib.sha256(return_raw).hexdigest(),status='finalization_incomplete')
+            need(isinstance(native,dict),'missing native outcome')
+            if not (folder/'START.json').exists():
+                row['status']='not_run' if native.get('outcome')=='skipped' else 'start_unavailable'
+                raise ValueError('required phase start absent')
+            start_raw=bounded_manifest(folder/'START.json');start=json.loads(start_raw)
+            row['start_sha256']=hashlib.sha256(start_raw).hexdigest()
+            need(native.get('outputs',{}).get('start_sha256')==row['start_sha256'],'native start digest mismatch')
+            need(start['phase']==phase and start['identity']==identity and start['platform']==platform,'retained start identity mismatch')
+            need(start.get('schema')=='n49c-phase-start-v1' and start.get('status')=='started','retained start schema mismatch')
+            phase_timestamp(start['clock'])
+            if returned is None:
+                row.update(status='interrupted_or_unknown_completion',observed_exit=None)
+                raise ValueError('phase started without a valid observed return')
+            need((folder/'RESULT.json').exists(),'observed return retained; final phase metadata absent')
+            raw=bounded_manifest(folder/'RESULT.json');result=json.loads(raw)
+            need(returned.get('schema')=='n49c-phase-return-v1' and result.get('schema')=='n49c-phase-result-v1','phase return/result schema mismatch')
+            row.update(result_sha256=hashlib.sha256(raw).hexdigest(),observed_exit=returned.get('observed_exit'))
+            need(native.get('outputs',{}).get('result_sha256')==row['result_sha256'],'native result digest mismatch')
+            need(result['return_sha256']==hashlib.sha256(return_raw).hexdigest(),'phase return digest mismatch')
+            for value in (returned,result):
+                need(value['identity']==identity and value['phase']==phase and value['platform']==platform,'phase return/result identity mismatch')
+                need(type(value.get('observed_exit')) is int and value['observed_exit']==returned['observed_exit'],'malformed phase exit')
+            need(result['start_sha256']==row['start_sha256'],'result start binding mismatch')
+            start_clock=start['clock']['monotonic_ns'];return_clock=returned['clock']['monotonic_ns']
+            need(type(start_clock) is int and type(return_clock) is int and type(result.get('elapsed_ns')) is int and return_clock>=start_clock and
+                 result.get('elapsed_ns')==return_clock-start_clock,'phase clock/elapsed mismatch')
+            need(last_return is None or start_clock>=last_return,'retained phases are not in the required order')
+            need(native.get('outcome')=='success' and native.get('conclusion')=='success','native phase failed or incomplete')
+            need(result['passed'] is True and result['record_complete'] is True and returned['observed_exit']==0,'phase failed or metadata incomplete')
+            phase_streams(folder,result);phase_descriptor(start['script'])
+            for key in ('script','binary','produced_binary'):
+                if key in result:
+                    phase_descriptor(result[key]);need(phase_file(result[key]['path'])==result[key],'phase retained '+key+' bytes changed')
+            need(result['script']==start['script'],'phase script binding changed')
+            need((start.get('binary') is not None)==(phase in BINARY_PHASES),'phase binary applicability changed')
+            need(('binary' in result)==(phase in BINARY_PHASES) and ('produced_binary' in result)==(phase=='cmake_build'),'phase result binary applicability changed')
+            if phase=='cmake_build':binary_hash=result['produced_binary']['sha256']
+            if phase in BINARY_PHASES:
+                phase_descriptor(start['binary'])
+                need(binary_hash is not None and result['binary']==start['binary'] and result['binary']['sha256']==binary_hash,'different combined binary across phases')
+            last_return=return_clock
+            row.update(passed=True,status='completed')
+        except Exception as error:
+            row['error']=str(error);failures.append(phase+': '+str(error))
+    try:
+        source=root.parent
+        need((source/'source.txt').read_text().strip()==identity['commit'],'source capture commit mismatch')
+        need((source/'tree.txt').read_text().strip()==identity['tree'],'source capture tree mismatch')
+        closure=json.loads(bounded_manifest(source/'source-closure.json'))
+        need(closure.get('passed') is True and closure.get('head')==identity['commit'] and closure.get('inventory_sha256')==PIN,'bootstrap source closure missing/mismatched')
+    except Exception as error:failures.append('bootstrap artifacts: '+str(error))
+    result=dict(schema='n49c-phase-ledger-v1',identity=identity,platform=platform,
+        expected_ids=list(PHASE_IDS),rows=rows,failures=failures,passed=not failures,
+        export_qualified=False,reconciliation_completed=True,cleanup='native-actions-managed; no independent process-tree proof')
+    phase_write(output,result)
+    return result
+
+def phase_actions(raw):
+    need(isinstance(raw,str) and 0<len(raw.encode('utf-8'))<=65536,'bounded explicit native phase outcomes required')
+    def unique(pairs):
+        value={}
+        for key,item in pairs:
+            need(key not in value,'duplicate native phase metadata key')
+            value[key]=item
+        return value
+    result=json.loads(raw,object_pairs_hook=unique)
+    need(isinstance(result,dict),'native phase outcomes must be an object')
+    return result
 
 def bounded_manifest(path):
     """Bound type, allocation and reads before opening/copying any manifest bytes."""
@@ -446,9 +666,25 @@ if __name__ == '__main__':
     p.add_argument('--package-evidence',type=Path);p.add_argument('--staging',type=Path);p.add_argument('--package-diagnostic',type=Path)
     p.add_argument('--run-id');p.add_argument('--run-attempt');p.add_argument('--job-key');p.add_argument('--job-label')
     p.add_argument('--verify-downloads',type=Path);p.add_argument('--manifest-sha256')
+    p.add_argument('--phase-start');p.add_argument('--phase-finish');p.add_argument('--phase-ledger',type=Path)
+    p.add_argument('--phase-root',type=Path);p.add_argument('--phase-platform');p.add_argument('--phase-script',type=Path)
+    p.add_argument('--phase-binary',type=Path);p.add_argument('--phase-produced-binary',type=Path)
+    p.add_argument('--phase-start-sha');p.add_argument('--phase-exit',type=int)
     p.add_argument('command',nargs=argparse.REMAINDER)
     args=p.parse_args()
     if args.repository:ROOT=args.repository.resolve(strict=True)
+    if args.phase_start or args.phase_finish or args.phase_ledger:
+        need(sum(bool(x) for x in (args.phase_start,args.phase_finish,args.phase_ledger))==1 and args.phase_root is not None,'one phase metadata operation and root required')
+        identity=dict(commit=args.expected_head,tree=args.expected_tree,run_id=args.run_id,run_attempt=args.run_attempt,job_key=args.job_key,job_label=args.job_label)
+        if args.phase_start:
+            need(args.phase_script is not None,'phase script identity required')
+            print(phase_start(args.phase_root,identity,args.phase_platform,args.phase_start,args.phase_script,args.phase_binary));raise SystemExit(0)
+        if args.phase_finish:
+            result,digest=phase_finish(args.phase_root,identity,args.phase_platform,args.phase_finish,args.phase_start_sha,args.phase_exit,args.phase_produced_binary)
+            print(digest);raise SystemExit(0 if result['passed'] else 1)
+        raw=os.environ.get('N49C_PHASE_OUTCOMES','')
+        result=phase_reconcile(args.phase_root,identity,args.phase_platform,phase_actions(raw),args.phase_ledger)
+        print(json.dumps(result));raise SystemExit(0 if result['passed'] else 1)
     if args.run_clean:
         command=args.command[1:] if args.command[:1]==['--'] else args.command
         raise SystemExit(run_clean(command))

@@ -23,6 +23,8 @@ jobs:
         ref: ${{ github.sha }}
         persist-credentials: false
         fetch-depth: 1
+      id: checkout
+      timeout-minutes: 2
     - name: Exact candidate ancestry and independent inventory binding
       shell: bash
       run: |
@@ -36,22 +38,60 @@ jobs:
         echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
         git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$RUNNER_TEMP/n49c-frozen-source-gate.py"
       id: source_identity
-    - name: Pin combined tree and unchanged build closures
+      timeout-minutes: 1
+    - name: Capture exact source and unchanged build closures
+      id: source_capture
+      timeout-minutes: 1
       shell: bash
       run: |
         set -euo pipefail
-        mkdir evidence
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-source_capture.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        mkdir -p evidence
         test "$(git rev-parse HEAD)" = '${{ github.sha }}'
         git rev-parse HEAD > evidence/source.txt
         git rev-parse HEAD^{tree} > evidence/tree.txt
         git ls-tree -r -z HEAD > evidence/source-tree.bin
         git archive --format=zip --output=evidence/source.zip HEAD
         python .ci/check_n49c_sources.py > evidence/source-closure.json
-    - name: Fresh combined CMake product and all portable registered targets
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start source_capture "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-source_capture.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/source_capture/stdout.raw 2> evidence/phases/source_capture/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish source_capture "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Fresh CMake build and Windows original60
+      id: cmake_build
+      timeout-minutes: 18
       shell: bash
       run: |
         set -euo pipefail
-        script="$RUNNER_TEMP/n49c-cmake-3.sh"
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-cmake_build.sh"
         cat > "$script" <<'N49C_CLEAN_COMMAND'
         set -euo pipefail
         cmake -S . -B build/n49c -DCMAKE_BUILD_TYPE=Debug -DQBRAIN_WITH_PG=OFF -DCMAKE_PROJECT_qbrain_INCLUDE="$GITHUB_WORKSPACE/.ci/client_retrieval_integration_targets.cmake" > evidence/configure.log 2>&1
@@ -74,28 +114,489 @@ jobs:
           native_script="$("$converter" -am "$script")"
         fi
         export N49C_TEST_BASH="$native_exe"
-        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-cmake-3.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter"
-    - name: Fresh combined CTests and original normal/optimized process tests
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start cmake_build "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-cmake_build.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/cmake_build/stdout.raw 2> evidence/phases/cmake_build/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish cmake_build "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status" --phase-produced-binary "$bindir/qbrain$suffix")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Fresh combined CTests
+      id: ctests
+      timeout-minutes: 6
       shell: bash
       run: |
         set -euo pipefail
-        script="$RUNNER_TEMP/n49c-cmake-4.sh"
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-ctests.sh"
         cat > "$script" <<'N49C_CLEAN_COMMAND'
         set -euo pipefail
         ctest --test-dir build/n49c -C Debug -E '^qbrain_unit$' --output-on-failure | tee evidence/ctest.log
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        binary_args=(--phase-binary "$bindir/qbrain$suffix")
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start ctests "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-ctests.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/ctests/stdout.raw 2> evidence/phases/ctests/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish ctests "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Fresh SQLite-only context gate
+      id: sqlite_context
+      timeout-minutes: 1
+      shell: bash
+      run: |
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-sqlite_context.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
         bindir=build/n49c; suffix=''
         if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
         "$bindir/qbrain_pg_context_tests$suffix" --sqlite-only > evidence/pg-context-sqlite.json
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        binary_args=(--phase-binary "$bindir/qbrain$suffix")
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start sqlite_context "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-sqlite_context.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/sqlite_context/stdout.raw 2> evidence/phases/sqlite_context/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish sqlite_context "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Original N49A normal and optimized process gates
+      id: n49a_process
+      timeout-minutes: 6
+      shell: bash
+      run: |
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-n49a_process.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
         python .ci/run_n49a_process.py --bin-dir "$bindir" --output evidence/process > evidence/process-summary.json
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        binary_args=(--phase-binary "$bindir/qbrain$suffix")
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start n49a_process "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-n49a_process.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/n49a_process/stdout.raw 2> evidence/phases/n49a_process/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish n49a_process "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Phase and source contracts in normal Python
+      id: contract_normal
+      timeout-minutes: 2
+      shell: bash
+      run: |
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-contract_normal.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
         python .ci/test_n49c_source_contract.py --evidence evidence/source-contract-normal > evidence/source-contract-tests.json 2> evidence/source-contract-tests.stderr
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start contract_normal "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-contract_normal.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/contract_normal/stdout.raw 2> evidence/phases/contract_normal/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish contract_normal "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Phase and source contracts in optimized Python
+      id: contract_optimized
+      timeout-minutes: 2
+      shell: bash
+      run: |
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-contract_optimized.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
         python -O .ci/test_n49c_source_contract.py --evidence evidence/source-contract-optimized > evidence/source-contract-tests-optimized.json 2> evidence/source-contract-tests-optimized.stderr
-        for mode in normal optimized; do
-          opt=(); if [ "$mode" = optimized ]; then opt=(-O); fi
-          python "${opt[@]}" .ci/test_directory_search.py --binary "$bindir/qbrain$suffix" --output "evidence/directory-$mode" > "evidence/directory-$mode.log"
-          python "${opt[@]}" .ci/test_cursor_hooks.py --binary "$bindir/qbrain$suffix" --output "evidence/cursor-$mode" > "evidence/cursor-$mode.log"
-          wire=(); if [ "$RUNNER_OS" = Windows ]; then wire=(--wire); fi
-          python "${opt[@]}" .ci/test_n49c_process.py --binary "$bindir/qbrain$suffix" --output "evidence/combined-$mode" "${wire[@]}" > "evidence/combined-$mode.log"
-        done
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start contract_optimized "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-contract_optimized.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/contract_optimized/stdout.raw 2> evidence/phases/contract_optimized/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish contract_optimized "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Fresh directory process gate (normal)
+      id: directory_normal
+      timeout-minutes: 1
+      shell: bash
+      run: |
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-directory_normal.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        mode=normal
+        opt=()
+        python "${opt[@]}" .ci/test_directory_search.py --binary "$bindir/qbrain$suffix" --output "evidence/directory-$mode" > "evidence/directory-$mode.log"
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        binary_args=(--phase-binary "$bindir/qbrain$suffix")
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start directory_normal "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-directory_normal.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/directory_normal/stdout.raw 2> evidence/phases/directory_normal/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish directory_normal "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Fresh cursor process gate (normal)
+      id: cursor_normal
+      timeout-minutes: 1
+      shell: bash
+      run: |
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-cursor_normal.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        mode=normal
+        opt=()
+        python "${opt[@]}" .ci/test_cursor_hooks.py --binary "$bindir/qbrain$suffix" --output "evidence/cursor-$mode" > "evidence/cursor-$mode.log"
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        binary_args=(--phase-binary "$bindir/qbrain$suffix")
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start cursor_normal "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-cursor_normal.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/cursor_normal/stdout.raw 2> evidence/phases/cursor_normal/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish cursor_normal "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Fresh combined process gate (normal)
+      id: combined_normal
+      timeout-minutes: 2
+      shell: bash
+      run: |
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-combined_normal.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        mode=normal
+        opt=()
+        wire=(); if [ "$RUNNER_OS" = Windows ]; then wire=(--wire); fi
+        python "${opt[@]}" .ci/test_n49c_process.py --binary "$bindir/qbrain$suffix" --output "evidence/combined-$mode" "${wire[@]}" > "evidence/combined-$mode.log"
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        binary_args=(--phase-binary "$bindir/qbrain$suffix")
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start combined_normal "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-combined_normal.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/combined_normal/stdout.raw 2> evidence/phases/combined_normal/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish combined_normal "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Fresh directory process gate (optimized)
+      id: directory_optimized
+      timeout-minutes: 1
+      shell: bash
+      run: |
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-directory_optimized.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        mode=optimized
+        opt=(-O)
+        python "${opt[@]}" .ci/test_directory_search.py --binary "$bindir/qbrain$suffix" --output "evidence/directory-$mode" > "evidence/directory-$mode.log"
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        binary_args=(--phase-binary "$bindir/qbrain$suffix")
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start directory_optimized "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-directory_optimized.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/directory_optimized/stdout.raw 2> evidence/phases/directory_optimized/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish directory_optimized "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Fresh cursor process gate (optimized)
+      id: cursor_optimized
+      timeout-minutes: 1
+      shell: bash
+      run: |
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-cursor_optimized.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        mode=optimized
+        opt=(-O)
+        python "${opt[@]}" .ci/test_cursor_hooks.py --binary "$bindir/qbrain$suffix" --output "evidence/cursor-$mode" > "evidence/cursor-$mode.log"
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        binary_args=(--phase-binary "$bindir/qbrain$suffix")
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start cursor_optimized "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-cursor_optimized.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/cursor_optimized/stdout.raw 2> evidence/phases/cursor_optimized/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish cursor_optimized "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Fresh combined process gate (optimized)
+      id: combined_optimized
+      timeout-minutes: 2
+      shell: bash
+      run: |
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-combined_optimized.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        mode=optimized
+        opt=(-O)
+        wire=(); if [ "$RUNNER_OS" = Windows ]; then wire=(--wire); fi
+        python "${opt[@]}" .ci/test_n49c_process.py --binary "$bindir/qbrain$suffix" --output "evidence/combined-$mode" "${wire[@]}" > "evidence/combined-$mode.log"
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        binary_args=(--phase-binary "$bindir/qbrain$suffix")
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start combined_optimized "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-combined_optimized.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/combined_optimized/stdout.raw 2> evidence/phases/combined_optimized/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish combined_optimized "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Preserve exact fresh combined binaries
+      id: binary_capture
+      timeout-minutes: 1
+      shell: bash
+      run: |
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-binary_capture.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
         mkdir evidence/binaries
         for target in qbrain qbrain_client_retrieval_integration_tests qbrain_directory_search_tests qbrain_cursor_hook_tests qbrain_verified_integration_tests qbrain_context_invalidation_tests qbrain_context_preflight_tests qbrain_context_coverage_tests qbrain_query_cache_tests qbrain_query_cache_integration_tests qbrain_query_cache_http_tests qbrain_logical_observation_tests qbrain_logical_observation_http_tests qbrain_logical_rerank_move_tests qbrain_logical_rerank_regression qbrain_runtime_observation_tests qbrain_observation_semantics_tests qbrain_runtime_observation_http qbrain_http_probe; do
           cp "$bindir/$target$suffix" evidence/binaries/
@@ -113,25 +614,166 @@ jobs:
           native_script="$("$converter" -am "$script")"
         fi
         export N49C_TEST_BASH="$native_exe"
-        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-cmake-4.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter"
-    - name: Historical comparison fixture for original 55-step gate
-      if: runner.os == 'Windows'
-      shell: pwsh
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        binary_args=(--phase-binary "$bindir/qbrain$suffix")
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start binary_capture "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-binary_capture.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/binary_capture/stdout.raw 2> evidence/phases/binary_capture/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish binary_capture "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+    - name: Verify unchanged original55 baseline fixture
+      id: baseline_fixture
+      timeout-minutes: 1
+      shell: bash
       run: |
-        $script=Join-Path $env:RUNNER_TEMP 'n49c-cmake-5.ps1'
-        $body=@'
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-baseline_fixture.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        ps_script="$RUNNER_TEMP/n49c-baseline_fixture.ps1"
+        cat > "$ps_script" <<'N49C_PS_COMMAND'
         $ErrorActionPreference = 'Stop'
         Invoke-WebRequest 'https://github.com/youq616/qbrain/releases/download/windows-current-preview-b810d689/qbrain-windows-x64-n47x-preview.zip' -OutFile baseline.zip
         if ((Get-FileHash baseline.zip -Algorithm SHA256).Hash.ToLowerInvariant() -cne 'c517582c1ea0e0795e881155edd4d34288e3a002dc3bc7657dafcb96a1eb8b4d') { throw 'Historical baseline digest mismatch' }
         Expand-Archive baseline.zip baseline
+        N49C_PS_COMMAND
+        ps_converter="$(command -v cygpath)"
+        native_ps_script="$("$ps_converter" -am "$ps_script")"
+        python .ci/check_n49c_sources.py --run-clean -- pwsh -NoProfile -NonInteractive -File "$native_ps_script"
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start baseline_fixture "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-baseline_fixture.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/baseline_fixture/stdout.raw 2> evidence/phases/baseline_fixture/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish baseline_fixture "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+      if: runner.os == 'Windows'
+    - name: Original55 and unchanged summary validator
+      id: original55
+      timeout-minutes: 14
+      shell: bash
+      run: |
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        script="$RUNNER_TEMP/n49c-original55.sh"
+        cat > "$script" <<'N49C_CLEAN_COMMAND'
+        set -euo pipefail
+        bindir=build/n49c; suffix=''
+        if [ "$RUNNER_OS" = Windows ]; then bindir=build/n49c/Debug; suffix=.exe; fi
+        ps_script="$RUNNER_TEMP/n49c-original55.ps1"
+        cat > "$ps_script" <<'N49C_PS_COMMAND'
+        $ErrorActionPreference = 'Stop'
         python .ci/run_n48i_checks.py --binary build/n49c/Debug/qbrain.exe --baseline baseline/qbrain.exe --output evidence/original55 | Tee-Object evidence/original55-summary.json
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         python -c "import json,sys; r=json.load(open('evidence/original55-summary.json',encoding='utf-8-sig')); sys.exit(0 if r['result']=='PASS' and r['steps']==55 else 1)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        '@
-        [IO.File]::WriteAllText($script,$body,(New-Object Text.UTF8Encoding($false)))
-        python .ci/check_n49c_sources.py --run-clean -- pwsh -NoProfile -NonInteractive -File $script
-        if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+        N49C_PS_COMMAND
+        ps_converter="$(command -v cygpath)"
+        native_ps_script="$("$ps_converter" -am "$ps_script")"
+        python .ci/check_n49c_sources.py --run-clean -- pwsh -NoProfile -NonInteractive -File "$native_ps_script"
+        N49C_CLEAN_COMMAND
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        phase_args=(--phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}')
+        binary_args=()
+        binary_args=(--phase-binary "$bindir/qbrain$suffix")
+        phase_start_sha="$(python .ci/check_n49c_sources.py --phase-start original55 "${phase_args[@]}" --phase-script "$native_script" "${binary_args[@]}")"
+        printf 'start_sha256=%s\n' "$phase_start_sha" >> "$GITHUB_OUTPUT"
+        set +e
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-original55.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter" > evidence/phases/original55/stdout.raw 2> evidence/phases/original55/stderr.raw
+        command_status=$?
+        phase_result_sha="$(python .ci/check_n49c_sources.py --phase-finish original55 "${phase_args[@]}" --phase-start-sha "$phase_start_sha" --phase-exit "$command_status")"
+        metadata_status=$?
+        set -e
+        printf 'result_sha256=%s\n' "$phase_result_sha" >> "$GITHUB_OUTPUT"
+        if [ "$command_status" -ne 0 ]; then exit "$command_status"; fi
+        exit "$metadata_status"
+      if: runner.os == 'Windows'
+    - name: Reconcile every native phase without inventing missing exits
+      id: phase_ledger
+      if: always()
+      timeout-minutes: 1
+      shell: bash
+      env:
+        N49C_PHASE_OUTCOMES: ${{ toJSON(steps) }}
+        N49C_PHASE_JOB_LABEL: qbrain-n49c-cmake-${{ matrix.os }}
+        N49C_PHASE_EXPECTED_TREE: ${{ steps.source_identity.outputs.tree }}
+      run: |
+        set -euo pipefail
+        mkdir -p evidence
+        set +e
+        git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$RUNNER_TEMP/n49c-frozen-phase-metadata.py" 2> evidence/phase-helper.stderr
+        helper_status=$?
+        set -e
+        if [ "$helper_status" -ne 0 ]; then
+          export N49C_PHASE_HELPER_STATUS="$helper_status"
+          python - <<'N49C_BOOTSTRAP_DIAGNOSTIC'
+        import json,os
+        from pathlib import Path
+        raw=os.environ.get('N49C_PHASE_OUTCOMES','')
+        actions={};parse_error=None
+        if len(raw.encode('utf-8'))<=65536:
+            with Path('evidence/phase-actions.raw.json').open('xb') as f:f.write(raw.encode('utf-8'))
+            try:
+                actions=json.loads(raw)
+                if not isinstance(actions,dict):raise ValueError('native outcomes are not an object')
+            except Exception as error:actions={};parse_error=str(error)
+        else:parse_error='native outcomes exceed metadata bound'
+        identity=dict(commit=os.environ.get('GITHUB_SHA') or None,tree=os.environ.get('N49C_PHASE_EXPECTED_TREE') or None,
+            run_id=os.environ.get('GITHUB_RUN_ID') or None,run_attempt=os.environ.get('GITHUB_RUN_ATTEMPT') or None,
+            job_key='cmake',job_label=os.environ.get('N49C_PHASE_JOB_LABEL') or None)
+        value=dict(schema='n49c-phase-ledger-v1',kind='bootstrap_helper_unavailable',identity=identity,
+            identity_validated=False,unavailable_identity_fields=[k for k,v in identity.items() if v is None],
+            native_actions=actions,native_actions_parse_error=parse_error,observed_exit=None,clock=None,
+            helper_extraction_exit=int(os.environ['N49C_PHASE_HELPER_STATUS']),reconciliation_completed=False,
+            passed=False,export_qualified=False,failures=['frozen helper extraction failed; qualification unavailable'])
+        with Path('evidence/PHASES.json').open('x',encoding='utf-8') as f:json.dump(value,f,indent=2);f.write('\n')
+        raise SystemExit(1)
+        N49C_BOOTSTRAP_DIAGNOSTIC
+          exit 1
+        fi
+        python "$RUNNER_TEMP/n49c-frozen-phase-metadata.py" --repository "$GITHUB_WORKSPACE" --phase-ledger evidence/PHASES.json --phase-root evidence/phases --phase-platform "$RUNNER_OS" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key cmake --job-label 'qbrain-n49c-cmake-${{ matrix.os }}' > evidence/phase-ledger.stdout 2> evidence/phase-ledger.stderr
     - name: Verify frozen HEAD tree index worktree and canonical bytes
       if: always()
       shell: bash
@@ -140,6 +782,7 @@ jobs:
         mkdir -p evidence
         git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$RUNNER_TEMP/n49c-frozen-source-gate.py"
         python "$RUNNER_TEMP/n49c-frozen-source-gate.py" --repository "$GITHUB_WORKSPACE" --final --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' > evidence/final-source-identity.json 2> evidence/final-source-identity.stderr
+      timeout-minutes: 2
     - name: Package complete raw evidence into bounded independently bound parts
       id: package
       if: always()
@@ -150,6 +793,7 @@ jobs:
         packer="$RUNNER_TEMP/n49c-frozen-packer.py"
         git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$packer"
         python "$packer" --repository "$GITHUB_WORKSPACE" --run-clean -- python "$packer" --repository "$GITHUB_WORKSPACE" --package-evidence "$GITHUB_WORKSPACE/evidence" --staging "$RUNNER_TEMP/n49c-evidence-package" --package-diagnostic "$RUNNER_TEMP/n49c-pack-diagnostics/failure.json" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key 'cmake' --job-label 'qbrain-n49c-cmake-${{ matrix.os }}' 2> "$RUNNER_TEMP/n49c-pack-diagnostics/stderr.log" | tee "$RUNNER_TEMP/n49c-pack-diagnostics/stdout.log"
+      timeout-minutes: 4
     - name: Upload complete evidence part 00
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 0 }}
@@ -159,6 +803,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 01
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 1 }}
@@ -168,6 +813,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 02
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 2 }}
@@ -177,6 +823,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 03
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 3 }}
@@ -186,6 +833,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 04
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 4 }}
@@ -195,6 +843,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 05
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 5 }}
@@ -204,6 +853,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 06
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 6 }}
@@ -213,6 +863,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 07
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 7 }}
@@ -222,6 +873,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 08
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 8 }}
@@ -231,6 +883,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 09
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 9 }}
@@ -240,6 +893,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 10
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 10 }}
@@ -249,6 +903,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 11
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 11 }}
@@ -258,6 +913,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 12
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 12 }}
@@ -267,6 +923,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 13
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 13 }}
@@ -276,6 +933,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 14
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 14 }}
@@ -285,6 +943,7 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Upload complete evidence part 15
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 15 }}
@@ -294,14 +953,21 @@ jobs:
         retention-days: 30
         if-no-files-found: error
         compression-level: 0
+      timeout-minutes: 1
     - name: Preserve packager diagnostics
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
         name: qbrain-n49c-cmake-${{ matrix.os }}-packager
-        path: ${{ runner.temp }}/n49c-pack-diagnostics/
+        path: |
+          ${{ runner.temp }}/n49c-pack-diagnostics/
+          evidence/PHASES.json
+          evidence/phase-ledger.*
+          evidence/phase-helper.stderr
+          evidence/phase-actions.raw.json
         retention-days: 30
         if-no-files-found: warn
+      timeout-minutes: 1
   direct-msvc:
     runs-on: windows-2022
     timeout-minutes: 90

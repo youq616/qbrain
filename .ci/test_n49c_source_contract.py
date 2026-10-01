@@ -532,6 +532,248 @@ def installer_export_controls(checks, evidence):
         checks.append('manifest overflow retains numeric bytes count archive and part diagnostics')
         return dict(expanded_manifest_bytes=expanded_size,expanded_manifest_entries=24000,exact_manifest_bytes=source_gate.MAX_MANIFEST,maximum_outer_zip_bytes=envelope_size,outer_tool_ceiling_bytes=32*source_gate.BLOCK,preflight_budget_bytes=source_gate.MIN_FREE)
 
+def phase_metadata_controls(checks,evidence):
+    """Synthetic metadata only: no product, shell or child process is launched."""
+    base=evidence/'phase-metadata';base.mkdir(exist_ok=False)
+    old={name:getattr(subprocess,name) for name in ('run','Popen','check_output')}
+    def prohibited(*args,**kwargs):raise RuntimeError('metadata helper attempted process execution')
+    try:
+        for name in old:setattr(subprocess,name,prohibited)
+        fixtures={}
+        for platform in ('Linux','Windows'):
+            folder=base/platform;folder.mkdir();phases=folder/'phases'
+            identity=dict(commit='1'*40,tree='2'*40,run_id='123',run_attempt='1',job_key='cmake',
+                job_label='qbrain-n49c-cmake-'+('windows-2022' if platform=='Windows' else 'ubuntu-24.04'))
+            script=folder/'synthetic script 中文.sh';script.write_bytes(b'# synthetic metadata fixture; never executed\n')
+            binary=folder/'synthetic-binary';binary.write_bytes(b'synthetic binary identity; not executable')
+            (folder/'source.txt').write_text(identity['commit']+'\n');(folder/'tree.txt').write_text(identity['tree']+'\n')
+            (folder/'source-closure.json').write_text(json.dumps(dict(passed=True,head=identity['commit'],inventory_sha256=source_gate.PIN)))
+            actions={p:dict(outcome='success',conclusion='success',outputs={}) for p in source_gate.PHASE_IDS}
+            for phase in source_gate.PHASE_IDS[2:]:
+                if platform=='Linux' and phase in source_gate.WINDOWS_PHASES:
+                    actions[phase].update(outcome='skipped',conclusion='skipped');continue
+                start=source_gate.phase_start(phases,identity,platform,phase,script,binary if phase in source_gate.BINARY_PHASES else None)
+                (phases/phase/'stdout.raw').write_bytes(b'OUT\0\xff\r\n');(phases/phase/'stderr.raw').write_bytes(b'ERR\0\xfe\n')
+                result,digest=source_gate.phase_finish(phases,identity,platform,phase,start,0,binary if phase=='cmake_build' else None)
+                if not result['passed']:raise RuntimeError('valid metadata phase failed')
+                actions[phase]['outputs']=dict(start_sha256=start,result_sha256=digest)
+            ledger=source_gate.phase_reconcile(phases,identity,platform,actions,folder/'valid-ledger.json')
+            if not ledger['passed'] or [r['phase'] for r in ledger['rows']]!=list(source_gate.PHASE_IDS):raise RuntimeError('valid ordered phase ledger failed')
+            fixtures[platform]=(folder,phases,identity,script,binary,actions)
+            checks.append('synthetic '+platform+' phase ledger preserves ordered complete metadata and exact separate bytes')
+        folder,phases,identity,script,binary,actions=fixtures['Windows'];case=phases/'ctests';mutation=folder/'mutations';mutation.mkdir()
+        def reject_ledger(name,updated_actions=None,updated_identity=None):
+            value=source_gate.phase_reconcile(phases,updated_identity or identity,'Windows',updated_actions or actions,mutation/(name+'.ledger.json'))
+            if value['passed']:raise RuntimeError('phase ledger accepted '+name)
+            checks.append('phase ledger rejects '+name)
+            return value
+        for field in ('commit','tree','run_id'):
+            changed={**identity,field:'3'*40 if field!='run_id' else '456'}
+            reject_ledger('wrong-'+field,updated_identity=changed)
+        for field,value in [('job_key','another-job'),('job_label','qbrain-n49c-cmake-ubuntu-24.04')]:
+            result=source_gate.phase_reconcile(phases,{**identity,field:value},'Windows',actions,mutation/('wrong-'+field+'.json'))
+            if result['passed'] or result['identity_validated'] or result['kind']!='bootstrap_failure':raise RuntimeError('phase metadata accepted wrong '+field)
+            checks.append('phase metadata wrong '+field+' rejected')
+        native=copy.deepcopy(actions);native['ctests'].update(outcome='failure',conclusion='success')
+        reject_ledger('native-failure-with-successful-retained-result',native)
+        native=copy.deepcopy(actions);del native['ctests']
+        reject_ledger('missing-native-outcome',native)
+        unexpected=phases/'unexpected';unexpected.mkdir()
+        try:reject_ledger('unknown-retained-phase')
+        finally:unexpected.rmdir()
+        saved={n:(case/n).read_bytes() for n in ('START.json','RETURN.json','RESULT.json')}
+        try:
+            start=json.loads(saved['START.json']);result=json.loads(saved['RESULT.json']);returned=json.loads(saved['RETURN.json'])
+            earlier=json.loads((phases/'cmake_build/RETURN.json').read_bytes())['clock']['monotonic_ns']-1
+            start['clock']['monotonic_ns']=earlier
+            (case/'START.json').write_text(json.dumps(start)+'\n')
+            result['start_sha256']=hashlib.sha256((case/'START.json').read_bytes()).hexdigest()
+            result['elapsed_ns']=returned['clock']['monotonic_ns']-earlier
+            (case/'RESULT.json').write_text(json.dumps(result)+'\n')
+            native=copy.deepcopy(actions);native['ctests']['outputs']=dict(start_sha256=result['start_sha256'],result_sha256=hashlib.sha256((case/'RESULT.json').read_bytes()).hexdigest())
+            reject_ledger('reordered-phase-clocks',native)
+        finally:
+            for n,raw in saved.items():(case/n).write_bytes(raw)
+        for name,which,field,value,remove in [
+            ('duplicate-phase-identity','START.json','phase','sqlite_context',False),
+            ('missing-exit','RETURN.json','observed_exit',None,True),
+            ('boolean-exit','RETURN.json','observed_exit',False,False),
+            ('string-exit','RETURN.json','observed_exit','0',False),
+            ('wrong-record-schema','RESULT.json','schema','unknown',False)]:
+            try:
+                data={n:json.loads(raw) for n,raw in saved.items()}
+                if remove:del data[which][field]
+                else:data[which][field]=value
+                if which=='RETURN.json':data['RESULT.json']['observed_exit']=value
+                if which=='START.json':data['RESULT.json']['start_sha256']=hashlib.sha256((json.dumps(data['START.json'])+'\n').encode()).hexdigest()
+                data['RESULT.json']['return_sha256']=hashlib.sha256((json.dumps(data['RETURN.json'])+'\n').encode()).hexdigest()
+                for n,v in data.items():(case/n).write_text(json.dumps(v)+'\n')
+                native=copy.deepcopy(actions);native['ctests']['outputs']=dict(start_sha256=hashlib.sha256((case/'START.json').read_bytes()).hexdigest(),result_sha256=hashlib.sha256((case/'RESULT.json').read_bytes()).hexdigest())
+                (mutation/(name+'.record.json')).write_text(json.dumps(data[which],indent=2)+'\n')
+                reject_ledger(name,native)
+            finally:
+                for n,raw in saved.items():(case/n).write_bytes(raw)
+        streams={n:(case/n).read_bytes() for n in ('stdout.raw','stderr.raw')}
+        for name in ('missing-stdout-descriptor','missing-stderr-descriptor','missing-stdout-file','missing-stderr-file',
+                     'aliased-stream-descriptor','hardlinked-stream-files','boolean-stream-size','missing-start-utc','missing-return-utc'):
+            try:
+                start=json.loads(saved['START.json']);returned=json.loads(saved['RETURN.json']);result=json.loads(saved['RESULT.json'])
+                if name=='missing-stdout-descriptor':del result['stdout'];(case/'stdout.raw').unlink()
+                elif name=='missing-stderr-descriptor':del result['stderr'];(case/'stderr.raw').unlink()
+                elif name=='missing-stdout-file':(case/'stdout.raw').unlink()
+                elif name=='missing-stderr-file':(case/'stderr.raw').unlink()
+                elif name=='aliased-stream-descriptor':result['stdout']=copy.deepcopy(result['stderr']);(case/'stdout.raw').unlink()
+                elif name=='hardlinked-stream-files':
+                    (case/'stdout.raw').unlink();os.link(case/'stderr.raw',case/'stdout.raw')
+                    if not (case/'stdout.raw').samefile(case/'stderr.raw'):raise RuntimeError('hardlink alias injection did not occur')
+                    result['stdout']=source_gate.phase_file(case/'stdout.raw')
+                elif name=='boolean-stream-size':
+                    (case/'stdout.raw').write_bytes(b'x');result['stdout']=source_gate.phase_file(case/'stdout.raw');result['stdout']['bytes']=True
+                elif name=='missing-start-utc':del start['clock']['utc_ns']
+                elif name=='missing-return-utc':del returned['clock']['utc_ns']
+                (case/'START.json').write_text(json.dumps(start)+'\n');(case/'RETURN.json').write_text(json.dumps(returned)+'\n')
+                result['start_sha256']=hashlib.sha256((case/'START.json').read_bytes()).hexdigest()
+                result['return_sha256']=hashlib.sha256((case/'RETURN.json').read_bytes()).hexdigest()
+                (case/'RESULT.json').write_text(json.dumps(result)+'\n')
+                native=copy.deepcopy(actions);native['ctests']['outputs']=dict(start_sha256=result['start_sha256'],result_sha256=hashlib.sha256((case/'RESULT.json').read_bytes()).hexdigest())
+                (mutation/(name+'.record.json')).write_text(json.dumps(dict(start=start,returned=returned,result=result),indent=2)+'\n')
+                reject_ledger(name,native)
+            finally:
+                for n in streams:
+                    if (case/n).exists():(case/n).unlink()
+                for n,raw in streams.items():(case/n).write_bytes(raw)
+                for n,raw in saved.items():(case/n).write_bytes(raw)
+        for observed in (0,7):
+            try:
+                returned=json.loads(saved['RETURN.json']);returned['observed_exit']=observed
+                (case/'RETURN.json').write_text(json.dumps(returned)+'\n');(case/'RESULT.json').unlink()
+                native=copy.deepcopy(actions);native['ctests'].update(outcome='failure',conclusion='failure');native['ctests']['outputs'].pop('result_sha256')
+                value=reject_ledger('retained-exit'+str(observed)+'-without-result',native)
+                row=next(r for r in value['rows'] if r['phase']=='ctests')
+                if row['observed_exit']!=observed or type(row['observed_exit']) is not int or row['status']!='finalization_incomplete':
+                    raise RuntimeError('valid observed return lost during incomplete finalization')
+            finally:
+                for n,raw in saved.items():(case/n).write_bytes(raw)
+        native={p:dict(outcome='skipped',conclusion='skipped',outputs={}) for p in source_gate.PHASE_IDS}
+        native['checkout'].update(outcome='success',conclusion='success');native['source_identity'].update(outcome='failure',conclusion='failure')
+        incomplete={**identity,'tree':''}
+        value=source_gate.phase_reconcile(phases,incomplete,'Windows',native,mutation/'missing-tree-bootstrap.json')
+        if value['passed'] or value['identity_validated'] or value['identity']['tree'] is not None or value['unavailable_identity_fields']!=['tree']:
+            raise RuntimeError('incomplete bootstrap fabricated identity or qualification')
+        if value['rows'][1]['native']!=native['source_identity'] or any(r['observed_exit'] is not None for r in value['rows']):
+            raise RuntimeError('bootstrap diagnostic lost known native outcome or invented exits')
+        checks.append('missing source tree produces only failed bootstrap diagnostic with known native outcomes')
+        try:
+            (case/'RETURN.json').unlink();(case/'RESULT.json').unlink()
+            value=reject_ledger('missing-finish-despite-native-success')
+            row=next(r for r in value['rows'] if r['phase']=='ctests')
+            if row['status']!='interrupted_or_unknown_completion' or row['observed_exit'] is not None:raise RuntimeError('interruption invented an exit')
+        finally:
+            for n,raw in saved.items():(case/n).write_bytes(raw)
+        try:
+            for n in saved:(case/n).unlink()
+            native=copy.deepcopy(actions);native['ctests'].update(outcome='skipped',conclusion='skipped')
+            value=reject_ledger('later-not-run-obligation',native)
+            row=next(r for r in value['rows'] if r['phase']=='ctests')
+            if row['status']!='not_run' or row['observed_exit'] is not None:raise RuntimeError('not-run phase invented an exit')
+        finally:
+            for n,raw in saved.items():(case/n).write_bytes(raw)
+        raw=(case/'stdout.raw').read_bytes()
+        try:(case/'stdout.raw').write_bytes(raw+b'changed');reject_ledger('changed-raw-stream')
+        finally:(case/'stdout.raw').write_bytes(raw)
+        raw=binary.read_bytes()
+        try:binary.write_bytes(raw+b'changed');reject_ledger('changed-combined-binary')
+        finally:binary.write_bytes(raw)
+        raw=script.read_bytes()
+        try:script.write_bytes(raw+b'changed');reject_ledger('changed-phase-script')
+        finally:script.write_bytes(raw)
+        for name,raw in [('duplicate-key','{"ctests":{},"ctests":{}}'),('non-object','[]'),('oversized',' '*65537)]:
+            try:source_gate.phase_actions(raw)
+            except ValueError:checks.append('native phase metadata '+name+' rejected')
+            else:raise RuntimeError('native phase metadata accepted '+name)
+        for mode in ('nonzero','hash-failure'):
+            target=base/mode;phase='contract_normal';start=source_gate.phase_start(target,identity,'Windows',phase,script)
+            old_file=source_gate.phase_file;fired=[]
+            def fail_file(path):fired.append(str(path));raise OSError('synthetic optional phase hash failure')
+            try:
+                if mode=='hash-failure':source_gate.phase_file=fail_file
+                result,digest=source_gate.phase_finish(target,identity,'Windows',phase,start,7)
+            finally:source_gate.phase_file=old_file
+            returned=json.loads((target/phase/'RETURN.json').read_bytes())
+            if returned['observed_exit']!=7 or result['observed_exit']!=7 or result['passed']:raise RuntimeError('primary nonzero exit was lost')
+            if mode=='hash-failure' and (len(fired)!=1 or result['record_complete'] or result.get('error')!='synthetic optional phase hash failure'):
+                raise RuntimeError('optional hash failure was not observed and preserved')
+            checks.append('phase '+mode+' retains primary exit7 before optional inspection and stays failed')
+        before={str(p.relative_to(phases)):hashlib.sha256(p.read_bytes()).hexdigest() for p in phases.rglob('*') if p.is_file()}
+        try:source_gate.phase_start(phases,identity,'Windows','ctests',script,binary)
+        except FileExistsError:pass
+        else:raise RuntimeError('existing phase evidence accepted')
+        after={str(p.relative_to(phases)):hashlib.sha256(p.read_bytes()).hexdigest() for p in phases.rglob('*') if p.is_file()}
+        if before!=after:raise RuntimeError('existing phase evidence was overwritten')
+        checks.append('existing phase evidence rejected without byte changes')
+    finally:
+        for name,value in old.items():setattr(subprocess,name,value)
+    text=(ROOT/'.github/workflows/n49c-integration.yml').read_text();cmake=text.split('  cmake:\n',1)[1].split('  direct-msvc:\n',1)[0]
+    import re
+    ids=re.findall(r'^      id: ([a-z0-9_]+)$',cmake,re.M)
+    expected=list(source_gate.PHASE_IDS)+['phase_ledger','package']
+    if ids!=expected:raise RuntimeError('native phase command order or immutable IDs changed')
+    for mode in ('normal','optimized'):
+        for family in ('directory','cursor','combined'):
+            phase=family+'_'+mode
+            if cmake.count('n49c-'+phase+'.sh')!=1 or 'mode='+mode not in cmake:raise RuntimeError('mode-first phase reconstruction missing')
+    if cmake.count('phase_start_sha=')!=len(source_gate.PHASE_IDS)-2 or cmake.count('observed_bash="$BASH"')!=len(source_gate.PHASE_IDS)-2:
+        raise RuntimeError('per-step phase start or Bash binding missing')
+    checks.append('native workflow keeps mode-first phase order and per-step observed Bash reconstruction')
+    # Actual metadata CLI and the exact failure-only workflow body, with synthetic identities.
+    cli=base/'bootstrap-cli';cli.mkdir();home=cli/'home';home.mkdir()
+    native={p:dict(outcome='skipped',conclusion='skipped',outputs={}) for p in source_gate.PHASE_IDS}
+    native['checkout'].update(outcome='success',conclusion='success');native['source_identity'].update(outcome='failure',conclusion='failure')
+    env=clean_environment(os.environ,home);env['N49C_PHASE_OUTCOMES']=json.dumps(native)
+    argv=[sys.executable,*(['-O'] if sys.flags.optimize else []),str(ROOT/'.ci/check_n49c_sources.py'),
+        '--phase-ledger',str(cli/'PHASES.json'),'--phase-root',str(cli/'phases'),'--phase-platform','Windows',
+        '--expected-head','1'*40,'--expected-tree','','--run-id','123','--run-attempt','1',
+        '--job-key','cmake','--job-label','qbrain-n49c-cmake-windows-2022']
+    child=subprocess.run(argv,env=env,capture_output=True,timeout=30)
+    (cli/'stdout.raw').write_bytes(child.stdout);(cli/'stderr.raw').write_bytes(child.stderr)
+    (cli/'COMMAND.json').write_text(json.dumps(dict(argv=argv,exit=child.returncode),indent=2)+'\n')
+    value=json.loads((cli/'PHASES.json').read_bytes())
+    if child.returncode!=1 or value['passed'] or value['identity']['tree'] is not None or value['identity_validated']:
+        raise RuntimeError('actual missing-tree CLI did not retain a strictly failed diagnostic')
+    checks.append('actual missing-tree CLI preserves failed bootstrap diagnostic and exit1')
+    import textwrap
+    match=re.search(r'^    - name: Reconcile every native phase without inventing missing exits\n.*?^      run: \|\n(.*?)(?=^    - name:)',cmake,re.M|re.S)
+    if not match:raise RuntimeError('exact native ledger workflow body unavailable')
+    body=textwrap.dedent(match[1]);substitutions={'github.sha':'1'*40,'steps.source_identity.outputs.tree':'',
+        'github.run_id':'123','github.run_attempt':'1','matrix.os':'windows-2022' if os.name=='nt' else 'ubuntu-24.04'}
+    for key,val in substitutions.items():body=body.replace('${{ '+key+' }}',val)
+    fallback=base/'helper-unavailable';fallback.mkdir();work=fallback/'empty workspace';work.mkdir();temp=fallback/'runner-temp';temp.mkdir()
+    script=fallback/'ledger.sh';script.write_bytes(body.encode('utf-8'))
+    exe=os.environ.get('N49C_TEST_BASH') or (shutil.which('bash') if os.name!='nt' else None)
+    if not exe:raise RuntimeError('observed Bash needed for bootstrap diagnostic control')
+    exe=Path(exe).resolve(strict=True)
+    env=clean_environment(os.environ,home);env.update(N49C_PHASE_OUTCOMES=json.dumps(native),N49C_PHASE_JOB_LABEL='qbrain-n49c-cmake-'+substitutions['matrix.os'],
+        N49C_PHASE_EXPECTED_TREE='',GITHUB_SHA='1'*40,GITHUB_RUN_ID='123',GITHUB_RUN_ATTEMPT='1',
+        RUNNER_TEMP=str(temp),GITHUB_WORKSPACE=str(work),RUNNER_OS='Windows' if os.name=='nt' else 'Linux',
+        GIT_CEILING_DIRECTORIES=str(fallback))
+    version=subprocess.run([str(exe),'--noprofile','--norc','-c','printf "%s" "$BASH_VERSION"'],env=env,capture_output=True,timeout=30)
+    (fallback/'version.stdout').write_bytes(version.stdout);(fallback/'version.stderr').write_bytes(version.stderr)
+    if version.returncode or version.stderr:raise RuntimeError('bootstrap control Bash version probe failed')
+    prior=Path.cwd()
+    try:
+        os.chdir(work)
+        code=source_gate.run_bound_bash(exe,script,version.stdout.decode(),fallback/'launcher.json',environment=env)
+    finally:os.chdir(prior)
+    value=json.loads((work/'evidence/PHASES.json').read_bytes())
+    if code!=1 or value['helper_extraction_exit']==0 or value['passed'] or value['export_qualified'] or value['reconciliation_completed']:
+        raise RuntimeError('unavailable frozen helper falsely qualified or lost extraction failure')
+    if value['identity']['tree'] is not None or value['native_actions']!=native or value['observed_exit'] is not None or value['clock'] is not None:
+        raise RuntimeError('helper-unavailable diagnostic fabricated missing identity/exit or lost native outcomes')
+    if not (work/'evidence/phase-helper.stderr').read_bytes():raise RuntimeError('helper extraction failure not observed')
+    checks.append('actual frozen-helper extraction failure retains known native outcomes and never qualifies')
+    if 'evidence/PHASES.json' not in cmake or 'evidence/phase-actions.raw.json' not in cmake:
+        raise RuntimeError('bootstrap diagnostic not included in always-run diagnostic upload')
+
 def main(evidence):
     raw=(ROOT/INVENTORY).read_bytes()
     if b'\r\n' in raw: raw=raw.replace(b'\r\n', b'\n')
@@ -616,6 +858,7 @@ def main(evidence):
         checks.append('successful child cannot omit required report')
     repair_controls(checks)
     measurements=installer_export_controls(checks,evidence)
+    phase_metadata_controls(checks,evidence)
     print(json.dumps(dict(passed=True,checks=checks,check_count=len(checks),installer_export_measurements=measurements,synthetic_evidence=str(evidence))))
 
 if __name__=='__main__':
