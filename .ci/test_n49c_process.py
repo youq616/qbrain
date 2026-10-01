@@ -1,5 +1,6 @@
 """Actual combined CLI/Hook/observation checks; synthetic disposable inputs only."""
 import argparse
+from contextlib import closing
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -16,6 +17,13 @@ from check_n49c_sources import clean_environment
 
 def encode(value):return json.dumps(value,ensure_ascii=False,sort_keys=True).encode('utf-8')
 def sha(raw):return hashlib.sha256(raw).hexdigest()
+
+def seed_fixture_sources(db):
+    # sqlite3's transaction context commits/rolls back but does not close.
+    with closing(sqlite3.connect(db)) as conn:
+        with conn:
+            for source in ('alpha','beta'):
+                conn.execute('INSERT INTO sources(id,name) VALUES(?,?)',(source,source))
 
 def capture_command(spec, result_path):
     """Capture fixed qualification argv without a shell, with exact byte streams."""
@@ -103,8 +111,7 @@ def main(binary, output, wire):
             cli(['init','--no-default']);cli(['config','set','embed.auto','false','--local'])
             cli(['config','set','memory.writeback','salient','--local'])
             db=(home if os.name=='nt' else home/'.local/share')/'Qbrain/brains/n49c/brain.db'
-            with sqlite3.connect(db) as conn:
-                for source in ('alpha','beta'):conn.execute('INSERT INTO sources(id,name) VALUES(?,?)',(source,source))
+            seed_fixture_sources(db)
             for slug in ('docs/a','docs/b','neighbor/c'):
                 cli(['put','--slug',slug,'--title','PRIVATE_N49C_NEEDLE','--body','PRIVATE_N49C_NEEDLE body'])
             directory='qbrain://default/resources/docs/'
@@ -200,12 +207,14 @@ def main(binary, output, wire):
         (output/'PARTIAL.json').write_bytes(encode(dict(passed=False,error=str(e),commands=commands,checks=checks)))
         raise
     finally:
-        if server:server.shutdown();server.server_close()
+        try:
+            if server:server.shutdown();server.server_close()
+        finally:
+            (output/'synthetic-requests.json').write_bytes(encode(requests))
     report=dict(passed=True,schema='qbrain-n49c-process-v1',commands=commands,checks=checks,
         command_count=len(commands),check_count=len(checks),actual_http_requests=len(requests),wire_executed=wire,
         wire_not_run_reason=None if wire else 'Windows-only actual WinHTTP gate',binary_sha256=sha(binary.read_bytes()),
         script_sha256=sha(Path(__file__).read_bytes()),real_cursor=False,postgres_executed=False,paid_provider_calls=0)
-    (output/'synthetic-requests.json').write_bytes(encode(requests))
     (output/'RESULT.json').write_bytes(encode(report))
     print(json.dumps({k:v for k,v in report.items() if k not in ('commands','checks')}))
 

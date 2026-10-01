@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -12,6 +13,7 @@ import zipfile
 import check_n49c_sources as source_gate
 from check_n49c_sources import ROOT, INVENTORY, ADDITIVE, contract, validate_inventory, clean_environment, run_clean, verify_frozen_checkout
 from test_n49c_process import capture_command
+import test_n49c_process as combined_driver
 
 def repair_controls(checks):
     def reject(name,call):
@@ -97,15 +99,18 @@ def repair_controls(checks):
             reject('manifest size bound',lambda:source_gate.package_evidence(evidence,root/'large-manifest',identity,4096))
         finally:source_gate.MAX_MANIFEST=old
         original_hash=source_gate.hash_file;changed_input=False
+        injection_target=evidence/'..'/evidence.name/'raw.bin'
         def changing_hash(path):
             nonlocal changed_input
             digest=original_hash(path)
-            if Path(path)==evidence/'raw.bin' and not changed_input:
-                changed_input=True;(evidence/'raw.bin').write_bytes(payload+b'changed')
+            if Path(path).samefile(injection_target) and not changed_input:
+                changed_input=True;injection_target.write_bytes(payload+b'changed')
             return digest
         try:
             source_gate.hash_file=changing_hash
             reject('evidence changed during capture',lambda:source_gate.package_evidence(evidence,root/'changing-input',identity,4096))
+            if not changed_input:raise RuntimeError('required evidence mutation injector did not run')
+            checks.append('mutation injector observed through distinct same-file path spelling')
         finally:
             source_gate.hash_file=original_hash;(evidence/'raw.bin').write_bytes(payload)
         disk=source_gate.shutil.disk_usage
@@ -165,6 +170,43 @@ def repair_controls(checks):
         reject('wrong outer artifact digest',lambda:source_gate.verify_downloaded_artifacts(changed,identity,anchor,4096))
         changed=copy.deepcopy(records);changed[0]['head_sha']='4'*40
         reject('wrong outer artifact provenance',lambda:source_gate.verify_downloaded_artifacts(changed,identity,anchor,4096))
+        real_connect=sqlite3.connect;owned=[]
+        def tracked_connect(*args,**kwargs):
+            conn=real_connect(*args,**kwargs);owned.append(conn);return conn
+        def require_closed(conn):
+            try:conn.execute('SELECT 1')
+            except sqlite3.ProgrammingError:return
+            raise RuntimeError('fixture seed connection remained usable')
+        for failure in (False,True):
+            database=root/('seed-error.db' if failure else 'seed-success.db')
+            with combined_driver.closing(real_connect(database)) as setup:
+                with setup:
+                    setup.execute('CREATE TABLE sources(id TEXT PRIMARY KEY,name TEXT)')
+                    if failure:setup.execute("INSERT INTO sources VALUES('beta','beta')")
+            try:
+                sqlite3.connect=tracked_connect
+                try:combined_driver.seed_fixture_sources(database)
+                except sqlite3.IntegrityError:
+                    if not failure:raise
+                else:
+                    if failure:raise RuntimeError('expected seed transaction error missing')
+            finally:sqlite3.connect=real_connect
+            require_closed(owned[-1])
+            with combined_driver.closing(real_connect(database)) as inspection:
+                rows=inspection.execute('SELECT id FROM sources ORDER BY id').fetchall()
+            expected_rows=[('beta',)] if failure else [('alpha',),('beta',)]
+            if rows!=expected_rows:raise RuntimeError('seed commit/rollback semantics changed')
+            database.unlink()
+            checks.append('fixture seed connection closed and file removed after '+('rollback error' if failure else 'successful commit'))
+        if len(owned)!=2:raise RuntimeError('seed ownership control did not observe both handles')
+        failed_output=root/'failed-combined-process'
+        try:combined_driver.main(Path(sys.executable),failed_output,False)
+        except ValueError:pass
+        else:raise RuntimeError('synthetic failing CLI unexpectedly accepted')
+        partial=json.loads((failed_output/'PARTIAL.json').read_bytes())
+        if partial['passed'] or not partial['commands'] or json.loads((failed_output/'synthetic-requests.json').read_bytes())!=[]:
+            raise RuntimeError('failed combined process lost partial/request evidence')
+        checks.append('failed combined process retains partial commands and synthetic request evidence')
 
 def main():
     raw=(ROOT/INVENTORY).read_bytes()
