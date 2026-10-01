@@ -34,6 +34,7 @@ jobs:
         test "$(git rev-parse --is-shallow-repository)" = false
         python -c "import hashlib,subprocess,sys; raw=subprocess.check_output(['git','show','HEAD:docs/nodes/n49c-evidence/INPUT-INVENTORY.json']);sys.exit(0 if hashlib.sha256(raw).hexdigest()=='5e0e87d28d2acb2a2409682b9d9618fc2a6bf43bba2b2c2392f7a6ba4ba40b0e' else 1)"
         echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+        git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$RUNNER_TEMP/n49c-frozen-source-gate.py"
       id: source_identity
     - name: Pin combined tree and unchanged build closures
       shell: bash
@@ -61,7 +62,19 @@ jobs:
           python -c "import sys,pathlib;sys.path.insert(0,'.ci');from validate_native_log import verified_groups;print(len(verified_groups(pathlib.Path('tests/test_main.cpp').read_text(),pathlib.Path('evidence/full60.log').read_text(encoding='utf-8-sig'),60)))" > evidence/full60-verified.txt
         fi
         N49C_CLEAN_COMMAND
-        python .ci/check_n49c_sources.py --run-clean -- bash -euo pipefail "$script"
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-cmake-3.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter"
     - name: Fresh combined CTests and original normal/optimized process tests
       shell: bash
       run: |
@@ -88,7 +101,19 @@ jobs:
           cp "$bindir/$target$suffix" evidence/binaries/
         done
         N49C_CLEAN_COMMAND
-        python .ci/check_n49c_sources.py --run-clean -- bash -euo pipefail "$script"
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-cmake-4.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter"
     - name: Historical comparison fixture for original 55-step gate
       if: runner.os == 'Windows'
       shell: pwsh
@@ -115,13 +140,168 @@ jobs:
         mkdir -p evidence
         git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$RUNNER_TEMP/n49c-frozen-source-gate.py"
         python "$RUNNER_TEMP/n49c-frozen-source-gate.py" --repository "$GITHUB_WORKSPACE" --final --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' > evidence/final-source-identity.json 2> evidence/final-source-identity.stderr
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    - name: Package complete raw evidence into bounded independently bound parts
+      id: package
       if: always()
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/n49c-pack-diagnostics"
+        packer="$RUNNER_TEMP/n49c-frozen-packer.py"
+        git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$packer"
+        python "$packer" --repository "$GITHUB_WORKSPACE" --run-clean -- python "$packer" --repository "$GITHUB_WORKSPACE" --package-evidence "$GITHUB_WORKSPACE/evidence" --staging "$RUNNER_TEMP/n49c-evidence-package" --package-diagnostic "$RUNNER_TEMP/n49c-pack-diagnostics/failure.json" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key 'cmake' --job-label 'qbrain-n49c-cmake-${{ matrix.os }}' 2> "$RUNNER_TEMP/n49c-pack-diagnostics/stderr.log" | tee "$RUNNER_TEMP/n49c-pack-diagnostics/stdout.log"
+    - name: Upload complete evidence part 00
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 0 }}
       with:
-        name: qbrain-n49c-cmake-${{ matrix.os }}
-        path: evidence/
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part00
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/00/
         retention-days: 30
         if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 01
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 1 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part01
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/01/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 02
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 2 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part02
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/02/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 03
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 3 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part03
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/03/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 04
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 4 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part04
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/04/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 05
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 5 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part05
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/05/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 06
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 6 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part06
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/06/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 07
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 7 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part07
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/07/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 08
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 8 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part08
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/08/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 09
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 9 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part09
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/09/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 10
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 10 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part10
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/10/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 11
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 11 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part11
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/11/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 12
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 12 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part12
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/12/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 13
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 13 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part13
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/13/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 14
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 14 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part14
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/14/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 15
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 15 }}
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-part15
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/15/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Preserve packager diagnostics
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: qbrain-n49c-cmake-${{ matrix.os }}-packager
+        path: ${{ runner.temp }}/n49c-pack-diagnostics/
+        retention-days: 30
+        if-no-files-found: warn
   direct-msvc:
     runs-on: windows-2022
     timeout-minutes: 90
@@ -142,6 +322,7 @@ jobs:
         test "$(git rev-parse --is-shallow-repository)" = false
         python -c "import hashlib,subprocess,sys; raw=subprocess.check_output(['git','show','HEAD:docs/nodes/n49c-evidence/INPUT-INVENTORY.json']);sys.exit(0 if hashlib.sha256(raw).hexdigest()=='5e0e87d28d2acb2a2409682b9d9618fc2a6bf43bba2b2c2392f7a6ba4ba40b0e' else 1)"
         echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+        git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$RUNNER_TEMP/n49c-frozen-source-gate.py"
       id: source_identity
     - name: Fresh original direct-MSVC production and original60
       shell: pwsh
@@ -181,7 +362,9 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         python -O .ci/test_n49a_wire.py --binary evidence/qbrain_verified_integration_tests.exe --output evidence/wire-optimized
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        git diff --exit-code > evidence/after-diff.txt
+        git diff > evidence/after-diff.txt
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python "$env:RUNNER_TEMP/n49c-frozen-source-gate.py" --repository "$env:GITHUB_WORKSPACE" --final --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' > evidence/intermediate-source-identity.json
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         '@
         [IO.File]::WriteAllText($script,$body,(New-Object Text.UTF8Encoding($false)))
@@ -201,7 +384,19 @@ jobs:
           python "${opt[@]}" .ci/test_n49c_process.py --binary evidence/qbrain.exe --output "evidence/combined-$mode" --wire > "evidence/combined-$mode.log"
         done
         N49C_CLEAN_COMMAND
-        python .ci/check_n49c_sources.py --run-clean -- bash -euo pipefail "$script"
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-direct-msvc-4.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter"
     - name: Both-shell complete installer ownership and transport matrix
       shell: pwsh
       run: |
@@ -221,13 +416,168 @@ jobs:
         mkdir -p evidence
         git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$RUNNER_TEMP/n49c-frozen-source-gate.py"
         python "$RUNNER_TEMP/n49c-frozen-source-gate.py" --repository "$GITHUB_WORKSPACE" --final --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' > evidence/final-source-identity.json 2> evidence/final-source-identity.stderr
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    - name: Package complete raw evidence into bounded independently bound parts
+      id: package
       if: always()
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/n49c-pack-diagnostics"
+        packer="$RUNNER_TEMP/n49c-frozen-packer.py"
+        git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$packer"
+        python "$packer" --repository "$GITHUB_WORKSPACE" --run-clean -- python "$packer" --repository "$GITHUB_WORKSPACE" --package-evidence "$GITHUB_WORKSPACE/evidence" --staging "$RUNNER_TEMP/n49c-evidence-package" --package-diagnostic "$RUNNER_TEMP/n49c-pack-diagnostics/failure.json" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key 'direct-msvc' --job-label 'qbrain-n49c-direct-msvc' 2> "$RUNNER_TEMP/n49c-pack-diagnostics/stderr.log" | tee "$RUNNER_TEMP/n49c-pack-diagnostics/stdout.log"
+    - name: Upload complete evidence part 00
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 0 }}
       with:
-        name: qbrain-n49c-direct-msvc
-        path: evidence/
+        name: qbrain-n49c-direct-msvc-part00
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/00/
         retention-days: 30
         if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 01
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 1 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part01
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/01/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 02
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 2 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part02
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/02/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 03
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 3 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part03
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/03/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 04
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 4 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part04
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/04/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 05
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 5 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part05
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/05/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 06
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 6 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part06
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/06/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 07
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 7 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part07
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/07/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 08
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 8 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part08
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/08/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 09
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 9 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part09
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/09/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 10
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 10 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part10
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/10/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 11
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 11 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part11
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/11/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 12
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 12 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part12
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/12/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 13
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 13 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part13
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/13/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 14
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 14 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part14
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/14/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 15
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 15 }}
+      with:
+        name: qbrain-n49c-direct-msvc-part15
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/15/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Preserve packager diagnostics
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: qbrain-n49c-direct-msvc-packager
+        path: ${{ runner.temp }}/n49c-pack-diagnostics/
+        retention-days: 30
+        if-no-files-found: warn
   sanitizer:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -247,6 +597,7 @@ jobs:
         test "$(git rev-parse --is-shallow-repository)" = false
         python -c "import hashlib,subprocess,sys; raw=subprocess.check_output(['git','show','HEAD:docs/nodes/n49c-evidence/INPUT-INVENTORY.json']);sys.exit(0 if hashlib.sha256(raw).hexdigest()=='5e0e87d28d2acb2a2409682b9d9618fc2a6bf43bba2b2c2392f7a6ba4ba40b0e' else 1)"
         echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+        git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$RUNNER_TEMP/n49c-frozen-source-gate.py"
       id: source_identity
     - name: Fresh fully linked combined ASan and UBSan gates
       shell: bash
@@ -255,7 +606,7 @@ jobs:
         script="$RUNNER_TEMP/n49c-sanitizer-2.sh"
         cat > "$script" <<'N49C_CLEAN_COMMAND'
         set -euo pipefail
-        mkdir evidence
+        mkdir -p evidence
         git rev-parse HEAD > evidence/source.txt
         git rev-parse HEAD^{tree} > evidence/tree.txt
         git archive --format=zip --output=evidence/source.zip HEAD
@@ -281,9 +632,22 @@ jobs:
           test "$code" -eq 0
           test ! -s "evidence/$target.stderr"
         done
-        git diff --exit-code > evidence/after-diff.txt
+        git diff > evidence/after-diff.txt
+        python "$RUNNER_TEMP/n49c-frozen-source-gate.py" --repository "$GITHUB_WORKSPACE" --final --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' > evidence/intermediate-source-identity.json
         N49C_CLEAN_COMMAND
-        python .ci/check_n49c_sources.py --run-clean -- bash -euo pipefail "$script"
+        observed_bash="$BASH"
+        process_exe="$(readlink -f /proc/$$/exe)"
+        test "$observed_bash" -ef "$process_exe"
+        native_exe="$process_exe"
+        native_script="$(readlink -f "$script")"
+        converter=''
+        if [ "$RUNNER_OS" = Windows ]; then
+          converter="$(command -v cygpath)"
+          native_exe="$("$converter" -am "$process_exe")"
+          native_script="$("$converter" -am "$script")"
+        fi
+        export N49C_TEST_BASH="$native_exe"
+        MSYS2_ARG_CONV_EXCL='*' python .ci/check_n49c_sources.py --run-clean-bash "$native_exe" --bash-version "$BASH_VERSION" --script "$native_script" --shell-report evidence/launcher-sanitizer-2.json --observed-bash "$observed_bash" --observed-process-exe "$process_exe" --observed-script "$script" --converter "$converter"
     - name: Verify frozen HEAD tree index worktree and canonical bytes
       if: always()
       shell: bash
@@ -292,13 +656,168 @@ jobs:
         mkdir -p evidence
         git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$RUNNER_TEMP/n49c-frozen-source-gate.py"
         python "$RUNNER_TEMP/n49c-frozen-source-gate.py" --repository "$GITHUB_WORKSPACE" --final --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' > evidence/final-source-identity.json 2> evidence/final-source-identity.stderr
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    - name: Package complete raw evidence into bounded independently bound parts
+      id: package
       if: always()
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/n49c-pack-diagnostics"
+        packer="$RUNNER_TEMP/n49c-frozen-packer.py"
+        git show '${{ github.sha }}:.ci/check_n49c_sources.py' > "$packer"
+        python "$packer" --repository "$GITHUB_WORKSPACE" --run-clean -- python "$packer" --repository "$GITHUB_WORKSPACE" --package-evidence "$GITHUB_WORKSPACE/evidence" --staging "$RUNNER_TEMP/n49c-evidence-package" --package-diagnostic "$RUNNER_TEMP/n49c-pack-diagnostics/failure.json" --expected-head '${{ github.sha }}' --expected-tree '${{ steps.source_identity.outputs.tree }}' --run-id '${{ github.run_id }}' --run-attempt '${{ github.run_attempt }}' --job-key 'sanitizer' --job-label 'qbrain-n49c-sanitizer' 2> "$RUNNER_TEMP/n49c-pack-diagnostics/stderr.log" | tee "$RUNNER_TEMP/n49c-pack-diagnostics/stdout.log"
+    - name: Upload complete evidence part 00
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 0 }}
       with:
-        name: qbrain-n49c-sanitizer
-        path: evidence/
+        name: qbrain-n49c-sanitizer-part00
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/00/
         retention-days: 30
         if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 01
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 1 }}
+      with:
+        name: qbrain-n49c-sanitizer-part01
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/01/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 02
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 2 }}
+      with:
+        name: qbrain-n49c-sanitizer-part02
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/02/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 03
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 3 }}
+      with:
+        name: qbrain-n49c-sanitizer-part03
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/03/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 04
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 4 }}
+      with:
+        name: qbrain-n49c-sanitizer-part04
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/04/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 05
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 5 }}
+      with:
+        name: qbrain-n49c-sanitizer-part05
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/05/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 06
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 6 }}
+      with:
+        name: qbrain-n49c-sanitizer-part06
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/06/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 07
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 7 }}
+      with:
+        name: qbrain-n49c-sanitizer-part07
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/07/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 08
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 8 }}
+      with:
+        name: qbrain-n49c-sanitizer-part08
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/08/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 09
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 9 }}
+      with:
+        name: qbrain-n49c-sanitizer-part09
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/09/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 10
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 10 }}
+      with:
+        name: qbrain-n49c-sanitizer-part10
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/10/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 11
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 11 }}
+      with:
+        name: qbrain-n49c-sanitizer-part11
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/11/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 12
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 12 }}
+      with:
+        name: qbrain-n49c-sanitizer-part12
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/12/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 13
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 13 }}
+      with:
+        name: qbrain-n49c-sanitizer-part13
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/13/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 14
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 14 }}
+      with:
+        name: qbrain-n49c-sanitizer-part14
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/14/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Upload complete evidence part 15
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && fromJSON(steps.package.outputs.part_count || '0') > 15 }}
+      with:
+        name: qbrain-n49c-sanitizer-part15
+        path: ${{ runner.temp }}/n49c-evidence-package/parts/15/
+        retention-days: 30
+        if-no-files-found: error
+        compression-level: 0
+    - name: Preserve packager diagnostics
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: qbrain-n49c-sanitizer-packager
+        path: ${{ runner.temp }}/n49c-pack-diagnostics/
+        retention-days: 30
+        if-no-files-found: warn
 'on':
   push:
     branches:

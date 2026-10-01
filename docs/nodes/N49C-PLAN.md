@@ -483,3 +483,72 @@ commit. Every later native artifact and final external outcome report must name
 the actual selected remote C/T. If this separate object binding is unavailable,
 stop before the ref update. No source rewrite or completed-native-report commit
 is needed for this narrow metadata binding.
+
+
+# Native qualification repair amendment
+
+Status: approved for bounded implementation; fresh qualification remains pending.
+
+Separate non-author plan review approved this amendment on 2026-10-01. Approved amendment SHA256: `8696316ed82607883cb053d9b110fa4c52eadd6aaae240e3deb07263cada9aab`. Review report SHA256: `5952cf096900111fd0511e6ce94a6a9d1e4721cd16a5377964a3b70deeaaae3c`.
+
+## Frozen first attempt
+
+- Actual published candidate: `354ed6a4169ad0995489d3e7d8b316c8dbf464ac`, tree `e6622ed0aaf5572d551ee1461af023517760ad6e`
+- Workflow run `36850547481`: Linux CMake and the 15-target sanitizer jobs report success; Windows CMake and direct MSVC report failure
+- Windows CMake failed before configure because the isolated Python child resolved bare `bash` to the WSL launcher. Its raw artifact `11155805561` was downloaded and independently hashed to `ff644763263e80371d61e7024fb19133ed1f9c4ffdd1cf5009b38fd269282daa`
+- Direct MSVC passed its original60 step, both cross-test executables and both retained N49A wire probes, then failed at the supplemental `git diff --exit-code`. Its always-run exact final source gate passed. Its raw after-diff file is not yet available locally; the cause is not asserted as proven
+- A portable synthetic LF/CRLF checkout reproduces a nonzero unconfigured Git diff while canonical CRLF normalization produces zero. This supports a configuration-sensitivity hypothesis only
+- Linux, sanitizer and direct artifacts exceed the materializer's 32 MiB size ceiling. The first two connector-returned URL materializations returned HTTP 403 and remain paused. This proposal does not recover, rehost, or claim inspection of those old archives
+
+## Scope and ancestry
+
+Create a clean repair worktree descending directly from the published candidate, retaining the genuine accepted three-parent integration in its ancestry. Preserve every first-attempt source, ref and evidence record. Only four previously allowlisted additive paths are proposed to change:
+
+1. `.ci/check_n49c_sources.py`
+2. `.ci/test_n49c_source_contract.py`
+3. `.github/workflows/n49c-integration.yml`
+4. `docs/nodes/N49C-PLAN.md`
+
+The immutable 1,622 inherited mappings, 14-path additive inventory, original N49A checker, runtime/build files, 60/55 tests, 44 installer rows, P/K/R fixtures and all 15 sanitizer targets remain unchanged. No old native result qualifies the repaired tree.
+
+## A. Bind the actual Actions Bash executable
+
+Replace each bare-Bash isolated launch with the current Actions shell's observed executable and `$BASH_VERSION`. Do not guess a Windows path, append an assumed `.exe`, or rediscover Bash through PATH. Record the invoking shell's `$BASH` and the current process executable resolved by `readlink -f /proc/$$/exe`; require the shell's `test "$BASH" -ef "$process_exe"` identity check. Missing process-path support fails explicitly, with no guessed fallback.
+
+On the Windows Git Bash/MSYS runner, use that current MSYS environment's observed `cygpath` converter to translate the resolved process executable and generated script path to absolute mixed/native Windows paths (`cygpath -am`). Record the converter's observed location, input spellings, output spellings and exits. Pass only these explicitly converted paths to native Python; Python must resolve existing absolute native files and record the exact argv it received. The MSYS identity comparison happens before conversion; subsequent native executable bytes/hash, script bytes/hash and version probes bind the converted objects. On Linux, record the same observed process identity and absolute native script/executable paths without MSYS conversion.
+
+A shared additive launcher will hash the selected executable, probe that exact executable's full `--version` output, and separately obtain its actual `$BASH_VERSION` using an explicit `-c` probe under the same disposable/scrubbed environment. Compare the latter byte-exactly with the invoking shell's observed `$BASH_VERSION`, including suffixes; do not infer equality by truncating or parsing the human-readable version banner. Invoke the script through that same absolute executable with `--noprofile --norc`. Record original/converted paths, command argv, both raw version-probe stdout/stderr streams, digests, exit and executable identity before/after. Clear ambient `BASH_ENV` and `ENV` script hooks as part of disposable shell isolation. Keep every existing DSN/provider scrub and test command.
+
+Portable controls will use an actual local Bash path with a deliberately misleading PATH entry, test rejection of a relative path and wrong observed version, and verify synthetic environment-hook/DSN isolation. These controls do not claim Windows execution.
+
+## B. Deterministic exact-source checks under isolated Git configuration
+
+Retain raw unconfigured Git diff as diagnostic evidence, including `after-diff.txt`. Replace its standalone exit gate with the already-reviewed complete frozen HEAD/tree/index/working-byte gate, bound to the event SHA and initial tree.
+
+For the full checker, explicitly select `core.autocrlf=true` only for the unstaged comparison, so its diff semantics match the approved canonical-or-exact-whole-file-LF-to-CRLF checkout contract even with global/system configuration disabled. Record both raw diagnostic and normalized diff. Staged comparison remains exact, and every tracked file must still match the expected Git blob exactly or the previously approved exact CRLF conversion. A different HEAD, tree, staged content, missing file, noncanonical bytes or substantive normalized diff still fails. No arbitrary whitespace or encoding tolerance is added.
+
+Keep final `always()` gates sourced from the immutable event commit. Add controls for a valid CRLF-only checkout with isolated configuration; substantive CRLF content mutation; staged mutation; moved HEAD/tree; and prior hidden-byte controls. Fresh native artifacts must preserve raw after-diff diagnostics so the first-attempt hypothesis can be assessed against new evidence without rewriting the old result.
+
+## C. New bounded multipart evidence artifacts
+
+After the final source gate, an `always()` packaging step will materialize the packer from the immutable event commit's checker blob even when earlier steps or the final source check fail. It will run with the disposable scrubbed environment and archive the entire existing evidence directory. Packer staging must be a separate sibling under runner temporary storage, outside the evidence input and outside tracked source; verify neither resolved root contains the other before enumerating. This prevents recursive/self-including archives. No raw stream, report, source archive or binary may be omitted. Reject symlinks, nonregular files, unsafe relative paths and file changes during capture. Use sorted names and deterministic ZIP metadata; record each file's byte length, mode and SHA256 plus the whole archive's length and SHA256.
+
+Enumerate sizes first and fail closed if total uncompressed evidence exceeds 2 GiB or any declared ZIP member/reconstruction bound would be exceeded. Read, hash, compress, split and reconstruct in at most 1 MiB streaming blocks; do not load entire archives/binaries into memory. Before staging, require at least 1,056 MiB of actual free space on the staging filesystem: three 320 MiB bounded archive/part/reconstruction allocations, sixteen 2 MiB manifest copies and 64 MiB headroom. Recheck writes and capacity failures truthfully. Bound archive writes to 320 MiB and member reads to declared sizes so ZIP expansion cannot exceed the 2 GiB total. Insufficient bounds/capacity fail packaging without trimming or deleting the original raw evidence. Preserve a small explicit packaging-error diagnostic and CI error record; disclose when complete evidence export did not succeed rather than qualifying a partial artifact set.
+
+Split the new compressed archive into consecutively numbered byte parts of at most 20 MiB. Set a conservative bound of 16 parts (320 MiB compressed total) and a 2 MiB manifest limit; exceeding either is an explicit packaging failure, never truncation. Each artifact contains exactly one part plus the complete identical manifest, comfortably below the 32 MiB materializer ceiling including ZIP overhead. Publish each indexed part with the existing pinned upload action through explicit conditional steps. No new action dependency, credential, URL relay or access route is introduced.
+
+The manifest binds schema, exact event commit/tree, run/attempt, workflow job key and explicit matrix job label, archive identity, exact member inventory and every ordered part's size/hash. Verify all part identities, concatenation length/hash and archived member bytes before upload. Print the verified manifest SHA256 and exact part count to the immutable workflow job log and step outputs only after all checks pass; upload steps are conditional on this verified count. A failed source gate stays failed even if its complete diagnostic evidence packages successfully.
+
+The external reconstruction validator must be supplied independent expected C/T, run ID/attempt and job key/label from the frozen candidate and fresh GitHub run/job metadata, plus the authoritative manifest SHA256 read from that job's log. It must also verify every downloaded outer artifact ZIP against its independently fetched GitHub artifact digest and workflow-run provenance. It may not accept a manifest because all downloaded copies merely agree. All copies must match the independently anchored manifest hash, and the contents must match the independently expected C/T/run/job values before any reconstruction/native acceptance. Actual numeric GitHub job ID is retained in the external API/log-to-artifact binding, not invented from a runner environment variable.
+
+A reconstruction validator will reject missing/extra/reordered/modified parts, inconsistent or uniformly replaced manifests, wrong independent C/T/run/job expectations, changed archive/member data, incorrect GitHub artifact ZIP digests and size-limit violations. Tests use bounded synthetic fixtures, independently held expected identities/digests and deterministic repeated packaging. Preserve packaging/final-source failures as failures; artifact upload does not imply qualification.
+
+New outputs will be downloaded only using their normal connector file references and the supported `download_file` route. Verify GitHub artifact ZIP digests, identical manifests and reconstructed archive/member digests before any native acceptance claim. Retain raw part ZIPs and identities outside source. This creates new authorized CI outputs; it does not bypass the old URL 403 responses.
+
+## Review, publication and fresh qualification
+
+Run focused launcher, source-contract and multipart controls in normal and optimized Python, plus workflow Bash syntax and exact inherited-union checks. Freeze a new local descendant and obtain separate source/local review. If remote metadata differs, create only the new unreferenced object and obtain separate full tree/parent/inventory binding before a normal fast-forward branch update. Preserve all pending source notices and final native reports outside source.
+
+All four jobs will rerun fresh at the repaired actual remote commit, with unchanged original60/original55, direct MSVC/cross/process, PS5/PS7 transport/install/ownership matrix, loopback wire and 15 leak-enabled ASan/UBSan gates. Windows host/client, real Cursor account, PostgreSQL and paid-provider qualification remain outside scope. A separate final outcome review must inspect downloaded raw evidence before completion.
+
+Rollback is preservation: if any repair gate or review fails, keep the currently published candidate and all evidence, do not advance the branch, and correct only the approved additive qualification scope. No main merge, release or deployment is proposed.

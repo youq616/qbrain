@@ -5,9 +5,12 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = 'docs/nodes/n49c-evidence/INPUT-INVENTORY.json'
@@ -33,6 +36,8 @@ BLOCKED_ENV = re.compile(r'^(QBRAIN|PG|CURSOR|OPENAI|ANTHROPIC|GH_TOKEN|GITHUB_T
 
 def clean_environment(source, home):
     value={k:v for k,v in source.items() if not BLOCKED_ENV.search(k)}
+    for key in ('BASH_ENV','ENV'):
+        value.pop(key,None)
     for key in ('HOME','USERPROFILE','APPDATA','LOCALAPPDATA','XDG_CONFIG_HOME','XDG_DATA_HOME','XDG_CACHE_HOME'):
         value[key]=str(home)
     value.update(PYTHONDONTWRITEBYTECODE='1',PYTHONIOENCODING='utf-8',GIT_CONFIG_GLOBAL=os.devnull,GIT_CONFIG_SYSTEM=os.devnull)
@@ -49,7 +54,9 @@ def verify_frozen_checkout(repository, expected_head, expected_tree):
     head=read('rev-parse','HEAD').decode().strip();tree=read('rev-parse','HEAD^{tree}').decode().strip()
     if head!=expected_head:failures.append('frozen HEAD changed')
     if tree!=expected_tree:failures.append('frozen tree changed')
-    staged=read('diff','--cached','--raw').decode();unstaged=read('diff','--raw').decode()
+    staged=read('diff','--cached','--raw').decode()
+    diagnostic=read('diff','--raw').decode()
+    unstaged=read('-c','core.autocrlf=true','diff','--raw').decode()
     if staged:failures.append('staged tracked changes')
     if unstaged:failures.append('unstaged tracked changes')
     conversions=[]
@@ -66,7 +73,220 @@ def verify_frozen_checkout(repository, expected_head, expected_tree):
         else:failures.append('tracked byte mismatch: '+path)
     return dict(passed=not failures,expected_head=expected_head,expected_tree=expected_tree,
         actual_head=head,actual_tree=tree,staged_diff=staged,unstaged_diff=unstaged,
+        raw_unconfigured_unstaged_diff=diagnostic,unstaged_autocrlf='true',
         checkout_conversions=conversions,failures=failures)
+
+BLOCK = 1024*1024
+PART_BYTES = 20*BLOCK
+MAX_PARTS = 16
+MAX_ARCHIVE = PART_BYTES*MAX_PARTS
+MAX_RAW = 2048*BLOCK
+MAX_MANIFEST = 2*BLOCK
+MIN_FREE = 1056*BLOCK
+IDENTITY_KEYS = ('commit','tree','run_id','run_attempt','job_key','job_label')
+
+def hash_file(path):
+    h=hashlib.sha256()
+    with Path(path).open('rb') as f:
+        while chunk:=f.read(BLOCK):h.update(chunk)
+    return h.hexdigest()
+
+def run_bound_bash(executable,script,version,report,observed=None,environment=None):
+    report=Path(report);report.parent.mkdir(parents=True,exist_ok=True)
+    result=dict(passed=False,observed=observed or {},received_executable=str(executable),received_script=str(script))
+    try:
+        need(Path(executable).is_absolute() and Path(script).is_absolute(),'absolute native shell and script paths required')
+        exe=Path(executable).resolve(strict=True);script=Path(script).resolve(strict=True)
+        need(exe.is_file() and script.is_file(),'native shell/script must be files')
+        before=hash_file(exe);script_hash=hash_file(script)
+        result.update(executable=str(exe),executable_sha256=before,script=str(script),script_sha256=script_hash,expected_bash_version=version)
+        with tempfile.TemporaryDirectory(prefix='n49c-bash-home-') as home:
+            env=clean_environment(os.environ if environment is None else environment,home)
+            probes=[]
+            for name,args in [('banner',['--version']),('exact',['-c','printf "%s" "$BASH_VERSION"'])]:
+                argv=[str(exe),'--noprofile','--norc',*args]
+                run=subprocess.run(argv,env=env,capture_output=True)
+                streams={}
+                for key,data in [('stdout',run.stdout),('stderr',run.stderr)]:
+                    path=report.with_name(report.name+'.'+name+'.'+key);path.write_bytes(data)
+                    streams[key]=dict(path=str(path),size=len(data),sha256=hashlib.sha256(data).hexdigest())
+                probes.append(dict(name=name,argv=argv,exit=run.returncode,**streams))
+                result['probes']=probes
+                need(run.returncode==0 and not run.stderr,'Bash version probe failed')
+                if name=='banner':result['full_version']=run.stdout.decode('utf-8',errors='strict')
+                else:
+                    result['actual_bash_version']=run.stdout.decode('utf-8',errors='strict')
+                    need(result['actual_bash_version']==version,'observed Bash version mismatch')
+            argv=[str(exe),'--noprofile','--norc','-euo','pipefail',str(script)]
+            result['argv']=argv
+            result['exit']=subprocess.run(argv,env=env).returncode
+        result['executable_after_sha256']=hash_file(exe);result['script_after_sha256']=hash_file(script)
+        need(result['executable_after_sha256']==before and result['script_after_sha256']==script_hash,'shell/script identity changed')
+        result['passed']=result['exit']==0
+    except Exception as exc:
+        result['error']=str(exc)
+    finally:report.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+    return 0 if result['passed'] else 1
+
+def safe_member(name):
+    return isinstance(name,str) and bool(name) and '\\' not in name and not name.startswith('/') and all(x not in ('','.','..') for x in name.split('/')) and ':' not in name
+
+def evidence_identity(identity):
+    need(set(identity)==set(IDENTITY_KEYS),'complete independent evidence identity required')
+    need(all(isinstance(identity[k],str) and identity[k] for k in IDENTITY_KEYS),'identity values required')
+    need(all(re.fullmatch('[0-9a-f]{40}',identity[k]) for k in ('commit','tree')),'invalid source identity')
+    need(identity['run_id'].isdigit() and identity['run_attempt'].isdigit(),'invalid run identity')
+
+def bounded_manifest(path):
+    """Bound type, allocation and reads before opening/copying any manifest bytes."""
+    path=Path(path);before=path.lstat()
+    need(stat.S_ISREG(before.st_mode) and 0<before.st_size<=MAX_MANIFEST,'manifest type/size limit')
+    flags=os.O_RDONLY|getattr(os,'O_BINARY',0)|getattr(os,'O_NOFOLLOW',0)|getattr(os,'O_NONBLOCK',0)
+    with os.fdopen(os.open(path,flags),'rb') as f:
+        opened=os.fstat(f.fileno())
+        def snapshot(s):return (s.st_dev,s.st_ino,s.st_mode,s.st_size,s.st_mtime_ns)
+        need(stat.S_ISREG(opened.st_mode) and 0<opened.st_size<=MAX_MANIFEST and snapshot(opened)==snapshot(before),'manifest changed before bounded read')
+        chunks=[];count=0
+        while count<opened.st_size:
+            chunk=f.read(min(BLOCK,opened.st_size-count))
+            need(bool(chunk),'manifest truncated during bounded read')
+            count+=len(chunk);chunks.append(chunk)
+        after=os.fstat(f.fileno());current=path.lstat()
+        need(snapshot(after)==snapshot(opened)==snapshot(current),'manifest changed during bounded read')
+    return b''.join(chunks)
+
+class BoundedArchive:
+    def __init__(self,file,limit):self.file=file;self.limit=limit
+    def write(self,data):
+        need(self.file.tell()+len(data)<=self.limit,'compressed evidence limit exceeded')
+        return self.file.write(data)
+    def __getattr__(self,name):return getattr(self.file,name)
+
+def verify_evidence_archive(archive,manifest):
+    need(archive.stat().st_size==manifest['archive']['size']<=MAX_ARCHIVE,'archive size mismatch')
+    need(hash_file(archive)==manifest['archive']['sha256'],'archive digest mismatch')
+    rows=manifest['files'];need(isinstance(rows,list) and rows,'empty member inventory')
+    names=[r['path'] for r in rows]
+    need(names==sorted(set(names)) and all(safe_member(n) for n in names),'invalid member inventory')
+    need(sum(r['size'] for r in rows)==manifest['uncompressed_bytes']<=MAX_RAW,'uncompressed limit/mapping mismatch')
+    with zipfile.ZipFile(archive) as z:
+        need(z.namelist()==names,'archive member inventory mismatch')
+        for row,info in zip(rows,z.infolist()):
+            need(info.file_size==row['size'] and 0<=row['size']<=MAX_RAW,'member size mismatch')
+            need(stat.S_ISREG(info.external_attr>>16) and (info.external_attr>>16)==row['mode'],'member mode mismatch')
+            h=hashlib.sha256();count=0
+            with z.open(info) as f:
+                while chunk:=f.read(BLOCK):
+                    count+=len(chunk);need(count<=row['size'],'member expansion exceeded');h.update(chunk)
+            need(count==row['size'] and h.hexdigest()==row['sha256'],'member content mismatch')
+
+def verify_evidence_parts(root,expected,expected_manifest_sha256,part_bytes=PART_BYTES):
+    evidence_identity(expected);root=Path(root).resolve(strict=True)
+    need(shutil.disk_usage(root.parent).free>=MAX_ARCHIVE+64*BLOCK,'insufficient reconstruction capacity')
+    raw=bounded_manifest(root/'00'/'manifest.json')
+    need(len(raw)<=MAX_MANIFEST and hashlib.sha256(raw).hexdigest()==expected_manifest_sha256,'authoritative manifest mismatch')
+    m=json.loads(raw)
+    need(m.get('schema')=='qbrain-n49c-evidence-parts-v1' and m.get('identity')==expected,'independent evidence identity mismatch')
+    parts=m['parts'];need(0<len(parts)<=MAX_PARTS,'invalid part count')
+    expected_dirs=[f'{i:02d}' for i in range(len(parts))]
+    need(sorted(p.name for p in root.iterdir())==expected_dirs,'missing or extra part directory')
+    need(sum(p['size'] for p in parts)==m['archive']['size']<=MAX_ARCHIVE,'part aggregate size mismatch')
+    with tempfile.TemporaryDirectory(prefix='n49c-reconstruct-',dir=root.parent) as tmp:
+        archive=Path(tmp)/'evidence.zip';h=hashlib.sha256();total=0
+        with archive.open('wb') as out:
+            for i,row in enumerate(parts):
+                directory=root/f'{i:02d}'
+                need(row['index']==i and row['file']=='evidence.part','part order/name mismatch')
+                need(sorted(p.name for p in directory.iterdir())==['evidence.part','manifest.json'],'unexpected part files')
+                need(bounded_manifest(directory/'manifest.json')==raw,'manifest copies differ')
+                p=directory/row['file'];need(p.is_file() and not p.is_symlink(),'invalid part type')
+                need(p.stat().st_size==row['size'] and 0<row['size']<=part_bytes<=PART_BYTES,'part size mismatch')
+                need(i==len(parts)-1 or row['size']==part_bytes,'short nonfinal part')
+                ph=hashlib.sha256()
+                with p.open('rb') as f:
+                    while chunk:=f.read(BLOCK):
+                        total+=len(chunk);need(total<=m['archive']['size'],'reconstruction overflow');out.write(chunk);ph.update(chunk);h.update(chunk)
+                need(ph.hexdigest()==row['sha256'],'part digest mismatch')
+        need(total==m['archive']['size'] and h.hexdigest()==m['archive']['sha256'],'concatenation mismatch')
+        verify_evidence_archive(archive,m)
+    return m
+
+def package_evidence(evidence,staging,identity,part_bytes=PART_BYTES):
+    evidence_identity(identity)
+    evidence=Path(evidence).resolve(strict=True);staging=Path(staging).absolute()
+    need(not staging.exists(),'staging must be new')
+    staging.parent.mkdir(parents=True,exist_ok=True);staging=staging.parent.resolve()/staging.name
+    need(evidence!=staging and evidence not in staging.parents and staging not in evidence.parents,'evidence and staging must be disjoint')
+    source=ROOT.resolve();need(staging!=source and source not in staging.parents,'staging must be outside tracked source')
+    need(shutil.disk_usage(staging.parent).free>=MIN_FREE,'insufficient evidence staging capacity')
+    need(0<part_bytes<=PART_BYTES,'invalid part bound')
+    rows=[];total=0
+    for p in sorted(evidence.rglob('*'),key=lambda p:p.relative_to(evidence).as_posix()):
+        need(not p.is_symlink(),'evidence symlink rejected')
+        if p.is_dir():continue
+        need(p.is_file(),'nonregular evidence rejected')
+        s=p.stat();name=p.relative_to(evidence).as_posix();need(safe_member(name),'unsafe evidence path')
+        total+=s.st_size;need(total<=MAX_RAW,'uncompressed evidence limit exceeded')
+        rows.append(dict(path=name,size=s.st_size,mode=stat.S_IFREG|stat.S_IMODE(s.st_mode),sha256=hash_file(p),snapshot=(s.st_size,s.st_mtime_ns,s.st_ino,s.st_mode)))
+    need(rows,'no evidence files')
+    staging.mkdir();archive=staging/'evidence.zip';parts_root=staging/'parts';parts_root.mkdir()
+    with archive.open('w+b') as raw:
+        with zipfile.ZipFile(BoundedArchive(raw,MAX_ARCHIVE),'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+            for row in rows:
+                p=evidence/row['path'];s=p.stat();need((s.st_size,s.st_mtime_ns,s.st_ino,s.st_mode)==row['snapshot'],'evidence changed before capture')
+                info=zipfile.ZipInfo(row['path'],date_time=(1980,1,1,0,0,0));info.compress_type=zipfile.ZIP_DEFLATED;info.create_system=3;info.external_attr=row['mode']<<16
+                count=0;h=hashlib.sha256()
+                with p.open('rb') as src,z.open(info,'w') as dst:
+                    while chunk:=src.read(BLOCK):
+                        count+=len(chunk);need(count<=row['size'],'evidence grew during capture');h.update(chunk);dst.write(chunk)
+                s=p.stat();need((s.st_size,s.st_mtime_ns,s.st_ino,s.st_mode)==row['snapshot'] and count==row['size'] and h.hexdigest()==row['sha256'],'evidence changed during capture')
+    current=[]
+    for p in sorted(evidence.rglob('*'),key=lambda p:p.relative_to(evidence).as_posix()):
+        need(not p.is_symlink(),'evidence became a symlink')
+        if p.is_dir():continue
+        need(p.is_file(),'evidence became nonregular');current.append(p.relative_to(evidence).as_posix())
+    need(current==[r['path'] for r in rows],'evidence member set changed during capture')
+    for row in rows:
+        p=evidence/row['path'];s=p.stat()
+        need((s.st_size,s.st_mtime_ns,s.st_ino,s.st_mode)==row['snapshot'] and hash_file(p)==row['sha256'],'evidence changed after capture')
+    parts=[]
+    with archive.open('rb') as src:
+        while src.tell()<archive.stat().st_size:
+            i=len(parts);need(i<MAX_PARTS,'part count limit exceeded');directory=parts_root/f'{i:02d}';directory.mkdir();p=directory/'evidence.part';count=0
+            with p.open('wb') as dst:
+                while count<part_bytes and (chunk:=src.read(min(BLOCK,part_bytes-count))):dst.write(chunk);count+=len(chunk)
+            parts.append(dict(index=i,file=p.name,size=count,sha256=hash_file(p)))
+    for row in rows:row.pop('snapshot')
+    m=dict(schema='qbrain-n49c-evidence-parts-v1',identity=identity,archive=dict(size=archive.stat().st_size,sha256=hash_file(archive)),uncompressed_bytes=total,files=rows,parts=parts)
+    raw=(json.dumps(m,sort_keys=True,indent=2)+'\n').encode('utf-8');need(len(raw)<=MAX_MANIFEST,'manifest limit exceeded')
+    for i in range(len(parts)):(parts_root/f'{i:02d}'/'manifest.json').write_bytes(raw)
+    digest=hashlib.sha256(raw).hexdigest();verify_evidence_parts(parts_root,identity,digest,part_bytes)
+    return dict(passed=True,part_count=len(parts),manifest_sha256=digest,archive_sha256=m['archive']['sha256'],parts_root=str(parts_root),identity=identity)
+
+def verify_downloaded_artifacts(records,expected,manifest_sha256,part_bytes=PART_BYTES):
+    """Records/digests and expected identities must come from independent GitHub reads."""
+    evidence_identity(expected);need(0<len(records)<=MAX_PARTS,'invalid downloaded artifact count')
+    staging_parent=Path(tempfile.gettempdir()).resolve(strict=True)
+    need(shutil.disk_usage(staging_parent).free>=MIN_FREE,'insufficient consumer staging capacity')
+    with tempfile.TemporaryDirectory(prefix='n49c-download-verify-',dir=staging_parent) as tmp:
+        root=Path(tmp)/'parts';root.mkdir()
+        for i,row in enumerate(records):
+            need(row['index']==i and row['name']==expected['job_label']+f'-part{i:02d}','artifact index/name mismatch')
+            need(str(row['run_id'])==expected['run_id'] and str(row['run_attempt'])==expected['run_attempt'] and row['head_sha']==expected['commit'],'artifact workflow provenance mismatch')
+            path=Path(row['path']);need(path.stat().st_size<32*BLOCK,'outer artifact exceeds materializer limit')
+            need(hash_file(path)==row['sha256'],'independent GitHub artifact digest mismatch')
+            directory=root/f'{i:02d}';directory.mkdir()
+            with zipfile.ZipFile(path) as z:
+                need(sorted(z.namelist())==['evidence.part','manifest.json'],'unexpected outer artifact members')
+                for info in z.infolist():
+                    limit=MAX_MANIFEST if info.filename=='manifest.json' else part_bytes
+                    need(0<info.file_size<=limit and not stat.S_ISLNK(info.external_attr>>16),'outer artifact member limit/type')
+                    count=0
+                    with z.open(info) as src,(directory/info.filename).open('wb') as dst:
+                        while chunk:=src.read(BLOCK):
+                            count+=len(chunk);need(count<=info.file_size,'outer artifact expansion');dst.write(chunk)
+                    need(count==info.file_size,'outer artifact member truncated')
+        return verify_evidence_parts(root,expected,manifest_sha256,part_bytes)
 
 def contract(raw):
     need(hashlib.sha256(raw).hexdigest() == PIN, 'unapproved inventory digest')
@@ -159,12 +379,40 @@ if __name__ == '__main__':
     p=argparse.ArgumentParser();p.add_argument('--precommit',action='store_true')
     p.add_argument('--repository',type=Path);p.add_argument('--final',action='store_true')
     p.add_argument('--expected-head');p.add_argument('--expected-tree');p.add_argument('--run-clean',action='store_true')
+    p.add_argument('--run-clean-bash');p.add_argument('--bash-version');p.add_argument('--script',type=Path);p.add_argument('--shell-report',type=Path)
+    p.add_argument('--observed-bash');p.add_argument('--observed-process-exe');p.add_argument('--observed-script');p.add_argument('--converter')
+    p.add_argument('--package-evidence',type=Path);p.add_argument('--staging',type=Path);p.add_argument('--package-diagnostic',type=Path)
+    p.add_argument('--run-id');p.add_argument('--run-attempt');p.add_argument('--job-key');p.add_argument('--job-label')
+    p.add_argument('--verify-downloads',type=Path);p.add_argument('--manifest-sha256')
     p.add_argument('command',nargs=argparse.REMAINDER)
     args=p.parse_args()
     if args.repository:ROOT=args.repository.resolve(strict=True)
     if args.run_clean:
         command=args.command[1:] if args.command[:1]==['--'] else args.command
         raise SystemExit(run_clean(command))
+    if args.run_clean_bash:
+        need(args.script and args.shell_report and args.bash_version,'complete observed shell binding required')
+        observed=dict(bash=args.observed_bash,process_exe=args.observed_process_exe,script=args.observed_script,converter=args.converter,conversion_exit=0 if args.converter else None)
+        raise SystemExit(run_bound_bash(args.run_clean_bash,args.script,args.bash_version,args.shell_report,observed))
+    if args.package_evidence or args.verify_downloads:
+        identity=dict(commit=args.expected_head,tree=args.expected_tree,run_id=args.run_id,run_attempt=args.run_attempt,job_key=args.job_key,job_label=args.job_label)
+        if args.verify_downloads:
+            result=verify_downloaded_artifacts(json.loads(args.verify_downloads.read_text()),identity,args.manifest_sha256)
+            print(json.dumps(dict(passed=True,archive=result['archive'],identity=result['identity'])));raise SystemExit(0)
+        try:
+            need(args.staging and args.package_diagnostic,'staging and failure diagnostic required')
+            result=package_evidence(args.package_evidence,args.staging,identity)
+            print(json.dumps(result,sort_keys=True))
+            if os.environ.get('GITHUB_OUTPUT'):
+                with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
+                    f.write('part_count='+str(result['part_count'])+'\nmanifest_sha256='+result['manifest_sha256']+'\n')
+            raise SystemExit(0)
+        except Exception as exc:
+            result=dict(passed=False,error=str(exc),identity=identity,complete_evidence_export=False)
+            if args.package_diagnostic:
+                args.package_diagnostic.parent.mkdir(parents=True,exist_ok=True)
+                args.package_diagnostic.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+            print(json.dumps(result,sort_keys=True));raise SystemExit(1)
     if args.final:
         need(bool(args.expected_head) and bool(args.expected_tree),'frozen source pins required')
         result=verify_frozen_checkout(ROOT,args.expected_head,args.expected_tree)
