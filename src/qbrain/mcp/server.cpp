@@ -356,6 +356,10 @@ json handle_request(Brain& brain, const ServeOptions& opts, const json& req,
     auto name = params["name"].get<std::string>();
     if (!available(name,opts.tool_profile)) return make_error(id,-32601,"Tool not available in selected profile");
     json arguments = params.contains("arguments") ? params["arguments"] : json::object();
+    if (name == "search" && arguments.is_object() && arguments.contains("uri") &&
+        !arguments["uri"].is_string()) {
+      return make_tool_argument_error(id, "uri", "string value required");
+    }
     if (is_analytics_operation(name)) {
       auto argument_error = validate_analytics_arguments(id, arguments);
       if (!argument_error.is_null()) return argument_error;

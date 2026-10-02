@@ -1,0 +1,15 @@
+{
+  "schema": "qbrain-n49d-candidate-status-v1",
+  "node": "N49D",
+  "status": "native_and_outcome_pending",
+  "accepted_base_commit": "cfe1ef58e244b51092c2248804b663b6c28913d7",
+  "accepted_base_tree": "75b69ad389630e51528ddb5536a27255203470df",
+  "approved_technical_plan_sha256": "df0d8a44cff5f6f920090020ea643560daa1c506e0f758134b9da6fad762595e",
+  "required_native_jobs": ["linux-cmake", "windows-cmake", "windows-msvc", "linux-sanitizers"],
+  "qualification_passed": false,
+  "outcome_acceptance": "External report must bind the exact frozen candidate commit/tree and all four native job artifacts",
+  "real_accounts_used": false,
+  "paid_provider_requests": 0,
+  "postgres_directory_qualification": false,
+  "merge_or_deployment": false
+}

@@ -1,0 +1,97 @@
+name: N49D MCP directory search
+on:
+  push:
+    branches:
+      - feature/n49d-mcp-directory-search
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Exact reviewed candidate commit (40 lowercase hexadecimal characters)
+        required: true
+        type: string
+      tree:
+        description: Independently verified complete candidate tree
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: n49d-${{ inputs.candidate || github.sha }}-${{ github.run_id }}
+  cancel-in-progress: false
+jobs:
+  qualify:
+    name: ${{ matrix.job }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - job: linux-cmake
+            os: ubuntu-24.04
+          - job: windows-cmake
+            os: windows-2022
+          - job: windows-msvc
+            os: windows-2022
+          - job: linux-sanitizers
+            os: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    env:
+      N49D_COMMIT: ${{ inputs.candidate || github.sha }}
+      N49D_TREE: ${{ inputs.tree }}
+      N49D_EVENT: ${{ github.event_name }}
+      N49D_JOB: ${{ matrix.job }}
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONIOENCODING: utf-8
+    steps:
+      - name: Check out exact candidate and its actual parent
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.candidate || github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Select Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Run fixed native qualification and bounded packaging
+        shell: python
+        run: |
+          import os, pathlib, re, subprocess, sys
+          root = pathlib.Path(os.environ['GITHUB_WORKSPACE'])
+          if not re.fullmatch('[0-9a-f]{40}', os.environ['N49D_COMMIT']):
+              raise SystemExit('Invalid candidate commit')
+          if os.environ['N49D_EVENT'] == 'push':
+              # The platform-provided push SHA binds the complete tree through
+              # its Git commit object; never qualify a mutable branch name.
+              os.environ['N49D_TREE'] = subprocess.check_output(
+                  ['git', 'rev-parse', os.environ['N49D_COMMIT'] + '^{tree}'],
+                  cwd=root, text=True).strip()
+          if not re.fullmatch('[0-9a-f]{40}', os.environ['N49D_TREE']):
+              raise SystemExit('Invalid candidate tree')
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          command = [sys.executable, str(root / '.ci/run_n49d_qualification.py'), 'run',
+              '--source', str(root), '--build', str(temp / 'n49d-build'),
+              '--output', str(temp / 'n49d-evidence'), '--package', str(temp / 'n49d-package'),
+              '--commit', os.environ['N49D_COMMIT'], '--tree', os.environ['N49D_TREE'],
+              '--job', os.environ['N49D_JOB'], '--run-id', os.environ['GITHUB_RUN_ID'],
+              '--run-attempt', os.environ['GITHUB_RUN_ATTEMPT']]
+          raise SystemExit(subprocess.call(command))
+      - name: Upload required single-part evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: n49d-${{ matrix.job }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.candidate || github.sha }}
+          path: |
+            ${{ runner.temp }}/n49d-package/parts/00/evidence.part
+            ${{ runner.temp }}/n49d-package/parts/00/manifest.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Upload bounded failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: n49d-diagnostics-${{ matrix.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/n49d-diagnostics/failure.json
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 14

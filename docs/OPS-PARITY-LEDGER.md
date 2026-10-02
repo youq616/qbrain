@@ -122,7 +122,7 @@ PG checks remain skipped in this N47L run and full project completion is not cla
 | schema_lint | **implemented** | N24-N25 |
 | schema_review_orphans | **implemented** | N24-N25 |
 | schema_stats | **implemented** | N20 |
-| search | **implemented** | N12 audited fail-open rerank |
+| search | **implemented** | N12 audited fail-open rerank; N49D candidate adds optional MCP directory URI within the already authorized source; current-candidate native/outcome acceptance pending ([plan](nodes/N49D-PLAN.md)) |
 | search_by_image | **implemented** | N33: content-level image metadata + optional provider embeddings, fail-open without credentials | N26-N27 |
 | send_job_message | **implemented** | N17: existing-job-only local Write with bounded UTF-8 sender and canonical JSON payload; fresh PASS 2026-08-04 |
 | sources_add | **implemented** | |

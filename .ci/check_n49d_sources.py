@@ -1,0 +1,248 @@
+"""N49D-only, fail-closed source identity and reviewed delta boundary."""
+from __future__ import annotations
+
+import argparse
+import ast
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import stat
+import subprocess
+import sys
+
+BASE = 'cfe1ef58e244b51092c2248804b663b6c28913d7'
+BASE_TREE = '75b69ad389630e51528ddb5536a27255203470df'
+HANDLERS = 'src/qbrain/ops/handlers.cpp'
+SERVER = 'src/qbrain/mcp/server.cpp'
+LEDGER = 'docs/OPS-PARITY-LEDGER.md'
+NEW = frozenset('''tests/test_mcp_directory_search.cpp
+.ci/mcp_directory_search_targets.cmake
+.ci/test_mcp_directory_search.py
+.ci/check_n49d_sources.py
+.ci/test_n49d_source_contract.py
+.ci/run_n49d_qualification.py
+.github/workflows/n49d-mcp-directory-search.yml
+docs/nodes/N49D-PLAN.md
+docs/nodes/N49D-PLAN-AUDIT.md
+docs/nodes/N49D-HARD-AUDIT.md
+docs/integration/MCP-DIRECTORY-SEARCH.md
+docs/nodes/n49d-evidence/RESULT.json
+docs/nodes/n49d-evidence/SOURCE-MANIFEST.json'''.splitlines())
+ALLOW = NEW | {HANDLERS, SERVER, LEDGER}
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def need(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def blob(raw):
+    return hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+
+
+def git(root, *args):
+    return subprocess.check_output(['git', *args], cwd=root, timeout=60)
+
+
+def generic_tree_reader(root):
+    """Load only unchanged generic tree primitives, never another qualifier."""
+    path = Path(root) / '.ci/check_source_archive.py'
+    checkout_bytes(path.read_bytes(), '8a573bf1e8673b767b8a6f7ebafa5685f241a86d', os.name == 'nt')
+    names = {'Rejected', 'need', 'object_id', 'safe_name', 'tree_from_manifest'}
+    nodes = [n for n in ast.parse(path.read_text(encoding='utf-8')).body
+             if isinstance(n, (ast.FunctionDef, ast.ClassDef)) and n.name in names]
+    need({n.name for n in nodes} == names, 'generic tree primitive inventory')
+    ns = dict(hashlib=hashlib, re=re, MANIFEST_CAP=2*1024*1024, FILE_CAP=5000, PATH_CAP=4096)
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), str(path), 'exec'), ns)
+    return ns['tree_from_manifest']
+
+
+def checkout_bytes(raw, oid, windows=False):
+    """Accept exact Git bytes, or one verified whole-file LF-to-CRLF form."""
+    if blob(raw) == oid:
+        return raw
+    need(windows and b'\0' not in raw, 'checkout blob mismatch')
+    canonical = raw.replace(b'\r\n', b'\n')
+    need(b'\r' not in canonical and raw == canonical.replace(b'\n', b'\r\n') and
+         blob(canonical) == oid, 'checkout newline representation mismatch')
+    return canonical
+
+
+def one_split(raw, anchor):
+    need(raw.count(anchor) == 1, 'production anchor ambiguous')
+    return raw.split(anchor, 1)
+
+
+def approved_regions(path, before, after):
+    if path == HANDLERS:
+        header = b'#include "qbrain/search/hybrid.hpp"\n'
+        added = b'#include "qbrain/search/directory.hpp"\n'
+        need(after.count(added) == 1 and header + added in after, 'directory header location')
+        stripped = after.replace(header + added, header, 1)
+        start = b'void register_search_ops() {\n'
+        end = b'  register_one(\n      "think", Scope::Read, [](OpContext& ctx) {'
+        bp, bt = one_split(before, start); ap, at = one_split(stripped, start)
+        body, bs = one_split(bt, end); changed, ass = one_split(at, end)
+        need(bp == ap and bs == ass and body != changed, 'outside search registration changed')
+        need(changed.startswith(b'  register_one(\n      "search", Scope::Read, [](OpContext& ctx) {'),
+             'search registration start')
+    elif path == SERVER:
+        anchor = b'    json arguments = params.contains("arguments") ? params["arguments"] : json::object();\n'
+        bp, bs = one_split(before, anchor); ap, rest = one_split(after, anchor)
+        need(bp == ap and rest.endswith(bs), 'outside search.uri validation changed')
+        insertion = rest[:-len(bs)] if bs else rest
+        expected = (b'    if (name == "search" && arguments.is_object() && arguments.contains("uri") &&\n'
+                    b'        !arguments["uri"].is_string()) {\n'
+                    b'      return make_tool_argument_error(id, "uri", "string value required");\n'
+                    b'    }\n')
+        need(insertion == expected, 'non-narrow search.uri insertion')
+    elif path == LEDGER:
+        old = before.splitlines(keepends=True); new = after.splitlines(keepends=True)
+        need(len(old) == len(new), 'ledger structure changed')
+        differences = [(a,b) for a,b in zip(old,new) if a != b]
+        need(len(differences) == 1, 'ledger change count')
+        a,b = differences[0]
+        need(a.startswith(b'|') and b.startswith(b'|') and a.split(b'|')[1].strip() == b'search' and b.split(b'|')[1].strip() == b'search',
+             'non-search ledger row changed')
+    else:
+        raise ValueError('unreviewed inherited delta')
+
+
+def validate_delta(base, candidate, read_before, read_after, base_commit=BASE, base_tree=BASE_TREE,
+                   require_complete=True):
+    need(base_commit == BASE and base_tree == BASE_TREE, 'wrong approved base/tree')
+    need(set(base) <= set(candidate), 'inherited file deleted')
+    new = set(candidate) - set(base)
+    need(new <= NEW, 'unreviewed added file')
+    if require_complete:
+        need(new == NEW, 'required new file missing')
+    changed = sorted(p for p in set(base) & set(candidate) if base[p] != candidate[p])
+    need(set(changed) <= {HANDLERS, SERVER, LEDGER}, 'inherited file identity changed')
+    if require_complete:
+        need(set(changed) == {HANDLERS, SERVER, LEDGER}, 'required production/ledger delta missing')
+    for path in changed:
+        need(base[path][0] == candidate[path][0] == '100644', 'inherited mode changed')
+        approved_regions(path, read_before(path), read_after(path))
+    for path in new:
+        need(candidate[path][0] == '100644', 'new file mode unsupported')
+    return sorted(new | set(changed))
+
+
+def stage_zero_index(raw):
+    """Keep staged additions/modes visible and reject unresolved index entries."""
+    rows={}
+    for record in raw.split(b'\0'):
+        if not record:continue
+        match=re.fullmatch(rb'(100644|100755|120000|160000) ([0-9a-f]{40}) ([0-3])\t([^\0]+)',record)
+        need(match is not None, 'invalid index record')
+        mode,oid,stage,path=match.groups()
+        need(stage==b'0', 'unmerged index entry')
+        name=path.decode('utf-8')
+        need(name not in rows, 'duplicate index path')
+        need(mode in (b'100644',b'100755'), 'nonregular index mode')
+        rows[name]=(mode.decode(),oid.decode())
+    need(rows, 'empty index inventory')
+    return rows
+
+
+def precommit_index(base, index, untracked):
+    need(set(base)<=set(index), 'staged inherited file deleted')
+    need((set(index)-set(base))<=NEW and set(untracked)<=NEW, 'unreviewed staged/untracked added file')
+    for path,value in index.items():
+        if path in base:
+            need(value[0]==base[path][0], 'staged inherited mode changed')
+            need(value==base[path] or path in {HANDLERS,SERVER,LEDGER}, 'staged inherited identity changed')
+        else:
+            need(value[0]=='100644', 'staged new file mode unsupported')
+    return dict(index)
+
+
+def check_source(root, commit=None, tree=None, precommit=False):
+    root = Path(root).resolve(strict=True)
+    head = git(root, 'rev-parse', 'HEAD').decode().strip()
+    head_tree = git(root, 'rev-parse', 'HEAD^{tree}').decode().strip()
+    need(git(root, 'rev-parse', BASE + '^{tree}').decode().strip() == BASE_TREE, 'base object mismatch')
+    parse = generic_tree_reader(root)
+    base_raw = git(root, 'ls-tree', '-r', '--full-tree', '-z', BASE)
+    base = parse(base_raw, BASE_TREE)
+    raw = git(root, 'ls-tree', '-r', '--full-tree', '-z', head)
+    candidate = parse(raw, head_tree)
+    if precommit:
+        need(head == BASE and head_tree == BASE_TREE, 'precommit requires actual approved base')
+    else:
+        need(commit == head and tree == head_tree and head != BASE, 'candidate pin mismatch')
+        need(git(root, 'show', '-s', '--format=%P', head).decode().strip() == BASE, 'candidate parent mismatch')
+    sparse = {v[2:].decode() for v in git(root, 'ls-files', '-t', '-z').split(b'\0') if v.startswith(b'S ')}
+    untracked = {v.decode() for v in git(root, 'ls-files', '--others', '--exclude-standard', '-z').split(b'\0') if v}
+    need(untracked <= NEW if precommit else not untracked, 'unexpected untracked source')
+    index_raw=None
+    if precommit:
+        index_raw=git(root,'ls-files','--stage','-z')
+        candidate=precommit_index(base,stage_zero_index(index_raw),untracked)
+        # A staged illegal production edit cannot hide behind a reverted worktree.
+        validate_delta(base,candidate,lambda p:git(root,'show',BASE+':'+p),
+                       lambda p:git(root,'cat-file','blob',candidate[p][1]),require_complete=False)
+    source_hashes = {}
+    def read_work(path):
+        p = root / path
+        need(p.is_file() and not p.is_symlink(), 'source type or absence')
+        raw_file = p.read_bytes()
+        if precommit:
+            if os.name == 'nt' and b'\0' not in raw_file and b'\r\n' in raw_file:
+                normalized = raw_file.replace(b'\r\n', b'\n')
+                need(b'\r' not in normalized and raw_file == normalized.replace(b'\n', b'\r\n'),
+                     'mixed working newline representation')
+                raw_file = normalized
+            return raw_file
+        return checkout_bytes(raw_file, candidate[path][1], os.name == 'nt')
+    for path in sorted(set(candidate) | untracked):
+        p = root / path
+        if not p.exists() and path in sparse:
+            continue
+        data = read_work(path)
+        if precommit:
+            indexed_mode=candidate[path][0] if path in candidate else '100644'
+            actual_mode=('100755' if p.stat().st_mode & 0o111 else '100644') if os.name!='nt' else indexed_mode
+            need(actual_mode==indexed_mode, 'working file mode differs from index')
+            candidate[path] = (actual_mode, blob(data))
+        source_hashes[path] = sha(data)
+    if precommit:
+        missing = {p for p in base if not (root / p).exists() and p not in sparse}
+        need(not missing, 'working inherited file deleted')
+    changed = validate_delta(base, candidate, lambda p: git(root, 'show', BASE + ':' + p),
+                             read_work, require_complete=not precommit)
+    return dict(schema='qbrain-n49d-source-v1', passed=True, base=BASE, base_tree=BASE_TREE,
+                commit=head, tree=head_tree, precommit=precommit, changed=changed,
+                changed_files={p:dict(mode=candidate[p][0],blob=candidate[p][1],sha256=sha(read_work(p))) for p in changed},
+                checkout_sha256=source_hashes, inventory_sha256=sha(raw),
+                index_inventory_sha256=sha(index_raw) if index_raw is not None else None,
+                dependency_sha256={p:h for p,h in source_hashes.items() if p.startswith('third_party/')})
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser()
+    p.add_argument('--source', type=Path, default=ROOT)
+    p.add_argument('--commit'); p.add_argument('--tree'); p.add_argument('--precommit', action='store_true')
+    p.add_argument('--report', type=Path)
+    args = p.parse_args(argv)
+    try:
+        result = check_source(args.source, args.commit, args.tree, args.precommit)
+        code = 0
+    except (ValueError, OSError, subprocess.SubprocessError) as e:
+        result = dict(passed=False, error=str(e)); code = 1
+    output = json.dumps(result, sort_keys=True, indent=2) + '\n'
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True); args.report.write_text(output, encoding='utf-8')
+    print(output, end='')
+    return code
+
+
+if __name__ == '__main__':
+    sys.exit(main())

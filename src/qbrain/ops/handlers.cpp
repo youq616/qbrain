@@ -18,6 +18,7 @@
 #include "qbrain/ingest/import.hpp"
 #include "qbrain/jobs/minions.hpp"
 #include "qbrain/search/hybrid.hpp"
+#include "qbrain/search/directory.hpp"
 #include "qbrain/search/vector.hpp"
 #include "qbrain/service/live_sync.hpp"
 #include "qbrain/util/string_util.hpp"
@@ -722,11 +723,24 @@ void register_search_ops() {
     opts.rrf_k = ctx.brain->config().search_rrf_k;
     opts.source_id = arg(ctx, "source_id");
     // Resolve before any embedding/model call; local unscoped search stays available.
-    if (ctx.via_mcp || ctx.remote || ctx.args.count("source_id")) {
+    if (ctx.via_mcp || ctx.remote || ctx.args.count("source_id") || ctx.args.count("uri")) {
       OpResult source_error;
       const auto source = resolve_source(ctx, true, source_error);
       if (!source) return source_error;
       opts.source_id = *source;
+    }
+    std::optional<search::DirectoryScope> directory_scope;
+    if (const auto uri = ctx.args.find("uri"); uri != ctx.args.end()) {
+      // A directory narrows the already authorized source; it never selects one.
+      const auto prefix = "qbrain://" + opts.source_id + "/";
+      if (uri->second.rfind(prefix, 0) != 0)
+        return argument_error("invalid_argument", "uri",
+                              "directory URI must use the resolved source_id");
+      try {
+        directory_scope = search::parse_directory_scope(*ctx.brain, uri->second);
+      } catch (const std::invalid_argument&) {
+        return argument_error("invalid_argument", "uri", "valid directory URI required");
+      }
     }
     opts.mode = arg(ctx, "mode", "balanced");
     opts.config = &ctx.brain->config();
@@ -745,7 +759,20 @@ void register_search_ops() {
         pemb = &emb;
       }
     }
-    auto hits = search::hybrid_search(*ctx.brain, q, pemb, opts);
+    std::vector<SearchHit> hits;
+    if (directory_scope) {
+      search::DirectorySearchOpts directory_opts;
+      directory_opts.limit = opts.limit;
+      directory_opts.rrf_k = opts.rrf_k;
+      directory_opts.mode = opts.mode;
+      directory_opts.rerank = opts.rerank;
+      directory_opts.rerank_llm = opts.rerank_llm;
+      directory_opts.config = opts.config;
+      hits = search::directory_search(*ctx.brain, q, pemb, *directory_scope,
+                                      directory_opts);
+    } else {
+      hits = search::hybrid_search(*ctx.brain, q, pemb, opts);
+    }
     json arr = json::array();
     std::ostringstream oss;
     int i = 1;
@@ -766,7 +793,7 @@ void register_search_ops() {
     r.text = oss.str().empty() ? "(no results)\n" : oss.str();
     return r;
   }, false, "Hybrid search (FTS + vector + RRF + optional rerank)",
-      R"({"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"},"no_vector":{"type":"boolean"},"source_id":{"type":"string"},"mode":{"type":"string"},"rerank":{"type":"boolean"},"rerank_llm":{"type":"boolean"}},"required":["query"]})");
+      R"({"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"},"no_vector":{"type":"boolean"},"source_id":{"type":"string"},"uri":{"type":"string","description":"Optional directory URI within the resolved authorized source, ending in /"},"mode":{"type":"string"},"rerank":{"type":"boolean"},"rerank_llm":{"type":"boolean"}},"required":["query"]})");
 
   register_one(
       "think", Scope::Read, [](OpContext& ctx) {
