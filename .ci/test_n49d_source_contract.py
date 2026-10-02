@@ -164,7 +164,9 @@ def ancestry_controls():
     replies={('rev-parse','HEAD'):head,('rev-parse','HEAD^{tree}'):tree,
              ('rev-parse',guard.BASE+'^{tree}'):guard.BASE_TREE,
              ('rev-parse',guard.CORRECTION_PARENT+'^{tree}'):guard.CORRECTION_PARENT_TREE,
-             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.PREVIOUS_PARENT,
+             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.INTERMEDIATE_PARENT,
+             ('rev-parse',guard.INTERMEDIATE_PARENT+'^{tree}'):guard.INTERMEDIATE_PARENT_TREE,
+             ('show','-s','--format=%P',guard.INTERMEDIATE_PARENT):guard.PREVIOUS_PARENT,
              ('rev-parse',guard.PREVIOUS_PARENT+'^{tree}'):guard.PREVIOUS_PARENT_TREE,
              ('show','-s','--format=%P',guard.PREVIOUS_PARENT):guard.EARLIER_PARENT,
              ('rev-parse',guard.EARLIER_PARENT+'^{tree}'):guard.EARLIER_PARENT_TREE,
@@ -180,11 +182,11 @@ def ancestry_controls():
             if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
             return (values[args]+'\n').encode()
         with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
-        check(len(calls)==(11 if precommit else 12),'unexpected ancestry query count')
+        check(len(calls)==(13 if precommit else 14),'unexpected ancestry query count')
         return result
     control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
     pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
-    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),'precommit actual parent fields'))
+    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.INTERMEDIATE_PARENT,guard.INTERMEDIATE_PARENT_TREE),'precommit actual parent fields'))
     def no_lazy_fetch():
         with patch.object(guard.subprocess,'check_output',return_value=b'fixture') as execute:
             check(guard.git(Path('.'),'rev-parse','HEAD')==b'fixture','git helper return')
@@ -202,6 +204,9 @@ def ancestry_controls():
            ('wrong-anchor-tree',('rev-parse',guard.CORRECTION_PARENT+'^{tree}'),'3'*40,'correction parent tree'),
            ('wrong-anchor-parent',('show','-s','--format=%P',guard.CORRECTION_PARENT),'3'*40,'correction parent ancestry'),
            ('multiple-anchor-parents',('show','-s','--format=%P',guard.CORRECTION_PARENT),guard.BASE+' '+'3'*40,'correction parent ancestry'),
+           ('wrong-intermediate-tree',('rev-parse',guard.INTERMEDIATE_PARENT+'^{tree}'),'3'*40,'intermediate parent tree'),
+           ('wrong-intermediate-parent',('show','-s','--format=%P',guard.INTERMEDIATE_PARENT),'3'*40,'intermediate parent ancestry'),
+           ('multiple-intermediate-parents',('show','-s','--format=%P',guard.INTERMEDIATE_PARENT),guard.BASE+' '+'3'*40,'intermediate parent ancestry'),
            ('wrong-previous-tree',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}'),'3'*40,'previous parent tree'),
            ('wrong-previous-parent',('show','-s','--format=%P',guard.PREVIOUS_PARENT),'3'*40,'previous parent ancestry'),
            ('multiple-previous-parents',('show','-s','--format=%P',guard.PREVIOUS_PARENT),guard.BASE+' '+'3'*40,'previous parent ancestry'),
@@ -218,11 +223,11 @@ def ancestry_controls():
                           ('wrong-tree',{('rev-parse','HEAD^{tree}'):'3'*40}),('other-tip',{('rev-parse','HEAD'):'3'*40})]:
         expect_failure('ancestry-precommit-'+label,lambda changes=changes:run(pre|changes,True),'precommit requires exact correction parent/tree')
     expect_failure('ancestry-anchor-is-not-candidate',lambda:run(pre,commit=guard.CORRECTION_PARENT,expected_tree=guard.CORRECTION_PARENT_TREE),'candidate pin mismatch')
-    for label,anchor,anchor_tree in [('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('earlier',guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),('original',guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
+    for label,anchor,anchor_tree in [('intermediate',guard.INTERMEDIATE_PARENT,guard.INTERMEDIATE_PARENT_TREE),('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('earlier',guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),('original',guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
         tip={('rev-parse','HEAD'):anchor,('rev-parse','HEAD^{tree}'):anchor_tree}
         expect_failure('ancestry-'+label+'-is-not-candidate',lambda tip=tip,anchor=anchor,anchor_tree=anchor_tree:run(tip,commit=anchor,expected_tree=anchor_tree),'candidate pin mismatch')
         expect_failure('ancestry-precommit-reject-'+label,lambda tip=tip:run(tip,True),'precommit requires exact correction parent/tree')
-    for label,key in [('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT)),('missing-earlier-object',('rev-parse',guard.EARLIER_PARENT+'^{tree}')),('missing-earlier-parent-metadata',('show','-s','--format=%P',guard.EARLIER_PARENT)),('missing-original-object',('rev-parse',guard.ORIGINAL_PARENT+'^{tree}')),('missing-original-parent-metadata',('show','-s','--format=%P',guard.ORIGINAL_PARENT))]:
+    for label,key in [('missing-intermediate-object',('rev-parse',guard.INTERMEDIATE_PARENT+'^{tree}')),('missing-intermediate-parent',('show','-s','--format=%P',guard.INTERMEDIATE_PARENT)),('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT)),('missing-earlier-object',('rev-parse',guard.EARLIER_PARENT+'^{tree}')),('missing-earlier-parent-metadata',('show','-s','--format=%P',guard.EARLIER_PARENT)),('missing-original-object',('rev-parse',guard.ORIGINAL_PARENT+'^{tree}')),('missing-original-parent-metadata',('show','-s','--format=%P',guard.ORIGINAL_PARENT))]:
         try:run({key:None})
         except subprocess.CalledProcessError as error:
             check(error.returncode==128 and error.cmd==['git',*key],'missing object boundary');RESULTS.append(dict(name='ancestry-'+label,passed=True))
@@ -241,14 +246,14 @@ def ancestry_controls():
         expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
     workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
     def workflow_contract(raw,windows=False):
-        canonical=guard.checkout_bytes(raw,'ee603f918c6b25ca43c03114ab5d76a99221d057',windows)
-        check(canonical.count(b'          fetch-depth: 6\n')==1 and
-              guard.sha(canonical.replace(b'          fetch-depth: 6\n',b'          fetch-depth: 5\n'))=='0da9b5e07c3d819b5ab09377a4f7845f3893de586a3e8cebba56d9ba0880a4e6','exact depth-six workflow contract')
+        canonical=guard.checkout_bytes(raw,'c6e90f6e3bcb1bf11846670982c9145e654e7a74',windows)
+        check(canonical.count(b'          fetch-depth: 7\n')==1 and
+              guard.sha(canonical.replace(b'          fetch-depth: 7\n',b'          fetch-depth: 6\n'))=='d6bd2e75cfaaff91fbf48ea0d3aa33ea38b15eedbcdacfb1b66beb6a62cda1de','exact depth-seven workflow contract')
         return canonical
-    control('workflow-only-depth-six-change',lambda:workflow_contract(workflow,os.name=='nt'))
+    control('workflow-only-depth-seven-change',lambda:workflow_contract(workflow,os.name=='nt'))
     canonical=workflow_contract(workflow,os.name=='nt')
-    for label,old,new in [('old-depth',b'fetch-depth: 6',b'fetch-depth: 5'),('broad-depth',b'fetch-depth: 6',b'fetch-depth: 0'),
-                          ('malformed-depth',b'fetch-depth: 6',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+    for label,old,new in [('old-depth',b'fetch-depth: 7',b'fetch-depth: 6'),('broad-depth',b'fetch-depth: 7',b'fetch-depth: 0'),
+                          ('malformed-depth',b'fetch-depth: 7',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
                           ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
         changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
         expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
@@ -738,13 +743,48 @@ def windows_diagnostic_controls(root):
         def __getattr__(self,name):return getattr(c,name)
         @staticmethod
         def get_last_error():return 5
-    def model(mode='live',count=1):
+    def model(mode='live',count=1,image_options=None):
+        options=image_options or {};last_error=[5];buffers=[]
         now=[0.];calls=[];closed=[];waits=[];tree=object.__new__(q._WindowsTree)
-        tree.c=C();tree.w=SimpleNamespace(DWORD=c.c_uint32,BOOL=c.c_int32)
+        class ImageC(C):
+            @staticmethod
+            def get_last_error():return last_error[0]
+            @staticmethod
+            def sizeof(value):
+                return 8 if options.get('fault')=='abi' and value is c.c_uint32 else c.sizeof(value)
+        tree.c=ImageC();tree.w=SimpleNamespace(DWORD=c.c_uint32,BOOL=c.c_int32)
         tree.Accounting=Accounting;tree.ProcessList=q._windows_job_list_type(c)
         tree.job=123;tree.assigned=True;tree.proc=SimpleNamespace(pid=456)
         tree.last_accounting=dict(total=17,active=count,terminated=3)
+        class ImageAPI:
+            def __setattr__(self,key,value):
+                if options.get('fault')=='binding':raise TypeError('private binding fixture')
+                object.__setattr__(self,key,value)
+            def __call__(self,handle,flags,buffer,length):
+                calls.append(('image',handle,flags));buffers.append(buffer)
+                check(flags==0 and len(buffer)==1024 and c.sizeof(buffer)==2048 and length._obj.value==1024,'image API buffer/flags')
+                check(self.argtypes==[c.c_void_p,c.c_uint32,c.POINTER(c.c_uint16),c.POINTER(c.c_uint32)] and self.restype is c.c_int32,'image API ABI')
+                check(('membership',handle,123) in calls and waits.count(handle)==2 and not any(x==('close',handle) for x in calls),'image not bound to observed open member')
+                if options.get('fault')=='exception':raise OSError('PRIVATE_PATH_MUST_NOT_ESCAPE')
+                if options.get('fault')=='value-exception':raise ValueError('PRIVATE_PATH_MUST_NOT_ESCAPE')
+                last_error[0]=options.get('error',5)
+                if options.get('fault')=='query':return 0
+                if options.get('fault')=='return-type':return 'invalid'
+                raw=options.get('path','C:\\private-prefix\\PyThOn.exe').encode('utf-16le','surrogatepass')
+                units=[int.from_bytes(raw[i:i+2],'little') for i in range(0,len(raw),2)]
+                for i,value in enumerate(units[:1024]):buffer[i]=value
+                length._obj.value=options.get('count',len(units))
+                if options.get('fault')=='no-nul' and length._obj.value<1024:buffer[length._obj.value]=65
+                if options.get('fault')=='embedded-nul':buffer[0]=0
+                if options.get('fault') in ('equal','overrun'):now[0]=.100 if options['fault']=='equal' else .101
+                return 1
+        api=ImageAPI()
         class Kernel:
+            @property
+            def QueryFullProcessImageNameW(self):
+                calls.append(('image-binding',))
+                if options.get('fault')=='missing':raise AttributeError('PRIVATE_SYMBOL')
+                return api
             def QueryInformationJobObject(self,job,kind,out,size,length):
                 calls.append(('query',job,kind));check(job==123,'diagnostic queried another job')
                 if mode=='query-exception':raise OSError('fixture API')
@@ -757,6 +797,7 @@ def windows_diagnostic_controls(root):
                 length._obj.value=size
                 for i in range(min(count,32)):out._obj.pids[i]=0xffffffff-i
                 if mode=='partial':out._obj.assigned=count+1
+                if mode in ('root','first-root'):out._obj.pids[0]=456
                 if mode=='zero':out._obj.pids[0]=0
                 if mode=='duplicate':out._obj.pids[1]=out._obj.pids[0]
                 if mode=='pid-range':out._obj.pids[0]=0x100000000
@@ -772,6 +813,7 @@ def windows_diagnostic_controls(root):
                 calls.append(('membership',handle,job));check(job==123,'wrong membership job')
                 out._obj.value=mode!='nonmember'
                 if mode=='membership-overrun':now[0]=.101
+                if mode=='wide-errors' and handle!=0xffffffff-(count-1):last_error[0]=0xffffffff;return False
                 return mode!='membership-error'
             def WaitForSingleObject(self,handle,milliseconds):
                 calls.append(('wait',handle,milliseconds));check(milliseconds==0,'diagnostic positive wait')
@@ -785,18 +827,34 @@ def windows_diagnostic_controls(root):
                 if mode=='wait-overrun':now[0]=.101
                 if mode=='conflict':return 0 if before else 258
                 if mode=='exit-between':return 258 if before else 0
-                return 0 if mode=='exited259' else 258
+                return 0 if mode=='exited259' or (mode=='first-exited' and handle==0xffffffff) else 258
             def GetExitCodeProcess(self,handle,out):
                 calls.append(('exit',handle));out._obj.value=7 if mode=='exit-inconsistent' else 259
                 if mode=='exit-overrun':now[0]=.101
                 return mode!='exit-error'
             def CloseHandle(self,handle):
                 calls.append(('close',handle));closed.append(handle)
+                check(all(not any(buffer) for buffer in buffers),'image buffer not wiped before close')
                 if mode=='close-overrun':now[0]=.101
                 if mode=='close-exception':raise OSError('fixture close')
                 return mode!='close-error'
         tree.k=Kernel()
-        with patch.object(q.time,'monotonic',lambda:now[0]):value=tree.diagnostic(0 if mode=='expired' else 1)
+        sample_image=q._WindowsTree.sample_image;parse_image=q._windows_image_name;image_detail=q._image_sample
+        def timed_sample(owner,handle,index,deadline):
+            if options.get('fault')=='before':now[0]=deadline
+            return sample_image(owner,handle,index,deadline)
+        def timed_parse(*args):
+            value=parse_image(*args)
+            if options.get('fault')=='hash-overrun':now[0]=.101
+            return value
+        def timed_detail(*args,**kwargs):
+            if options.get('fault')=='serialization-error' and args and args[0]=='sampled':
+                with patch.object(q.json,'dumps',side_effect=ValueError('PRIVATE_SERIALIZATION')):return image_detail(*args,**kwargs)
+            value=image_detail(*args,**kwargs)
+            if options.get('fault')=='serialization-overrun' and value['status']=='sampled':now[0]=.101
+            return value
+        with patch.object(q.time,'monotonic',lambda:now[0]),patch.object(q._WindowsTree,'sample_image',timed_sample),patch.object(q,'_windows_image_name',timed_parse),patch.object(q,'_image_sample',timed_detail):
+            value=tree.diagnostic(0 if mode=='expired' else options.get('cleanup_deadline',1))
         return value,calls,closed
     control('windows-diagnostic-fixed-width-ABI',lambda:check(c.sizeof(q._windows_job_list_type(c))==264 and c.sizeof(c.c_uint32)==4,'Windows ABI'))
     for label,mode,count in [('live','live',1),('exited-code-259','exited259',1),('exit-between-reads','exit-between',1),('empty-later-sample','live',0),('maximum-shape','live',32)]:
@@ -822,7 +880,7 @@ def windows_diagnostic_controls(root):
     control('windows-diagnostic-serialization-error',lambda:check(q._bounded_job_diagnostic({'invalid':object()})['error']=='metadata_cap','diagnostic serializer failure'))
     # Use production JSON formatting at the actual nesting depth, then verify the
     # existing partial-evidence writer preserves the complete maximum-shape result.
-    maximum=model('live',32)[0]
+    maximum=model('live',32,dict(path='C:/'+('x'*60+'.exe')))[0]
     ident=identity();stage=root/'stages/tiny';stage.mkdir(parents=True)
     raw=b'x'*(70*1024)
     for name in ('stdout.bin','stderr.bin'):(stage/name).write_bytes(raw)
@@ -858,6 +916,159 @@ def windows_diagnostic_controls(root):
     with patch.object(q.os,'linesep','\r\n'):
         check(q._bounded_job_diagnostic(maximum)==maximum,'Windows diagnostic metadata bound')
     RESULTS.append(dict(name='windows-diagnostic-Windows-JSON-layout-caps',passed=True))
+    return model
+
+
+
+def windows_image_controls(root,model):
+    """Actual selector, query/parser and caller models, not Windows execution."""
+    import ctypes as c
+    from types import SimpleNamespace
+    root.mkdir()
+    def sample(label,mode='live',count=1,options=None,status='sampled',queries=1,index=0,name='PyThOn.exe'):
+        value,calls,closed=model(mode,count,options);row=value['image_sample']
+        check(set(row)=={'member_index','status','basename','basename_sha256','race','win32'} and
+              row['status']==status and row['member_index']==index and row['race']=='non_atomic','image schema/status '+label)
+        check(sum(x[0]=='image' for x in calls)==queries and len(closed)==count,'image selection/closure '+label)
+        if status=='sampled':
+            check(row['basename']==name and row['basename_sha256']==hashlib.sha256(name.encode('utf-16le')).hexdigest() and row['win32'] is None,'exact image name/hash')
+        elif status=='redacted_basename':
+            check(row['basename'] is None and row['basename_sha256']==hashlib.sha256(name.encode('utf-16le')).hexdigest(),'redacted exact name hash')
+        elif status not in ('query_failed','buffer_limit'):
+            check(row['basename'] is row['basename_sha256'] is row['win32'] is None,'unavailable value leakage')
+        check('private-prefix' not in json.dumps(value) and 'PRIVATE_' not in json.dumps(value),'private image metadata leaked')
+        RESULTS.append(dict(name='image-model-'+label,passed=True));return value,calls
+    sample('same-verified-handle')
+    sample('first-root-skipped','first-root',2,index=1)
+    sample('first-exited-skipped','first-exited',2,index=1)
+    sample('first-only-32','live',32)
+    for label,mode in [('root-ineligible','root'),('nonroot-signaled259-ineligible','exited259'),
+                       ('unverified-ineligible','membership-error'),('nonmember-ineligible','nonmember'),
+                       ('conflicting-state-ineligible','conflict'),('exit-race-ineligible','exit-between')]:
+        sample(label,mode,status='not_selected',queries=0,index=None)
+    empty,_,_=model('live',0)
+    check(empty['image_sample']==q._image_sample(),'empty image selection');RESULTS.append(dict(name='image-model-empty',passed=True))
+    for label,path,name in [('one-unit','A','A'),('long-path','x'*1012+'/PyThOn.exe','PyThOn.exe'),
+                           ('safe64','C:/'+('a'*60+'.exe'),'a'*60+'.exe'),('drive','D:/private-prefix/tool.exe','tool.exe'),
+                           ('unc',r'\\private-prefix\share\tool.exe','tool.exe'),('extended',r'\\?\C:\private-prefix\Tool.EXE','Tool.EXE')]:
+        sample(label,options=dict(path=path),name=name)
+    for label,name in [('over64','a'*61+'.exe'),('unicode','工具.exe'),('surrogate-pair','😀.exe'),
+                       ('space','two words.exe'),('punctuation','a:b.exe'),('control','a\nb.exe')]:
+        sample(label,options=dict(path='C:/private-prefix/'+name),status='redacted_basename',name=name)
+    one=sample('case-upper',options=dict(path='C:/Tool.EXE'),name='Tool.EXE')[0]['image_sample']
+    two=sample('case-lower',options=dict(path='Z:/tool.exe'),name='tool.exe')[0]['image_sample']
+    check(one['basename_sha256']!=two['basename_sha256'],'name hash folded case')
+    p1=sample('prefix-one',options=dict(path='C:/private-prefix/Tool.EXE'),name='Tool.EXE')[0]['image_sample']
+    check(p1['basename_sha256']==one['basename_sha256'],'prefix included in name digest')
+    for label,options in [('zero-count',dict(count=0)),('count1024',dict(count=1024)),('count-huge',dict(count=0xffffffff)),
+                           ('no-nul',dict(fault='no-nul')),('embedded-nul',dict(fault='embedded-nul')),
+                           ('empty-component',dict(path='C:/')),('dot',dict(path='C:/.')),('dotdot',dict(path='C:/..')),
+                           ('lone-surrogate',dict(path='C:/\ud800.exe')),('return-type',dict(fault='return-type')),
+                           ('bad-error-type',dict(fault='query',error=True)),('negative-error',dict(fault='query',error=-1))]:
+        sample(label,options=options,status='invalid_result')
+    for error in (0,5,6,87,122,0xffffffff):
+        value,_=sample('api-error-'+str(error),count=2,options=dict(fault='query',error=error),
+                       status='buffer_limit' if error==122 else 'query_failed')
+        check(value['image_sample']['win32']==error,'image API error changed')
+    sample('serialization-error-latched',count=2,options=dict(fault='serialization-error'),status='metadata_cap')
+    for fault,queries in [('missing',0),('binding',0),('abi',0),('exception',1),('value-exception',1)]:
+        sample(fault,count=2,options=dict(fault=fault),status='api_exception',queries=queries)
+    for fault in ('before','equal','overrun','hash-overrun','serialization-overrun'):
+        value,calls=sample(fault,options=dict(fault=fault),status='deadline',queries=0 if fault=='before' else 1)
+        check(value['complete'] is False and calls[-1][0]=='close','late image continued observations')
+    sample('narrow-original-cleanup',options=dict(cleanup_deadline=.050))
+    value,calls=sample('narrow-original-expiry',options=dict(cleanup_deadline=.050,fault='before'),status='deadline',queries=0)
+    check(not any(row[0]=='image-binding' for row in calls),'expired image binding accessed')
+    for mode in ('close-error','close-exception'):
+        value,calls=sample('image-'+mode,mode,2)
+        check(value['handles_closed'] is False and value['complete'] is False and sum(row[0]=='image' for row in calls)==1,'close failure caused reselection')
+    eligible=dict(root=False,wait_before=258,exit_code=259,wait_after=258)
+    for field,value in [('root',0),('wait_before',True),('exit_code','259'),('wait_after',258.0),('error','fixed')]:
+        row=dict(eligible);row[field]=value
+        control('image-selector-exact-'+field,lambda row=row:check(not q._windows_image_eligible(row),'coerced image selector'))
+    units=[65]+[0]*1023
+    for label,count,values in [('bool-count',True,units),('short-buffer',1,[65,0]),('bool-unit',1,[True]+[0]*1023)]:
+        expect_failure('image-parser-'+label,lambda count=count,values=values:q._windows_image_name(values,count),'invalid_result')
+    for label,args in [('bool-index',dict(status='sampled',index=True,name='a',name_hash='a'*64)),
+                       ('unknown-status',dict(status='PRIVATE_STATUS',index=0)),('bad-hash',dict(status='sampled',index=0,name='a',name_hash='PRIVATE_HASH')),
+                       ('bad-error',dict(status='query_failed',index=0,win32=True)),('error122',dict(status='query_failed',index=0,win32=122)),
+                       ('unexpected-name',dict(status='api_exception',index=0,name='PRIVATE_NAME'))]:
+        control('image-fixed-detail-'+label,lambda args=args:check(q._image_sample(**args)['status']=='metadata_cap','invalid fixed image detail'))
+    with patch.object(q.json,'dumps',side_effect=ValueError('PRIVATE_SERIALIZER')):
+        check(q._image_sample('sampled',0,'a','a'*64)['status']=='metadata_cap','image serializer escaped')
+    RESULTS.append(dict(name='image-detail-serialization-unavailable',passed=True))
+    # New symbol and ABI validation are absent from the successful constructor path.
+    for fault in ('missing','binding','abi'):
+        touched=[];closed=[];lookups=[]
+        class Function:
+            def __init__(self,name):self.name=name
+            def __call__(self,*args):
+                touched.append(self.name)
+                if self.name=='CloseHandle':closed.append(args[0])
+                return 123 if self.name=='CreateJobObjectW' else 1
+        class Kernel:
+            def __init__(self):self.functions={}
+            def __getattr__(self,name):
+                if name=='QueryFullProcessImageNameW':
+                    lookups.append(name)
+                    if fault=='missing':raise AttributeError('missing fixture symbol')
+                    if fault=='binding':
+                        class BadBinding:
+                            def __setattr__(self,key,value):raise TypeError('bad fixture binding')
+                        return BadBinding()
+                return self.functions.setdefault(name,Function(name))
+        sizeof=c.sizeof
+        def widths(value):return 8 if fault=='abi' and value is c.c_uint32 else sizeof(value)
+        with patch.object(c,'WinDLL',return_value=Kernel(),create=True),patch.object(c,'sizeof',widths):
+            tree=q._WindowsTree()
+            owner=object.__new__(q.OwnedChild);owner.started=time.monotonic();owner.deadline=owner.started+3;owner.scan_deadline=owner.deadline
+            owner.paths=[root/('constructor-'+fault+'-'+name) for name in ('stdout','stderr')]
+            for path in owner.paths:path.write_bytes(b'')
+            owner.proc=SimpleNamespace(pid=17,poll=lambda:0,stdout=None,stderr=None);tree.proc=owner.proc;owner.tree=tree
+            owner.result=None;owner.stable=False;owner.locked=False;owner.readers=[];owner.errors=[];owner.overflow=q.threading.Event();owner.job_diagnostic=None
+            result=owner._end()
+        check(result['classification']=='passed' and result['stable'] and 'job_diagnostic' not in result and
+              not lookups and 'QueryFullProcessImageNameW' not in touched and closed==[123],'constructor image dependency')
+        sample('constructor-neutral-failed-path-'+fault,options=dict(fault=fault),status='api_exception',queries=0)
+        RESULTS.append(dict(name='image-constructor-neutral-'+fault,passed=True))
+    # Protected actual owner/Recorder propagation with no OS process in this model.
+    original=q.OwnedChild
+    for label,mode,count,options in [('visible','live',32,dict(path='C:/'+('x'*60+'.exe'))),
+                                    ('wide-errors','wide-errors',32,None),
+                                    ('query-failure','live',2,dict(fault='query',error=0xffffffff)),
+                                    ('binding-failure','live',2,dict(fault='missing'))]:
+        captured=[];r=q.Recorder(root/label,identity(),['tiny'],dict(os.environ),root,stream_cap=512)
+        class Tree:
+            def diagnostic(self,deadline):
+                value,_,_=model(mode,count,options);return value
+            def terminate(self):pass
+            def active(self):return []
+            def close(self):pass
+        def owner_factory(argv,cwd,env,stdin,stdout,stderr,timeout,cap):
+            owner=object.__new__(original);owner.started=time.monotonic();owner.deadline=owner.started+timeout;owner.scan_deadline=owner.deadline
+            owner.paths=[Path(stdout),Path(stderr)]
+            for path in owner.paths:path.write_bytes(b'')
+            owner.proc=SimpleNamespace(pid=17,poll=lambda:0,stdout=None,stderr=None);owner.tree=Tree();owner.readers=[]
+            owner.result=None;owner.stable=False;owner.locked=False;owner.errors=[];owner.overflow=q.threading.Event();owner.job_diagnostic=None
+            original._end(owner,'lingering-descendant');captured.append(owner);return owner
+        with patch.object(q,'OwnedChild',owner_factory):
+            expect_failure('image-recorder-'+label,lambda:r.run('tiny',[sys.executable,'-c','pass'],3),'lingering-descendant',record=False)
+        raw=(r.root/'stages/tiny/result.json').read_bytes();record=json.loads(raw);owner=captured[0]
+        check(record['classification']=='lingering-descendant' and record['ownership']==owner.result and
+              owner.result['cleanup_ok'] and owner.result['stable'],'image owner/Recorder propagation')
+        frozen=copy.deepcopy(owner.result);expect_failure('image-owner-repeat-'+label,lambda:owner.wait(),'lingering-descendant',record=False)
+        check(owner.result==frozen,'image failure changed on repeated wait')
+        field=record['ownership']['job_diagnostic'];sampled=field['image_sample']
+        for newline in ('\n','\r\n'):
+            image_bytes=(json.dumps(sampled,sort_keys=True,indent=2)+'\n').replace('\n',newline).encode()
+            diagnostic_bytes=(json.dumps(field,sort_keys=True,indent=2)+'\n').replace('\n',newline).encode()
+            stage_bytes=(json.dumps(record,sort_keys=True,indent=2)+'\n').replace('\n',newline).encode()
+            check(len(image_bytes)<=512 and len(diagnostic_bytes)<=8192 and len(stage_bytes)<=16384,'image full layout cap')
+        packet=q.failure_diagnostics(r.root,r.root/'failure.json',identity(),['tiny'],['tiny'],'lingering-descendant')
+        retained=packet['files']['stages/tiny/result.json']
+        check(not retained['truncated'] and base64.b64decode(retained['data'])==raw and packet['passed'] is False and
+              (r.root/'failure.json').stat().st_size<=262144,'image complete failed packet retention')
+        RESULTS.append(dict(name='image-actual-owner-recorder-retention-'+label,passed=True))
 
 
 def windows_pinned_member_controls(root):
@@ -884,6 +1095,9 @@ def windows_pinned_member_controls(root):
         check(owner.proc.returncode==259 and tree.k.WaitForSingleObject(handle,0)==0,'native fixture did not exit 259')
         exited=tree.observe_member(handle,min(setup_deadline,time.monotonic()+.1))
         check('error' not in exited and exited['wait_before']==exited['wait_after']==0 and exited['exit_code']==259,'259 misclassified as alive')
+        check(not q._windows_image_eligible(dict(live,root=True)) and not q._windows_image_eligible(dict(exited,root=True)),
+              'native pinned root image eligibility')
+        RESULTS.append(dict(name='windows-genuine-root-signaled259-observation-and-root-ineligibility',passed=True))
         check(tree.k.CloseHandle(handle),'native pinned fixture close');handle=None
         terminal=owner.stop('pinned_fixture_complete')
         check(terminal['classification']=='stopped' and terminal['cleanup_ok'] and terminal['stable'],'native pinned fixture finalization')
@@ -1399,6 +1613,12 @@ def lifecycle_controls(root):
                 check(diagnostic.get('complete') is True and diagnostic.get('handles_closed') is True and
                       any(row.get('pid')==pid and row.get('root') is False and row.get('wait_before')==258 and 'error' not in row
                           for row in diagnostic.get('members',[])),'descendant native live-member proof missing')
+                sample=diagnostic.get('image_sample',{});index=sample.get('member_index')
+                check(type(index) is int and 0<=index<len(diagnostic['members']) and diagnostic['members'][index]['pid']==pid and
+                      sample.get('status')=='sampled' and sample.get('race')=='non_atomic' and
+                      type(sample.get('basename')) is str and sample['basename'].casefold()==Path(sys.executable).name.casefold() and
+                      sample.get('basename_sha256')==hashlib.sha256(sample['basename'].encode('utf-16le')).hexdigest(),
+                      'descendant native Windows basename comparison/hash missing')
             return pid
         for label,redirect,detached in [('inherited-pipe',False,False),('silent-redirected',True,False),('detached-writer',False,True)]:
             code,ready,confirmed,release=descendant_fixture(label,redirect,detached);started=time.monotonic()
@@ -1638,8 +1858,9 @@ def lifecycle_controls(root):
                 check(sentinel.poll() is None,'oracle consumed or terminated omitted sentinel')
         else:
             for kind in ('recorder','driver'):
-                run(kind,'unrelated-sentinel','pass')
-                check(sentinel.poll() is None,'private Windows job affected unrelated sentinel')
+                with patch.object(q._WindowsTree,'sample_image',side_effect=ValueError('unexpected image query')) as image_query:
+                    run(kind,'unrelated-sentinel','pass')
+                check(sentinel.poll() is None and image_query.call_count==0,'private Windows job affected or queried unrelated sentinel')
                 RESULTS.append(dict(name=kind+'-unrelated-sentinel-survives-private-job',passed=True))
     finally:sentinel.terminate();sentinel.wait(timeout=2)
     if os.name!='nt':
@@ -1913,7 +2134,7 @@ def package_consumer_controls(root):
 
 def main():
     with tempfile.TemporaryDirectory(prefix='n49d-tiny-controls-') as tmp:
-        root=Path(tmp);source_controls();ancestry_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();windows_diagnostic_controls(root/'diagnostics');failure_detail_controls(root/'failure-detail');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');root_terminal_controls(root/'root-terminal');root_terminal_native_controls(root/'root-native');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned');failure_detail_retention_controls(root/'failure-detail-retention')
+        root=Path(tmp);source_controls();ancestry_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();image_model=windows_diagnostic_controls(root/'diagnostics');windows_image_controls(root/'images',image_model);failure_detail_controls(root/'failure-detail');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');root_terminal_controls(root/'root-terminal');root_terminal_native_controls(root/'root-native');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned');failure_detail_retention_controls(root/'failure-detail-retention')
     print(json.dumps(dict(passed=True,python_optimized=sys.flags.optimize>0,controls=RESULTS,
         linux_reader_backend=('stat-adapter' if q._PROC_STAT_CHILD_ADAPTER else 'native-children') if os.name!='nt' else 'not_applicable',
         n49d_package_wrapper_executed=True,generic_package_fixture_seam=True,inherited_packager_executed=False,inherited_packager_reason='unchanged 1152 MiB reserve; native CI only'),sort_keys=True))

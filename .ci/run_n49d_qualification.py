@@ -467,6 +467,48 @@ def _bounded_job_diagnostic(value):
         return dict(complete=False,observation='unknown',error='metadata_cap',members=[])
 
 
+
+def _image_sample(status='not_selected',index=None,name=None,name_hash=None,win32=None):
+    """Only six fixed redacted fields; malformed detail cannot affect ownership."""
+    valid_index=type(index) is int and 0<=index<32
+    fallback=dict(member_index=index if valid_index else None,status='metadata_cap',
+                  basename=None,basename_sha256=None,race='non_atomic',win32=None)
+    try:
+        need(status in ('not_selected','sampled','redacted_basename','query_failed','buffer_limit',
+                        'invalid_result','deadline','api_exception','metadata_cap'),'image status')
+        need(index is None or valid_index,'image index')
+        if status=='not_selected':need(index is None and name is None and name_hash is None and win32 is None,'image empty')
+        elif status in ('sampled','redacted_basename'):
+            need(valid_index and type(name_hash) is str and re.fullmatch('[0-9a-f]{64}',name_hash) and win32 is None,'image name hash')
+            need((status=='sampled' and type(name) is str and re.fullmatch('[A-Za-z0-9_.-]{1,64}',name) and name not in ('.','..')) or
+                 (status=='redacted_basename' and name is None),'image name')
+        elif status in ('query_failed','buffer_limit'):
+            need(valid_index and name is None and name_hash is None and type(win32) is int and 0<=win32<=0xffffffff and
+                 ((win32==122)==(status=='buffer_limit')),'image error')
+        else:need(name is None and name_hash is None and win32 is None,'image unavailable')
+        value=dict(member_index=index,status=status,basename=name,basename_sha256=name_hash,race='non_atomic',win32=win32)
+        need(len((json.dumps(value,sort_keys=True,indent=2)+'\n').replace('\n','\r\n').encode('utf-8'))<=512,'image cap')
+        return value
+    except BaseException:return fallback
+
+
+def _windows_image_eligible(row):
+    return (isinstance(row,dict) and row.get('root') is False and 'error' not in row and
+            all(type(row.get(key)) is int and row[key]==value
+                for key,value in (('wait_before',258),('exit_code',259),('wait_after',258))))
+
+
+def _windows_image_name(units,count):
+    need(type(count) is int and 1<=count<1024 and len(units)==1024,'invalid_result')
+    need(units[count]==0 and all(type(x) is int and 0<x<=0xffff for x in units[:count]),'invalid_result')
+    last=max((i for i in range(count) if units[i] in (47,92)),default=-1)
+    raw=b''.join(x.to_bytes(2,'little') for x in units[last+1:count])
+    name=raw.decode('utf-16le',errors='strict')
+    need(name not in ('','.','..'),'invalid_result')
+    name_hash=hashlib.sha256(raw).hexdigest()
+    return name if re.fullmatch('[A-Za-z0-9_.-]{1,64}',name) else None,name_hash
+
+
 class _WindowsTree:
     def __init__(self):
         import ctypes as c
@@ -546,10 +588,51 @@ class _WindowsTree:
             row['error']='deadline' if isinstance(error,ValueError) and str(error)=='deadline' else 'api_exception'
         return row
 
+
+    def sample_image(self,handle,index,deadline):
+        """One name query on the existing verified member handle, never a PID."""
+        c=self.c;buffer=None;phase='binding';value=_image_sample('api_exception',index)
+        try:
+            need(time.monotonic()<deadline,'deadline')
+            need(type(index) is int and 0<=index<32,'invalid_result')
+            # Resolve and validate only inside this failure-only unavailable boundary.
+            need(c.sizeof(c.c_void_p)==c.sizeof(c.c_size_t)==8 and
+                 c.sizeof(c.c_uint16)==2 and c.sizeof(c.c_uint32)==c.sizeof(c.c_int32)==4,'image ABI')
+            query=self.k.QueryFullProcessImageNameW
+            query.argtypes=[c.c_void_p,c.c_uint32,c.POINTER(c.c_uint16),c.POINTER(c.c_uint32)]
+            query.restype=c.c_int32
+            buffer=(c.c_uint16*1024)();length=c.c_uint32(1024)
+            need(time.monotonic()<deadline,'deadline')
+            phase='query'
+            ok=query(handle,0,buffer,c.byref(length))
+            error=c.get_last_error() if not ok else None
+            need(time.monotonic()<deadline,'deadline')
+            phase='parse'
+            need(type(ok) is int,'invalid_result')
+            if not ok:
+                need(type(error) is int and 0<=error<=0xffffffff,'invalid_result')
+                value=_image_sample('buffer_limit' if error==122 else 'query_failed',index,win32=error)
+            else:
+                name,name_hash=_windows_image_name(list(buffer),length.value)
+                need(time.monotonic()<deadline,'deadline')
+                value=_image_sample('sampled' if name is not None else 'redacted_basename',index,name,name_hash)
+            need(time.monotonic()<deadline,'deadline')
+        except BaseException as error:
+            status='deadline' if isinstance(error,ValueError) and str(error)=='deadline' else (
+                'invalid_result' if phase=='parse' and isinstance(error,(UnicodeError,ValueError)) else 'api_exception')
+            value=_image_sample(status,index)
+        finally:
+            if buffer is not None:
+                try:c.memset(buffer,0,c.sizeof(buffer))
+                except BaseException:value=_image_sample('api_exception',index)
+        if time.monotonic()>=deadline:value=_image_sample('deadline',index)
+        return value
+
     def diagnostic(self,cleanup_deadline):
         """One bounded observation, with no effect on the selected failure."""
         started=time.monotonic();deadline=min(cleanup_deadline,started+.100)
-        value=dict(complete=False,observation='unknown',trigger=self.last_accounting,handles_closed=True,members=[])
+        value=dict(complete=False,observation='unknown',trigger=self.last_accounting,handles_closed=True,members=[],image_sample=_image_sample())
+        image_selected=False
         step='accounting'
         try:
             need(self.assigned and bool(self.job),'invalid_job')
@@ -584,6 +667,9 @@ class _WindowsTree:
                     if not member.value:row['error']='membership_mismatch';continue
                     row['root']=pid==self.proc.pid
                     row.update(self.observe_member(handle,deadline))
+                    if not image_selected and _windows_image_eligible(row):
+                        image_selected=True
+                        value['image_sample']=self.sample_image(handle,len(value['members'])-1,deadline)
                 finally:
                     if handle:
                         try:
