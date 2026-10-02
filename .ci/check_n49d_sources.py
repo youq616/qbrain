@@ -14,10 +14,12 @@ import sys
 
 BASE = 'cfe1ef58e244b51092c2248804b663b6c28913d7'
 BASE_TREE = '75b69ad389630e51528ddb5536a27255203470df'
-CORRECTION_PARENT = 'ff61dde8150f30eec699a4e5c01554175ff37f98'
-CORRECTION_PARENT_TREE = 'd8895a9792cab41cc15d71f7c248fef794829787'
-PREVIOUS_PARENT = '0c99f74436682500caeaf0bf68a7bc42310d6a50'
-PREVIOUS_PARENT_TREE = 'd91c1f258a704eed9fe899c1193df8d080ff2f56'
+CORRECTION_PARENT = 'adf7adfe5ef7cb2a7686161fffd8f00d1d6547c2'
+CORRECTION_PARENT_TREE = '3f166c44c1267c64b1f890617e7062117a9790f5'
+PREVIOUS_PARENT = 'ff61dde8150f30eec699a4e5c01554175ff37f98'
+PREVIOUS_PARENT_TREE = 'd8895a9792cab41cc15d71f7c248fef794829787'
+EARLIER_PARENT = '0c99f74436682500caeaf0bf68a7bc42310d6a50'
+EARLIER_PARENT_TREE = 'd91c1f258a704eed9fe899c1193df8d080ff2f56'
 CORRECTION_PATHS = frozenset({'.ci/check_n49d_sources.py', '.ci/run_n49d_qualification.py',
                               '.ci/test_n49d_source_contract.py', '.github/workflows/n49d-mcp-directory-search.yml'})
 HANDLERS = 'src/qbrain/ops/handlers.cpp'
@@ -171,7 +173,7 @@ def precommit_index(base, index, untracked):
 
 
 def check_ancestry(root, commit=None, tree=None, precommit=False):
-    """Only the two reviewed lineage edges; no ancestor walk or fetch fallback."""
+    """Only the fixed reviewed lineage edges; no ancestor walk or fetch fallback."""
     head = git(root, 'rev-parse', 'HEAD').decode().strip()
     head_tree = git(root, 'rev-parse', 'HEAD^{tree}').decode().strip()
     need(git(root, 'rev-parse', BASE + '^{tree}').decode().strip() == BASE_TREE, 'base object mismatch')
@@ -181,13 +183,17 @@ def check_ancestry(root, commit=None, tree=None, precommit=False):
          'correction parent ancestry mismatch')
     need(git(root, 'rev-parse', PREVIOUS_PARENT + '^{tree}').decode().strip() == PREVIOUS_PARENT_TREE,
          'previous parent tree mismatch')
-    need(git(root, 'show', '-s', '--format=%P', PREVIOUS_PARENT).decode().strip() == BASE,
+    need(git(root, 'show', '-s', '--format=%P', PREVIOUS_PARENT).decode().strip() == EARLIER_PARENT,
          'previous parent ancestry mismatch')
+    need(git(root, 'rev-parse', EARLIER_PARENT + '^{tree}').decode().strip() == EARLIER_PARENT_TREE,
+         'earlier parent tree mismatch')
+    need(git(root, 'show', '-s', '--format=%P', EARLIER_PARENT).decode().strip() == BASE,
+         'earlier parent ancestry mismatch')
     if precommit:
         need(head == CORRECTION_PARENT and head_tree == CORRECTION_PARENT_TREE,
              'precommit requires exact correction parent/tree')
         return head,head_tree,PREVIOUS_PARENT,PREVIOUS_PARENT_TREE
-    need(commit == head and tree == head_tree and head not in (BASE,PREVIOUS_PARENT,CORRECTION_PARENT), 'candidate pin mismatch')
+    need(commit == head and tree == head_tree and head not in (BASE,EARLIER_PARENT,PREVIOUS_PARENT,CORRECTION_PARENT), 'candidate pin mismatch')
     need(git(root, 'show', '-s', '--format=%P', head).decode().strip() == CORRECTION_PARENT, 'candidate parent mismatch')
     return head,head_tree,CORRECTION_PARENT,CORRECTION_PARENT_TREE
 

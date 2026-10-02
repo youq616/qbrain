@@ -25,6 +25,7 @@ import check_n49d_sources as guard
 import run_n49d_qualification as q
 
 RESULTS=[]
+FAILURE_DETAIL=None
 
 
 def check(ok, name):
@@ -42,6 +43,63 @@ def expect_failure(name, fn, message=None, *, record=True):
 
 def control(name, fn):
     fn(); RESULTS.append(dict(name=name,passed=True))
+
+
+def timeout_proof(value,live,pid):
+    check(live is True and value['root_pid']==pid and value['classification']=='timeout' and value['exit'] not in (None,0) and
+          value['cleanup_error'] is None and all(value.get(key) is True for key in ('cleanup_ok','owned_tree_empty','readers_done','stable')),
+          'timeout fixture boundary not proved')
+
+
+def _timeout_failure_detail(result,raw,live,pid):
+    fallback=dict(schema='qbrain-n49d-timeout-proof-v1',site='actual-bounded-timeout',complete=False,reason='detail-unavailable')
+    try:
+        value=result['ownership']
+        predicates=dict(readiness_live_observed=live is True,root_pid_matches=value['root_pid']==pid,
+            classification_is_timeout=value['classification']=='timeout',exit_is_nonzero_terminal=value['exit'] not in (None,0),
+            cleanup_error_is_none=value['cleanup_error'] is None,
+            **{key+'_is_true':value.get(key) is True for key in ('cleanup_ok','owned_tree_empty','readers_done','stable')})
+        def string_detail(text,known):
+            if text is None:return dict(category='none')
+            check(type(text) is str,'detail text type');data=text.encode('utf-8')
+            return dict(category=known.get(text,'other'),size=len(data),sha256=hashlib.sha256(data).hexdigest())
+        def stream_detail(item):
+            check(type(item) is dict and set(item)=={'size','sha256'},'detail stream fields')
+            check(type(item['size']) is int and 0<=item['size']<=2048 and type(item['sha256']) is str and
+                  q.re.fullmatch('[0-9a-f]{64}',item['sha256']) is not None,'detail stream types')
+            return dict(item)
+        exit_code=value['exit'];elapsed=value['elapsed_seconds']
+        check(exit_code is None or (type(exit_code) is int and exit_code.bit_length()<=64),'detail exit type')
+        check(type(elapsed) in (int,float) and math.isfinite(elapsed) and elapsed>=0,'detail elapsed type')
+        check(type(raw) is bytes and type(value['classification']) is str,'detail input type')
+        stage={key:stream_detail(result[key]) for key in ('stdout','stderr')}
+        owned={key:stream_detail(value[key]) for key in ('stdout','stderr')}
+        detail=dict(schema=fallback['schema'],site=fallback['site'],complete=True,predicates=predicates,exit=exit_code,
+            classification=string_detail(value['classification'],{v:v for v in ('timeout','passed','stopped')}),
+            cleanup_error=string_detail(value['cleanup_error'],{v:v.replace(' ','-') for v in
+                ('private job termination failed','private job close failed','owned cleanup deadline exceeded','failed cleanup grace exceeded')}),
+            elapsed_seconds=elapsed,timeout_seconds=3,record=dict(size=len(raw),sha256=hashlib.sha256(raw).hexdigest()),
+            stage_streams=stage,ownership_streams=owned,streams_match={key:stage[key]==owned[key] for key in stage},
+            streams_stable=value.get('stable') is True)
+        return q._bounded_failure_detail(detail,fallback,4096)
+    except BaseException:return fallback
+
+
+def _actual_timeout_proof(result,raw,live,pid):
+    global FAILURE_DETAIL
+    try:timeout_proof(result['ownership'],live,pid)
+    except ValueError as error:
+        if str(error)=='timeout fixture boundary not proved' and FAILURE_DETAIL is None:
+            FAILURE_DETAIL=dict(schema='qbrain-n49d-timeout-proof-v1',site='actual-bounded-timeout',complete=False,reason='detail-unavailable')
+            try:FAILURE_DETAIL=_timeout_failure_detail(result,raw,live,pid)
+            except BaseException:pass
+        raise
+
+
+def _selftest_failure(error):
+    value=dict(passed=False,error=str(error),controls=RESULTS)
+    if FAILURE_DETAIL is not None:value['failure_detail']=FAILURE_DETAIL
+    return value
 
 
 def identity(tree='2'*40):
@@ -108,7 +166,9 @@ def ancestry_controls():
              ('rev-parse',guard.CORRECTION_PARENT+'^{tree}'):guard.CORRECTION_PARENT_TREE,
              ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.PREVIOUS_PARENT,
              ('rev-parse',guard.PREVIOUS_PARENT+'^{tree}'):guard.PREVIOUS_PARENT_TREE,
-             ('show','-s','--format=%P',guard.PREVIOUS_PARENT):guard.BASE,
+             ('show','-s','--format=%P',guard.PREVIOUS_PARENT):guard.EARLIER_PARENT,
+             ('rev-parse',guard.EARLIER_PARENT+'^{tree}'):guard.EARLIER_PARENT_TREE,
+             ('show','-s','--format=%P',guard.EARLIER_PARENT):guard.BASE,
              ('show','-s','--format=%P',head):guard.CORRECTION_PARENT}
     def run(overrides=None,precommit=False,commit=head,expected_tree=tree):
         values=dict(replies);values.update(overrides or {});calls=[]
@@ -118,7 +178,7 @@ def ancestry_controls():
             if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
             return (values[args]+'\n').encode()
         with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
-        check(len(calls)==(7 if precommit else 8),'unexpected ancestry query count')
+        check(len(calls)==(9 if precommit else 10),'unexpected ancestry query count')
         return result
     control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
     pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
@@ -143,6 +203,9 @@ def ancestry_controls():
            ('wrong-previous-tree',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}'),'3'*40,'previous parent tree'),
            ('wrong-previous-parent',('show','-s','--format=%P',guard.PREVIOUS_PARENT),'3'*40,'previous parent ancestry'),
            ('multiple-previous-parents',('show','-s','--format=%P',guard.PREVIOUS_PARENT),guard.BASE+' '+'3'*40,'previous parent ancestry'),
+           ('wrong-earlier-tree',('rev-parse',guard.EARLIER_PARENT+'^{tree}'),'3'*40,'earlier parent tree'),
+           ('wrong-earlier-parent',('show','-s','--format=%P',guard.EARLIER_PARENT),'3'*40,'earlier parent ancestry'),
+           ('multiple-earlier-parents',('show','-s','--format=%P',guard.EARLIER_PARENT),guard.BASE+' '+'3'*40,'earlier parent ancestry'),
            ('wrong-base-tree',('rev-parse',guard.BASE+'^{tree}'),'3'*40,'base object')]
     for label,key,value,boundary in cases:
         expect_failure('ancestry-'+label,lambda key=key,value=value:run({key:value}),boundary)
@@ -150,11 +213,11 @@ def ancestry_controls():
                           ('wrong-tree',{('rev-parse','HEAD^{tree}'):'3'*40}),('other-tip',{('rev-parse','HEAD'):'3'*40})]:
         expect_failure('ancestry-precommit-'+label,lambda changes=changes:run(pre|changes,True),'precommit requires exact correction parent/tree')
     expect_failure('ancestry-anchor-is-not-candidate',lambda:run(pre,commit=guard.CORRECTION_PARENT,expected_tree=guard.CORRECTION_PARENT_TREE),'candidate pin mismatch')
-    for label,anchor,anchor_tree in [('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
+    for label,anchor,anchor_tree in [('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('earlier',guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
         tip={('rev-parse','HEAD'):anchor,('rev-parse','HEAD^{tree}'):anchor_tree}
         expect_failure('ancestry-'+label+'-is-not-candidate',lambda tip=tip,anchor=anchor,anchor_tree=anchor_tree:run(tip,commit=anchor,expected_tree=anchor_tree),'candidate pin mismatch')
         expect_failure('ancestry-precommit-reject-'+label,lambda tip=tip:run(tip,True),'precommit requires exact correction parent/tree')
-    for label,key in [('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT))]:
+    for label,key in [('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT)),('missing-earlier-object',('rev-parse',guard.EARLIER_PARENT+'^{tree}')),('missing-earlier-parent-metadata',('show','-s','--format=%P',guard.EARLIER_PARENT))]:
         try:run({key:None})
         except subprocess.CalledProcessError as error:
             check(error.returncode==128 and error.cmd==['git',*key],'missing object boundary');RESULTS.append(dict(name='ancestry-'+label,passed=True))
@@ -173,17 +236,195 @@ def ancestry_controls():
         expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
     workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
     def workflow_contract(raw,windows=False):
-        canonical=guard.checkout_bytes(raw,'9c56fffbbe8b265ed93d88b2849bacd71dad446e',windows)
-        check(canonical.count(b'          fetch-depth: 4\n')==1 and
-              guard.sha(canonical.replace(b'          fetch-depth: 4\n',b'          fetch-depth: 3\n'))=='e25718fb42b48f04c4604718be2542e823baa6a5e6b6dfb66ba7e94a9de6c4f1','exact depth-four workflow contract')
+        canonical=guard.checkout_bytes(raw,'4991e696fc6607c9969f30b010838570b1b93793',windows)
+        check(canonical.count(b'          fetch-depth: 5\n')==1 and
+              guard.sha(canonical.replace(b'          fetch-depth: 5\n',b'          fetch-depth: 4\n'))=='92484272c4926016f6ad0ceba28e1eac167eefd2e01e987cdb1cb58963f663f8','exact depth-five workflow contract')
         return canonical
-    control('workflow-only-depth-four-change',lambda:workflow_contract(workflow,os.name=='nt'))
+    control('workflow-only-depth-five-change',lambda:workflow_contract(workflow,os.name=='nt'))
     canonical=workflow_contract(workflow,os.name=='nt')
-    for label,old,new in [('old-depth',b'fetch-depth: 4',b'fetch-depth: 3'),('broad-depth',b'fetch-depth: 4',b'fetch-depth: 0'),
-                          ('malformed-depth',b'fetch-depth: 4',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+    for label,old,new in [('old-depth',b'fetch-depth: 5',b'fetch-depth: 4'),('broad-depth',b'fetch-depth: 5',b'fetch-depth: 0'),
+                          ('malformed-depth',b'fetch-depth: 5',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
                           ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
         changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
         expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
+
+
+def _detail_fixture():
+    stream=dict(size=0,sha256=hashlib.sha256(b'').hexdigest())
+    terminal=dict(root_pid=17,classification='timeout',exit=1,cleanup_error=None,cleanup_ok=True,
+        owned_tree_empty=True,readers_done=True,stable=True,elapsed_seconds=3.01,stdout=dict(stream),stderr=dict(stream))
+    return dict(ownership=terminal,stdout=dict(stream),stderr=dict(stream))
+
+
+def failure_detail_controls(root):
+    global FAILURE_DETAIL
+    root.mkdir();saved=FAILURE_DETAIL
+    def exercise(record,live=True,pid=17):
+        return _actual_timeout_proof(record,json.dumps(record).encode(),live,pid)
+    try:
+        FAILURE_DETAIL=None;valid=_detail_fixture();exercise(valid)
+        check(FAILURE_DETAIL is None,'successful timeout proof retained detail');RESULTS.append(dict(name='failure-detail-valid-proof-unchanged',passed=True))
+        cases=[('readiness_live_observed',{},False,17),('root_pid_matches',{},True,18),
+            ('classification_is_timeout',dict(classification='passed'),True,17),('exit_is_nonzero_terminal',dict(exit=0),True,17),
+            ('cleanup_error_is_none',dict(cleanup_error='private job termination failed'),True,17)]
+        cases += [(key+'_is_true',{key:False},True,17) for key in ('cleanup_ok','owned_tree_empty','readers_done','stable')]
+        for key,changes,live,pid in cases:
+            FAILURE_DETAIL=None;record=_detail_fixture();record['ownership'].update(changes)
+            expect_failure('failure-detail-false-'+key,lambda:exercise(record,live,pid),'timeout fixture boundary not proved')
+            check(FAILURE_DETAIL['complete'] is True and [k for k,v in FAILURE_DETAIL['predicates'].items() if not v]==[key],'false conjunct detail mismatch')
+            check(FAILURE_DETAIL['record']==dict(size=len(json.dumps(record).encode()),sha256=hashlib.sha256(json.dumps(record).encode()).hexdigest()),'inner record descriptor mismatch')
+        FAILURE_DETAIL=None;record=_detail_fixture();record['ownership'].update(exit=None,cleanup_ok=False,stable=False)
+        expect_failure('failure-detail-multiple-false',lambda:exercise(record),'timeout fixture boundary not proved')
+        check({k for k,v in FAILURE_DETAIL['predicates'].items() if not v}=={'exit_is_nonzero_terminal','cleanup_ok_is_true','stable_is_true'},'multiple false terms lost')
+        first=FAILURE_DETAIL;before=copy.deepcopy(first);record=_detail_fixture();record['ownership']['exit']=0
+        expect_failure('failure-detail-first-failure-immutable',lambda:exercise(record),'timeout fixture boundary not proved')
+        check(FAILURE_DETAIL is first and FAILURE_DETAIL==before,'first detail overwritten')
+        expect_failure('failure-detail-model-does-not-latch',lambda:timeout_proof(record['ownership'],True,17),'timeout fixture boundary not proved')
+        check(FAILURE_DETAIL is first and FAILURE_DETAIL==before,'model overwrote actual detail')
+        FAILURE_DETAIL=None;record=_detail_fixture();del record['ownership']['root_pid']
+        expect_failure('failure-detail-earlier-keyerror',lambda:exercise(record),'root_pid');check(FAILURE_DETAIL is None,'earlier error relabelled')
+        for label,field,value in [('boolean-exit','exit',True),('string-exit','exit','sentinel-secret'),('large-exit','exit',1<<20000),
+                ('nan-elapsed','elapsed_seconds',float('nan')),('negative-elapsed','elapsed_seconds',-1),('string-elapsed','elapsed_seconds','sentinel-secret')]:
+            record=_detail_fixture();record['ownership'][field]=value;FAILURE_DETAIL=None
+            # These values add no new condition to the original proof.
+            timeout_proof(record['ownership'],True,17)
+            record['ownership']['cleanup_ok']=False
+            expect_failure('failure-detail-incomplete-'+label,lambda record=record:_actual_timeout_proof(record,b'fixture raw',True,17),'timeout fixture boundary not proved')
+            check(FAILURE_DETAIL['complete'] is False and 'sentinel-secret' not in json.dumps(FAILURE_DETAIL),'type failure changed/leaked evidence')
+        FAILURE_DETAIL=None;record=_detail_fixture();record['ownership'].update(classification='private-classification-'+('x'*5000),cleanup_error='private-error-'+('y'*5000))
+        expect_failure('failure-detail-unknown-string-redaction',lambda:exercise(record),'timeout fixture boundary not proved')
+        check(FAILURE_DETAIL['complete'] is True and FAILURE_DETAIL['classification']['category']=='other' and
+              FAILURE_DETAIL['cleanup_error']['category']=='other' and 'private-' not in json.dumps(FAILURE_DETAIL),'unknown detail leaked')
+        complete=copy.deepcopy(FAILURE_DETAIL)
+        for label,changes in [('malformed-stream',{'stdout':dict(size=True,sha256='x')}),('malformed-classification',{})]:
+            FAILURE_DETAIL=None;record=_detail_fixture();record['ownership']['cleanup_ok']=False;record.update(changes)
+            if label=='malformed-classification':record['ownership']['classification']=17
+            expect_failure('failure-detail-'+label,lambda:exercise(record),'timeout fixture boundary not proved')
+            check(FAILURE_DETAIL['complete'] is False,'malformed detail accepted')
+        FAILURE_DETAIL=None;record=_detail_fixture();record['ownership']['exit']=0
+        with patch.object(sys.modules[__name__],'_timeout_failure_detail',side_effect=RuntimeError('private-detail-error')):
+            expect_failure('failure-detail-builder-exception-permanent',lambda:exercise(record),'timeout fixture boundary not proved')
+        check(FAILURE_DETAIL['complete'] is False and 'private-detail-error' not in json.dumps(_selftest_failure(ValueError('timeout fixture boundary not proved'))),'builder error relabelled failure')
+        fallback=dict(schema='fixture',complete=False)
+        for ownership,value in [(False,complete),(True,q._linux_identity_detail(dict(start=1,ppid=23),dict(start=2,ppid=24),23,22,{}))]:
+            wrapper={'failure_detail':value}
+            if ownership:wrapper={'ownership':wrapper}
+            size=len((json.dumps(wrapper,sort_keys=True,indent=2,allow_nan=False)+'\n').replace('\n','\r\n').encode())
+            for delta in (-1,0,1):
+                observed=q._bounded_failure_detail(value,fallback,size+delta,ownership)
+                check(observed==(fallback if delta<0 else value),'actual formatted cap boundary')
+                RESULTS.append(dict(name='failure-detail-cap-'+str(ownership)+'-'+str(delta),passed=True))
+            detached=q._bounded_failure_detail(value,fallback,size,ownership);check(detached is not value,'detail not detached')
+        with patch.object(q.json,'dumps',side_effect=ValueError('private-serialization-error')):
+            check(q._bounded_failure_detail(complete,fallback,4096)==fallback,'serializer failure not incomplete')
+        RESULTS.append(dict(name='failure-detail-serialization-failure',passed=True))
+        # All below are Python-only relation models, including on Windows.
+        controller=1<<32;parent=controller+1;child=controller+2
+        for expected,pin in [(controller,None),(parent,dict(fd=313,start=123))]:
+            for label,start,after_parent in [('matching',1,expected),('start',2,expected),('parent',1,controller+3),
+                    ('both',2,controller+3),('controller-parent',1,controller)]:
+                tree=object.__new__(q._LinuxTree);tree.known={};tree.controller_pid=controller;calls=[]
+                def parent_current(p,v):calls.append(('parent',p,v is pin));return True
+                def read(p):calls.append(('stat',p));return dict(start=1 if sum(c[0]=='stat' for c in calls)==1 else start,ppid=expected if sum(c[0]=='stat' for c in calls)==1 else after_parent)
+                def opened(p,flags):calls.append(('open',p,flags));return 999
+                with patch.object(tree,'parent_current',parent_current),patch.object(q,'_linux_stat',read),patch.object(q.os,'pidfd_open',opened,create=True),patch.object(q.os,'close') as close,patch.object(q.os,'getpid',side_effect=AssertionError('extra query')):
+                    ok=start==1 and after_parent==expected
+                    if ok:check(tree.observe(child,expected,pin)==dict(fd=999,start=1),'matching observe changed')
+                    else:expect_failure('failure-detail-linux-'+str(pin is not None)+'-'+label,lambda:tree.observe(child,expected,pin),'pidfd identity/ancestry mismatch')
+                    check(calls==[('parent',expected,True),('stat',child),('parent',expected,True),('open',child,0),('stat',child),('parent',expected,True)],'identity query sequence changed')
+                    if ok:check(not close.called and getattr(tree,'failure_detail',None) is None,'successful observe detail');RESULTS.append(dict(name='failure-detail-linux-matching-'+str(pin is not None)+'-'+label,passed=True))
+                    else:
+                        check(close.call_args_list==[((999,),{})] and not tree.known,'failed pin admitted/close changed')
+                        detail=tree.failure_detail
+                        check(detail['complete'] is True and detail['same_start']==(start==1) and detail['after_parent_matches_expected']==(after_parent==expected) and
+                            detail['before_parent_matches_expected'] is True and detail['after_parent_matches_controller']==(after_parent==controller) and
+                            detail['before_after_parent_equal']==(expected==after_parent) and detail['expected_parent_is_controller']==(expected==controller) and
+                            detail['parent_pin_present']==(pin is not None) and detail['candidate_was_already_known'] is False and
+                            detail['final_parent_check_returned_true'] is True,'identity comparison detail mismatch')
+                        check(str(controller) not in json.dumps(detail) and str(child) not in json.dumps(detail),'raw identity leaked')
+                        first=tree.failure_detail;calls.clear()
+                        expect_failure('failure-detail-linux-first-immutable-'+str(pin is not None)+'-'+label,lambda:tree.observe(child,expected,pin),'pidfd identity/ancestry mismatch')
+                        check(tree.failure_detail is first,'Linux detail overwritten')
+        for label,before,after in [('before-link',dict(start=1,ppid=parent),dict(start=2,ppid=parent)),('missing-after',dict(start=1,ppid=controller),dict(ppid=controller))]:
+            tree=object.__new__(q._LinuxTree);tree.known={};tree.controller_pid=controller
+            with patch.object(tree,'parent_current',return_value=True),patch.object(q,'_linux_stat',side_effect=[before,after]),patch.object(q.os,'pidfd_open',return_value=999,create=True),patch.object(q.os,'close'):
+                expect_failure('failure-detail-linux-early-'+label,lambda:tree.observe(child,controller),'ambiguous descendant ancestry' if label=='before-link' else 'start')
+                check(getattr(tree,'failure_detail',None) is None,'early Linux error manufactured detail')
+        tree=object.__new__(q._LinuxTree);tree.known={};tree.controller_pid=controller
+        with patch.object(tree,'parent_current',return_value=True),patch.object(q,'_linux_stat',side_effect=[dict(start=1,ppid=controller),dict(start=2,ppid=controller)]),patch.object(q.os,'pidfd_open',return_value=999,create=True),patch.object(q.os,'close') as close,patch.object(q,'_linux_identity_detail',side_effect=RuntimeError('private-detail-error')):
+            expect_failure('failure-detail-linux-builder-error-permanent',lambda:tree.observe(child,controller),'pidfd identity/ancestry mismatch')
+            check(tree.failure_detail['complete'] is False and not tree.known and close.call_count==1,'Linux detail error changed cleanup')
+        for label,value in [('list',[]),('extra',dict(q._linux_detail_unavailable(),raw='private-sentinel')),('bad-complete',dict(q._linux_detail_unavailable(),complete=1))]:
+            check(q._copy_linux_failure_detail(value)==q._linux_detail_unavailable(),'malformed transferred detail accepted')
+            RESULTS.append(dict(name='failure-detail-linux-transfer-'+label,passed=True))
+        # Genuine owned command/cleanup; a one-shot post-read comparison fault
+        # is scoped to that exact owned root. All cleanup reads remain real.
+        if os.name!='nt':
+            for broken_detail in (False,True,'copy','malformed'):
+                original_read=q._linux_stat;seen=[];injected=[]
+                def fault(pid,deadline=None):
+                    value=original_read(pid,deadline);owner=q._ACTIVE_OWNER
+                    if not injected and owner is not None and owner.proc is not None and pid==owner.proc.pid:
+                        seen.append(pid)
+                        if len(seen)==2:injected.append(pid);return dict(value,start=value['start']+1)
+                    return value
+                recorder=q.Recorder(root/('propagation-'+str(broken_detail)),identity(),['tiny'],dict(os.environ),root,stream_cap=2048)
+                original_detail=q._linux_identity_detail;original_copy=q._copy_linux_failure_detail
+                def detail(*args):
+                    if broken_detail is True:raise ValueError('private-detail-error')
+                    if broken_detail=='malformed':return {'private-sentinel':17}
+                    return original_detail(*args)
+                def copy_detail(value):
+                    if broken_detail=='copy':raise ValueError('private-copy-error')
+                    return original_copy(value)
+                with patch.object(q,'_linux_stat',fault),patch.object(q,'_linux_identity_detail',detail),patch.object(q,'_copy_linux_failure_detail',copy_detail):
+                    expect_failure('failure-detail-real-recorder-mismatch-'+str(broken_detail),lambda:recorder.run('tiny',[sys.executable,'-c','import time;time.sleep(10)'],3),'pidfd identity/ancestry mismatch')
+                row=json.loads((recorder.root/'stages/tiny/result.json').read_bytes());owned=row['ownership']
+                check(len(injected)==1 and injected[0]==owned['root_pid'] and row['classification']=='pidfd identity/ancestry mismatch' and
+                      owned['classification']=='pidfd identity/ancestry mismatch' and owned['failure_detail']['complete'] is (not broken_detail) and
+                      all(owned[key] is True for key in ('cleanup_ok','owned_tree_empty','readers_done','stable')) and
+                      q._ACTIVE_OWNER is None and not q._OWNER_LOCK.locked() and 'private-' not in json.dumps(owned),'failed comparison detail changed owned cleanup/outcome')
+    finally:FAILURE_DETAIL=saved
+
+
+def failure_detail_retention_controls(root):
+    global FAILURE_DETAIL
+    root.mkdir();saved=FAILURE_DETAIL
+    try:
+        record=_detail_fixture();record['ownership'].update(exit=None,cleanup_ok=False,stable=False)
+        raw=json.dumps(record).encode();windows=_timeout_failure_detail(record,raw,True,17)
+        linux=q._linux_identity_detail(dict(start=1,ppid=23),dict(start=2,ppid=24),23,22,{})
+        names=['failure-detail-final-retention-'+platform+'-'+newline for platform in ('windows','linux') for newline in ('LF','CRLF')]
+        final_controls=RESULTS+[dict(name=name,passed=True) for name in names]
+        for platform,detail in [('windows',windows),('linux',linux)]:
+            for newline in ('LF','CRLF'):
+                case=root/(platform+'-'+newline);stage=case/'stages/tiny';stage.mkdir(parents=True)
+                terminal=dict(record['ownership'],classification='nonzero child exit' if platform=='windows' else 'pidfd identity/ancestry mismatch')
+                if platform=='linux':terminal['failure_detail']=detail
+                FAILURE_DETAIL=detail if platform=='windows' else None
+                failure=_selftest_failure(ValueError('timeout fixture boundary not proved'));failure['controls']=final_controls
+                stderr=(json.dumps(failure)+'\n') if platform=='windows' else 'tiny build diagnostic\n'
+                if newline=='CRLF':stderr=stderr.replace('\n','\r\n')
+                (stage/'stderr.bin').write_bytes(stderr.encode());(stage/'stdout.bin').write_bytes(b'')
+                row=dict(schema='qbrain-n49d-stage-v1',name='tiny',identity=identity(),ownership=terminal,
+                    classification=terminal['classification'],argv=['cmake','--build','/fixture/build','--config','Debug','--target','qbrain',*q.TARGETS,'--parallel','2'],
+                    cwd='/fixture',timeout_seconds=1800,stream_limit=8*q.MIB,exit=-9,elapsed_seconds=101.615,
+                    requested_reports=[],available_reports={},binaries_before={},binaries_after={},runtime_options={},
+                    stdout=q.descriptor(stage/'stdout.bin'),stderr=q.descriptor(stage/'stderr.bin'))
+                data=json.dumps(row,sort_keys=True,indent=2)+'\n'
+                if newline=='CRLF':data=data.replace('\n','\r\n')
+                (stage/'result.json').write_bytes(data.encode());check(len(data.encode())<=16*1024 and len(stderr.encode())<=64*1024,'final retained leaf cap')
+                payload=q.failure_diagnostics(case,case/'failure.json',identity(),['tiny'],['tiny'],ValueError(row['classification']))
+                for leaf in ('stderr.bin','stdout.bin','result.json'):
+                    entry=payload['files']['stages/tiny/'+leaf];actual=(stage/leaf).read_bytes()
+                    check(entry['truncated'] is False and entry['retained_offset']==0 and base64.b64decode(entry['data'])==actual and
+                          entry['size']==len(actual) and entry['sha256']==hashlib.sha256(actual).hexdigest(),'failure detail retention bytes/hash')
+                retained=json.loads(base64.b64decode(payload['files']['stages/tiny/'+('stderr.bin' if platform=='windows' else 'result.json')]['data']))
+                observed=retained['failure_detail'] if platform=='windows' else retained['ownership']['failure_detail']
+                check(observed==detail and payload['passed'] is False and payload['status']=='failed-partial-diagnostics' and
+                      (case/'failure.json').stat().st_size<=256*1024,'retained failure detail/outcome changed')
+                RESULTS.append(dict(name='failure-detail-final-retention-'+platform+'-'+newline,passed=True))
+    finally:FAILURE_DETAIL=saved
 
 
 def recorder_controls(root):
@@ -192,6 +433,7 @@ def recorder_controls(root):
         return q.Recorder(root/label,ident,required,dict(os.environ),root,stream_cap=2048)
     good=recorder('record-valid')
     good.run('tiny',[sys.executable,'-c','print("tiny fixture")'],2,binaries=[binary])
+    check('failure_detail' not in json.loads((good.root/'stages/tiny/result.json').read_bytes())['ownership'],'successful ownership retained failure detail')
     binding=dict(size=1,sha256='3'*64)
     good.finish(binding,binding)
     control('recorder-valid',lambda:q.validate_recordings(lambda p:(good.root/p).read_bytes(),ident,['tiny']))
@@ -217,12 +459,8 @@ def recorder_controls(root):
             raise
     with patch.object(q.OwnedChild,'wait',wait_ready):
         expect_failure('bounded-timeout',lambda:r.run('tiny',[sys.executable,'-c',code],3),'timeout',record=False)
-    result=json.loads((r.root/'stages/tiny/result.json').read_bytes());terminal=result['ownership']
-    def timeout_proof(value,live,pid):
-        check(live is True and value['root_pid']==pid and value['classification']=='timeout' and value['exit'] not in (None,0) and
-              value['cleanup_error'] is None and all(value.get(key) is True for key in ('cleanup_ok','owned_tree_empty','readers_done','stable')),
-              'timeout fixture boundary not proved')
-    timeout_proof(terminal,captured.get('live'),captured['owner'].proc.pid)
+    raw_result=(r.root/'stages/tiny/result.json').read_bytes();result=json.loads(raw_result);terminal=result['ownership']
+    _actual_timeout_proof(result,raw_result,captured.get('live'),captured['owner'].proc.pid)
     check((r.root/'stages/tiny/stdout.bin').read_bytes().splitlines()==[b'ready'],'timeout fixture ready output missing')
     before=[q.descriptor(path) for path in captured['owner'].paths]
     check(before==[terminal['stdout'],terminal['stderr']],'timeout fixture stream binding')
@@ -1355,7 +1593,7 @@ def package_consumer_controls(root):
 
 def main():
     with tempfile.TemporaryDirectory(prefix='n49d-tiny-controls-') as tmp:
-        root=Path(tmp);source_controls();ancestry_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();windows_diagnostic_controls(root/'diagnostics');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned')
+        root=Path(tmp);source_controls();ancestry_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();windows_diagnostic_controls(root/'diagnostics');failure_detail_controls(root/'failure-detail');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned');failure_detail_retention_controls(root/'failure-detail-retention')
     print(json.dumps(dict(passed=True,python_optimized=sys.flags.optimize>0,controls=RESULTS,
         linux_reader_backend=('stat-adapter' if q._PROC_STAT_CHILD_ADAPTER else 'native-children') if os.name!='nt' else 'not_applicable',
         n49d_package_wrapper_executed=True,generic_package_fixture_seam=True,inherited_packager_executed=False,inherited_packager_reason='unchanged 1152 MiB reserve; native CI only'),sort_keys=True))
@@ -1365,4 +1603,4 @@ def main():
 if __name__=='__main__':
     try:sys.exit(main())
     except Exception as e:
-        print(json.dumps(dict(passed=False,error=str(e),controls=RESULTS)),file=sys.stderr);sys.exit(1)
+        print(json.dumps(_selftest_failure(e)),file=sys.stderr);sys.exit(1)

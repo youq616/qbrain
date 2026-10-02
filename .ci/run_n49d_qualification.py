@@ -306,12 +306,59 @@ def _linux_no_children(deadline):
     need(absent,'kernel child absence not proved')
 
 
+def _bounded_failure_detail(value, fallback, cap, ownership=False):
+    """Detach fixed primitives and measure their actual pretty CRLF wrapper."""
+    try:
+        wrapper={'failure_detail':value}
+        if ownership:wrapper={'ownership':wrapper}
+        raw=(json.dumps(wrapper,sort_keys=True,indent=2,allow_nan=False)+'\n').replace('\n','\r\n').encode('utf-8')
+        need(len(raw)<=cap,'failure detail cap')
+        detached=json.loads(raw)
+        return (detached['ownership'] if ownership else detached)['failure_detail']
+    except BaseException:return dict(fallback)
+
+
+def _linux_detail_unavailable():
+    return dict(schema='qbrain-n49d-linux-identity-comparison-v1',site='observe-post-pidfd',complete=False,reason='detail-unavailable')
+
+
+def _copy_linux_failure_detail(value):
+    fallback=_linux_detail_unavailable()
+    try:
+        fields={'same_start','before_parent_matches_expected','after_parent_matches_expected','after_parent_matches_controller',
+            'before_after_parent_equal','expected_parent_is_controller','parent_pin_present','candidate_was_already_known','final_parent_check_returned_true'}
+        need(type(value) is dict,'detail mapping type')
+        if value==fallback:return fallback
+        need(set(value)==set(fallback)|fields and value['complete'] is True and
+             value['schema']==fallback['schema'] and value['site']==fallback['site'] and
+             value['reason'] in ('start-mismatch','parent-mismatch','start-and-parent-mismatch') and
+             all(type(value[key]) is bool for key in fields),'detail fixed fields')
+        return _bounded_failure_detail(value,fallback,1024,ownership=True)
+    except BaseException:return fallback
+
+
+def _linux_identity_detail(before,after,parent,controller,parent_pin):
+    fallback=_linux_detail_unavailable()
+    try:
+        need(all(type(v) is int for v in (before['start'],after['start'],before['ppid'],after['ppid'],parent,controller)), 'detail types')
+        same=before['start']==after['start'];linked=after['ppid']==parent
+        value=dict(schema=fallback['schema'],site=fallback['site'],complete=True,
+            reason='parent-mismatch' if same else ('start-mismatch' if linked else 'start-and-parent-mismatch'),
+            same_start=same,before_parent_matches_expected=before['ppid']==parent,
+            after_parent_matches_expected=linked,after_parent_matches_controller=after['ppid']==controller,
+            before_after_parent_equal=before['ppid']==after['ppid'],expected_parent_is_controller=parent==controller,
+            parent_pin_present=parent_pin is not None,candidate_was_already_known=False,final_parent_check_returned_true=True)
+        return _copy_linux_failure_detail(value)
+    except BaseException:return fallback
+
+
 class _LinuxTree:
     def __init__(self):
         import ctypes
         need(signal.getsignal(signal.SIGCHLD)==signal.SIG_DFL,'incompatible SIGCHLD reaper disposition')
         need(hasattr(os,'pidfd_open') and hasattr(signal,'pidfd_send_signal'),'pidfd ownership unavailable')
-        need(not _linux_children(os.getpid()),'unmanaged pre-existing child makes ownership ambiguous')
+        self.controller_pid=os.getpid()
+        need(not _linux_children(self.controller_pid),'unmanaged pre-existing child makes ownership ambiguous')
         _linux_no_children(_proc_deadline())
         self.libc=ctypes.CDLL(None,use_errno=True);self.previous=ctypes.c_int()
         need(self.libc.prctl(37,ctypes.byref(self.previous),0,0,0)==0,'cannot read subreaper state')
@@ -349,7 +396,14 @@ class _LinuxTree:
         try:
             after=_linux_stat(pid)
             if not self.parent_current(parent,parent_pin):return None
-            need(before['start']==after['start'] and after['ppid']==parent,'pidfd identity/ancestry mismatch')
+            try:
+                need(before['start']==after['start'] and after['ppid']==parent,'pidfd identity/ancestry mismatch')
+            except ValueError as error:
+                if str(error)=='pidfd identity/ancestry mismatch' and getattr(self,'failure_detail',None) is None:
+                    self.failure_detail=_linux_detail_unavailable()
+                    try:self.failure_detail=_linux_identity_detail(before,after,parent,self.controller_pid,parent_pin)
+                    except BaseException:pass
+                raise
             self.known[pid]=dict(fd=fd,start=after['start'])
             retained=True;return self.known[pid]
         except (FileNotFoundError,ProcessLookupError):
@@ -658,6 +712,12 @@ class OwnedChild:
         if not failure and time.monotonic()>=self.deadline:value['classification']='timeout'
         value['elapsed_seconds']=round(time.monotonic()-self.started,6)
         if self.job_diagnostic is not None:value['job_diagnostic']=self.job_diagnostic
+        if failure and isinstance(self.tree,_LinuxTree):
+            try:
+                if getattr(self.tree,'failure_detail',None) is not None:
+                    value['failure_detail']=_linux_detail_unavailable()
+                    value['failure_detail']=_copy_linux_failure_detail(self.tree.failure_detail)
+            except BaseException:value['failure_detail']=_linux_detail_unavailable()
         self.result=value
         if cleanup_ok and readers_done and self.locked:
             _ACTIVE_OWNER=None;self.locked=False;_OWNER_LOCK.release()
