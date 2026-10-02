@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import ast
 import base64
+import errno
 import hashlib
 import json
 import os
@@ -285,12 +286,33 @@ def _pidfd_exited(fd):
     return any(flags & select.POLLIN for _,flags in events)
 
 
+_LINUX_WAIT_ALL_CHILDREN=0x40000000  # Linux __WALL includes clone and non-clone children.
+
+
+def _linux_no_children(deadline):
+    """Absence only: never consume a status or use an oracle-returned PID."""
+    need(time.monotonic()<deadline,'no-child oracle deadline')
+    need(signal.getsignal(signal.SIGCHLD)==signal.SIG_DFL,'incompatible SIGCHLD at no-child oracle')
+    need(callable(getattr(os,'waitid',None)) and all(hasattr(os,key) for key in ('P_ALL','WEXITED','WNOHANG','WNOWAIT')),
+         'required no-child oracle API unavailable')
+    absent=False
+    try:
+        os.waitid(os.P_ALL,0,os.WEXITED|os.WNOHANG|os.WNOWAIT|_LINUX_WAIT_ALL_CHILDREN)
+    except OSError as error:
+        absent=error.errno==errno.ECHILD
+    finally:
+        need(time.monotonic()<deadline,'no-child oracle deadline')
+        need(signal.getsignal(signal.SIGCHLD)==signal.SIG_DFL,'SIGCHLD changed at no-child oracle')
+    need(absent,'kernel child absence not proved')
+
+
 class _LinuxTree:
     def __init__(self):
         import ctypes
         need(signal.getsignal(signal.SIGCHLD)==signal.SIG_DFL,'incompatible SIGCHLD reaper disposition')
         need(hasattr(os,'pidfd_open') and hasattr(signal,'pidfd_send_signal'),'pidfd ownership unavailable')
         need(not _linux_children(os.getpid()),'unmanaged pre-existing child makes ownership ambiguous')
+        _linux_no_children(_proc_deadline())
         self.libc=ctypes.CDLL(None,use_errno=True);self.previous=ctypes.c_int()
         need(self.libc.prctl(37,ctypes.byref(self.previous),0,0,0)==0,'cannot read subreaper state')
         need(self.libc.prctl(36,1,0,0,0)==0,'cannot enable runner-local subreaper')
@@ -299,35 +321,55 @@ class _LinuxTree:
     def attach(self,proc):
         self.proc=proc;self.observe(proc.pid,os.getpid())
 
-    def observe(self,pid,parent):
-        import select
+    def parent_current(self,parent,pin):
+        if parent==os.getpid():
+            need(pin is None,'unexpected interpreter parent pin');return True
+        need(pin is not None and self.known.get(parent) is pin,'queued parent pin mismatch')
+        if _pidfd_exited(pin['fd']):return False
+        try:current=_linux_stat(parent)
+        except (FileNotFoundError,ProcessLookupError):
+            need(_pidfd_exited(pin['fd']),'live parent pidfd lost identity record');return False
+        if _pidfd_exited(pin['fd']):return False
+        need(current['start']==pin['start'],'owned parent identity changed')
+        return True
+
+    def observe(self,pid,parent,parent_pin=None):
+        if not self.parent_current(parent,parent_pin):return None
         try:before=_linux_stat(pid)
-        except FileNotFoundError:return
-        need(before['ppid'] in (parent,os.getpid()),'ambiguous descendant ancestry')
+        except (FileNotFoundError,ProcessLookupError):
+            if pid in self.known:need(_pidfd_exited(self.known[pid]['fd']),'live pidfd lost identity record')
+            return None
+        if not self.parent_current(parent,parent_pin):return None
+        need(before['ppid']==parent,'ambiguous descendant ancestry')
         if pid in self.known:
-            need(self.known[pid]['start']==before['start'],'owned PID identity changed');return
+            need(self.known[pid]['start']==before['start'],'owned PID identity changed');return self.known[pid]
         try:fd=os.pidfd_open(pid,0)
-        except ProcessLookupError:return
+        except ProcessLookupError:return None
+        retained=False
         try:
             after=_linux_stat(pid)
-            need(before['start']==after['start'] and after['ppid'] in (parent,os.getpid()),'pidfd identity/ancestry mismatch')
+            if not self.parent_current(parent,parent_pin):return None
+            need(before['start']==after['start'] and after['ppid']==parent,'pidfd identity/ancestry mismatch')
             self.known[pid]=dict(fd=fd,start=after['start'])
-        except FileNotFoundError:
-            try:need(_pidfd_exited(fd),'live pidfd lost identity record')
-            finally:os.close(fd)
-        except BaseException:os.close(fd);raise
+            retained=True;return self.known[pid]
+        except (FileNotFoundError,ProcessLookupError):
+            need(_pidfd_exited(fd),'live pidfd lost identity record');return None
+        finally:
+            if not retained:os.close(fd)
 
     def active(self):
-        import select
         # Only this interpreter's child lineage; exclusive launch audit is active.
-        pending=[(pid,os.getpid()) for pid in _linux_children(os.getpid())];seen=set()
+        pending=[(pid,os.getpid(),None) for pid in _linux_children(os.getpid())];seen=set()
         while pending:
-            pid,parent=pending.pop()
+            pid,parent,parent_pin=pending.pop()
             if pid in seen:continue
             seen.add(pid);need(len(seen)<=1024,'owned child count cap')
-            self.observe(pid,parent)
-            try:pending.extend((child,pid) for child in _linux_children(pid))
-            except FileNotFoundError:pass
+            pin=self.observe(pid,parent,parent_pin)
+            if pin is None or not self.parent_current(pid,pin):continue
+            try:children=_linux_children(pid)
+            except (FileNotFoundError,ProcessLookupError):
+                need(_pidfd_exited(pin['fd']),'live pidfd lost child inventory');continue
+            if self.parent_current(pid,pin):pending.extend((child,pid,pin) for child in children)
         alive=[]
         for pid,row in self.known.items():
             if not _pidfd_exited(row['fd']):alive.append(pid)
@@ -337,7 +379,7 @@ class _LinuxTree:
                     need(current['start']==row['start'],'adopted child identity changed before reap')
                     need(signal.getsignal(signal.SIGCHLD)==signal.SIG_DFL,'SIGCHLD disposition changed during ownership')
                     if current['ppid']==os.getpid():os.waitpid(pid,os.WNOHANG)
-                except (FileNotFoundError,ChildProcessError):pass
+                except (FileNotFoundError,ProcessLookupError,ChildProcessError):pass
         if self.proc is not None:self.proc.poll()
         return alive
 
@@ -349,6 +391,7 @@ class _LinuxTree:
 
     def close(self):
         need(not self.active() and not _linux_children(os.getpid()),'owned children not reaped')
+        _linux_no_children(_proc_deadline())
         need(self.libc.prctl(36,self.previous.value,0,0,0)==0,'cannot restore subreaper state')
         self.restored=True
         for row in self.known.values():os.close(row['fd'])
@@ -616,6 +659,8 @@ def validate_semantics(read, expected, result):
         checks=json.loads(read('stages/selftest-'+mode+'/stdout.bin'))
         need(checks.get('passed') is True and checks.get('python_optimized')==(mode=='optimized') and
              checks.get('controls') and all(c.get('passed') is True for c in checks['controls']), 'source controls semantic failure')
+        if job.startswith('linux'):
+            need(checks.get('linux_reader_backend')=='native-children','native Linux children-interface controls required')
     if job=='linux-sanitizers':
         effective=json.loads(read('reports/sanitizer-effective.json'));validate_sanitizer_flags(effective)
         for name in ('sanitize-mcp','sanitize-directory'):
@@ -778,7 +823,10 @@ def validate_recordings(read, expected, required=None, *, files=None):
         binding=json.loads(before)
         need(binding.get('passed') is True and binding.get('commit')==expected['commit'] and
              binding.get('tree')==expected['tree'] and binding.get('base')==source_guard.BASE and
-             binding.get('base_tree')==source_guard.BASE_TREE and binding.get('precommit') is False,
+             binding.get('base_tree')==source_guard.BASE_TREE and binding.get('precommit') is False and
+             binding.get('parent')==source_guard.CORRECTION_PARENT and
+             binding.get('parent_tree')==source_guard.CORRECTION_PARENT_TREE and
+             binding.get('correction_changed')==sorted(source_guard.CORRECTION_PATHS),
              'source/candidate binding mismatch')
         need(json.loads(read('source/dependencies.json'))==binding['dependency_sha256'], 'dependency manifest mismatch')
         inventory=read('source/tree-inventory.bin')

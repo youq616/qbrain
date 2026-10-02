@@ -7,6 +7,7 @@ wrappers and the streaming consumer are exercised on newly generated tiny ZIPs.
 from __future__ import annotations
 import copy
 import base64
+import errno
 import hashlib
 import json
 import os
@@ -98,6 +99,77 @@ def source_controls():
     expect_failure('changed-with-newlines',lambda:guard.checkout_bytes(b'one\r\nthree\r\n',oid,True))
 
 
+def ancestry_controls():
+    head='1'*40;tree='2'*40
+    replies={('rev-parse','HEAD'):head,('rev-parse','HEAD^{tree}'):tree,
+             ('rev-parse',guard.BASE+'^{tree}'):guard.BASE_TREE,
+             ('rev-parse',guard.CORRECTION_PARENT+'^{tree}'):guard.CORRECTION_PARENT_TREE,
+             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.BASE,
+             ('show','-s','--format=%P',head):guard.CORRECTION_PARENT}
+    def run(overrides=None,precommit=False,commit=head,expected_tree=tree):
+        values=dict(replies);values.update(overrides or {});calls=[]
+        def git(root,*args):
+            calls.append(args)
+            if args not in values:raise ValueError('unapproved ancestry query')
+            if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
+            return (values[args]+'\n').encode()
+        with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
+        check(len(calls)==(5 if precommit else 6),'unexpected ancestry query count')
+        return result
+    control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
+    pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
+    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.BASE,guard.BASE_TREE),'precommit actual parent fields'))
+    expect_failure('ancestry-wrong-requested-commit',lambda:run(commit='3'*40),'candidate pin mismatch')
+    expect_failure('ancestry-wrong-requested-tree',lambda:run(expected_tree='3'*40),'candidate pin mismatch')
+    cases=[('wrong-head',('rev-parse','HEAD'),'3'*40,'candidate pin'),
+           ('wrong-head-tree',('rev-parse','HEAD^{tree}'),'3'*40,'candidate pin'),
+           ('sibling-base-parent',('show','-s','--format=%P',head),guard.BASE,'candidate parent'),
+           ('missing-parent',('show','-s','--format=%P',head),'','candidate parent'),
+           ('wrong-parent',('show','-s','--format=%P',head),'3'*40,'candidate parent'),
+           ('extra-parent',('show','-s','--format=%P',head),guard.CORRECTION_PARENT+' '+guard.BASE,'candidate parent'),
+           ('self-parent',('show','-s','--format=%P',head),head,'candidate parent'),
+           ('wrong-anchor-tree',('rev-parse',guard.CORRECTION_PARENT+'^{tree}'),'3'*40,'correction parent tree'),
+           ('wrong-anchor-parent',('show','-s','--format=%P',guard.CORRECTION_PARENT),'3'*40,'correction parent ancestry'),
+           ('multiple-anchor-parents',('show','-s','--format=%P',guard.CORRECTION_PARENT),guard.BASE+' '+'3'*40,'correction parent ancestry'),
+           ('wrong-base-tree',('rev-parse',guard.BASE+'^{tree}'),'3'*40,'base object')]
+    for label,key,value,boundary in cases:
+        expect_failure('ancestry-'+label,lambda key=key,value=value:run({key:value}),boundary)
+    for label,changes in [('old-base',{('rev-parse','HEAD'):guard.BASE,('rev-parse','HEAD^{tree}'):guard.BASE_TREE}),
+                          ('wrong-tree',{('rev-parse','HEAD^{tree}'):'3'*40}),('other-tip',{('rev-parse','HEAD'):'3'*40})]:
+        expect_failure('ancestry-precommit-'+label,lambda changes=changes:run(pre|changes,True),'precommit requires exact correction parent/tree')
+    expect_failure('ancestry-anchor-is-not-candidate',lambda:run(pre,commit=guard.CORRECTION_PARENT,expected_tree=guard.CORRECTION_PARENT_TREE),'candidate pin mismatch')
+    for label,key in [('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT))]:
+        try:run({key:None})
+        except subprocess.CalledProcessError as error:
+            check(error.returncode==128 and error.cmd==['git',*key],'missing object boundary');RESULTS.append(dict(name='ancestry-'+label,passed=True))
+        else:raise ValueError('missing ancestry object passed')
+    parent={p:('100644',guard.blob(('parent '+p).encode())) for p in guard.ALLOW};candidate=dict(parent)
+    for path in guard.CORRECTION_PATHS:candidate[path]=('100644',guard.blob(('correction '+path).encode()))
+    control('correction-exact-four-paths',lambda:check(guard.validate_correction(parent,candidate)==sorted(guard.CORRECTION_PATHS),'correction inventory'))
+    partial=dict(parent);path=sorted(guard.CORRECTION_PATHS)[0];partial[path]=candidate[path]
+    control('correction-precommit-subset',lambda:check(guard.validate_correction(parent,partial,False)==[path],'correction subset'))
+    expect_failure('correction-missing-final-member',lambda:guard.validate_correction(parent,partial),'required correction path missing')
+    for label,changes,removed in [('production',{guard.HANDLERS:('100644','0'*40)},None),('documentation',{guard.LEDGER:('100644','0'*40)},None),
+                                  ('extra',{'unexpected.txt':('100644','0'*40)},None),('deleted',{},path),('mode',{path:('100755',candidate[path][1])},None)]:
+        changed=dict(candidate);changed.update(changes)
+        if removed is not None:del changed[removed]
+        expect_failure('correction-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed))
+        expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
+    workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
+    def workflow_contract(raw,windows=False):
+        canonical=guard.checkout_bytes(raw,'3fe3fbef0d60c27fe9e577635ac0e0183e32e9dc',windows)
+        check(canonical.count(b'          fetch-depth: 3\n')==1 and
+              guard.sha(canonical.replace(b'          fetch-depth: 3\n',b'          fetch-depth: 2\n'))=='f57327d68cb819f81afc33a4a585d5e39a1d9ec66af75c2481baa70affb25f96','exact depth-three workflow contract')
+        return canonical
+    control('workflow-only-depth-three-change',lambda:workflow_contract(workflow,os.name=='nt'))
+    canonical=workflow_contract(workflow,os.name=='nt')
+    for label,old,new in [('old-depth',b'fetch-depth: 3',b'fetch-depth: 2'),('broad-depth',b'fetch-depth: 3',b'fetch-depth: 0'),
+                          ('malformed-depth',b'fetch-depth: 3',b'fetch-depth: three'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+                          ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
+        changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
+        expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
+
+
 def recorder_controls(root):
     ident=identity(); binary=root/'fixture.bin';binary.write_bytes(b'fixture-binary')
     def recorder(label, required=('tiny',)):
@@ -172,18 +244,20 @@ def audit_launch_controls():
 
 def proc_reader_controls():
     if os.name=='nt':return
-    pid=os.getpid();fields=['S',str(pid),'0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','123']
+    pid=os.getpid();model_pid=1<<32;model_other=model_pid+1
+    # Unallocatable pid_t values keep mocked ancestry distinct from real fixtures.
+    fields=['S',str(pid),'0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','123']
     raw=lambda n,comm='unusual ) comm with spaces':str(n)+' ('+comm+') '+' '.join(fields)
-    control('proc-stat-unusual-comm',lambda:check(q._parse_proc_stat(raw(7),7)['start']==123,'comm parsing'))
-    expect_failure('proc-stat-pid-mismatch',lambda:q._parse_proc_stat(raw(7),8),'PID/comm mismatch')
-    expect_failure('proc-stat-malformed',lambda:q._parse_proc_stat('7 (x) S 1',7),'incomplete proc stat')
-    with patch.object(q,'_PROC_RECORD_CAP',8):expect_failure('proc-stat-size-cap',lambda:q._parse_proc_stat(raw(7),7),'record cap')
+    control('proc-stat-unusual-comm',lambda:check(q._parse_proc_stat(raw(model_pid),model_pid)['start']==123,'comm parsing'))
+    expect_failure('proc-stat-pid-mismatch',lambda:q._parse_proc_stat(raw(model_pid),model_other),'PID/comm mismatch')
+    expect_failure('proc-stat-malformed',lambda:q._parse_proc_stat(str(model_pid)+' (x) S 1',model_pid),'incomplete proc stat')
+    with patch.object(q,'_PROC_RECORD_CAP',8):expect_failure('proc-stat-size-cap',lambda:q._parse_proc_stat(raw(model_pid),model_pid),'record cap')
     with tempfile.TemporaryDirectory(prefix='n49d-proc-read-') as tmp:
-        path=Path(tmp)/'stat';text=raw(7,comm='\u00e9');data=text.encode('utf-8');path.write_bytes(data)
-        control('proc-read-multibyte-at-byte-cap',lambda:check(q._parse_proc_stat(q._proc_read(path,len(data)),7)['start']==123,'multibyte byte boundary'))
+        path=Path(tmp)/'stat';text=raw(model_pid,comm='\u00e9');data=text.encode('utf-8');path.write_bytes(data)
+        control('proc-read-multibyte-at-byte-cap',lambda:check(q._parse_proc_stat(q._proc_read(path,len(data)),model_pid)['start']==123,'multibyte byte boundary'))
         expect_failure('proc-read-multibyte-over-byte-cap',lambda:q._proc_read(path,len(text)),'proc record byte cap')
         with patch.object(q,'_PROC_RECORD_CAP',len(text)):
-            expect_failure('proc-stat-multibyte-over-byte-cap',lambda:q._parse_proc_stat(text,7),'record cap')
+            expect_failure('proc-stat-multibyte-over-byte-cap',lambda:q._parse_proc_stat(text,model_pid),'record cap')
         path.write_bytes(b'\xff')
         expect_failure('proc-read-strict-decoding',lambda:q._proc_read(path,1),'decode')
         path.write_bytes(b'\xff\xff')
@@ -191,54 +265,232 @@ def proc_reader_controls():
     def read_missing(path,cap):
         if path.name=='children':raise FileNotFoundError(2,'missing interface')
         return raw(int(path.parent.name))
-    with patch.object(q,'_PROC_STAT_CHILD_ADAPTER',None),patch.object(q,'_proc_read',read_missing),patch.object(q,'_proc_pids',lambda:iter([7])):
-        control('proc-self-ENOENT-adapter',lambda:check(q._linux_children(pid)==[7] and q._PROC_STAT_CHILD_ADAPTER is True,'self adapter selection'))
+    with patch.object(q,'_PROC_STAT_CHILD_ADAPTER',None),patch.object(q,'_proc_read',read_missing),patch.object(q,'_proc_pids',lambda:iter([model_pid])):
+        control('proc-self-ENOENT-adapter',lambda:check(q._linux_children(pid)==[model_pid] and q._PROC_STAT_CHILD_ADAPTER is True,'self adapter selection'))
     with patch.object(q,'_PROC_STAT_CHILD_ADAPTER',None),patch.object(q,'_proc_read',side_effect=PermissionError(13,'denied')):
         expect_failure('proc-access-denial-no-fallback',lambda:q._linux_children(pid),'denied')
         check(q._PROC_STAT_CHILD_ADAPTER is None,'denial selected fallback')
     with patch.object(q,'_PROC_STAT_CHILD_ADAPTER',False),patch.object(q,'_proc_read',side_effect=FileNotFoundError(2,'child disappeared')):
-        expect_failure('proc-child-disappearance-no-route-switch',lambda:q._linux_children(7),'child disappeared')
+        expect_failure('proc-child-disappearance-no-route-switch',lambda:q._linux_children(model_pid),'child disappeared')
         check(q._PROC_STAT_CHILD_ADAPTER is False,'child race selected alternate interface')
     def vanished(n,deadline=None):
-        if n==7:raise FileNotFoundError(2,'disappeared')
+        if n==model_pid:raise FileNotFoundError(2,'disappeared')
         return dict(ppid=pid,start=123,state='S')
-    with patch.object(q,'_PROC_STAT_CHILD_ADAPTER',True),patch.object(q,'_proc_pids',lambda:iter([7,8])),patch.object(q,'_linux_stat',vanished):
-        control('proc-normal-disappearance-race',lambda:check(q._linux_children(pid)==[8],'disappearing record'))
+    with patch.object(q,'_PROC_STAT_CHILD_ADAPTER',True),patch.object(q,'_proc_pids',lambda:iter([model_pid,model_other])),patch.object(q,'_linux_stat',vanished):
+        control('proc-normal-disappearance-race',lambda:check(q._linux_children(pid)==[model_other],'disappearing record'))
         with patch.object(q,'_PROC_ENTRY_CAP',1):expect_failure('proc-entry-cap',lambda:q._linux_children(pid),'inventory cap')
-    with patch.object(q,'_PROC_STAT_CHILD_ADAPTER',True),patch.object(q,'_proc_pids',lambda:iter([7])),patch.object(q,'_proc_read',side_effect=PermissionError(13,'stat denied')):
+    with patch.object(q,'_PROC_STAT_CHILD_ADAPTER',True),patch.object(q,'_proc_pids',lambda:iter([model_pid])),patch.object(q,'_proc_read',side_effect=PermissionError(13,'stat denied')):
         expect_failure('proc-stat-denial-fails',lambda:q._linux_children(pid),'stat denied')
-    with patch.object(q,'_PROC_STAT_CHILD_ADAPTER',True),patch.object(q,'_PROC_SCAN_SECONDS',0),patch.object(q,'_proc_pids',lambda:iter([7])):
+    with patch.object(q,'_PROC_STAT_CHILD_ADAPTER',True),patch.object(q,'_PROC_SCAN_SECONDS',0),patch.object(q,'_proc_pids',lambda:iter([model_pid])):
         expect_failure('proc-wall-time-cap',lambda:q._linux_children(pid),'deadline')
     for exited in (False,True):
         tree=object.__new__(q._LinuxTree);tree.known={}
         with patch.object(q,'_linux_stat',side_effect=[dict(ppid=pid,start=123,state='S'),FileNotFoundError(2,'gone')]),patch.object(os,'pidfd_open',return_value=999),patch.object(os,'close'),patch.object(q,'_pidfd_exited',return_value=exited):
-            if exited:control('proc-disappearance-after-pidfd-exit',lambda:tree.observe(7,pid))
-            else:expect_failure('proc-live-pidfd-missing-record',lambda:tree.observe(7,pid),'live pidfd lost identity record')
+            if exited:control('proc-disappearance-after-pidfd-exit',lambda:tree.observe(model_pid,pid))
+            else:expect_failure('proc-live-pidfd-missing-record',lambda:tree.observe(model_pid,pid),'live pidfd lost identity record')
     for label,after in [('start',dict(ppid=pid,start=124,state='S')),('link',dict(ppid=pid+1,start=123,state='S'))]:
         tree=object.__new__(q._LinuxTree);tree.known={}
         with patch.object(q,'_linux_stat',side_effect=[dict(ppid=pid,start=123,state='S'),after]),patch.object(os,'pidfd_open',return_value=999),patch.object(os,'close') as close:
-            expect_failure('proc-pidfd-'+label+'-mismatch',lambda:tree.observe(7,pid),'pidfd identity/ancestry mismatch')
+            expect_failure('proc-pidfd-'+label+'-mismatch',lambda:tree.observe(model_pid,pid),'pidfd identity/ancestry mismatch')
             check(not tree.known and close.call_args.args==(999,),'uncertain pidfd was admitted')
+
+
+def absence_oracle_controls():
+    if os.name=='nt':return
+    call=lambda:q._linux_no_children(time.monotonic()+1)
+    flags=os.WEXITED|os.WNOHANG|os.WNOWAIT|0x40000000
+    with patch.object(os,'waitid',side_effect=ChildProcessError(errno.ECHILD,'fixture')) as query:
+        control('oracle-exact-ECHILD',call)
+        check(query.call_args.args==(os.P_ALL,0,flags),'oracle exact non-consuming flags')
+    for label,value in [('none',None),('event',os.waitid_result((7,0,q.signal.SIGCHLD,7,os.CLD_EXITED))),('malformed',object())]:
+        with patch.object(os,'waitid',return_value=value):
+            expect_failure('oracle-reject-'+label,call,'kernel child absence not proved')
+    for code in (errno.EINTR,errno.ESRCH,errno.EINVAL,errno.EPERM,errno.EACCES,errno.ENOSYS,errno.EIO):
+        with patch.object(os,'waitid',side_effect=OSError(code,'fixture')):
+            expect_failure('oracle-reject-errno-'+str(code),call,'kernel child absence not proved')
+    with patch.object(os,'waitid',side_effect=ChildProcessError('no errno')):
+        expect_failure('oracle-reject-untyped-child-error',call,'kernel child absence not proved')
+    with patch.object(os,'waitid',None):
+        expect_failure('oracle-missing-API',call,'oracle API unavailable')
+    with patch.dict(os.__dict__):
+        del os.WNOWAIT
+        expect_failure('oracle-missing-required-flag',call,'oracle API unavailable')
+    with patch.object(os,'waitid',side_effect=ChildProcessError(errno.ECHILD,'fixture')) as query:
+        expect_failure('oracle-deadline-before',lambda:q._linux_no_children(time.monotonic()-1),'oracle deadline')
+        check(not query.called,'expired oracle performed query')
+        with patch.object(q.time,'monotonic',side_effect=[0,2]):
+            expect_failure('oracle-deadline-after',lambda:q._linux_no_children(1),'oracle deadline')
+        with patch.object(q.signal,'getsignal',side_effect=[q.signal.SIG_DFL,q.signal.SIG_IGN]):
+            expect_failure('oracle-reaper-changed-after',call,'SIGCHLD changed')
+    with patch.object(q.signal,'getsignal',return_value=q.signal.SIG_IGN),patch.object(os,'waitid') as query:
+        expect_failure('oracle-incompatible-reaper-before',call,'incompatible SIGCHLD')
+        check(not query.called,'incompatible reaper reached oracle')
+    control('oracle-genuine-no-children',call)
+    live=subprocess.Popen([sys.executable,'-c','import time;time.sleep(10)'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    try:
+        for attempt in range(2):expect_failure('oracle-genuine-live-nonconsuming-'+str(attempt),call,'kernel child absence not proved')
+        check(live.poll() is None,'oracle consumed or terminated live sentinel')
+    finally:live.terminate();live.wait(timeout=2)
+    child=subprocess.Popen([sys.executable,'-c','import sys;sys.stdin.buffer.read(1);raise SystemExit(7)'],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    fd=os.pidfd_open(child.pid,0);raw=None
+    try:
+        q._linux_children(os.getpid())
+        if q._PROC_STAT_CHILD_ADAPTER is False:raw=Path('/proc',str(child.pid),'stat').open('rb')
+        child.stdin.write(b'x');child.stdin.close();deadline=time.monotonic()+2
+        while not q._pidfd_exited(fd):
+            check(time.monotonic()<deadline,'genuine child exit deadline');time.sleep(.005)
+        for attempt in range(2):expect_failure('oracle-genuine-zombie-nonconsuming-'+str(attempt),call,'kernel child absence not proved')
+        check(child.wait(timeout=2)==7,'oracle consumed fixture exit status')
+        if raw is not None:
+            def stale_stat():
+                try:raw.read(4097)
+                except OSError as error:check(error.errno==errno.ESRCH,'native stale-stat wrong errno');return
+                raise ValueError('native stale-stat did not reject reaped process')
+            control('native-proc-open-stat-after-reap-ESRCH',stale_stat)
+    finally:
+        if raw is not None:raw.close()
+        os.close(fd)
+        if child.poll() is None:child.kill()
+        child.wait(timeout=2)
+    control('oracle-genuine-empty-after-explicit-reap',call)
+
+
+def disappearance_controls():
+    if os.name=='nt':return
+    own=os.getpid();model_parent=1<<32;model_child=model_parent+1
+    # Pure model identities cannot collide with any real Linux pid_t.
+    record=dict(ppid=own,start=123,state='S')
+    def tree(known=None):
+        value=object.__new__(q._LinuxTree);value.known={} if known is None else known;value.proc=None;return value
+    for code in (errno.ENOENT,errno.ESRCH):
+        gone=lambda:OSError(code,'fixture disappeared')
+        value=tree()
+        with patch.object(q,'_linux_stat',side_effect=gone()),patch.object(os,'pidfd_open') as opened:
+            control('disappearance-pre-pin-'+str(code),lambda:check(value.observe(model_parent,own) is None,'explicit unpinned result'))
+            check(not opened.called,'vanished unpinned PID opened')
+        for exited in (False,True):
+            value=tree({model_parent:dict(fd=999,start=123)})
+            with patch.object(q,'_linux_stat',side_effect=gone()),patch.object(q,'_pidfd_exited',return_value=exited):
+                action=lambda:check(value.observe(model_parent,own) is None,'known disappeared pin')
+                if exited:control('disappearance-known-exited-'+str(code),action)
+                else:expect_failure('disappearance-known-live-'+str(code),action,'live pidfd lost identity')
+            value=tree()
+            with patch.object(q,'_linux_stat',side_effect=[record,gone()]),patch.object(os,'pidfd_open',return_value=999),patch.object(os,'close') as closed,patch.object(q,'_pidfd_exited',return_value=exited):
+                action=lambda:check(value.observe(model_parent,own) is None,'post-pin disappeared')
+                if exited:control('disappearance-post-pin-exited-'+str(code),action)
+                else:expect_failure('disappearance-post-pin-live-'+str(code),action,'live pidfd lost identity')
+                check(not value.known and closed.call_count==1 and closed.call_args.args==(999,),'temporary pin close count')
+        value=tree();visited=[]
+        def unpinned_children(pid):visited.append(pid);return [model_parent] if pid==own else []
+        with patch.object(q,'_linux_children',unpinned_children),patch.object(q,'_linux_stat',side_effect=gone()):
+            control('unpinned-no-numeric-descent-'+str(code),lambda:check(value.active()==[] and visited==[own],'unpinned PID traversed'))
+        for exited in (False,True):
+            value=tree({model_parent:dict(fd=999,start=123)});reads=[];polls=[]
+            def children(pid):
+                reads.append(pid)
+                if pid==own:return [model_parent]
+                raise gone()
+            def ready(fd):polls.append(fd);return exited if len(polls)>2 else False
+            with patch.object(q,'_linux_children',children),patch.object(q,'_linux_stat',return_value=record),patch.object(q,'_pidfd_exited',ready):
+                if exited:control('descendant-enumeration-exited-'+str(code),lambda:check(value.active()==[],'exited traversal'))
+                else:expect_failure('descendant-enumeration-live-'+str(code),value.active,'live pidfd lost child inventory')
+                check(reads==[own,model_parent],'enumeration control missed intended boundary')
+        value=tree({model_parent:dict(fd=999,start=123)})
+        with patch.object(q,'_linux_children',return_value=[]),patch.object(q,'_pidfd_exited',return_value=True),patch.object(q,'_linux_stat',side_effect=gone()),patch.object(os,'waitpid') as reaped:
+            value.proc=type('Root',(),{'pid':model_child,'poll':lambda self:None})()
+            control('exited-reap-record-disappearance-'+str(code),lambda:check(value.active()==[],'reap disappearance'))
+            check(not reaped.called,'missing identity was reaped numerically')
+        with patch.object(q,'_linux_children',return_value=[]),patch.object(q,'_pidfd_exited',return_value=False),patch.object(q,'_linux_stat',side_effect=gone()) as inspected,patch.object(os,'waitpid') as reaped:
+            control('live-pin-never-entered-reap-'+str(code),lambda:check(value.active()==[model_parent],'live child treated as absent'))
+            check(not inspected.called and not reaped.called,'live child entered exited-only reap path')
+        pin=dict(fd=999,start=123);value=tree({model_parent:pin})
+        for exited in (False,True):
+            with patch.object(q,'_pidfd_exited',side_effect=[False,exited]),patch.object(q,'_linux_stat',side_effect=gone()):
+                if exited:control('parent-record-exited-'+str(code),lambda:check(value.parent_current(model_parent,pin) is False,'exited parent retained'))
+                else:expect_failure('parent-record-live-'+str(code),lambda:value.parent_current(model_parent,pin),'live parent pidfd lost identity')
+    with patch.object(q,'_PROC_STAT_CHILD_ADAPTER',None),patch.object(q,'_proc_read',side_effect=ProcessLookupError(errno.ESRCH,'self disappeared')):
+        expect_failure('self-ESRCH-never-selects-adapter',lambda:q._linux_children(own),'self disappeared')
+        check(q._PROC_STAT_CHILD_ADAPTER is None,'self ESRCH selected fallback')
+    for label,error in [('permission',PermissionError(errno.EACCES,'denied')),('unknown',OSError(errno.EIO,'I/O fixture')),('parse',ValueError('malformed fixture'))]:
+        with patch.object(q,'_linux_stat',side_effect=error):
+            expect_failure('observe-fails-'+label,lambda:tree().observe(model_parent,own))
+    pin=dict(fd=999,start=123);value=tree({model_parent:pin})
+    with patch.object(q,'_pidfd_exited',return_value=True),patch.object(os,'pidfd_open') as opened,patch.object(q.signal,'pidfd_send_signal') as signaled:
+        control('queued-exited-parent-discard',lambda:check(value.observe(model_child,model_parent,pin) is None,'exited parent admitted child'))
+        check(not opened.called and not signaled.called,'exited parent led to child pin/signal')
+    with patch.object(q,'_pidfd_exited',return_value=False),patch.object(q,'_linux_stat',return_value=dict(record,start=124)),patch.object(os,'pidfd_open') as opened,patch.object(q.signal,'pidfd_send_signal') as signaled:
+        expect_failure('queued-reused-parent-rejected',lambda:value.observe(model_child,model_parent,pin),'owned parent identity changed')
+        check(not opened.called and not signaled.called,'reused parent led to child pin/signal')
+    expect_failure('queued-parent-pin-replaced',lambda:value.observe(model_child,model_parent,dict(pin)),'queued parent pin mismatch')
+    for phase,answers in [('before-pin',[True,False]),('after-pin',[True,True,False])]:
+        with patch.object(value,'parent_current',side_effect=answers),patch.object(q,'_linux_stat',return_value=dict(record,ppid=model_parent)),patch.object(os,'pidfd_open',return_value=998) as opened,patch.object(os,'close') as closed:
+            control('parent-exit-during-admission-'+phase,lambda:check(value.observe(model_child,model_parent,pin) is None,'exited parent admission'))
+            check(model_child not in value.known and opened.call_count==(phase=='after-pin') and closed.call_count==(phase=='after-pin'),'admission temporary pin ownership')
+    exited=[];visited=[]
+    def changing_children(pid):
+        visited.append(pid)
+        if pid==own:return [model_parent]
+        exited.append(True);return [model_child]
+    with patch.object(q,'_linux_children',changing_children),patch.object(q,'_linux_stat',return_value=record),patch.object(q,'_pidfd_exited',side_effect=lambda fd:bool(exited)),patch.object(os,'pidfd_open') as opened:
+        control('parent-exit-during-enumeration-discards-list',lambda:check(value.active()==[] and visited==[own,model_parent],'stale parent list descended'))
+        check(not opened.called,'stale parent list pinned child')
+    with patch.object(q,'_linux_stat',return_value=record),patch.object(os,'pidfd_open',return_value=998):
+        control('true-adoption-admitted-separately',lambda:check(value.observe(model_child,own)==dict(fd=998,start=123),'true adopted route failed'))
 
 
 def lifecycle_controls(root):
     """Real tiny process trees through Recorder and the process-driver adapter."""
     import test_mcp_directory_search as driver
-    root.mkdir();ident=identity()
+    root.mkdir();ident=identity();records=[]
     backend=q._WindowsTree if os.name=='nt' else q._LinuxTree
     def run(kind,label,code,timeout=1,check_after=None):
         directory=root/(kind+'-'+label)
         if kind=='recorder':
             recorder=q.Recorder(directory,ident,['tiny'],dict(os.environ),root,stream_cap=512)
-            value=recorder.run('tiny',[sys.executable,'-c',code],timeout,check=check_after)
+            try:value=recorder.run('tiny',[sys.executable,'-c',code],timeout,check=check_after)
+            finally:
+                result_path=directory/'stages/tiny/result.json'
+                if result_path.is_file():records.append(json.loads(result_path.read_bytes()))
             return value,directory/'stages/tiny/stdout.bin'
         ev=driver.Evidence(directory)
         with patch.object(driver,'STREAM_CAP',512):
             child=driver.OwnedProcess(ev,[sys.executable,'-c',code],root,dict(os.environ),timeout=timeout)
-            child.wait()
+            try:child.wait()
+            finally:records.append(child.record)
         return child.record,child.stdout_path
     for kind in ('recorder','driver'):
         control(kind+'-owned-ordinary-success',lambda kind=kind:run(kind,'valid','print("valid")'))
+        churn='import subprocess,sys\nfor wave in range(2):\n children=[subprocess.Popen([sys.executable,"-c","pass"]) for _ in range(4)]\n for child in children:\n  if child.wait()!=0:raise SystemExit(9)\nprint("churn complete")'
+        control(kind+'-genuine-bounded-child-churn',lambda kind=kind:run(kind,'churn',churn,3))
+        if os.name!='nt':
+            pidfile=root/(kind+'-hidden-adoptee.pid');hidden=[True];pins=[];reached=[]
+            original_children=q._linux_children;original_oracle=q._linux_no_children
+            def omit_fixture(pid):
+                children=original_children(pid)
+                if hidden[0] and pidfile.is_file():
+                    fixture_pid=int(pidfile.read_text())
+                    if not pins:pins.append(os.pidfd_open(fixture_pid,0))
+                    return [child for child in children if child!=fixture_pid]
+                return children
+            def reveal_after_oracle(deadline):
+                try:return original_oracle(deadline)
+                except ValueError as error:
+                    if hidden[0] and pidfile.is_file() and 'kernel child absence not proved' in str(error):
+                        hidden[0]=False;reached.append(True)
+                    raise
+            code='import subprocess,sys;from pathlib import Path;p=subprocess.Popen([sys.executable,"-c","import time;time.sleep(5)"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);Path('+repr(str(pidfile))+').write_text(str(p.pid));print("leader",flush=True)'
+            try:
+                with patch.object(q,'_linux_children',omit_fixture),patch.object(q,'_linux_no_children',reveal_after_oracle):
+                    expect_failure(kind+'-oracle-detects-omitted-adoptee',lambda kind=kind:run(kind,'omitted-adoptee',code,2),'cleanup-failed')
+                ownership=records[-1]['ownership']
+                check(reached and pins and all(q._pidfd_exited(fd) for fd in pins),'oracle did not prove fixture cleanup')
+                check(ownership['classification']!='passed' and ownership['cleanup_ok'] and ownership['stable'],'oracle failure lost permanence/stability')
+                stdout=root/(kind+'-omitted-adoptee')/('stages/tiny/stdout.bin' if kind=='recorder' else 'raw/0002-stdout.bin')
+                before=q.descriptor(stdout);time.sleep(.03);check(before==q.descriptor(stdout),'post-cleanup output mutation')
+                q._linux_no_children(time.monotonic()+1)
+                RESULTS.append(dict(name=kind+'-oracle-failure-cleaned-stable-permanent',passed=True))
+            finally:
+                for fd in pins:os.close(fd)
         for label,redirect,detached in [('inherited-pipe',False,False),('silent-redirected',True,False),('detached-writer',False,True)]:
             pidfile=root/(kind+'-'+label+'.pid')
             child='import time;time.sleep(.5);print("late descendant",flush=True)'
@@ -299,6 +551,9 @@ def lifecycle_controls(root):
             for kind in ('recorder','driver'):
                 expect_failure(kind+'-unrelated-sentinel-rejected',lambda kind=kind:run(kind,'sentinel','pass'),'unmanaged pre-existing child')
                 check(sentinel.poll() is None,'unrelated sentinel was terminated')
+                with patch.object(q,'_linux_children',return_value=[]):
+                    expect_failure(kind+'-omitted-sentinel-oracle-rejected',lambda kind=kind:run(kind,'omitted-sentinel','pass'),'kernel child absence not proved')
+                check(sentinel.poll() is None,'oracle consumed or terminated omitted sentinel')
         else:
             for kind in ('recorder','driver'):
                 run(kind,'unrelated-sentinel','pass')
@@ -347,7 +602,8 @@ def tiny_bundle(root):
             body+=(b'40000' if directory else b'100644')+b' '+name.encode()+b'\0'+bytes.fromhex(tree_hash(value) if directory else value)
         return hashlib.sha1(b'tree '+str(len(body)).encode()+b'\0'+body).hexdigest()
     tree=tree_hash(nodes);ident=identity(tree)
-    source=dict(passed=True,commit=ident['commit'],tree=tree,base=guard.BASE,base_tree=guard.BASE_TREE,precommit=False,
+    source=dict(passed=True,commit=ident['commit'],tree=tree,base=guard.BASE,base_tree=guard.BASE_TREE,
+                parent=guard.CORRECTION_PARENT,parent_tree=guard.CORRECTION_PARENT_TREE,correction_changed=sorted(guard.CORRECTION_PATHS),precommit=False,
                 inventory_sha256=hashlib.sha256(inventory).hexdigest(),changed=paths,changed_files=rows,dependency_sha256={})
     q.dump(root/'reports/source-before.json',source);q.dump(root/'reports/source-after.json',source)
     (root/'source/tree-inventory.bin').write_bytes(inventory);q.dump(root/'source/dependencies.json',{})
@@ -374,7 +630,7 @@ def tiny_bundle(root):
         stdout=b'fixture-only\n'
         if name=='ctest-inventory':stdout=json.dumps(dict(tests=[dict(name=n) for n in q.TESTS])).encode()
         elif name=='ctest-completeness':stdout=json.dumps(list(q.TESTS)).encode()
-        elif name.startswith('selftest-'):stdout=json.dumps(dict(passed=True,python_optimized=name.endswith('optimized'),controls=[dict(name='fixture',passed=True)])).encode()
+        elif name.startswith('selftest-'):stdout=json.dumps(dict(passed=True,python_optimized=name.endswith('optimized'),linux_reader_backend='native-children',controls=[dict(name='fixture',passed=True)])).encode()
         (folder/'stdout.bin').write_bytes(stdout);(folder/'stderr.bin').write_bytes(b'')
         q.dump(folder/'result.json',dict(name=name,identity=ident,argv=spec['argv'],timeout_seconds=spec['timeout_seconds'],cwd=locations['source'],exit=0,classification='passed',ownership=dict(classification='passed',cleanup_ok=True,stable=True,readers_done=True,exit=0,stdout=q.descriptor(folder/'stdout.bin'),stderr=q.descriptor(folder/'stderr.bin')),
             stdout=q.descriptor(folder/'stdout.bin'),stderr=q.descriptor(folder/'stderr.bin'),requested_reports=spec['reports'],reports={p:q.descriptor(root/p) for p in spec['reports']},
@@ -389,7 +645,7 @@ def tiny_bundle(root):
 def make_archive(evidence, archive, ident):
     rows=[]
     with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
-        for p in sorted(evidence.rglob('*')):
+        for p in sorted(evidence.rglob('*'),key=lambda p:p.relative_to(evidence).as_posix()):
             if not p.is_file():continue
             name=p.relative_to(evidence).as_posix();info=zipfile.ZipInfo(name);info.create_system=3
             info.external_attr=(stat.S_IFREG|0o644)<<16;info.compress_type=zipfile.ZIP_DEFLATED
@@ -409,6 +665,18 @@ def wrap(archive, raw, outer, extra=None, omit=None):
 
 
 def package_consumer_controls(root):
+    from pathlib import PureWindowsPath
+    order_root=root/'order-fixture';order_root.mkdir()
+    order_names=['docs/Z.txt','docs/a.txt','docs/n49d-evidence/RESULT.json','docs/N49D-PLAN.md','prefix-file.txt','prefix/child.txt','\u6587\u6863/\u9875.txt']
+    for name in order_names:
+        path=order_root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'tiny ordering fixture')
+    windows_names=[PureWindowsPath(name) for name in order_names]
+    check([p.as_posix() for p in sorted(windows_names)]!=sorted(order_names),'case-folding control is not discriminating')
+    control('windows-canonical-relative-POSIX-order-model',lambda:check([p.as_posix() for p in sorted(windows_names,key=lambda p:p.as_posix())]==sorted(order_names),'canonical Windows path key'))
+    order_archive=root/'order.zip';order_manifest=make_archive(order_root,order_archive,identity())
+    control('actual-mixed-case-prefix-unicode-archive-order',lambda:check([r['path'] for r in q.validate_manifest(order_manifest,identity())['files']]==sorted(order_names),'actual archive canonical order'))
+    with zipfile.ZipFile(order_archive) as archive:
+        check(archive.namelist()==sorted(order_names),'ZIP and manifest order disagree')
     evidence=root/'evidence';ident=tiny_bundle(evidence)
     archive=root/'tiny.zip';raw=make_archive(evidence,archive,ident);outer=root/'outer.zip';wrap(archive,raw,outer)
     data={p.relative_to(evidence).as_posix():p.read_bytes() for p in evidence.rglob('*') if p.is_file()}
@@ -419,6 +687,9 @@ def package_consumer_controls(root):
         expect_failure('full-contract-omitted-'+name,lambda omitted=omitted:q.validate_recordings(omitted.__getitem__,ident,files=omitted),'fixed required report inventory mismatch')
     wrong=dict(data);path='stages/selftest-normal/result.json';stage=json.loads(wrong[path]);stage['argv']=['fixture-only'];wrong[path]=json.dumps(stage).encode()
     expect_failure('full-contract-changed-command',lambda:q.validate_recordings(wrong.__getitem__,ident,files=wrong),'fixed stage command mismatch')
+    wrong=dict(data);path='stages/selftest-normal/stdout.bin';report=json.loads(wrong[path]);report['linux_reader_backend']='stat-adapter';wrong[path]=json.dumps(report).encode()
+    path='stages/selftest-normal/result.json';stage=json.loads(wrong[path]);desc=dict(size=len(wrong['stages/selftest-normal/stdout.bin']),sha256=hashlib.sha256(wrong['stages/selftest-normal/stdout.bin']).hexdigest());stage['stdout']=desc;stage['ownership']['stdout']=desc;wrong[path]=json.dumps(stage).encode()
+    expect_failure('full-contract-native-Linux-reader-required',lambda:q.validate_recordings(wrong.__getitem__,ident,files=wrong),'native Linux children-interface controls required')
     source_path='.ci/run_n49d_qualification.py';source_leaf='source/changed/'+source_path
     def source_packet(change):
         packet=dict(data);binding=json.loads(packet['reports/source-before.json']);change(binding,packet)
@@ -431,6 +702,14 @@ def package_consumer_controls(root):
         result=json.loads(packet['qualification.json']);result['source_before']=desc;result['source_after']=desc
         packet['qualification.json']=json.dumps(result).encode()
         return packet
+    ancestry_packets=[]
+    for field in ('parent','parent_tree','correction_changed'):
+        for mode in ('wrong','omitted'):
+            def mutate(binding,packet,field=field,mode=mode):
+                if mode=='omitted':binding.pop(field)
+                else:binding[field]=[] if field=='correction_changed' else '0'*40
+            packet=source_packet(mutate);label=field+'-'+mode;ancestry_packets.append((label,packet))
+            expect_failure('producer-rehashed-'+label,lambda packet=packet:q.validate_recordings(packet.__getitem__,ident,files=packet),'source/candidate binding mismatch')
     omitted_source=source_packet(lambda binding,packet:(binding['changed_files'].pop(source_path),packet.pop(source_leaf)))
     expect_failure('full-source-omitted-leaf-and-map-rehashed',lambda:q.validate_recordings(omitted_source.__getitem__,ident,files=omitted_source),'fixed changed source map mismatch')
     cases=[
@@ -497,6 +776,15 @@ def package_consumer_controls(root):
     omitted_archive=root/'source-omission.zip';omitted_manifest=make_archive(omitted_root,omitted_archive,ident)
     omitted_review=root/'source-omission-review';omitted_review.mkdir();omitted_outer=omitted_review/'download.zip';wrap(omitted_archive,omitted_manifest,omitted_outer)
     expect_failure('consumer-omitted-source-and-map-rehashed',lambda:q.consume(omitted_outer,omitted_review,ident,hashlib.sha256(omitted_manifest).hexdigest(),q.digest(omitted_outer),limits),'fixed changed source map mismatch')
+    for label,packet in ancestry_packets:
+        invalid=root/('ancestry-'+label);invalid.mkdir();src=invalid/'evidence';src.mkdir()
+        for name,value in packet.items():
+            dest=src/name;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(value)
+        before_calls=len(calls)
+        expect_failure('package-rehashed-'+label,lambda src=src,invalid=invalid:q.package(src,invalid/'package',ident,_generic_packager=tiny_packager),'source/candidate binding mismatch')
+        check(len(calls)==before_calls,'invalid ancestry reached generic packager')
+        packed=invalid/'inner.zip';packed_manifest=make_archive(src,packed,ident);review_dir=invalid/'review';review_dir.mkdir();download=review_dir/'download.zip';wrap(packed,packed_manifest,download)
+        expect_failure('consumer-rehashed-'+label,lambda download=download,review_dir=review_dir,packed_manifest=packed_manifest:q.consume(download,review_dir,ident,hashlib.sha256(packed_manifest).hexdigest(),q.digest(download),limits),'source/candidate binding mismatch')
     cap_root=root/'selection-cap';cap_root.mkdir();cap_outer=cap_root/'download.zip';cap_outer.write_bytes(outer.read_bytes())
     expect_failure('review-selection-cumulative-size-cap',lambda:q.consume(cap_outer,cap_root,ident,sha,q.digest(cap_outer),dict(limits,text=sum(r['size'] for r in selection)-1)), 'aggregate retained-text cap')
     raw_path=evidence/'reports/mcp_directory_search-normal/raw/fixture.bin';old_raw=raw_path.read_bytes();raw_path.write_bytes(b'changed')
@@ -543,8 +831,9 @@ def package_consumer_controls(root):
 
 def main():
     with tempfile.TemporaryDirectory(prefix='n49d-tiny-controls-') as tmp:
-        root=Path(tmp);source_controls();audit_launch_controls();proc_reader_controls();(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');lifecycle_controls(root/'lifecycle')
+        root=Path(tmp);source_controls();ancestry_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');lifecycle_controls(root/'lifecycle')
     print(json.dumps(dict(passed=True,python_optimized=sys.flags.optimize>0,controls=RESULTS,
+        linux_reader_backend=('stat-adapter' if q._PROC_STAT_CHILD_ADAPTER else 'native-children') if os.name!='nt' else 'not_applicable',
         n49d_package_wrapper_executed=True,generic_package_fixture_seam=True,inherited_packager_executed=False,inherited_packager_reason='unchanged 1152 MiB reserve; native CI only'),sort_keys=True))
     return 0
 

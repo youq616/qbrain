@@ -14,6 +14,10 @@ import sys
 
 BASE = 'cfe1ef58e244b51092c2248804b663b6c28913d7'
 BASE_TREE = '75b69ad389630e51528ddb5536a27255203470df'
+CORRECTION_PARENT = '0c99f74436682500caeaf0bf68a7bc42310d6a50'
+CORRECTION_PARENT_TREE = 'd91c1f258a704eed9fe899c1193df8d080ff2f56'
+CORRECTION_PATHS = frozenset({'.ci/check_n49d_sources.py', '.ci/run_n49d_qualification.py',
+                              '.ci/test_n49d_source_contract.py', '.github/workflows/n49d-mcp-directory-search.yml'})
 HANDLERS = 'src/qbrain/ops/handlers.cpp'
 SERVER = 'src/qbrain/mcp/server.cpp'
 LEDGER = 'docs/OPS-PARITY-LEDGER.md'
@@ -164,21 +168,43 @@ def precommit_index(base, index, untracked):
     return dict(index)
 
 
-def check_source(root, commit=None, tree=None, precommit=False):
-    root = Path(root).resolve(strict=True)
+def check_ancestry(root, commit=None, tree=None, precommit=False):
+    """Only the two reviewed lineage edges; no ancestor walk or fetch fallback."""
     head = git(root, 'rev-parse', 'HEAD').decode().strip()
     head_tree = git(root, 'rev-parse', 'HEAD^{tree}').decode().strip()
     need(git(root, 'rev-parse', BASE + '^{tree}').decode().strip() == BASE_TREE, 'base object mismatch')
+    need(git(root, 'rev-parse', CORRECTION_PARENT + '^{tree}').decode().strip() == CORRECTION_PARENT_TREE,
+         'correction parent tree mismatch')
+    need(git(root, 'show', '-s', '--format=%P', CORRECTION_PARENT).decode().strip() == BASE,
+         'correction parent ancestry mismatch')
+    if precommit:
+        need(head == CORRECTION_PARENT and head_tree == CORRECTION_PARENT_TREE,
+             'precommit requires exact correction parent/tree')
+        return head,head_tree,BASE,BASE_TREE
+    need(commit == head and tree == head_tree and head not in (BASE,CORRECTION_PARENT), 'candidate pin mismatch')
+    need(git(root, 'show', '-s', '--format=%P', head).decode().strip() == CORRECTION_PARENT, 'candidate parent mismatch')
+    return head,head_tree,CORRECTION_PARENT,CORRECTION_PARENT_TREE
+
+
+def validate_correction(parent, candidate, require_complete=True):
+    need(set(parent)==set(candidate),'correction added/deleted path')
+    need(all(parent[p][0]==candidate[p][0] for p in parent),'correction mode changed')
+    changed=sorted(p for p in parent if parent[p]!=candidate[p])
+    need(set(changed)<=CORRECTION_PATHS,'unreviewed correction path')
+    if require_complete:need(set(changed)==CORRECTION_PATHS,'required correction path missing')
+    return changed
+
+
+def check_source(root, commit=None, tree=None, precommit=False):
+    root = Path(root).resolve(strict=True)
+    head,head_tree,parent,parent_tree=check_ancestry(root,commit,tree,precommit)
     parse = generic_tree_reader(root)
     base_raw = git(root, 'ls-tree', '-r', '--full-tree', '-z', BASE)
     base = parse(base_raw, BASE_TREE)
+    parent_raw = git(root, 'ls-tree', '-r', '--full-tree', '-z', CORRECTION_PARENT)
+    correction_parent = parse(parent_raw, CORRECTION_PARENT_TREE)
     raw = git(root, 'ls-tree', '-r', '--full-tree', '-z', head)
     candidate = parse(raw, head_tree)
-    if precommit:
-        need(head == BASE and head_tree == BASE_TREE, 'precommit requires actual approved base')
-    else:
-        need(commit == head and tree == head_tree and head != BASE, 'candidate pin mismatch')
-        need(git(root, 'show', '-s', '--format=%P', head).decode().strip() == BASE, 'candidate parent mismatch')
     sparse = {v[2:].decode() for v in git(root, 'ls-files', '-t', '-z').split(b'\0') if v.startswith(b'S ')}
     untracked = {v.decode() for v in git(root, 'ls-files', '--others', '--exclude-standard', '-z').split(b'\0') if v}
     need(untracked <= NEW if precommit else not untracked, 'unexpected untracked source')
@@ -186,6 +212,7 @@ def check_source(root, commit=None, tree=None, precommit=False):
     if precommit:
         index_raw=git(root,'ls-files','--stage','-z')
         candidate=precommit_index(base,stage_zero_index(index_raw),untracked)
+        validate_correction(correction_parent,candidate,require_complete=False)
         # A staged illegal production edit cannot hide behind a reverted worktree.
         validate_delta(base,candidate,lambda p:git(root,'show',BASE+':'+p),
                        lambda p:git(root,'cat-file','blob',candidate[p][1]),require_complete=False)
@@ -218,8 +245,10 @@ def check_source(root, commit=None, tree=None, precommit=False):
         need(not missing, 'working inherited file deleted')
     changed = validate_delta(base, candidate, lambda p: git(root, 'show', BASE + ':' + p),
                              read_work, require_complete=not precommit)
+    correction_changed=validate_correction(correction_parent,candidate,require_complete=not precommit)
     return dict(schema='qbrain-n49d-source-v1', passed=True, base=BASE, base_tree=BASE_TREE,
-                commit=head, tree=head_tree, precommit=precommit, changed=changed,
+                commit=head, tree=head_tree, parent=parent, parent_tree=parent_tree,
+                precommit=precommit, changed=changed, correction_changed=correction_changed,
                 changed_files={p:dict(mode=candidate[p][0],blob=candidate[p][1],sha256=sha(read_work(p))) for p in changed},
                 checkout_sha256=source_hashes, inventory_sha256=sha(raw),
                 index_inventory_sha256=sha(index_raw) if index_raw is not None else None,
