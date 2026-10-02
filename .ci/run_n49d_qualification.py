@@ -661,56 +661,84 @@ class OwnedChild:
         global _ACTIVE_OWNER
         if self.result is not None:return self.result
         cleanup_deadline=time.monotonic()+2 if failure else self.deadline
-        self.scan_deadline=cleanup_deadline
-        cleanup_ok=False;cleanup_error=None
+        self.scan_deadline=cleanup_deadline;self.stable=False
+        root_exit=None;no_root_failure=self.proc is None and bool(failure)
+        close_attempted=False;close_returned=False;close_in_budget=False
+        cleanup_ok=False;cleanup_error=None;capture_error=None
+        streams={'stdout':None,'stderr':None}
+        def budget(message):
+            nonlocal failure
+            if time.monotonic()>=cleanup_deadline:
+                if not failure and time.monotonic()>=self.deadline:failure='timeout'
+                raise ValueError(message)
+        def cleanup():
+            nonlocal root_exit,close_attempted,close_returned,close_in_budget,cleanup_deadline,failure
+            budget('owned cleanup deadline exceeded')
+            if self.tree is None:
+                need(no_root_failure,'owned root/tree unavailable');return
+            if failure or intentional:
+                self.tree.terminate();budget('owned cleanup deadline exceeded')
+            while True:
+                budget('owned cleanup deadline exceeded')
+                if self.proc is not None and root_exit is None:root_exit=self.proc.poll()
+                budget('owned cleanup deadline exceeded')
+                alive=self.tree.active();budget('owned cleanup deadline exceeded')
+                need(self.proc is not None or no_root_failure,'owned root unavailable')
+                if alive and not failure and not intentional:
+                    failure='lingering-descendant'
+                    cleanup_deadline=min(cleanup_deadline,time.monotonic()+2);self.scan_deadline=cleanup_deadline
+                    self._diagnose_lingering(cleanup_deadline)
+                    raise ValueError(failure)
+                if not alive and (root_exit is not None or no_root_failure):break
+                if alive and (failure or intentional):
+                    self.tree.terminate();budget('owned cleanup deadline exceeded')
+                time.sleep(min(.005,max(0,cleanup_deadline-time.monotonic())))
+            budget('owned cleanup deadline exceeded')
+            close_attempted=True
+            self.tree.close();close_returned=True
+            budget('owned cleanup deadline exceeded');close_in_budget=True
         if failure=='lingering-descendant':self._diagnose_lingering(cleanup_deadline)
-        if self.proc is not None and not self.readers:
-            for pipe in (self.proc.stdout,self.proc.stderr):
-                if pipe is not None:pipe.close()
         try:
-            if self.tree is not None:
-                if failure or intentional:self.tree.terminate()
-                while True:
-                    if self.proc is not None:self.proc.poll()
-                    alive=self.tree.active()
-                    if not alive:break
-                    if not failure and not intentional:
-                        failure='lingering-descendant'
-                        cleanup_deadline=min(cleanup_deadline,time.monotonic()+2);self.scan_deadline=cleanup_deadline
-                        self._diagnose_lingering(cleanup_deadline)
-                        raise ValueError(failure)
-                    if time.monotonic()>=cleanup_deadline:raise ValueError('owned cleanup deadline exceeded')
-                    if failure or intentional:self.tree.terminate()
-                    time.sleep(.005)
-                self.tree.close()
-            cleanup_ok=True
+            if self.proc is not None and not self.readers:
+                for pipe in (self.proc.stdout,self.proc.stderr):
+                    if pipe is not None:pipe.close()
+            cleanup();cleanup_ok=True
         except BaseException as error:
             cleanup_error=str(error);failure=failure or 'cleanup-failed'
-            # A failed API can never become PASS, but verify any safely completed
-            # teardown and restore process-local state within the failure grace.
-            if failure!='lingering-descendant':cleanup_deadline=min(cleanup_deadline,time.monotonic()+2)
-            self.scan_deadline=cleanup_deadline
+            # A close attempt can partially release ownership. Never touch that
+            # tree again; only pre-close errors permit this bounded fallback.
+            if not close_attempted:
+                try:cleanup();cleanup_ok=True
+                except BaseException as retry_error:cleanup_error+='; '+str(retry_error)
+        for thread in self.readers:
             try:
-                if self.tree is not None:
-                    while self.tree.active():
-                        need(time.monotonic()<cleanup_deadline,'failed cleanup grace exceeded')
-                        self.tree.terminate();time.sleep(.005)
-                    self.tree.close()
-                cleanup_ok=True
-            except BaseException as retry_error:cleanup_error+='; '+str(retry_error)
-        for thread in self.readers:thread.join(max(0,cleanup_deadline-time.monotonic()))
-        readers_done=not any(t.is_alive() for t in self.readers)
-        self.stable=cleanup_ok and readers_done
-        if not self.stable:failure=failure or 'capture-not-finalized'
+                budget('owned capture deadline exceeded')
+                thread.join(max(0,cleanup_deadline-time.monotonic()))
+                budget('owned capture deadline exceeded')
+            except BaseException:
+                capture_error='capture-deadline' if time.monotonic()>=cleanup_deadline else 'reader-join-failed'
+        try:readers_done=not any(t.is_alive() for t in self.readers)
+        except BaseException:readers_done=False;capture_error=capture_error or 'reader-state-unavailable'
+        for key,path in zip(('stdout','stderr'),self.paths):
+            if time.monotonic()>=cleanup_deadline:
+                capture_error=capture_error or 'capture-deadline';continue
+            try:
+                streams[key]=descriptor(path)
+                if time.monotonic()>=cleanup_deadline:capture_error=capture_error or 'capture-deadline'
+            except BaseException:
+                reason=key+'-unavailable'
+                capture_error='both-unavailable' if capture_error=='stdout-unavailable' and key=='stderr' else (capture_error or reason)
+        cleanup_ok=cleanup_ok and (self.tree is None or (close_returned and close_in_budget)) and readers_done and capture_error is None
+        self.stable=cleanup_ok
+        if not self.stable:failure=failure or ('timeout' if time.monotonic()>=self.deadline else 'capture-not-finalized')
         if self.overflow.is_set() or self.errors:failure=failure or 'output-limit'
         if not failure and time.monotonic()>=self.deadline:failure='timeout'
-        value=dict(classification=failure or ('stopped' if intentional else 'passed'),exit=self.proc.poll() if self.proc else None,
+        value=dict(classification=failure or ('stopped' if intentional else 'passed'),exit=root_exit,
             process_backend='windows-private-job' if os.name=='nt' else ('linux-stat-pidfd-subreaper' if _PROC_STAT_CHILD_ADAPTER else 'linux-children-pidfd-subreaper'),
             root_pid=self.proc.pid if self.proc else None,owned_tree_empty=cleanup_ok,
             cleanup_ok=cleanup_ok,cleanup_error=cleanup_error,stable=self.stable,readers_done=readers_done,
-            elapsed_seconds=round(time.monotonic()-self.started,6),stdout=descriptor(self.paths[0]),stderr=descriptor(self.paths[1]))
-        if not failure and time.monotonic()>=self.deadline:value['classification']='timeout'
-        value['elapsed_seconds']=round(time.monotonic()-self.started,6)
+            elapsed_seconds=round(time.monotonic()-self.started,6),stdout=streams['stdout'],stderr=streams['stderr'])
+        if capture_error is not None:value['capture_error']=capture_error
         if self.job_diagnostic is not None:value['job_diagnostic']=self.job_diagnostic
         if failure and isinstance(self.tree,_LinuxTree):
             try:
@@ -718,6 +746,11 @@ class OwnedChild:
                     value['failure_detail']=_linux_detail_unavailable()
                     value['failure_detail']=_copy_linux_failure_detail(self.tree.failure_detail)
             except BaseException:value['failure_detail']=_linux_detail_unavailable()
+        if time.monotonic()>=cleanup_deadline:
+            failure=failure or 'timeout';self.stable=False;cleanup_ok=False
+            value.update(classification=failure,owned_tree_empty=False,cleanup_ok=False,stable=False)
+            value.setdefault('capture_error','capture-deadline')
+        value['elapsed_seconds']=round(time.monotonic()-self.started,6)
         self.result=value
         if cleanup_ok and readers_done and self.locked:
             _ACTIVE_OWNER=None;self.locked=False;_OWNER_LOCK.release()
@@ -768,9 +801,7 @@ class Recorder:
         need(name in self.required and name not in self.stages, 'unexpected/duplicate stage')
         folder = self.root / 'stages' / name; folder.mkdir(parents=True)
         self.stages.append(name)
-        before = {str(p):descriptor(p) for p in binaries}
-        for p,value in before.items():
-            need(self.binary_pins.setdefault(p,value) == value, 'binary mutation before stage')
+        before={}
         result = dict(schema='qbrain-n49d-stage-v1',name=name,identity=self.identity,
                       argv=[str(a) for a in argv],cwd=str(self.cwd),timeout_seconds=timeout,
                       stream_limit=self.stream_cap,exit=None,classification='incomplete',
@@ -778,36 +809,56 @@ class Recorder:
                       binaries_before=before,binaries_after={},runtime_options={k:self.environment[k] for k in ('ASAN_OPTIONS','UBSAN_OPTIONS') if k in self.environment})
         failure=None;child=None
         streams=[folder/'stdout.bin',folder/'stderr.bin']
+        def fail(error):
+            nonlocal failure,child
+            failure=failure or str(error);result['classification']=failure
+            if isinstance(error,OwnedChildError):child=error.owner
+            if child is not None:
+                result['ownership']=child.result;result['exit']=child.result.get('exit') if child.result else None
+        def retain_failed():
+            result.setdefault('ownership',None)
+            terminal=result.get('ownership') or {}
+            for key in ('stdout','stderr'):result.setdefault(key,terminal.get(key))
+            result['available_reports']={**result.get('reports',{}),**result.get('available_reports',{})}
+            self.failed_result=result
         try:
+            for p in binaries:before[str(p)]=descriptor(p)
+            for p,value in before.items():
+                need(self.binary_pins.setdefault(p,value)==value,'binary mutation before stage')
             need(time.monotonic()<deadline,'timeout during stage setup')
             child=OwnedChild(result['argv'],self.cwd,self.environment,subprocess.DEVNULL,*streams,deadline-time.monotonic(),self.stream_cap)
             child.deadline=deadline;child.scan_deadline=deadline
             terminal=child.wait()
             result['exit']=terminal['exit'];result['ownership']=terminal
-            after = {str(p):descriptor(p) for p in list(binaries)+list(produced)}
-            result['binaries_after'] = after
+            after=result['binaries_after']
+            for p in list(binaries)+list(produced):after[str(p)]=descriptor(p)
             need(all(after[p] == value for p,value in before.items()), 'binary mutation during stage')
             for p,value in after.items():
                 need(self.binary_pins.setdefault(p,value) == value, 'binary identity swapped')
-            result['reports'] = {Path(p).relative_to(self.root).as_posix():descriptor(p) for p in reports}
+            result['reports']={}
+            for p in reports:result['reports'][Path(p).relative_to(self.root).as_posix()]=descriptor(p)
             if check: check()
             need(time.monotonic()<deadline,'timeout during stage finalization')
-            result['classification'] = 'passed'
-        except Exception as e:
-            failure = failure or str(e); result['classification'] = failure
-            if isinstance(e,OwnedChildError):child=e.owner
-            if child is not None:
-                result['ownership']=child.result;result['exit']=child.result.get('exit') if child.result else None
-        finally:
-            result['available_reports']={Path(p).relative_to(self.root).as_posix():descriptor(p) for p in reports if Path(p).is_file()}
-            result['elapsed_seconds'] = round(time.monotonic()-start,3)
-            result['stdout'] = descriptor(streams[0]); result['stderr'] = descriptor(streams[1])
-            if result['classification']=='passed' and time.monotonic()>=deadline:
-                failure='timeout during evidence finalization';result['classification']=failure
+            result['classification']='passed'
+        except Exception as error:fail(error)
+        if failure is None:
+            try:
+                result['available_reports']={}
+                for p in reports:
+                    if Path(p).is_file():result['available_reports'][Path(p).relative_to(self.root).as_posix()]=descriptor(p)
+                result['stdout']=descriptor(streams[0]);result['stderr']=descriptor(streams[1])
+                need(time.monotonic()<deadline,'timeout during evidence finalization')
+            except Exception as error:fail(error)
+        result['elapsed_seconds']=round(time.monotonic()-start,3)
+        if failure is not None:retain_failed()
+        try:
             dump(folder/'result.json',result)
-            if result['classification']=='passed' and time.monotonic()>=deadline:
-                failure='timeout during result write';result['classification']=failure;dump(folder/'result.json',result)
-        need(result['classification'] == 'passed', f'{name}: {failure}')
+            if failure is None and time.monotonic()>=deadline:
+                fail(ValueError('timeout during result write'));retain_failed();dump(folder/'result.json',result)
+        except Exception as error:
+            fail(error);retain_failed();result['evidence_error']='result-write-unavailable'
+            raise ValueError(f'{name}: {failure}; result evidence unavailable') from error
+        need(result['classification']=='passed',f'{name}: {failure}')
         return result
 
     def finish(self, source_before, source_after):

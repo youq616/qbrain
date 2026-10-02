@@ -168,7 +168,9 @@ def ancestry_controls():
              ('rev-parse',guard.PREVIOUS_PARENT+'^{tree}'):guard.PREVIOUS_PARENT_TREE,
              ('show','-s','--format=%P',guard.PREVIOUS_PARENT):guard.EARLIER_PARENT,
              ('rev-parse',guard.EARLIER_PARENT+'^{tree}'):guard.EARLIER_PARENT_TREE,
-             ('show','-s','--format=%P',guard.EARLIER_PARENT):guard.BASE,
+             ('show','-s','--format=%P',guard.EARLIER_PARENT):guard.ORIGINAL_PARENT,
+             ('rev-parse',guard.ORIGINAL_PARENT+'^{tree}'):guard.ORIGINAL_PARENT_TREE,
+             ('show','-s','--format=%P',guard.ORIGINAL_PARENT):guard.BASE,
              ('show','-s','--format=%P',head):guard.CORRECTION_PARENT}
     def run(overrides=None,precommit=False,commit=head,expected_tree=tree):
         values=dict(replies);values.update(overrides or {});calls=[]
@@ -178,7 +180,7 @@ def ancestry_controls():
             if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
             return (values[args]+'\n').encode()
         with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
-        check(len(calls)==(9 if precommit else 10),'unexpected ancestry query count')
+        check(len(calls)==(11 if precommit else 12),'unexpected ancestry query count')
         return result
     control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
     pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
@@ -206,6 +208,9 @@ def ancestry_controls():
            ('wrong-earlier-tree',('rev-parse',guard.EARLIER_PARENT+'^{tree}'),'3'*40,'earlier parent tree'),
            ('wrong-earlier-parent',('show','-s','--format=%P',guard.EARLIER_PARENT),'3'*40,'earlier parent ancestry'),
            ('multiple-earlier-parents',('show','-s','--format=%P',guard.EARLIER_PARENT),guard.BASE+' '+'3'*40,'earlier parent ancestry'),
+           ('wrong-original-tree',('rev-parse',guard.ORIGINAL_PARENT+'^{tree}'),'3'*40,'original parent tree'),
+           ('wrong-original-parent',('show','-s','--format=%P',guard.ORIGINAL_PARENT),'3'*40,'original parent ancestry'),
+           ('multiple-original-parents',('show','-s','--format=%P',guard.ORIGINAL_PARENT),guard.BASE+' '+'3'*40,'original parent ancestry'),
            ('wrong-base-tree',('rev-parse',guard.BASE+'^{tree}'),'3'*40,'base object')]
     for label,key,value,boundary in cases:
         expect_failure('ancestry-'+label,lambda key=key,value=value:run({key:value}),boundary)
@@ -213,11 +218,11 @@ def ancestry_controls():
                           ('wrong-tree',{('rev-parse','HEAD^{tree}'):'3'*40}),('other-tip',{('rev-parse','HEAD'):'3'*40})]:
         expect_failure('ancestry-precommit-'+label,lambda changes=changes:run(pre|changes,True),'precommit requires exact correction parent/tree')
     expect_failure('ancestry-anchor-is-not-candidate',lambda:run(pre,commit=guard.CORRECTION_PARENT,expected_tree=guard.CORRECTION_PARENT_TREE),'candidate pin mismatch')
-    for label,anchor,anchor_tree in [('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('earlier',guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
+    for label,anchor,anchor_tree in [('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('earlier',guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),('original',guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
         tip={('rev-parse','HEAD'):anchor,('rev-parse','HEAD^{tree}'):anchor_tree}
         expect_failure('ancestry-'+label+'-is-not-candidate',lambda tip=tip,anchor=anchor,anchor_tree=anchor_tree:run(tip,commit=anchor,expected_tree=anchor_tree),'candidate pin mismatch')
         expect_failure('ancestry-precommit-reject-'+label,lambda tip=tip:run(tip,True),'precommit requires exact correction parent/tree')
-    for label,key in [('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT)),('missing-earlier-object',('rev-parse',guard.EARLIER_PARENT+'^{tree}')),('missing-earlier-parent-metadata',('show','-s','--format=%P',guard.EARLIER_PARENT))]:
+    for label,key in [('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT)),('missing-earlier-object',('rev-parse',guard.EARLIER_PARENT+'^{tree}')),('missing-earlier-parent-metadata',('show','-s','--format=%P',guard.EARLIER_PARENT)),('missing-original-object',('rev-parse',guard.ORIGINAL_PARENT+'^{tree}')),('missing-original-parent-metadata',('show','-s','--format=%P',guard.ORIGINAL_PARENT))]:
         try:run({key:None})
         except subprocess.CalledProcessError as error:
             check(error.returncode==128 and error.cmd==['git',*key],'missing object boundary');RESULTS.append(dict(name='ancestry-'+label,passed=True))
@@ -236,14 +241,14 @@ def ancestry_controls():
         expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
     workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
     def workflow_contract(raw,windows=False):
-        canonical=guard.checkout_bytes(raw,'4991e696fc6607c9969f30b010838570b1b93793',windows)
-        check(canonical.count(b'          fetch-depth: 5\n')==1 and
-              guard.sha(canonical.replace(b'          fetch-depth: 5\n',b'          fetch-depth: 4\n'))=='92484272c4926016f6ad0ceba28e1eac167eefd2e01e987cdb1cb58963f663f8','exact depth-five workflow contract')
+        canonical=guard.checkout_bytes(raw,'ee603f918c6b25ca43c03114ab5d76a99221d057',windows)
+        check(canonical.count(b'          fetch-depth: 6\n')==1 and
+              guard.sha(canonical.replace(b'          fetch-depth: 6\n',b'          fetch-depth: 5\n'))=='0da9b5e07c3d819b5ab09377a4f7845f3893de586a3e8cebba56d9ba0880a4e6','exact depth-six workflow contract')
         return canonical
-    control('workflow-only-depth-five-change',lambda:workflow_contract(workflow,os.name=='nt'))
+    control('workflow-only-depth-six-change',lambda:workflow_contract(workflow,os.name=='nt'))
     canonical=workflow_contract(workflow,os.name=='nt')
-    for label,old,new in [('old-depth',b'fetch-depth: 5',b'fetch-depth: 4'),('broad-depth',b'fetch-depth: 5',b'fetch-depth: 0'),
-                          ('malformed-depth',b'fetch-depth: 5',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+    for label,old,new in [('old-depth',b'fetch-depth: 6',b'fetch-depth: 5'),('broad-depth',b'fetch-depth: 6',b'fetch-depth: 0'),
+                          ('malformed-depth',b'fetch-depth: 6',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
                           ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
         changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
         expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
@@ -888,6 +893,250 @@ def windows_pinned_member_controls(root):
         if owner is not None and owner.result is None:owner.stop('pinned_fixture_failure')
 
 
+def root_terminal_controls(root):
+    """Finite cleanup models; no process/handle is allocated by these models."""
+    import test_mcp_directory_search as driver
+    root.mkdir();empty=dict(size=0,sha256=hashlib.sha256(b'').hexdigest())
+    def model(label,polls=(1,),active=([],),primary='timeout',intentional=False,close='ok',
+              poll_cost=0,active_cost=0,join='ok',capture='ok',proc=True,tree=True):
+        folder=root/label;folder.mkdir();paths=[folder/'stdout.bin',folder/'stderr.bin']
+        for path in paths:path.write_bytes(b'')
+        now=[0.];calls=[];returned=[];poll_values=list(polls);active_values=list(active);release=[];closed=[False]
+        def next_value(values):return values.pop(0) if len(values)>1 else values[0]
+        class Proc:
+            pid=17;stdout=None;stderr=None
+            def poll(self):
+                calls.append('poll');now[0]+=poll_cost;value=next_value(poll_values)
+                if isinstance(value,BaseException):raise value
+                if value is not None:returned.append(value)
+                calls.append('poll-completed');return value
+        class Tree:
+            def active(self):
+                check(not closed[0],'tree queried after close attempt');calls.append('active');now[0]+=active_cost
+                value=next_value(active_values)
+                if isinstance(value,BaseException):raise value
+                return value
+            def terminate(self):check(not closed[0],'tree terminated after close attempt');calls.append('terminate')
+            def close(self):
+                check(not closed[0],'ownership close repeated');closed[0]=True;calls.append('close')
+                if close in ('oracle-reject','oracle-success'):
+                    from types import SimpleNamespace
+                    real=object.__new__(q._LinuxTree);real.known={17:dict(fd=999,start=1)};real.previous=SimpleNamespace(value=0);real.restored=False
+                    def live():calls.append('close-active');return []
+                    def children(pid):calls.append('close-children');return []
+                    def prctl(*args):calls.append('restore');return 0
+                    def released(fd):check(fd==999,'model fd changed');calls.append('fd-close')
+                    def waitid(*args):
+                        calls.append('close-oracle')
+                        if close=='oracle-success':raise ChildProcessError(errno.ECHILD,'model no children')
+                        return None
+                    real.active=live;real.libc=SimpleNamespace(prctl=prctl)
+                    with patch.object(q,'_linux_children',children),patch.object(q.os,'getpid',return_value=17),patch.object(q.os,'waitid',waitid,create=True),patch.object(q.os,'close',released),patch.object(q.signal,'getsignal',return_value=q.signal.SIG_DFL):
+                        q._LinuxTree.close(real)
+                    return
+                if close in ('throw','partial'):raise ValueError('close-'+close)
+                if close in ('equal','late'):now[0]=2 if close=='equal' else 2.1
+        class Reader:
+            def join(self,timeout):
+                calls.append('join');check(0<=timeout<=2 if primary else timeout<=10,'reader received new grace')
+                if join=='throw':raise ValueError('reader-fixture')
+                if join=='late':now[0]=2.1
+            def is_alive(self):return False
+        class Lock:
+            def release(self):release.append(True)
+        owner=object.__new__(q.OwnedChild);owner.started=0;owner.deadline=10;owner.scan_deadline=10
+        owner.proc=Proc() if proc else None;owner.tree=Tree() if tree else None;owner.paths=paths;owner.readers=[Reader()] if proc else []
+        owner.result=None;owner.stable=False;owner.locked=True;owner.job_diagnostic=None;owner.errors=[];owner.overflow=q.threading.Event()
+        original_descriptor=q.descriptor
+        def descriptor(path):
+            calls.append('hash-'+Path(path).name)
+            if capture=='both' or (capture=='stdout' and Path(path)==paths[0]):raise OSError('capture-fixture')
+            value=original_descriptor(path)
+            if capture=='late':now[0]=2.1
+            return value
+        with patch.object(q.time,'monotonic',lambda:now[0]),patch.object(q.time,'sleep',lambda seconds:now.__setitem__(0,now[0]+seconds)),patch.object(q,'descriptor',descriptor),patch.object(q,'_OWNER_LOCK',Lock()),patch.object(q,'_ACTIVE_OWNER',owner):
+            result=owner._end(primary,intentional);saved=copy.deepcopy(result);count=len(calls)
+            check(owner._end('replacement',True) is result and result==saved and len(calls)==count,'cached finalization changed')
+            if result['classification']!='passed':
+                expect_failure('root-model-repeat-'+label,lambda:owner.wait(),result['classification'])
+                check(owner.stop() is result and result==saved and len(calls)==count,'repeat cleanup changed record')
+            else:check(owner.wait() is result and len(calls)==count,'passed repeat repolled')
+            check(result['exit']==(returned[0] if returned else None),'synthetic or discarded root exit')
+            check(len(release)==int(result['cleanup_ok'] and result['readers_done']),'owner release disagrees with proof')
+            if 'close' in calls:check(not any(v in ('poll','active','terminate','close') for v in calls[calls.index('close')+1:]),'operations after close attempt')
+        RESULTS.append(dict(name='root-model-'+label,passed=True));return owner,result,calls
+    owner,value,calls=model('empty-before-root',polls=(None,None,7))
+    check(value['exit']==7 and value['classification']=='timeout' and value['stable'] and calls.count('poll')==3,'empty tree bypassed root')
+    owner,value,calls=model('root-before-empty',active=([1],[1],[]))
+    check(value['stable'] and calls.count('poll')==1 and calls.count('active')==3,'root exit cache/job barrier')
+    for code in (0,7,259):
+        owner,value,calls=model('terminal-'+str(code),polls=(code,),primary=None)
+        check(value['classification']=='passed' and value['exit']==code and value['stable'],'terminal value rejected')
+    for primary in ('timeout','preselected-fixture',None):
+        deadline=2 if primary else 10
+        for terminal in (None,7):
+            for overrun in (0,.1):
+                label='post-poll-'+str(primary)+'-'+str(terminal)+'-'+str(overrun)
+                owner,value,calls=model(label,polls=(terminal,),primary=primary,poll_cost=deadline+overrun)
+                marker=calls.index('poll-completed')
+                check(not any(v in ('poll','active','terminate','close') for v in calls[marker+1:]) and
+                      calls[:marker].count('terminate')==int(bool(primary)) and owner.scan_deadline==deadline and
+                      value['classification']==(primary or 'timeout') and value['exit']==terminal and
+                      'owned cleanup deadline exceeded' in value['cleanup_error'] and not value['cleanup_ok'] and not value['stable'] and owner.locked,
+                      'exhausted poll crossed into another operation or changed failure/deadline')
+    owner,value,calls=model('post-poll-just-before',poll_cost=1.999)
+    check(value['cleanup_ok'] and calls.index('poll-completed')<calls.index('active')<calls.index('close'),'eligible next observation rejected')
+    if os.name!='nt':
+        owner,value,calls=model('actual-linux-close-oracle-reject',polls=(0,),primary=None,close='oracle-reject')
+        check(value['classification']=='cleanup-failed' and value['cleanup_error']=='kernel child absence not proved' and
+              not value['cleanup_ok'] and not value['stable'] and owner.locked and calls.count('close')==1 and
+              calls.count('close-oracle')==1 and 'restore' not in calls and 'fd-close' not in calls,'real close oracle rejection retried/released')
+        owner,value,calls=model('actual-linux-close-oracle-success',polls=(0,),primary=None,close='oracle-success')
+        check(value['classification']=='passed' and value['cleanup_ok'] and not owner.locked and
+              calls.count('close')==calls.count('close-oracle')==calls.count('restore')==calls.count('fd-close')==1 and
+              calls.index('close-oracle')<calls.index('restore')<calls.index('fd-close'),'real close oracle release ordering')
+    owner,value,calls=model('intentional',primary=None,intentional=True)
+    check(value['classification']=='stopped' and value['stable'],'intentional stop changed')
+    for label,kwargs in [('pending',dict(polls=(None,))),('poll-error',dict(polls=(OSError('poll-fixture'),))),
+                         ('active-error',dict(active=(OSError('active-fixture'),))),('poll-deadline',dict(poll_cost=2)),
+                         ('active-deadline',dict(active_cost=2)),('close-equal',dict(close='equal')),('close-late',dict(close='late')),
+                         ('close-throw',dict(close='throw')),('close-partial',dict(close='partial')),
+                         ('join-throw',dict(join='throw')),('join-late',dict(join='late')),('hash-late',dict(capture='late'))]:
+        owner,value,calls=model(label,**kwargs)
+        check(value['classification']=='timeout' and not value['cleanup_ok'] and not value['stable'] and owner.locked,'incomplete cleanup released/passed')
+        if label.startswith('close-'):check(calls.count('close')==1,'close attempt missing/repeated')
+    for label,kwargs in [('poll-recovered',dict(polls=(OSError('poll-fixture'),None,1))),('active-recovered',dict(active=(OSError('active-fixture'),[])))]:
+        owner,value,calls=model(label,**kwargs)
+        check(value['classification']=='timeout' and value['cleanup_ok'] and value['cleanup_error'] and calls.count('close')==1,'pre-close fallback lost failure')
+    owner,value,calls=model('no-root-failed',proc=False)
+    check(value['exit'] is None and value['root_pid'] is None and value['cleanup_ok'] and 'poll' not in calls,'failed no-root setup')
+    owner,value,calls=model('no-root-no-tree',proc=False,tree=False)
+    check(value['cleanup_ok'] and value['exit'] is None,'failed pre-tree setup')
+    for label,kwargs in [('missing-root-success',dict(proc=False,primary=None)),('root-without-tree',dict(tree=False))]:
+        owner,value,calls=model(label,**kwargs);check(value['classification']!='passed' and not value['cleanup_ok'] and owner.locked,'impossible ownership passed')
+    for unavailable in ('stdout','both'):
+        owner,value,calls=model('descriptor-'+unavailable,capture=unavailable)
+        check(value['stdout'] is None and value['stderr']==(None if unavailable=='both' else empty) and value['exit']==1 and
+              value['classification']=='timeout' and value['capture_error']==('both-unavailable' if unavailable=='both' else 'stdout-unavailable'),'failed descriptor shape')
+        recorder=q.Recorder(root/('recorder-'+unavailable),identity(),['tiny'],dict(os.environ),root)
+        def failed_owner(*args,**kwargs):raise q.OwnedChildError('timeout',owner)
+        with patch.object(q,'OwnedChild',failed_owner),patch.object(q,'descriptor',side_effect=AssertionError('failed-path rehash')):
+            expect_failure('root-recorder-partial-'+unavailable,lambda:recorder.run('tiny',['fixture'],3,reports=[recorder.root/'report.json']),'timeout')
+        row=json.loads((recorder.root/'stages/tiny/result.json').read_bytes())
+        check(row['ownership']==value and row['stdout'] is None and row['stderr']==value['stderr'] and row['available_reports']=={},'Recorder lost failed cached metadata')
+        ev=driver.Evidence(root/('driver-'+unavailable));child=object.__new__(driver.OwnedProcess)
+        child.owner=owner;child.proc=owner.proc;child.ev=ev;child.closed=False;child.record={'status':'running'};child.started=time.monotonic()
+        child.stdout_path=owner.paths[0];child.stderr_path=owner.paths[1]
+        # The unchanged adapter uses relative evidence paths; use its own tiny files.
+        child.stdout_path=ev.path('stdout.bin');child.stderr_path=ev.path('stderr.bin')
+        child.stdout_path.write_bytes(b'');child.stderr_path.write_bytes(b'')
+        with patch.object(ev,'file',side_effect=AssertionError('unstable driver hash')):
+            expect_failure('root-driver-partial-'+unavailable,lambda:child.wait(),'timeout')
+        check(child.record['ownership'] is value and child.record['stable'] is False and child.record['stdout']['stable'] is False,'driver partial route changed')
+        check(value==owner.result,'adapter changed frozen ownership')
+        unavailable_child=copy.copy(child);unavailable_child.closed=False;unavailable_child.record={'status':'running'}
+        with patch.object(Path,'is_file',side_effect=OSError('presence-fixture')):
+            expect_failure('root-driver-presence-unavailable-'+unavailable,lambda:unavailable_child.wait(),'presence-fixture')
+        check(owner.result is value and value['classification']=='timeout' and unavailable_child.record['ownership'] is value and
+              unavailable_child.record['stable'] is False,'storage absence erased primary owner failure')
+    owner,value,calls=model('report-owner',polls=(0,),primary=None)
+    for label in ('report-check','stream-finalizer','write','collector','setup'):
+        recorder=q.Recorder(root/('recorder-'+label),identity(),['tiny'],dict(os.environ),root);report=recorder.root/'report.json';report.write_text('{}')
+        counts=[];original_descriptor=q.descriptor
+        def describe(path):
+            counts.append(str(path))
+            if Path(path)==report:return original_descriptor(path)
+            if label=='stream-finalizer':raise OSError('stream-finalizer-fixture')
+            return dict(empty)
+        def factory(*args,**kwargs):
+            if label=='setup':raise OSError('setup-fixture')
+            return owner
+        def checking():
+            if label in ('report-check','write','collector'):raise ValueError('primary-fixture')
+        expected='setup-fixture' if label=='setup' else ('stream-finalizer-fixture' if label=='stream-finalizer' else 'primary-fixture')
+        real_dump=q.dump
+        def dumping(path,data):
+            if label=='write':raise OSError('write-fixture')
+            return real_dump(path,data)
+        with patch.object(q,'OwnedChild',factory),patch.object(q,'descriptor',describe),patch.object(q,'dump',dumping):
+            expect_failure('root-recorder-'+label,lambda:recorder.run('tiny',['fixture'],3,reports=[report],check=checking),expected)
+        row=recorder.failed_result
+        check(row['classification']==expected and row['ownership']==(None if label=='setup' else value),'failed Recorder primary/owner changed')
+        if label in ('report-check','write','collector'):
+            check(counts==[str(report)] and row['available_reports']==row['reports'],'failed report was rehashed or lost')
+        if label=='setup':check(counts==[] and row['stdout'] is None and row['stderr'] is None,'setup failure invented capture')
+        if label=='write':check(row['evidence_error']=='result-write-unavailable' and not (recorder.root/'stages/tiny/result.json').exists(),'write failure claimed record')
+        if label=='collector':
+            with patch.object(q,'descriptor',side_effect=OSError('collector-fixture')):
+                expect_failure('root-recorder-collector-unavailable',lambda:q.failure_diagnostics(recorder.root,recorder.root/'failure.json',identity(),['tiny'],['tiny'],ValueError(expected)),'collector-fixture')
+            check(row['classification']==expected and not (recorder.root/'failure.json').exists(),'collector failure erased primary')
+
+
+def root_terminal_native_controls(root):
+    """Real caller APIs; conservative withheld observations are fixture hooks."""
+    import test_mcp_directory_search as driver
+    root.mkdir();backend=q._WindowsTree if os.name=='nt' else q._LinuxTree
+    for kind in ('recorder','driver'):
+        for mode in ('root-delayed','job-delayed','pre-close-error','poll-error'):
+            folder=root/(kind+'-'+mode);captured=[];ending=[];withheld=[];errors=[];closed=[]
+            original_init=q.OwnedChild.__init__;original_end=q.OwnedChild._end;original_active=backend.active;original_close=backend.close
+            def setup(owner,*args,**kwargs):
+                original_init(owner,*args,**kwargs);captured.append(owner);poll=owner.proc.poll
+                def observed_poll():
+                    value=poll()
+                    if ending and not closed and mode=='poll-error' and not errors:
+                        errors.append('poll');raise OSError('root-poll-fixture')
+                    if ending and not closed and mode in ('root-delayed','pre-close-error') and value is not None and len(withheld)<2:
+                        withheld.append('terminal');return None
+                    return value
+                owner.proc.poll=observed_poll
+            def end(owner,*args,**kwargs):ending.append(owner);return original_end(owner,*args,**kwargs)
+            def active(tree):
+                value=original_active(tree)
+                if captured and tree is captured[0].tree and ending and not closed:
+                    if mode=='pre-close-error' and not errors:errors.append('active');raise OSError('root-active-fixture')
+                    if mode=='job-delayed' and not value and len(withheld)<2:
+                        withheld.append('empty');return [0]  # conservative accounting only, never used as a PID
+                return value
+            def close(tree):
+                check(captured and tree is captured[0].tree and captured[0].proc.returncode is not None,'close before actual terminal root')
+                check(mode not in ('root-delayed','job-delayed','pre-close-error') or len(withheld)==2,'close bypassed withheld observation')
+                check(not closed,'real close repeated');closed.append(True);return original_close(tree)
+            code='import time;print("ready",flush=True)'+(';time.sleep(10)' if mode=='job-delayed' else '')
+            expected='timeout' if mode=='job-delayed' else ('cleanup-failed' if mode in ('pre-close-error','poll-error') else None)
+            with patch.object(q.OwnedChild,'__init__',setup),patch.object(q.OwnedChild,'_end',end),patch.object(backend,'active',active),patch.object(backend,'close',close):
+                if kind=='recorder':
+                    recorder=q.Recorder(folder,identity(),['tiny'],dict(os.environ),root,stream_cap=2048)
+                    call=lambda:recorder.run('tiny',[sys.executable,'-c',code],3)
+                    if expected:expect_failure('root-real-'+kind+'-'+mode,call,expected,record=False)
+                    else:call()
+                    record=json.loads((folder/'stages/tiny/result.json').read_bytes())
+                else:
+                    ev=driver.Evidence(folder);child=driver.OwnedProcess(ev,[sys.executable,'-c',code],root,dict(os.environ),timeout=3)
+                    if expected:expect_failure('root-real-'+kind+'-'+mode,lambda:child.wait(),expected,record=False)
+                    else:child.wait()
+                    record=child.record
+            check(len(captured)==1 and closed==[True],'real owner boundary not exercised');owner=captured[0];terminal=record['ownership']
+            check(terminal['exit']==owner.proc.returncode and terminal['exit'] is not None and
+                  terminal['classification']==(expected or 'passed') and all(terminal[k] is True for k in ('cleanup_ok','owned_tree_empty','readers_done','stable')),'real root finalization proof')
+            if mode in ('pre-close-error','poll-error'):check(terminal['cleanup_error']==('root-active-fixture' if mode=='pre-close-error' else 'root-poll-fixture'),'pre-close error lost')
+            if mode=='job-delayed':check(terminal['exit']!=0,'genuine timeout exited normally')
+            before=[q.descriptor(path) for path in owner.paths];check(before==[terminal['stdout'],terminal['stderr']],'real stable descriptor binding')
+            check(owner.paths[0].read_bytes().splitlines()==[b'ready'],'real child ready output')
+            frozen=copy.deepcopy(owner.result);time.sleep(.03);check(before==[q.descriptor(path) for path in owner.paths],'real output mutation')
+            if expected:expect_failure('root-real-repeat-'+kind+'-'+mode,lambda:owner.wait(),expected,record=False)
+            else:owner.wait()
+            check(owner.result==frozen and q._ACTIVE_OWNER is None and not q._OWNER_LOCK.locked(),'real immutable completion/release')
+            RESULTS.append(dict(name='root-real-'+kind+'-'+mode,passed=True))
+    if os.name=='nt':
+        recorder=q.Recorder(root/'recorder-259',identity(),['tiny'],dict(os.environ),root)
+        expect_failure('root-native-259-recorder-nonzero',lambda:recorder.run('tiny',[sys.executable,'-c','raise SystemExit(259)'],3),'nonzero child exit')
+        value=recorder.failed_result['ownership'];check(value['exit']==259 and value['cleanup_ok'] and value['stable'],'signaled 259 was not terminal')
+        ev=driver.Evidence(root/'driver-259');child=driver.OwnedProcess(ev,[sys.executable,'-c','raise SystemExit(259)'],root,dict(os.environ),timeout=3)
+        child.wait(expected=259);check(child.record['ownership']['exit']==259 and child.record['status']=='completed','expected 259 not accepted')
+        RESULTS.append(dict(name='root-native-259-driver-expected',passed=True))
+
+
 def lifecycle_controls(root):
     """Real tiny process trees through Recorder and the process-driver adapter."""
     import test_mcp_directory_search as driver
@@ -1037,25 +1286,96 @@ def lifecycle_controls(root):
                         check(not state['conceal'] and read(model_root)==values[model_root] and not pinned,'bad handoff remained hidden')
                 RESULTS.append(dict(name=kind+'-handoff-'+fault+'-finite-boundary',passed=True))
             omit_fixture,state=omission(pidfile,marker,original_children,lambda:q._ACTIVE_OWNER,lambda pid:os.pidfd_open(pid,0))
-            def reveal_after_oracle(deadline):
-                try:return original_oracle(deadline)
+            def seam_proof(owner,tree,alive,inside,closing,ready,terminal,adopted,live,in_budget):
+                check(inside is owner and owner is state['owner'] and tree is state['tree'] and owner.proc is state['proc'] and
+                      tree.proc is state['proc'] and tree.known.get(state['proc'].pid) is state['root_pin'] and
+                      not closing and not alive and ready and terminal==0 and terminal is not None and adopted and live and in_budget,
+                      'fixture pre-close seam not proved')
+            def reject_oracle(fixture,oracle,live):
+                try:
+                    oracle()
                 except ValueError as error:
-                    expected=state['conceal'] and state['steps']==['observed','marker','publication'] and str(error)=='kernel child absence not proved'
-                    state['conceal']=False
-                    if expected:state['steps'].extend(('oracle','reveal'))
+                    if str(error)!='kernel child absence not proved':raise
+                    check(live(),'fixture selected child exited during oracle')
+                    fixture['steps'].append('oracle');fixture['conceal']=False;fixture['steps'].append('reveal')
                     raise
-            code='import subprocess,sys,time;from pathlib import Path\np=subprocess.Popen([sys.executable,"-c","import time;time.sleep(5)"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\nm=Path('+repr(str(marker))+');end=time.monotonic()+1\nwhile not m.is_file():\n if time.monotonic()>=end:raise SystemExit(8)\n time.sleep(.005)\nif m.read_bytes()!=str(p.pid).encode():raise SystemExit(9)\npub=Path('+repr(str(pidfile))+');pending=pub.with_suffix(".pending");pending.write_bytes(str(p.pid).encode());pending.replace(pub);print("leader",flush=True)'
+                else:raise ValueError('fixture oracle unexpectedly succeeded')
+                finally:fixture['conceal']=False
+            # These finite seam predicates never inspect a model PID or handle.
+            actual_state=state
+            model_proc=SimpleNamespace(pid=1,returncode=0);model_pin={};model_tree=SimpleNamespace(proc=model_proc,known={1:model_pin})
+            model_owner=SimpleNamespace(proc=model_proc,tree=model_tree)
+            state=dict(owner=model_owner,proc=model_proc,tree=model_tree,root_pin=model_pin)
             try:
-                with patch.object(q,'_linux_children',omit_fixture),patch.object(q,'_linux_no_children',reveal_after_oracle):
+                base=[model_owner,model_tree,[],model_owner,False,True,0,True,True,True]
+                for fault,index,value in [('foreign-owner',0,SimpleNamespace(proc=model_proc)),('foreign-tree',1,SimpleNamespace(proc=model_proc)),
+                        ('outside-end',3,None),('prior-close',4,True),('missing-handoff',5,False),('root-pending',6,None),('root-nonzero',6,7),
+                        ('nonempty-scan',2,[1]),('unadopted',7,False),('selected-exited',8,False),('deadline',9,False)]:
+                    args=list(base);args[index]=value
+                    expect_failure(kind+'-preclose-seam-'+fault,lambda args=args:seam_proof(*args),'fixture pre-close seam not proved')
+                control(kind+'-preclose-seam-valid',lambda:seam_proof(*base))
+                for fault,error,live in [('expected',ValueError('kernel child absence not proved'),True),('wrong-error',ValueError('oracle deadline'),True),
+                        ('success',None,True),('exited-after',ValueError('kernel child absence not proved'),False)]:
+                    sample=dict(conceal=True,steps=['observed','marker','publication'])
+                    def oracle(error=error):
+                        if error is not None:raise error
+                    expected='kernel child absence not proved' if fault=='expected' else ('oracle deadline' if fault=='wrong-error' else 'fixture')
+                    expect_failure(kind+'-preclose-oracle-'+fault,lambda:reject_oracle(sample,oracle,lambda:live),expected)
+                    check(sample['conceal'] is False and sample['steps']==(['observed','marker','publication','oracle','reveal'] if fault=='expected' else ['observed','marker','publication']),
+                          'wrong oracle result earned fixture proof or remained hidden')
+            finally:state=actual_state
+            actual_active=q._LinuxTree.active;actual_close=q._LinuxTree.close;actual_end=q.OwnedChild._end
+            phase=dict(inside=None,close=False,fired=False,deadline=None);events=[]
+            def inside_end(owner,*args,**kwargs):
+                if owner.result is not None:return actual_end(owner,*args,**kwargs)
+                phase['inside']=owner
+                try:return actual_end(owner,*args,**kwargs)
+                finally:phase['inside']=None
+            def preclose_active(tree):
+                alive=actual_active(tree)
+                if phase['inside'] is None or not state['conceal'] or phase['fired']:return alive
+                try:
+                    owner=q._ACTIVE_OWNER;selected=state['selected'];pin=state['pin']
+                    live=pin is not None and not q._pidfd_exited(pin)
+                    adopted=live and original_children(os.getpid())==[selected] and q._linux_stat(selected)['ppid']==os.getpid() and not q._pidfd_exited(pin)
+                    seam_proof(owner,tree,alive,phase['inside'],phase['close'],state['steps']==['observed','marker','publication'],
+                        state['proc'].returncode if state['proc'] is not None else None,adopted,live,time.monotonic()<owner.scan_deadline)
+                    phase['fired']=True;phase['deadline']=owner.scan_deadline;events.append('pre-close-oracle')
+                    return reject_oracle(state,lambda:original_oracle(owner.scan_deadline),lambda:not q._pidfd_exited(pin))
+                except BaseException:state['conceal']=False;raise
+            def final_close(tree):
+                check(phase['fired'] and tree is state['tree'] and phase['inside'] is state['owner'] and not phase['close'] and
+                      not state['conceal'] and state['owner'].scan_deadline==phase['deadline'],'fixture final close boundary')
+                phase['close']=True;events.append('close');return actual_close(tree)
+            def traced_oracle(deadline):
+                if phase['close']:
+                    phase['close_oracle_deadline']=deadline
+                    check(state['owner'].scan_deadline==phase['deadline'] and time.monotonic()<deadline<=phase['deadline'],
+                          'fixture close oracle exceeded original cleanup deadline')
+                    result=original_oracle(deadline);events.append('close-oracle');return result
+                check(state['owner'] is None and not phase['fired'],'fixture unexpected oracle location')
+                result=original_oracle(deadline);events.append('preflight');return result
+            code='import subprocess,sys,time;from pathlib import Path\np=subprocess.Popen([sys.executable,"-c","import time;time.sleep(5)"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\nm=Path('+repr(str(marker))+');end=time.monotonic()+1\nwhile not m.is_file():\n if time.monotonic()>=end:raise SystemExit(8)\n time.sleep(.005)\nif m.read_bytes()!=str(p.pid).encode():raise SystemExit(9)\npub=Path('+repr(str(pidfile))+');pending=pub.with_suffix(".pending");pending.write_bytes(str(p.pid).encode());pending.replace(pub);print("leader",flush=True)'
+            started=time.monotonic()
+            try:
+                with patch.object(q,'_linux_children',omit_fixture),patch.object(q,'_linux_no_children',traced_oracle),patch.object(q._LinuxTree,'active',preclose_active),patch.object(q._LinuxTree,'close',final_close),patch.object(q.OwnedChild,'_end',inside_end):
                     expect_failure(kind+'-oracle-detects-omitted-adoptee',lambda kind=kind:run(kind,'omitted-adoptee',code,2),'cleanup-failed',record=False)
                 ownership=records[-1]['ownership']
                 check(state['steps']==['observed','marker','publication','oracle','reveal'] and state['pin'] is not None and q._pidfd_exited(state['pin']),'oracle did not prove ordered fixture cleanup')
-                check(ownership['classification']=='cleanup-failed' and ownership['cleanup_ok'] and ownership['owned_tree_empty'] and ownership['readers_done'] and ownership['stable'],'oracle failure lost permanence/stability')
+                check(ownership['classification']=='cleanup-failed' and ownership['cleanup_error']=='kernel child absence not proved' and ownership['exit']==0 and
+                      ownership['cleanup_ok'] and ownership['owned_tree_empty'] and ownership['readers_done'] and ownership['stable'] and
+                      events==['preflight','pre-close-oracle','close','close-oracle'] and time.monotonic()<started+5 and
+                      q._ACTIVE_OWNER is None and not q._OWNER_LOCK.locked(),'pre-close oracle failure lost permanent safe cleanup')
+                frozen=copy.deepcopy(state['owner'].result)
+                expect_failure(kind+'-preclose-oracle-repeat-failed',lambda:state['owner'].wait(),'cleanup-failed',record=False)
+                check(state['owner'].result==frozen and events==['preflight','pre-close-oracle','close','close-oracle'],'pre-close result changed or closed twice')
                 stdout=root/(kind+'-omitted-adoptee')/('stages/tiny/stdout.bin' if kind=='recorder' else 'raw/0002-stdout.bin')
                 before=q.descriptor(stdout);time.sleep(.03);check(before==q.descriptor(stdout),'post-cleanup output mutation')
                 q._linux_no_children(time.monotonic()+1)
-                RESULTS.append(dict(name=kind+'-oracle-detects-omitted-adoptee',passed=True))
-                RESULTS.append(dict(name=kind+'-oracle-failure-cleaned-stable-permanent',passed=True))
+                RESULTS.append(dict(name=kind+'-preclose-oracle-detects-omitted-adoptee',passed=True))
+                RESULTS.append(dict(name=kind+'-preclose-oracle-failure-cleaned-stable-permanent',passed=True,
+                    trace=dict(steps=list(state['steps']),events=list(events),cleanup_deadline=phase['deadline'],
+                               close_oracle_deadline=phase['close_oracle_deadline'],final_absence=True)))
             finally:
                 if state['pin'] is not None:os.close(state['pin'])
         def descendant_fixture(label,redirect,detached):
@@ -1593,7 +1913,7 @@ def package_consumer_controls(root):
 
 def main():
     with tempfile.TemporaryDirectory(prefix='n49d-tiny-controls-') as tmp:
-        root=Path(tmp);source_controls();ancestry_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();windows_diagnostic_controls(root/'diagnostics');failure_detail_controls(root/'failure-detail');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned');failure_detail_retention_controls(root/'failure-detail-retention')
+        root=Path(tmp);source_controls();ancestry_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();windows_diagnostic_controls(root/'diagnostics');failure_detail_controls(root/'failure-detail');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');root_terminal_controls(root/'root-terminal');root_terminal_native_controls(root/'root-native');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned');failure_detail_retention_controls(root/'failure-detail-retention')
     print(json.dumps(dict(passed=True,python_optimized=sys.flags.optimize>0,controls=RESULTS,
         linux_reader_backend=('stat-adapter' if q._PROC_STAT_CHILD_ADAPTER else 'native-children') if os.name!='nt' else 'not_applicable',
         n49d_package_wrapper_executed=True,generic_package_fixture_seam=True,inherited_packager_executed=False,inherited_packager_reason='unchanged 1152 MiB reserve; native CI only'),sort_keys=True))
