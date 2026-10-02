@@ -10,6 +10,7 @@ import base64
 import errno
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import stat
@@ -30,11 +31,12 @@ def check(ok, name):
     if not ok: raise ValueError(name)
 
 
-def expect_failure(name, fn, message=None):
+def expect_failure(name, fn, message=None, *, record=True):
     try: fn()
     except (ValueError, OSError, KeyError, TypeError, zipfile.BadZipFile) as error:
         check(message is None or message in str(error), name+': wrong failure boundary: '+str(error))
-        RESULTS.append(dict(name=name,passed=True)); return
+        if record:RESULTS.append(dict(name=name,passed=True))
+        return
     raise ValueError('negative control unexpectedly passed: '+name)
 
 
@@ -104,7 +106,9 @@ def ancestry_controls():
     replies={('rev-parse','HEAD'):head,('rev-parse','HEAD^{tree}'):tree,
              ('rev-parse',guard.BASE+'^{tree}'):guard.BASE_TREE,
              ('rev-parse',guard.CORRECTION_PARENT+'^{tree}'):guard.CORRECTION_PARENT_TREE,
-             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.BASE,
+             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.PREVIOUS_PARENT,
+             ('rev-parse',guard.PREVIOUS_PARENT+'^{tree}'):guard.PREVIOUS_PARENT_TREE,
+             ('show','-s','--format=%P',guard.PREVIOUS_PARENT):guard.BASE,
              ('show','-s','--format=%P',head):guard.CORRECTION_PARENT}
     def run(overrides=None,precommit=False,commit=head,expected_tree=tree):
         values=dict(replies);values.update(overrides or {});calls=[]
@@ -114,11 +118,16 @@ def ancestry_controls():
             if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
             return (values[args]+'\n').encode()
         with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
-        check(len(calls)==(5 if precommit else 6),'unexpected ancestry query count')
+        check(len(calls)==(7 if precommit else 8),'unexpected ancestry query count')
         return result
     control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
     pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
-    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.BASE,guard.BASE_TREE),'precommit actual parent fields'))
+    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),'precommit actual parent fields'))
+    def no_lazy_fetch():
+        with patch.object(guard.subprocess,'check_output',return_value=b'fixture') as execute:
+            check(guard.git(Path('.'),'rev-parse','HEAD')==b'fixture','git helper return')
+        check(execute.call_args.kwargs['env']['GIT_NO_LAZY_FETCH']=='1','source query may lazy fetch')
+    control('ancestry-git-explicit-no-lazy-fetch',no_lazy_fetch)
     expect_failure('ancestry-wrong-requested-commit',lambda:run(commit='3'*40),'candidate pin mismatch')
     expect_failure('ancestry-wrong-requested-tree',lambda:run(expected_tree='3'*40),'candidate pin mismatch')
     cases=[('wrong-head',('rev-parse','HEAD'),'3'*40,'candidate pin'),
@@ -131,6 +140,9 @@ def ancestry_controls():
            ('wrong-anchor-tree',('rev-parse',guard.CORRECTION_PARENT+'^{tree}'),'3'*40,'correction parent tree'),
            ('wrong-anchor-parent',('show','-s','--format=%P',guard.CORRECTION_PARENT),'3'*40,'correction parent ancestry'),
            ('multiple-anchor-parents',('show','-s','--format=%P',guard.CORRECTION_PARENT),guard.BASE+' '+'3'*40,'correction parent ancestry'),
+           ('wrong-previous-tree',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}'),'3'*40,'previous parent tree'),
+           ('wrong-previous-parent',('show','-s','--format=%P',guard.PREVIOUS_PARENT),'3'*40,'previous parent ancestry'),
+           ('multiple-previous-parents',('show','-s','--format=%P',guard.PREVIOUS_PARENT),guard.BASE+' '+'3'*40,'previous parent ancestry'),
            ('wrong-base-tree',('rev-parse',guard.BASE+'^{tree}'),'3'*40,'base object')]
     for label,key,value,boundary in cases:
         expect_failure('ancestry-'+label,lambda key=key,value=value:run({key:value}),boundary)
@@ -138,7 +150,11 @@ def ancestry_controls():
                           ('wrong-tree',{('rev-parse','HEAD^{tree}'):'3'*40}),('other-tip',{('rev-parse','HEAD'):'3'*40})]:
         expect_failure('ancestry-precommit-'+label,lambda changes=changes:run(pre|changes,True),'precommit requires exact correction parent/tree')
     expect_failure('ancestry-anchor-is-not-candidate',lambda:run(pre,commit=guard.CORRECTION_PARENT,expected_tree=guard.CORRECTION_PARENT_TREE),'candidate pin mismatch')
-    for label,key in [('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT))]:
+    for label,anchor,anchor_tree in [('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
+        tip={('rev-parse','HEAD'):anchor,('rev-parse','HEAD^{tree}'):anchor_tree}
+        expect_failure('ancestry-'+label+'-is-not-candidate',lambda tip=tip,anchor=anchor,anchor_tree=anchor_tree:run(tip,commit=anchor,expected_tree=anchor_tree),'candidate pin mismatch')
+        expect_failure('ancestry-precommit-reject-'+label,lambda tip=tip:run(tip,True),'precommit requires exact correction parent/tree')
+    for label,key in [('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT))]:
         try:run({key:None})
         except subprocess.CalledProcessError as error:
             check(error.returncode==128 and error.cmd==['git',*key],'missing object boundary');RESULTS.append(dict(name='ancestry-'+label,passed=True))
@@ -157,14 +173,14 @@ def ancestry_controls():
         expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
     workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
     def workflow_contract(raw,windows=False):
-        canonical=guard.checkout_bytes(raw,'3fe3fbef0d60c27fe9e577635ac0e0183e32e9dc',windows)
-        check(canonical.count(b'          fetch-depth: 3\n')==1 and
-              guard.sha(canonical.replace(b'          fetch-depth: 3\n',b'          fetch-depth: 2\n'))=='f57327d68cb819f81afc33a4a585d5e39a1d9ec66af75c2481baa70affb25f96','exact depth-three workflow contract')
+        canonical=guard.checkout_bytes(raw,'9c56fffbbe8b265ed93d88b2849bacd71dad446e',windows)
+        check(canonical.count(b'          fetch-depth: 4\n')==1 and
+              guard.sha(canonical.replace(b'          fetch-depth: 4\n',b'          fetch-depth: 3\n'))=='e25718fb42b48f04c4604718be2542e823baa6a5e6b6dfb66ba7e94a9de6c4f1','exact depth-four workflow contract')
         return canonical
-    control('workflow-only-depth-three-change',lambda:workflow_contract(workflow,os.name=='nt'))
+    control('workflow-only-depth-four-change',lambda:workflow_contract(workflow,os.name=='nt'))
     canonical=workflow_contract(workflow,os.name=='nt')
-    for label,old,new in [('old-depth',b'fetch-depth: 3',b'fetch-depth: 2'),('broad-depth',b'fetch-depth: 3',b'fetch-depth: 0'),
-                          ('malformed-depth',b'fetch-depth: 3',b'fetch-depth: three'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+    for label,old,new in [('old-depth',b'fetch-depth: 4',b'fetch-depth: 3'),('broad-depth',b'fetch-depth: 4',b'fetch-depth: 0'),
+                          ('malformed-depth',b'fetch-depth: 4',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
                           ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
         changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
         expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
@@ -180,12 +196,42 @@ def recorder_controls(root):
     good.finish(binding,binding)
     control('recorder-valid',lambda:q.validate_recordings(lambda p:(good.root/p).read_bytes(),ident,['tiny']))
     for label,command,timeout in [('nonzero-child',[sys.executable,'-c','raise SystemExit(7)'],2),
-            ('bounded-timeout',[sys.executable,'-c','import time; time.sleep(2)'],.05),
             ('output-budget',[sys.executable,'-c','print("x"*4096)'],2)]:
         r=recorder(label)
         expect_failure(label,lambda r=r,command=command,timeout=timeout:r.run('tiny',command,timeout))
         result=json.loads((r.root/'stages/tiny/result.json').read_text())
         check(result['classification']!='passed','child failure must remain failed')
+    r=recorder('bounded-timeout');ready=r.root/'ready.pid';captured={};original_wait=q.OwnedChild.wait
+    code='import os,time;from pathlib import Path\np=Path('+repr(str(ready))+');pending=p.with_suffix(".pending");pending.write_text(str(os.getpid()));pending.replace(p);print("ready",flush=True);time.sleep(10)'
+    def wait_ready(owner,*args,**kwargs):
+        try:
+            check(all(path.resolve().is_relative_to(r.root.resolve()) for path in owner.paths),'timeout fixture path mismatch')
+            while not ready.is_file():
+                owner.check_budget();time.sleep(.005)
+            owner.check_budget()
+            check(ready.read_bytes()==str(owner.proc.pid).encode() and owner.proc.poll() is None and time.monotonic()<owner.deadline,'timeout fixture ready identity')
+            captured.update(owner=owner,live=True,deadline=owner.deadline)
+            return original_wait(owner,*args,**kwargs)
+        except BaseException:
+            if owner.result is None:owner.stop('timeout_fixture_setup_failed')
+            raise
+    with patch.object(q.OwnedChild,'wait',wait_ready):
+        expect_failure('bounded-timeout',lambda:r.run('tiny',[sys.executable,'-c',code],3),'timeout',record=False)
+    result=json.loads((r.root/'stages/tiny/result.json').read_bytes());terminal=result['ownership']
+    def timeout_proof(value,live,pid):
+        check(live is True and value['root_pid']==pid and value['classification']=='timeout' and value['exit'] not in (None,0) and
+              value['cleanup_error'] is None and all(value.get(key) is True for key in ('cleanup_ok','owned_tree_empty','readers_done','stable')),
+              'timeout fixture boundary not proved')
+    timeout_proof(terminal,captured.get('live'),captured['owner'].proc.pid)
+    check((r.root/'stages/tiny/stdout.bin').read_bytes().splitlines()==[b'ready'],'timeout fixture ready output missing')
+    before=[q.descriptor(path) for path in captured['owner'].paths]
+    check(before==[terminal['stdout'],terminal['stderr']],'timeout fixture stream binding')
+    time.sleep(.03);check(before==[q.descriptor(path) for path in captured['owner'].paths],'timeout fixture output mutation')
+    RESULTS.append(dict(name='bounded-timeout',passed=True))
+    for label,value,live,pid in [('missing-ready',terminal,False,terminal['root_pid']),('foreign-ready',terminal,True,terminal['root_pid']+1),
+                               ('early-setup',dict(terminal,classification='setup-failed'),True,terminal['root_pid']),
+                               ('unproved-cleanup',dict(terminal,cleanup_ok=False),True,terminal['root_pid'])]:
+        expect_failure('bounded-timeout-proof-'+label,lambda value=value,live=live,pid=pid:timeout_proof(value,live,pid),'boundary not proved')
     missing=recorder('missing-stage',('tiny','missing'))
     missing.run('tiny',[sys.executable,'-c','pass'],2)
     expect_failure('missing-stage',lambda:missing.finish(binding,binding))
@@ -438,6 +484,172 @@ def disappearance_controls():
         control('true-adoption-admitted-separately',lambda:check(value.observe(model_child,own)==dict(fd=998,start=123),'true adopted route failed'))
 
 
+def windows_diagnostic_controls(root):
+    """Fixed-width API models; these do not claim Windows execution."""
+    import ctypes as c
+    from types import SimpleNamespace
+    root.mkdir()
+    class Accounting(c.Structure):
+        _fields_=[(name,c.c_uint32) for name in ('TotalProcesses','ActiveProcesses','TotalTerminatedProcesses')]
+    class C:
+        def __getattr__(self,name):return getattr(c,name)
+        @staticmethod
+        def get_last_error():return 5
+    def model(mode='live',count=1):
+        now=[0.];calls=[];closed=[];waits=[];tree=object.__new__(q._WindowsTree)
+        tree.c=C();tree.w=SimpleNamespace(DWORD=c.c_uint32,BOOL=c.c_int32)
+        tree.Accounting=Accounting;tree.ProcessList=q._windows_job_list_type(c)
+        tree.job=123;tree.assigned=True;tree.proc=SimpleNamespace(pid=456)
+        tree.last_accounting=dict(total=17,active=count,terminated=3)
+        class Kernel:
+            def QueryInformationJobObject(self,job,kind,out,size,length):
+                calls.append(('query',job,kind));check(job==123,'diagnostic queried another job')
+                if mode=='query-exception':raise OSError('fixture API')
+                if kind==1:
+                    check(size==c.sizeof(Accounting),'accounting model size')
+                    out._obj.TotalProcesses=0xffffffff;out._obj.ActiveProcesses=count;out._obj.TotalTerminatedProcesses=0xffffffff
+                    return mode!='accounting-error'
+                check(kind==3 and size==264,'fixed x64 process-list buffer')
+                out._obj.assigned=count;out._obj.listed=count
+                length._obj.value=size
+                for i in range(min(count,32)):out._obj.pids[i]=0xffffffff-i
+                if mode=='partial':out._obj.assigned=count+1
+                if mode=='zero':out._obj.pids[0]=0
+                if mode=='duplicate':out._obj.pids[1]=out._obj.pids[0]
+                if mode=='pid-range':out._obj.pids[0]=0x100000000
+                if mode=='short-length':length._obj.value=7
+                if mode=='long-length':length._obj.value=size+1
+                if mode=='list-overrun':now[0]=.101
+                return mode!='more-data'
+            def OpenProcess(self,rights,inherit,pid):
+                calls.append(('open',rights,inherit,pid));check(rights==0x00101000 and inherit is False,'diagnostic process rights')
+                if mode=='open-overrun':now[0]=.101
+                return 0 if mode=='open-error' else pid
+            def IsProcessInJob(self,handle,job,out):
+                calls.append(('membership',handle,job));check(job==123,'wrong membership job')
+                out._obj.value=mode!='nonmember'
+                if mode=='membership-overrun':now[0]=.101
+                return mode!='membership-error'
+            def WaitForSingleObject(self,handle,milliseconds):
+                calls.append(('wait',handle,milliseconds));check(milliseconds==0,'diagnostic positive wait')
+                check(any(row==('membership',handle,123) for row in calls),'state before exact membership')
+                check(mode not in ('nonmember','membership-error'),'unrelated state inspected')
+                waits.append(handle);before=waits.count(handle)==1
+                if mode=='wait-exception':raise OSError('fixture wait')
+                if mode=='wait-failed':return 0xffffffff
+                if mode=='wait-unexpected':return 128
+                if mode=='wait-after-error' and not before:return 0xffffffff
+                if mode=='wait-overrun':now[0]=.101
+                if mode=='conflict':return 0 if before else 258
+                if mode=='exit-between':return 258 if before else 0
+                return 0 if mode=='exited259' else 258
+            def GetExitCodeProcess(self,handle,out):
+                calls.append(('exit',handle));out._obj.value=7 if mode=='exit-inconsistent' else 259
+                if mode=='exit-overrun':now[0]=.101
+                return mode!='exit-error'
+            def CloseHandle(self,handle):
+                calls.append(('close',handle));closed.append(handle)
+                if mode=='close-overrun':now[0]=.101
+                if mode=='close-exception':raise OSError('fixture close')
+                return mode!='close-error'
+        tree.k=Kernel()
+        with patch.object(q.time,'monotonic',lambda:now[0]):value=tree.diagnostic(0 if mode=='expired' else 1)
+        return value,calls,closed
+    control('windows-diagnostic-fixed-width-ABI',lambda:check(c.sizeof(q._windows_job_list_type(c))==264 and c.sizeof(c.c_uint32)==4,'Windows ABI'))
+    for label,mode,count in [('live','live',1),('exited-code-259','exited259',1),('exit-between-reads','exit-between',1),('empty-later-sample','live',0),('maximum-shape','live',32)]:
+        value,calls,closed=model(mode,count)
+        check(value['complete'] and len(value['members'])==count and len(closed)==count,'valid diagnostic model')
+        check(value['trigger']==dict(total=17,active=count,terminated=3) and value['accounting']['total']==0xffffffff,'trigger accounting overwritten')
+        check(value['observation']==('live_member_observed' if count and mode!='exited259' else 'no_live_member_observed_in_complete_snapshot'),'diagnostic observation')
+        check(len((json.dumps(value,sort_keys=True,indent=2)+'\n').encode())<=8192,'formatted diagnostic field cap')
+        RESULTS.append(dict(name='windows-diagnostic-model-'+label,passed=True))
+    for mode,count in [('accounting-error',1),('query-exception',1),('more-data',1),('partial',1),('zero',1),('duplicate',2),('pid-range',1),('short-length',1),('long-length',1),('cap',33),('open-error',1),('membership-error',1),('nonmember',1),('wait-failed',1),('wait-unexpected',1),('wait-after-error',1),('wait-exception',1),('exit-error',1),('conflict',1),('exit-inconsistent',1),('close-error',1),('close-exception',1),('expired',1),('list-overrun',1),('open-overrun',1),('membership-overrun',1),('wait-overrun',1),('exit-overrun',1),('close-overrun',1)]:
+        value,calls,closed=model(mode,count)
+        check(value['complete'] is False and value['observation']=='unknown','invalid diagnostic model accepted: '+mode)
+        opened=[row[-1] for row in calls if row[0]=='open' and mode!='open-error']
+        check(closed==opened,'diagnostic close path: '+mode)
+        check(value['handles_closed']==(mode not in ('close-error','close-exception')),'unproved diagnostic closure')
+        check(len([row for row in calls if row[0]=='query' and row[2]==3])<=1,'diagnostic list retried')
+        if mode in ('more-data','partial','zero','duplicate','pid-range','short-length','long-length','cap','expired'):
+            check(not opened,'incomplete list examined members')
+        if mode in ('membership-error','nonmember'):
+            check(not any(row[0] in ('wait','exit') for row in calls),'unverified member state exported')
+        RESULTS.append(dict(name='windows-diagnostic-model-'+mode,passed=True))
+    control('windows-diagnostic-serialization-cap',lambda:check(q._bounded_job_diagnostic({'oversized':'x'*8192})['error']=='metadata_cap','diagnostic cap'))
+    control('windows-diagnostic-serialization-error',lambda:check(q._bounded_job_diagnostic({'invalid':object()})['error']=='metadata_cap','diagnostic serializer failure'))
+    # Use production JSON formatting at the actual nesting depth, then verify the
+    # existing partial-evidence writer preserves the complete maximum-shape result.
+    maximum=model('live',32)[0]
+    ident=identity();stage=root/'stages/tiny';stage.mkdir(parents=True)
+    raw=b'x'*(70*1024)
+    for name in ('stdout.bin','stderr.bin'):(stage/name).write_bytes(raw)
+    result=dict(schema='qbrain-n49d-stage-v1',name='direct-production',identity=ident,
+                argv=['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/build-cl.ps1'],
+                cwd='D:\\a\\qbrain\\qbrain',classification='lingering-descendant',exit=0,timeout_seconds=1800,
+                stream_limit=8*q.MIB,elapsed_seconds=1800.123456,requested_reports=[],available_reports={},
+                binaries_before={},binaries_after={},runtime_options={},
+                ownership=dict(classification='lingering-descendant',exit=0,process_backend='windows-private-job',root_pid=0xffffffff,
+                    cleanup_ok=True,cleanup_error=None,owned_tree_empty=True,stable=True,readers_done=True,
+                    elapsed_seconds=1800.123456,job_diagnostic=maximum,stdout=q.descriptor(stage/'stdout.bin'),stderr=q.descriptor(stage/'stderr.bin')),
+                stdout=q.descriptor(stage/'stdout.bin'),stderr=q.descriptor(stage/'stderr.bin'))
+    q.dump(stage/'result.json',result);check((stage/'result.json').stat().st_size<=16*1024,'maximum full result exceeds retained result cap')
+    output=root/'diagnostics.json';packet=q.failure_diagnostics(root,output,ident,['tiny'],['tiny'],'lingering-descendant')
+    retained=packet['files']['stages/tiny/result.json']
+    check(not retained['truncated'] and base64.b64decode(retained['data'])==(stage/'result.json').read_bytes(),'diagnostic result truncation')
+    check(output.stat().st_size<=256*1024 and packet['passed'] is False,'diagnostic artifact cap/status')
+    for name in ('stdout.bin','stderr.bin'):
+        row=packet['files']['stages/tiny/'+name]
+        check(row['truncated'] and row['sha256']==hashlib.sha256(raw).hexdigest() and base64.b64decode(row['data'])==raw[-64*1024:],'raw failure stream changed')
+    RESULTS.append(dict(name='windows-diagnostic-maximum-formatted-artifact-retention',passed=True))
+    for mode in ('open-overrun','close-exception'):
+        result['ownership']['job_diagnostic']=model(mode)[0]
+        q.dump(stage/'result.json',result)
+        packet=q.failure_diagnostics(root,output,ident,['tiny'],['tiny'],'lingering-descendant')
+        row=packet['files']['stages/tiny/result.json'];retained=json.loads(base64.b64decode(row['data']))
+        check(not row['truncated'] and retained==result and retained['ownership']['job_diagnostic']['complete'] is False,'diagnostic error retention')
+        RESULTS.append(dict(name='windows-diagnostic-serialized-'+mode,passed=True))
+    result['ownership']['job_diagnostic']=maximum
+    windows_field=(json.dumps(maximum,sort_keys=True,indent=2)+'\n').replace('\n','\r\n').encode()
+    windows_result=(json.dumps(result,sort_keys=True,indent=2)+'\n').replace('\n','\r\n').encode()
+    check(len(windows_field)<=8192 and len(windows_result)<=16*1024,'Windows CRLF diagnostic retention caps')
+    with patch.object(q.os,'linesep','\r\n'):
+        check(q._bounded_job_diagnostic(maximum)==maximum,'Windows diagnostic metadata bound')
+    RESULTS.append(dict(name='windows-diagnostic-Windows-JSON-layout-caps',passed=True))
+
+
+def windows_pinned_member_controls(root):
+    if os.name!='nt':return
+    root.mkdir();ready=root/'ready';release=root/'release';handle=None;owner=None
+    code='import sys,time;from pathlib import Path\nPath('+repr(str(ready))+').write_text("ready")\nend=time.monotonic()+4\nwhile not Path('+repr(str(release))+').is_file():\n if time.monotonic()>=end:raise SystemExit(8)\n time.sleep(.005)\nsys.exit(259)'
+    try:
+        owner=q.OwnedChild([sys.executable,'-c',code],root,dict(os.environ),subprocess.DEVNULL,root/'stdout.bin',root/'stderr.bin',5,512)
+        tree=owner.tree;setup_deadline=owner.deadline
+        while not ready.is_file():
+            owner.check_budget();time.sleep(.005)
+        listing=tree.ProcessList();length=tree.w.DWORD()
+        check(tree.k.QueryInformationJobObject(tree.job,3,tree.c.byref(listing),tree.c.sizeof(listing),tree.c.byref(length)) and
+              listing.assigned==listing.listed<=32 and owner.proc.pid in listing.pids[:listing.listed],'native fixture is not listed in exact job')
+        handle=tree.k.OpenProcess(0x00101000,False,owner.proc.pid);check(bool(handle),'native pinned fixture open')
+        member=tree.w.BOOL()
+        check(tree.k.IsProcessInJob(handle,tree.job,tree.c.byref(member)) and member.value,'native pinned fixture membership')
+        live=tree.observe_member(handle,min(setup_deadline,time.monotonic()+.1))
+        check('error' not in live and live['wait_before']==live['wait_after']==258 and live['exit_code']==259,'native live pinned observation')
+        release.write_text('exit')
+        # Scheduling and exit coordination finish before the observation window.
+        while owner.proc.poll() is None:
+            owner.check_budget();time.sleep(.005)
+        check(owner.proc.returncode==259 and tree.k.WaitForSingleObject(handle,0)==0,'native fixture did not exit 259')
+        exited=tree.observe_member(handle,min(setup_deadline,time.monotonic()+.1))
+        check('error' not in exited and exited['wait_before']==exited['wait_after']==0 and exited['exit_code']==259,'259 misclassified as alive')
+        check(tree.k.CloseHandle(handle),'native pinned fixture close');handle=None
+        terminal=owner.stop('pinned_fixture_complete')
+        check(terminal['classification']=='stopped' and terminal['cleanup_ok'] and terminal['stable'],'native pinned fixture finalization')
+        RESULTS.append(dict(name='windows-genuine-live-and-precoordinated-exited259-pinned-handle',passed=True))
+    finally:
+        if handle:check(owner.tree.k.CloseHandle(handle),'native fixture emergency handle close')
+        if owner is not None and owner.result is None:owner.stop('pinned_fixture_failure')
+
+
 def lifecycle_controls(root):
     """Real tiny process trees through Recorder and the process-driver adapter."""
     import test_mcp_directory_search as driver
@@ -460,66 +672,302 @@ def lifecycle_controls(root):
         return child.record,child.stdout_path
     for kind in ('recorder','driver'):
         control(kind+'-owned-ordinary-success',lambda kind=kind:run(kind,'valid','print("valid")'))
+        check('job_diagnostic' not in records[-1]['ownership'],'successful command acquired failure diagnostic')
+        for branch in ('wait','late'):
+            for issue in ('exception','partial','overrun'):
+                label='diagnostic-'+branch+'-'+issue;ready=root/(kind+'-'+label+'.pid')
+                child='import os,time;from pathlib import Path;p=Path('+repr(str(ready))+');s=p.with_suffix(".pending");s.write_text(str(os.getpid()));s.replace(p);time.sleep(5)'
+                code='import subprocess,sys,time;from pathlib import Path\np=subprocess.Popen([sys.executable,"-c",'+repr(child)+'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\nend=time.monotonic()+3\nwhile not Path('+repr(str(ready))+').is_file():\n if time.monotonic()>=end:raise SystemExit(7)\n time.sleep(.005)\n'
+                active=backend.active;terminate=backend.terminate;original_wait=q.OwnedChild.wait;original_end=q.OwnedChild._end
+                hidden=[];observed=[];terminated=[];owners=[];ending=[]
+                def delayed_active(tree):
+                    alive=active(tree);owner=q._ACTIVE_OWNER
+                    if branch=='late' and alive and not ending and tree.proc.poll() is not None:
+                        if not hidden:hidden.append(True)
+                        return []
+                    return alive
+                def enter_end(owner,*args,**kwargs):
+                    ending.append(True);return original_end(owner,*args,**kwargs)
+                def capture_owner(owner,*args,**kwargs):
+                    owners.append(owner);return original_wait(owner,*args,**kwargs)
+                def observe(tree,deadline):
+                    observed.append(deadline);check(deadline==q._ACTIVE_OWNER.scan_deadline,'diagnostic reset original cleanup deadline')
+                    if issue=='exception':raise OSError('injected diagnostic API failure')
+                    if issue=='overrun':time.sleep(.12)
+                    q._ACTIVE_OWNER.deadline=min(q._ACTIVE_OWNER.deadline,time.monotonic())
+                    return dict(complete=False,observation='unknown',error='deadline' if issue=='overrun' else 'process_list',members=[])
+                def terminate_record(tree):
+                    terminated.append(q._ACTIVE_OWNER.scan_deadline);return terminate(tree)
+                with patch.object(backend,'active',delayed_active),patch.object(backend,'diagnostic',observe,create=True),patch.object(backend,'terminate',terminate_record),patch.object(q.OwnedChild,'wait',capture_owner),patch.object(q.OwnedChild,'_end',enter_end):
+                    expect_failure(kind+'-'+label,lambda:run(kind,label,code,5),'lingering-descendant',record=False)
+                terminal=records[-1]['ownership']
+                check(ready.is_file() and len(observed)==1 and terminated and all(value==observed[0] for value in terminated),'diagnostic boundary/deadline not preserved')
+                check(branch!='late' or hidden,'late diagnostic boundary not reached')
+                check(terminal['classification']=='lingering-descendant' and terminal['cleanup_ok'] and terminal['stable'] and terminal['job_diagnostic']['complete'] is False,'diagnostic changed failure or cleanup')
+                expect_failure(kind+'-'+label+'-repeat',lambda:owners[0].wait(),'lingering-descendant')
+                check(len(observed)==1,'failure snapshot repeated')
+                before=[q.descriptor(path) for path in owners[0].paths];time.sleep(.02)
+                check(before==[q.descriptor(path) for path in owners[0].paths],'diagnostic failure output changed')
+                RESULTS.append(dict(name=kind+'-'+label+'-original-deadline-cleaned-stable',passed=True))
+        if os.name=='nt':
+            for redirect in (False,True):
+                label='native-job-redirected' if redirect else 'native-job-inherited';ready=root/(kind+'-'+label+'.pid')
+                child='import os,time;from pathlib import Path;p=Path('+repr(str(ready))+');s=p.with_suffix(".pending");s.write_text(str(os.getpid()));s.replace(p);time.sleep(5)'
+                options=',stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL' if redirect else ''
+                code='import subprocess,sys,time;from pathlib import Path\np=subprocess.Popen([sys.executable,"-c",'+repr(child)+']'+options+')\nend=time.monotonic()+3\nwhile not Path('+repr(str(ready))+').is_file():\n if time.monotonic()>=end:raise SystemExit(7)\n time.sleep(.005)\n'
+                expect_failure(kind+'-'+label,lambda:run(kind,label,code,5),'lingering-descendant',record=False)
+                terminal=records[-1]['ownership'];diagnostic=terminal['job_diagnostic']
+                check(ready.is_file() and diagnostic['complete'] and diagnostic['observation']=='live_member_observed','native diagnostic fixture boundary')
+                check(any(row['pid']==int(ready.read_text()) and row['root'] is False and row['wait_before']==258 for row in diagnostic['members']),'real private-job child not observed alive')
+                check(terminal['cleanup_ok'] and terminal['owned_tree_empty'] and terminal['readers_done'] and terminal['stable'],'native diagnostic cleanup')
+                stdout=root/(kind+'-'+label)/('stages/tiny/stdout.bin' if kind=='recorder' else 'raw/0002-stdout.bin')
+                before=q.descriptor(stdout);time.sleep(.03);check(before==q.descriptor(stdout),'native diagnostic post-cleanup mutation')
+                RESULTS.append(dict(name=kind+'-'+label+'-genuine-stable',passed=True))
         churn='import subprocess,sys\nfor wave in range(2):\n children=[subprocess.Popen([sys.executable,"-c","pass"]) for _ in range(4)]\n for child in children:\n  if child.wait()!=0:raise SystemExit(9)\nprint("churn complete")'
         control(kind+'-genuine-bounded-child-churn',lambda kind=kind:run(kind,'churn',churn,3))
         if os.name!='nt':
-            pidfile=root/(kind+'-hidden-adoptee.pid');hidden=[True];pins=[];reached=[]
+            pidfile=root/(kind+'-hidden-adoptee.pid');marker=root/(kind+'-observed-adoptee.pid')
             original_children=q._linux_children;original_oracle=q._linux_no_children
-            def omit_fixture(pid):
-                children=original_children(pid)
-                if hidden[0] and pidfile.is_file():
-                    fixture_pid=int(pidfile.read_text())
-                    if not pins:pins.append(os.pidfd_open(fixture_pid,0))
-                    return [child for child in children if child!=fixture_pid]
-                return children
+            def omission(publication,observed_marker,reader,owner_lookup,pin_child):
+                state=dict(conceal=True,owner=None,proc=None,tree=None,root_pin=None,selected=None,pin=None,steps=[])
+                def read(pid):
+                    try:
+                        children=reader(pid)
+                        if not state['conceal']:return children
+                        owner=owner_lookup()
+                        if state['owner'] is None:
+                            if owner is None or owner.proc is None or owner.tree is None or pid!=owner.proc.pid:return children
+                            check(owner.tree.proc is owner.proc and owner.proc.pid in owner.tree.known,'fixture root not pinned')
+                            state.update(owner=owner,proc=owner.proc,tree=owner.tree,root_pin=owner.tree.known[owner.proc.pid])
+                        check(owner is state['owner'] and owner.proc is state['proc'] and owner.tree is state['tree'] and
+                              owner.tree.proc is state['proc'] and owner.tree.known.get(state['proc'].pid) is state['root_pin'],
+                              'fixture owner/root identity changed')
+                        if publication.is_file():
+                            selected=state['selected']
+                            check(selected is not None and publication.stat().st_size<=10 and publication.read_bytes()==str(selected).encode(),'fixture atomic handoff mismatch')
+                            if 'publication' not in state['steps']:
+                                state['steps'].append('publication');state['pin']=pin_child(selected)
+                            return [child for child in children if child!=selected]
+                        check(state['proc'].returncode is None,'fixture atomic handoff missing')
+                        if pid!=state['proc'].pid:return children
+                        check(len(children)<=1,'fixture has multiple children')
+                        if not children:return children
+                        selected=children[0]
+                        check(type(selected) is int and 0<selected<=0x7fffffff and selected not in (pid,os.getpid()),'fixture child PID invalid')
+                        check(state['selected'] in (None,selected),'fixture child identity changed')
+                        if state['selected'] is None:
+                            state['selected']=selected;state['steps'].append('observed')
+                            check(not observed_marker.exists(),'fixture marker already exists')
+                            pending=observed_marker.with_suffix('.pending');pending.write_bytes(str(selected).encode());pending.replace(observed_marker)
+                            state['steps'].append('marker')
+                        return []
+                    except BaseException:
+                        state['conceal']=False
+                        raise
+                return read,state
+            # Finite checks of this exact fixture reader never touch model PIDs.
+            from types import SimpleNamespace
+            for fault in ('unrelated','empty','multiple','changed','owner','root','invalid','missing','malformed','mismatch','matching'):
+                folder=root/(kind+'-handoff-'+fault);folder.mkdir();pub=folder/'published';mark=folder/'observed'
+                model_root=0x40000000+(os.getpid()&0xffff);model_child=model_root+1
+                proc=SimpleNamespace(pid=model_root,returncode=None);pin={};tree=SimpleNamespace(proc=proc,known={model_root:pin})
+                owner=SimpleNamespace(proc=proc,tree=tree);current=[owner];values={model_root:[model_child],os.getpid():[model_root,model_child+2],model_root+3:[model_child+4]};pinned=[]
+                read,state=omission(pub,mark,lambda pid:list(values.get(pid,[])),lambda:current[0],lambda pid:pinned.append(pid) or 123)
+                if fault=='unrelated':
+                    current[0]=None;check(read(os.getpid())==values[os.getpid()],'fixture preflight changed');current[0]=owner
+                    check(read(os.getpid())==values[os.getpid()] and read(model_root+3)==values[model_root+3] and not mark.exists(),'fixture unrelated enumeration changed')
+                elif fault=='empty':
+                    values[model_root]=[];check(read(model_root)==[] and not mark.exists(),'empty fixture created marker')
+                elif fault in ('multiple','invalid'):
+                    values[model_root]=[model_child,model_child+1] if fault=='multiple' else [0]
+                    expect_failure(kind+'-handoff-'+fault,lambda:read(model_root),'fixture',record=False)
+                    check(not state['conceal'] and read(model_root)==values[model_root] and not mark.exists(),'bad initial fixture remained hidden')
+                else:
+                    check(read(model_root)==[] and mark.read_bytes()==str(model_child).encode(),'fixture pre-publication observation absent')
+                    check(read(os.getpid())==values[os.getpid()] and read(model_root+3)==values[model_root+3],'fixture hid unrelated pre-handoff list')
+                    if fault=='changed':values[model_root]=[model_child+1]
+                    elif fault=='owner':current[0]=SimpleNamespace(proc=proc,tree=tree)
+                    elif fault=='root':owner.proc=SimpleNamespace(pid=model_root,returncode=None)
+                    elif fault=='missing':proc.returncode=0
+                    elif fault=='malformed':pub.write_bytes(b'invalid')
+                    elif fault=='mismatch':pub.write_bytes(str(model_child+1).encode())
+                    elif fault=='matching':
+                        pub.write_bytes(str(model_child).encode());values[os.getpid()]=[model_child,model_child+2]
+                        check(read(os.getpid())==[model_child+2] and pinned==[model_child] and state['steps']==['observed','marker','publication'],'fixture selected handoff')
+                    if fault!='matching':
+                        expect_failure(kind+'-handoff-'+fault,lambda:read(model_root),'fixture',record=False)
+                        check(not state['conceal'] and read(model_root)==values[model_root] and not pinned,'bad handoff remained hidden')
+                RESULTS.append(dict(name=kind+'-handoff-'+fault+'-finite-boundary',passed=True))
+            omit_fixture,state=omission(pidfile,marker,original_children,lambda:q._ACTIVE_OWNER,lambda pid:os.pidfd_open(pid,0))
             def reveal_after_oracle(deadline):
                 try:return original_oracle(deadline)
                 except ValueError as error:
-                    if hidden[0] and pidfile.is_file() and 'kernel child absence not proved' in str(error):
-                        hidden[0]=False;reached.append(True)
+                    expected=state['conceal'] and state['steps']==['observed','marker','publication'] and str(error)=='kernel child absence not proved'
+                    state['conceal']=False
+                    if expected:state['steps'].extend(('oracle','reveal'))
                     raise
-            code='import subprocess,sys;from pathlib import Path;p=subprocess.Popen([sys.executable,"-c","import time;time.sleep(5)"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);Path('+repr(str(pidfile))+').write_text(str(p.pid));print("leader",flush=True)'
+            code='import subprocess,sys,time;from pathlib import Path\np=subprocess.Popen([sys.executable,"-c","import time;time.sleep(5)"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\nm=Path('+repr(str(marker))+');end=time.monotonic()+1\nwhile not m.is_file():\n if time.monotonic()>=end:raise SystemExit(8)\n time.sleep(.005)\nif m.read_bytes()!=str(p.pid).encode():raise SystemExit(9)\npub=Path('+repr(str(pidfile))+');pending=pub.with_suffix(".pending");pending.write_bytes(str(p.pid).encode());pending.replace(pub);print("leader",flush=True)'
             try:
                 with patch.object(q,'_linux_children',omit_fixture),patch.object(q,'_linux_no_children',reveal_after_oracle):
-                    expect_failure(kind+'-oracle-detects-omitted-adoptee',lambda kind=kind:run(kind,'omitted-adoptee',code,2),'cleanup-failed')
+                    expect_failure(kind+'-oracle-detects-omitted-adoptee',lambda kind=kind:run(kind,'omitted-adoptee',code,2),'cleanup-failed',record=False)
                 ownership=records[-1]['ownership']
-                check(reached and pins and all(q._pidfd_exited(fd) for fd in pins),'oracle did not prove fixture cleanup')
-                check(ownership['classification']!='passed' and ownership['cleanup_ok'] and ownership['stable'],'oracle failure lost permanence/stability')
+                check(state['steps']==['observed','marker','publication','oracle','reveal'] and state['pin'] is not None and q._pidfd_exited(state['pin']),'oracle did not prove ordered fixture cleanup')
+                check(ownership['classification']=='cleanup-failed' and ownership['cleanup_ok'] and ownership['owned_tree_empty'] and ownership['readers_done'] and ownership['stable'],'oracle failure lost permanence/stability')
                 stdout=root/(kind+'-omitted-adoptee')/('stages/tiny/stdout.bin' if kind=='recorder' else 'raw/0002-stdout.bin')
                 before=q.descriptor(stdout);time.sleep(.03);check(before==q.descriptor(stdout),'post-cleanup output mutation')
                 q._linux_no_children(time.monotonic()+1)
+                RESULTS.append(dict(name=kind+'-oracle-detects-omitted-adoptee',passed=True))
                 RESULTS.append(dict(name=kind+'-oracle-failure-cleaned-stable-permanent',passed=True))
             finally:
-                for fd in pins:os.close(fd)
-        for label,redirect,detached in [('inherited-pipe',False,False),('silent-redirected',True,False),('detached-writer',False,True)]:
-            pidfile=root/(kind+'-'+label+'.pid')
-            child='import time;time.sleep(.5);print("late descendant",flush=True)'
+                if state['pin'] is not None:os.close(state['pin'])
+        def descendant_fixture(label,redirect,detached):
+            ready=root/(kind+'-'+label+'.pid');confirmed=root/(kind+'-'+label+'.confirmed');release=root/(kind+'-'+label+'.release')
+            child='import os,sys,time;from pathlib import Path\np=Path('+repr(str(ready))+');release=Path('+repr(str(release))+');end=time.monotonic()+10\ns=p.with_suffix(".pending");s.write_text(str(os.getpid()));s.replace(p)\nwhile not release.is_file():\n if time.monotonic()>=end:raise SystemExit(8)\n time.sleep(.005)\nif release.read_bytes()!=str(os.getpid()).encode():raise SystemExit(9)\ntime.sleep(.1);print("late descendant",flush=True)'
             options=',stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL' if redirect else ''
             if detached:options+=',creationflags=subprocess.CREATE_NEW_PROCESS_GROUP' if os.name=='nt' else ',start_new_session=True'
-            code='import subprocess,sys;from pathlib import Path;p=subprocess.Popen([sys.executable,"-c",'+repr(child)+']'+options+');Path('+repr(str(pidfile))+').write_text(str(p.pid));print("leader",flush=True)'
-            expect_failure(kind+'-'+label,lambda kind=kind,label=label,code=code:run(kind,label,code,.3))
-            stdout=root/(kind+'-'+label)/('stages/tiny/stdout.bin' if kind=='recorder' else 'raw/0002-stdout.bin')
-            before=q.descriptor(stdout);time.sleep(.55)
-            check(q.descriptor(stdout)==before,kind+' descendant changed finalized output')
+            code='import subprocess,sys,time;from pathlib import Path\np=subprocess.Popen([sys.executable,"-c",'+repr(child)+']'+options+')\nready=Path('+repr(str(ready))+');end=time.monotonic()+1\nwhile not ready.is_file():\n if time.monotonic()>=end:raise SystemExit(7)\n time.sleep(.005)\nif ready.read_bytes()!=str(p.pid).encode():raise SystemExit(9)\nc=Path('+repr(str(confirmed))+');s=c.with_suffix(".confirmed-pending");s.write_text(str(p.pid));s.replace(c);print("leader",p.pid,flush=True)'
+            return code,ready,confirmed,release
+        def descendant_proof(terminal,ready,confirmed,stdout,late=False):
+            check(0<len(ready)<=10 and ready.isdigit() and ready==confirmed,'descendant readiness mismatch')
+            pid=int(ready)
+            check(0<pid<=0xffffffff and ready==str(pid).encode() and pid!=terminal['root_pid'] and
+                  stdout.splitlines()==[b'leader '+ready],'descendant ready identity mismatch')
+            check(terminal['classification']=='lingering-descendant' and terminal['exit']==0 and
+                  terminal['cleanup_error']==('lingering-descendant' if late else None) and
+                  all(terminal.get(key) is True for key in ('cleanup_ok','owned_tree_empty','readers_done','stable')),
+                  'descendant exact failure/cleanup not proved')
+            if os.name=='nt':
+                diagnostic=terminal.get('job_diagnostic',{})
+                check(diagnostic.get('complete') is True and diagnostic.get('handles_closed') is True and
+                      any(row.get('pid')==pid and row.get('root') is False and row.get('wait_before')==258 and 'error' not in row
+                          for row in diagnostic.get('members',[])),'descendant native live-member proof missing')
+            return pid
+        for label,redirect,detached in [('inherited-pipe',False,False),('silent-redirected',True,False),('detached-writer',False,True)]:
+            code,ready,confirmed,release=descendant_fixture(label,redirect,detached);started=time.monotonic()
+            expect_failure(kind+'-'+label,lambda kind=kind,label=label,code=code:run(kind,label,code,3),'lingering-descendant',record=False)
+            terminal=records[-1]['ownership'];folder=root/(kind+'-'+label)
+            stdout=folder/('stages/tiny/stdout.bin' if kind=='recorder' else 'raw/0002-stdout.bin')
+            stderr=folder/('stages/tiny/stderr.bin' if kind=='recorder' else 'raw/0003-stderr.bin')
+            pid=descendant_proof(terminal,ready.read_bytes(),confirmed.read_bytes(),stdout.read_bytes())
+            check(time.monotonic()<started+10,'descendant could expire naturally before cleanup proof')
+            before=[q.descriptor(path) for path in (stdout,stderr)]
+            check(before==[terminal['stdout'],terminal['stderr']],'descendant stream binding')
+            release.write_text(str(pid));time.sleep(.55)
+            check([q.descriptor(path) for path in (stdout,stderr)]==before,kind+' descendant changed finalized output')
+            RESULTS.append(dict(name=kind+'-'+label,passed=True))
             RESULTS.append(dict(name=kind+'-'+label+'-stable-hash',passed=True))
-        active=backend.active;hidden=[]
+        for fault,raw,confirmation,output,value in [('missing',b'',b'',stdout.read_bytes(),terminal),
+                ('malformed',b'bad',b'bad',stdout.read_bytes(),terminal),('mismatched',ready.read_bytes(),b'0',stdout.read_bytes(),terminal),
+                ('foreign',b'1',b'1',stdout.read_bytes(),terminal),('earlier-timeout',ready.read_bytes(),confirmed.read_bytes(),stdout.read_bytes(),dict(terminal,classification='timeout')),
+                ('unproved-cleanup',ready.read_bytes(),confirmed.read_bytes(),stdout.read_bytes(),dict(terminal,cleanup_ok=False))]:
+            expect_failure(kind+'-descendant-proof-'+fault,lambda raw=raw,confirmation=confirmation,output=output,value=value:descendant_proof(value,raw,confirmation,output),'descendant')
+        active=backend.active;original_end=q.OwnedChild._end;hidden=[];entered=[];exposed=[];owners=[];phase=['wait']
+        late_directory=root/(kind+'-late-finalization')
+        def late_entry_proof(failure,intentional,exit,readers,markers):
+            check(failure is None and intentional is False and exit==0 and readers and markers,'late fixture entry proof')
         def late_active(tree):
             value=active(tree)
             owner=q._ACTIVE_OWNER
-            if value and tree.proc is not None and tree.proc.poll() is not None and not hidden and owner is not None and not any(t.is_alive() for t in owner.readers):
-                hidden.append(True);return []
+            if value and owner is not None and tree is owner.tree and tree.proc.poll()==0 and all(path.resolve().is_relative_to(late_directory.resolve()) for path in owner.paths):
+                if phase[0]=='wait':
+                    if not hidden:hidden.append(owner)
+                    return []
+                if phase[0]=='end' and not exposed:exposed.append(owner)
             return value
-        late_code='import subprocess,sys;subprocess.Popen([sys.executable,"-c","import time;time.sleep(.5)"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)'
-        with patch.object(backend,'active',late_active):
-            expect_failure(kind+'-late-finalization-descendant',lambda kind=kind:run(kind,'late-finalization',late_code,.3),'lingering-descendant')
-        check(hidden,'late finalization control did not reach terminal boundary')
+        def enter_late(owner,failure=None,intentional=False):
+            if owner.result is None:
+                try:late_entry_proof(failure,intentional,owner.proc.poll(),not any(reader.is_alive() for reader in owner.readers),hidden==[owner])
+                except BaseException:
+                    phase[0]='failed';original_end(owner,'fixture_late_entry_failed');raise
+                phase[0]='end'
+                entered.append(owner);owners.append(owner)
+            return original_end(owner,failure,intentional)
+        code,ready,confirmed,release=descendant_fixture('late-finalization',True,False);started=time.monotonic()
+        with patch.object(backend,'active',late_active),patch.object(q.OwnedChild,'_end',enter_late):
+            expect_failure(kind+'-late-finalization-descendant',lambda:run(kind,'late-finalization',code,3),'lingering-descendant',record=False)
+        check(len(owners)==1 and hidden==entered==exposed==owners,'late fixture missing ordered transition')
+        owner=owners[0];terminal=records[-1]['ownership']
+        pid=descendant_proof(terminal,ready.read_bytes(),confirmed.read_bytes(),owner.paths[0].read_bytes(),True)
+        check(time.monotonic()<started+10,'late descendant could expire naturally')
+        before=[q.descriptor(path) for path in owner.paths];check(before==[terminal['stdout'],terminal['stderr']],'late stream binding')
+        release.write_text(str(pid));time.sleep(.55);check(before==[q.descriptor(path) for path in owner.paths],'late finalized stream mutated')
+        expect_failure(kind+'-late-repeat-remains-failed',lambda:owner.wait(),'lingering-descendant',record=False)
+        RESULTS.append(dict(name=kind+'-late-finalization-descendant',passed=True))
+        for label,args in [('timeout',('timeout',False,0,True,True)),('intentional',(None,True,0,True,True)),
+                           ('leader-error',(None,False,7,True,True)),('missing-readers',(None,False,0,False,True)),('missing-transition',(None,False,0,True,False))]:
+            expect_failure(kind+'-late-proof-'+label,lambda args=args:late_entry_proof(*args),'entry proof')
         expect_failure(kind+'-owned-overflow',lambda kind=kind:run(kind,'overflow','print("x"*1024)'))
-        original=q.OwnedChild._drain;finished=[]
+        original_drain=q.OwnedChild._drain;original_wait=q.OwnedChild.wait
+        go=q.threading.Event();lock=q.threading.Lock();drain=dict(owner=None,eofs={},holds={},errors=[],proved=False)
+        drain_directory=root/(kind+'-drain')
+        def eof_proof(eofs,paths,deadline,exit):
+            check(exit==0 and set(eofs)==set(paths) and len(eofs)==2 and all(value['at']<deadline for value in eofs.values()),'drain EOF proof')
+        def hold_proof(holds,paths,deadline):
+            check(set(holds)==set(paths) and len(holds)==2 and all(value['begin']<deadline<value['end'] for value in holds.values()),'drain hold proof')
         def slow_drain(owner,pipe,path):
-            original(owner,pipe,path);finished.append(str(path));time.sleep(.45)
-        with patch.object(q.OwnedChild,'_drain',slow_drain):
-            expect_failure(kind+'-deadline-through-drain',lambda kind=kind:run(kind,'drain','print("EOF")',.2),'timeout')
-        check(finished,'pipe drain control must reach actual EOF')
+            try:
+                original_drain(owner,pipe,path)
+                with lock:
+                    check(all(p.resolve().is_relative_to(drain_directory.resolve()) for p in owner.paths) and path in owner.paths,'drain fixture owner/path mismatch')
+                    check(drain['owner'] is None or drain['owner'] is owner,'drain fixture owner changed')
+                    drain['owner']=owner
+                    check(path not in drain['eofs'],'duplicate drain EOF')
+                    drain['eofs'][path]=dict(at=time.monotonic(),descriptor=q.descriptor(path))
+                while not go.is_set():
+                    remaining=owner.deadline-time.monotonic();check(remaining>0,'drain setup deadline')
+                    go.wait(min(.01,remaining))
+                check(drain['proved'],'drain setup proof missing')
+                now=time.monotonic();remaining=owner.deadline-now;check(0<remaining<=3,'drain hold missed deadline')
+                with lock:drain['holds'][path]=dict(begin=now)
+                time.sleep(remaining+.03)
+                with lock:drain['holds'][path]['end']=time.monotonic()
+            except BaseException:
+                with lock:drain['errors'].append('fixture drain proof failed')
+                owner.errors.append('fixture drain proof failed');owner.overflow.set();go.set()
+            finally:pipe.close()
+        def begin_drain_wait(owner,*args,**kwargs):
+            try:
+                while True:
+                    owner.check_budget();code=owner.proc.poll()
+                    with lock:
+                        check(not drain['errors'],'drain reader setup failed')
+                        check(code in (None,0),'drain leader failed')
+                        if code==0 and len(drain['eofs'])==2:
+                            check(drain['owner'] is owner,'drain main owner mismatch')
+                            eof_proof(drain['eofs'],owner.paths,owner.deadline,code)
+                            check(time.monotonic()<owner.deadline,'drain setup exhausted deadline')
+                            drain['deadline']=owner.deadline;drain['proved']=True;break
+                    time.sleep(.005)
+                go.set();return original_wait(owner,*args,**kwargs)
+            except BaseException:
+                go.set()
+                if owner.result is None:owner.stop('drain_fixture_setup_failed')
+                raise
+        with patch.object(q.OwnedChild,'_drain',slow_drain),patch.object(q.OwnedChild,'wait',begin_drain_wait):
+            expect_failure(kind+'-deadline-through-drain',lambda kind=kind:run(kind,'drain','print("EOF",flush=True)',3),'timeout',record=False)
+        owner=drain['owner'];terminal=records[-1]['ownership']
+        check(drain['proved'] and not drain['errors'],'drain did not reach intended EOF/hold boundary')
+        eof_proof(drain['eofs'],owner.paths,drain['deadline'],terminal['exit']);hold_proof(drain['holds'],owner.paths,drain['deadline'])
+        check(owner.deadline==drain['deadline'] and terminal['classification']=='timeout' and terminal['cleanup_error'] is None and
+              all(terminal.get(key) is True for key in ('cleanup_ok','owned_tree_empty','readers_done','stable')),'drain exact timeout/cleanup proof')
+        before=[q.descriptor(path) for path in owner.paths]
+        check(before==[terminal['stdout'],terminal['stderr']]==[drain['eofs'][path]['descriptor'] for path in owner.paths],'drain EOF stream binding')
+        check(owner.paths[0].read_bytes().splitlines()==[b'EOF'] and owner.paths[1].read_bytes()==b'','drain real output/EOF missing')
+        time.sleep(.03);check(before==[q.descriptor(path) for path in owner.paths],'drain post-timeout mutation')
+        expect_failure(kind+'-drain-repeat-remains-failed',lambda:owner.wait(),'timeout',record=False)
+        RESULTS.append(dict(name=kind+'-deadline-through-drain',passed=True))
+        for label in ('missing','late','foreign','leader-error'):
+            wrong=copy.deepcopy(drain['eofs']);code=0
+            if label=='missing':wrong.pop(owner.paths[0])
+            elif label=='late':wrong[owner.paths[0]]['at']=drain['deadline']
+            elif label=='foreign':wrong[root/'foreign-output']=wrong.pop(owner.paths[0])
+            else:code=7
+            expect_failure(kind+'-drain-proof-'+label,lambda wrong=wrong,code=code:eof_proof(wrong,owner.paths,drain['deadline'],code),'drain EOF proof')
+        for label in ('missing','before-expiry'):
+            wrong=copy.deepcopy(drain['holds'])
+            if label=='missing':wrong.pop(owner.paths[0])
+            else:wrong[owner.paths[0]]['end']=drain['deadline']
+            expect_failure(kind+'-drain-hold-proof-'+label,lambda wrong=wrong:hold_proof(wrong,owner.paths,drain['deadline']),'drain hold proof')
         for when in ('before','after'):
             attach=backend.attach
             def broken_attach(tree,proc,when=when):
@@ -527,23 +975,99 @@ def lifecycle_controls(root):
                 raise ValueError('injected ownership '+when)
             with patch.object(backend,'attach',broken_attach):
                 expect_failure(kind+'-ownership-api-'+when,lambda kind=kind,when=when:run(kind,'api-'+when,'import time;time.sleep(1)'), 'injected ownership '+when)
-        terminate=backend.terminate;calls=[]
-        def broken_terminate(tree):
-            terminate(tree)
-            if not calls:calls.append(True);raise ValueError('injected cleanup API failure')
-        with patch.object(backend,'terminate',broken_terminate):
-            expect_failure(kind+'-cleanup-failure-remains-failed',lambda kind=kind:run(kind,'cleanup','import time;time.sleep(1)',.05))
-        check(calls,'cleanup failure control reached real termination')
+        for delayed in (False,True):
+            terminate=backend.terminate;original_wait=q.OwnedChild.wait;original_init=q.OwnedChild.__init__
+            calls=[];started=[];owners=[]
+            def broken_terminate(tree):
+                terminate(tree)
+                if not calls:calls.append(True);raise ValueError('injected cleanup API failure')
+            def expire_after_start(owner,*args,**kwargs):
+                check(owner.proc is not None and owner.proc.poll() is None,'cleanup fixture has no live owned child')
+                started.append(True);owners.append(owner)
+                owner.deadline=min(owner.deadline,time.monotonic());owner.scan_deadline=owner.deadline
+                return original_wait(owner,*args,**kwargs)
+            def setup(owner,*args,**kwargs):
+                if delayed:time.sleep(.1)
+                original_init(owner,*args,**kwargs)
+            label='cleanup-delayed' if delayed else 'cleanup'
+            with patch.object(backend,'terminate',broken_terminate),patch.object(q.OwnedChild,'wait',expire_after_start),patch.object(q.OwnedChild,'__init__',setup):
+                expect_failure(kind+'-'+label+'-remains-failed',lambda:run(kind,label,'import time;time.sleep(5)',3),'timeout',record=False)
+            check(calls==[True] and started==[True],'cleanup fixture did not reach intended real termination')
+            terminal=records[-1]['ownership']
+            check(terminal['classification']=='timeout' and terminal['cleanup_error']=='injected cleanup API failure' and
+                  terminal['cleanup_ok'] and terminal['owned_tree_empty'] and terminal['readers_done'] and terminal['stable'],
+                  'cleanup fixture terminal proof')
+            expect_failure(kind+'-'+label+'-repeat-stays-failed',lambda:owners[0].wait(),'timeout')
+            before=[q.descriptor(path) for path in owners[0].paths];time.sleep(.03)
+            check(before==[q.descriptor(path) for path in owners[0].paths],'cleanup fixture output changed')
+            RESULTS.append(dict(name=kind+'-'+label+'-reached-cleaned-stable',passed=True))
+        final_directory=root/(kind+'-slow-finalizer');captured={};markers=[];original_wait=q.OwnedChild.wait
+        def owner_proof(terminal):
+            check(terminal.get('classification')=='passed' and terminal.get('exit')==0 and
+                  all(terminal.get(key) is True for key in ('owned_tree_empty','cleanup_ok','readers_done','stable')),
+                  'finalizer setup owner did not pass')
+        def capture_passed(owner,*args,**kwargs):
+            terminal=original_wait(owner,*args,**kwargs);owner_proof(terminal)
+            check(not captured and not any(reader.is_alive() for reader in owner.readers) and
+                  all(path.resolve().is_relative_to(final_directory.resolve()) for path in owner.paths),'finalizer owner/path mismatch')
+            captured.update(owner=owner,deadline=owner.deadline,descriptors=[q.descriptor(path) for path in owner.paths])
+            check(captured['descriptors']==[terminal['stdout'],terminal['stderr']],'finalizer setup stream binding')
+            markers.append('owner-passed');return terminal
+        def cross_finalization_deadline():
+            check(markers==['owner-passed'] and captured,'finalizer hook missing passed owner')
+            owner=captured['owner'];owner_proof(owner.result)
+            check(owner.deadline==captured['deadline'] and not any(reader.is_alive() for reader in owner.readers),'finalizer owner changed')
+            remaining=captured['deadline']-time.monotonic();check(0<remaining<=3,'finalizer setup exhausted real deadline')
+            markers.append('finalization-entered');time.sleep(remaining+.03)
+            check(time.monotonic()>captured['deadline'],'finalizer did not cross actual deadline')
+            markers.append('deadline-crossed')
+        def marker_proof(events):
+            check(events==['owner-passed','finalization-entered','deadline-crossed'],'finalizer missing ordered markers')
         if kind=='recorder':
-            expect_failure('recorder-slow-finalizer',lambda:run(kind,'slow-finalizer','pass',.2,lambda:time.sleep(.3)), 'timeout during stage finalization')
+            recorder=q.Recorder(final_directory,ident,['tiny'],dict(os.environ),root,stream_cap=512)
+            with patch.object(q.OwnedChild,'wait',capture_passed):
+                expect_failure('recorder-slow-finalizer',lambda:recorder.run('tiny',[sys.executable,'-c','pass'],3,check=cross_finalization_deadline),
+                               'timeout during stage finalization',record=False)
+            record_path=final_directory/'stages/tiny/result.json';saved=record_path.read_bytes();outer=json.loads(saved)
+            check(outer['classification']=='timeout during stage finalization','wrong Recorder finalization failure')
+            binding=dict(size=1,sha256='1'*64)
+            expect_failure('recorder-finalizer-record-rejected',lambda:recorder.finish(binding,binding),'failed/incomplete stage',record=False)
+            expect_failure('recorder-finalizer-duplicate-rejected',lambda:recorder.run('tiny',[sys.executable,'-c','pass'],3),'unexpected/duplicate stage',record=False)
+            check(record_path.read_bytes()==saved,'Recorder overwrote failed finalization evidence')
         else:
-            original_file=driver.Evidence.file;delayed=[]
-            def slow_file(ev,path):
-                value=original_file(ev,path)
-                if not delayed:delayed.append(True);time.sleep(.3)
+            ev=driver.Evidence(final_directory);original_file=driver.Evidence.file
+            def slow_file(evidence,path):
+                value=original_file(evidence,path)
+                if captured and markers==['owner-passed']:
+                    check(evidence is ev and Path(path).resolve()==captured['owner'].paths[0].resolve(),'driver finalizer owner/path mismatch')
+                    cross_finalization_deadline()
                 return value
-            with patch.object(driver.Evidence,'file',slow_file):
-                expect_failure('driver-slow-finalizer',lambda:run(kind,'slow-finalizer','pass',.2),'deadline')
+            with patch.object(q.OwnedChild,'wait',capture_passed),patch.object(driver.Evidence,'file',slow_file),patch.object(driver,'STREAM_CAP',512):
+                child=driver.OwnedProcess(ev,[sys.executable,'-c','pass'],root,dict(os.environ),timeout=3)
+                try:child.wait()
+                except TimeoutError as error:check(str(error)=='process evidence finalization exceeded whole deadline','wrong driver deadline error')
+                else:raise ValueError('driver finalization unexpectedly passed')
+            outer=child.record
+            check(outer['status']=='failed_finalization_deadline' and outer['finalization_classification']=='timeout','wrong driver finalization failure')
+            saved=copy.deepcopy(outer)
+            try:child.wait()
+            except TimeoutError as error:check(str(error)=='process evidence finalization exceeded whole deadline','wrong repeated driver deadline error')
+            else:raise ValueError('repeated driver finalization unexpectedly passed')
+            check(child.record is outer and
+                  {key:value for key,value in child.record.items() if key!='elapsed_seconds'}==
+                  {key:value for key,value in saved.items() if key!='elapsed_seconds'},'driver replaced failed finalization evidence')
+            times=[saved['elapsed_seconds'],child.record['elapsed_seconds']]
+            check(all(type(value) in (int,float) and math.isfinite(value) and value>=0 for value in times) and times[1]>=times[0],
+                  'driver repeated failure elapsed time invalid')
+        marker_proof(markers);owner_proof(captured['owner'].result);owner_proof(outer['ownership'])
+        check(captured['owner'].deadline==captured['deadline'],'finalizer fixture mutated real deadline')
+        check([q.descriptor(path) for path in captured['owner'].paths]==captured['descriptors'],'finalizer raw stream changed')
+        time.sleep(.03);check([q.descriptor(path) for path in captured['owner'].paths]==captured['descriptors'],'finalizer post-failure mutation')
+        RESULTS.append(dict(name=kind+'-slow-finalizer',passed=True))
+        RESULTS.append(dict(name=kind+'-finalizer-failure-permanent-stable',passed=True))
+        bad=dict(captured['owner'].result,classification='timeout')
+        expect_failure(kind+'-finalizer-rejects-early-owner-failure',lambda:owner_proof(bad),'setup owner did not pass')
+        expect_failure(kind+'-finalizer-rejects-missing-hook',lambda:marker_proof(['owner-passed']),'missing ordered markers')
     # Unmanaged siblings make startup reject; never signal that sentinel.
     sentinel=subprocess.Popen([sys.executable,'-c','import time;time.sleep(10)'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     try:
@@ -831,7 +1355,7 @@ def package_consumer_controls(root):
 
 def main():
     with tempfile.TemporaryDirectory(prefix='n49d-tiny-controls-') as tmp:
-        root=Path(tmp);source_controls();ancestry_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');lifecycle_controls(root/'lifecycle')
+        root=Path(tmp);source_controls();ancestry_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();windows_diagnostic_controls(root/'diagnostics');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned')
     print(json.dumps(dict(passed=True,python_optimized=sys.flags.optimize>0,controls=RESULTS,
         linux_reader_backend=('stat-adapter' if q._PROC_STAT_CHILD_ADAPTER else 'native-children') if os.name!='nt' else 'not_applicable',
         n49d_package_wrapper_executed=True,generic_package_fixture_seam=True,inherited_packager_executed=False,inherited_packager_reason='unchanged 1152 MiB reserve; native CI only'),sort_keys=True))

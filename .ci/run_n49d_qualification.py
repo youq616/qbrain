@@ -398,11 +398,28 @@ class _LinuxTree:
         self.known.clear()
 
 
+def _windows_job_list_type(c):
+    # Fixed Windows widths also make the off-platform API controls faithful.
+    class ProcessList(c.Structure):
+        _fields_=[('assigned',c.c_uint32),('listed',c.c_uint32),('pids',c.c_size_t*32)]
+    return ProcessList
+
+
+def _bounded_job_diagnostic(value):
+    try:
+        need(len((json.dumps(value,sort_keys=True,indent=2)+'\n').replace('\n',os.linesep).encode('utf-8'))<=8192,'metadata_cap')
+        return value
+    except BaseException:
+        return dict(complete=False,observation='unknown',error='metadata_cap',members=[])
+
+
 class _WindowsTree:
     def __init__(self):
         import ctypes as c
         from ctypes import wintypes as w
         self.c=c;self.w=w;self.k=c.WinDLL('kernel32',use_last_error=True);self.proc=None;self.assigned=False
+        self.last_accounting=None;self.ProcessList=_windows_job_list_type(c)
+        need(c.sizeof(self.ProcessList)==8+32*c.sizeof(c.c_size_t),'private job list ABI mismatch')
         class Basic(c.Structure):
             _fields_=[('PerProcessUserTimeLimit',c.c_longlong),('PerJobUserTimeLimit',c.c_longlong),('LimitFlags',w.DWORD),('MinimumWorkingSetSize',c.c_size_t),('MaximumWorkingSetSize',c.c_size_t),('ActiveProcessLimit',w.DWORD),('Affinity',c.c_size_t),('PriorityClass',w.DWORD),('SchedulingClass',w.DWORD)]
         class IO(c.Structure):_fields_=[(n,c.c_ulonglong) for n in ('ReadOperationCount','WriteOperationCount','OtherOperationCount','ReadTransferCount','WriteTransferCount','OtherTransferCount')]
@@ -412,6 +429,10 @@ class _WindowsTree:
         self.Accounting=Accounting;self.Thread=Thread
         signatures={'CreateJobObjectW':([c.c_void_p,w.LPCWSTR],w.HANDLE),'SetInformationJobObject':([w.HANDLE,c.c_int,c.c_void_p,w.DWORD],w.BOOL),'SetHandleInformation':([w.HANDLE,w.DWORD,w.DWORD],w.BOOL),'CloseHandle':([w.HANDLE],w.BOOL),'OpenProcess':([w.DWORD,w.BOOL,w.DWORD],w.HANDLE),'AssignProcessToJobObject':([w.HANDLE,w.HANDLE],w.BOOL),'CreateToolhelp32Snapshot':([w.DWORD,w.DWORD],w.HANDLE),'Thread32First':([w.HANDLE,c.POINTER(Thread)],w.BOOL),'Thread32Next':([w.HANDLE,c.POINTER(Thread)],w.BOOL),'OpenThread':([w.DWORD,w.BOOL,w.DWORD],w.HANDLE),'ResumeThread':([w.HANDLE],w.DWORD),'GetProcessIdOfThread':([w.HANDLE],w.DWORD),'QueryInformationJobObject':([w.HANDLE,c.c_int,c.c_void_p,w.DWORD,c.c_void_p],w.BOOL),'TerminateJobObject':([w.HANDLE,w.UINT],w.BOOL)}
         for name,(args,ret) in signatures.items():getattr(self.k,name).argtypes=args;getattr(self.k,name).restype=ret
+        for name,(args,ret) in {'IsProcessInJob':([w.HANDLE,w.HANDLE,c.POINTER(w.BOOL)],w.BOOL),
+                'WaitForSingleObject':([w.HANDLE,w.DWORD],w.DWORD),
+                'GetExitCodeProcess':([w.HANDLE,c.POINTER(w.DWORD)],w.BOOL)}.items():
+            getattr(self.k,name).argtypes=args;getattr(self.k,name).restype=ret
         self.job=self.k.CreateJobObjectW(None,None);need(bool(self.job),'CreateJobObject failed')
         try:
             need(self.k.SetHandleInformation(self.job,1,0),'noninheritable job handle failed')
@@ -444,7 +465,86 @@ class _WindowsTree:
     def active(self):
         if not self.assigned:return [self.proc.pid] if self.proc is not None and self.proc.poll() is None else []
         value=self.Accounting();need(self.k.QueryInformationJobObject(self.job,1,self.c.byref(value),self.c.sizeof(value),None),'private job accounting failed')
+        self.last_accounting=dict(total=value.TotalProcesses,active=value.ActiveProcesses,terminated=value.TotalTerminatedProcesses)
         return list(range(value.ActiveProcesses))
+
+    def observe_member(self,handle,deadline):
+        """Observe an already verified, pinned private-job member; never by PID."""
+        row={};step='wait_before'
+        try:
+            need(time.monotonic()<deadline,'deadline')
+            row['wait_before']=int(self.k.WaitForSingleObject(handle,0));error=int(self.c.get_last_error())
+            need(time.monotonic()<deadline,'deadline')
+            if row['wait_before'] not in (0,258):row.update(error=step,win32=error);return row
+            step='exit_code';value=self.w.DWORD()
+            need(time.monotonic()<deadline,'deadline')
+            ok=self.k.GetExitCodeProcess(handle,self.c.byref(value));error=int(self.c.get_last_error())
+            need(time.monotonic()<deadline,'deadline')
+            if not ok:row.update(error=step,win32=error);return row
+            row['exit_code']=int(value.value);step='wait_after'
+            need(time.monotonic()<deadline,'deadline')
+            row['wait_after']=int(self.k.WaitForSingleObject(handle,0));error=int(self.c.get_last_error())
+            need(time.monotonic()<deadline,'deadline')
+            if row['wait_after'] not in (0,258):row.update(error=step,win32=error)
+            elif row['wait_before']==0 and row['wait_after']!=0:row['error']='conflicting_states'
+            elif row['wait_after']==258 and row['exit_code']!=259:row['error']='conflicting_states'
+        except BaseException as error:
+            row['error']='deadline' if isinstance(error,ValueError) and str(error)=='deadline' else 'api_exception'
+        return row
+
+    def diagnostic(self,cleanup_deadline):
+        """One bounded observation, with no effect on the selected failure."""
+        started=time.monotonic();deadline=min(cleanup_deadline,started+.100)
+        value=dict(complete=False,observation='unknown',trigger=self.last_accounting,handles_closed=True,members=[])
+        step='accounting'
+        try:
+            need(self.assigned and bool(self.job),'invalid_job')
+            need(time.monotonic()<deadline,'deadline')
+            accounting=self.Accounting()
+            ok=self.k.QueryInformationJobObject(self.job,1,self.c.byref(accounting),self.c.sizeof(accounting),None)
+            error=int(self.c.get_last_error());need(time.monotonic()<deadline,'deadline')
+            if not ok:value.update(error=step,win32=error);return _bounded_job_diagnostic(value)
+            value['accounting']=dict(total=accounting.TotalProcesses,active=accounting.ActiveProcesses,terminated=accounting.TotalTerminatedProcesses)
+            step='process_list';listing=self.ProcessList();length=self.w.DWORD()
+            need(time.monotonic()<deadline,'deadline')
+            ok=self.k.QueryInformationJobObject(self.job,3,self.c.byref(listing),self.c.sizeof(listing),self.c.byref(length))
+            error=int(self.c.get_last_error());need(time.monotonic()<deadline,'deadline')
+            value.update(assigned=int(listing.assigned),listed=int(listing.listed))
+            if not ok:value.update(error=step,win32=error);return _bounded_job_diagnostic(value)
+            need(0<=listing.listed==listing.assigned<=32 and
+                 8+listing.listed*self.c.sizeof(self.c.c_size_t)<=length.value<=self.c.sizeof(listing),'invalid_list')
+            pids=list(listing.pids[:listing.listed])
+            need(len(set(pids))==len(pids) and all(0<pid<=0xffffffff for pid in pids),'invalid_list')
+            for pid in pids:
+                need(time.monotonic()<deadline,'deadline')
+                row=dict(pid=int(pid));value['members'].append(row);handle=None
+                try:
+                    step='open';handle=self.k.OpenProcess(0x00101000,False,pid);error=int(self.c.get_last_error())
+                    need(time.monotonic()<deadline,'deadline')
+                    if not handle:row.update(error=step,win32=error);continue
+                    step='membership';member=self.w.BOOL()
+                    need(time.monotonic()<deadline,'deadline')
+                    ok=self.k.IsProcessInJob(handle,self.job,self.c.byref(member));error=int(self.c.get_last_error())
+                    need(time.monotonic()<deadline,'deadline')
+                    if not ok:row.update(error=step,win32=error);continue
+                    if not member.value:row['error']='membership_mismatch';continue
+                    row['root']=pid==self.proc.pid
+                    row.update(self.observe_member(handle,deadline))
+                finally:
+                    if handle:
+                        try:
+                            ok=self.k.CloseHandle(handle);error=int(self.c.get_last_error())
+                            if not ok:row.update(error='close',win32=error);value['handles_closed']=False
+                        except BaseException:row['error']='close_exception';value['handles_closed']=False
+                        if time.monotonic()>=deadline:row['error']='deadline'
+                need(time.monotonic()<deadline,'deadline')
+            value['complete']=not any('error' in row for row in value['members'])
+            if value['complete']:
+                value['observation']='live_member_observed' if any(row['wait_before']==258 for row in value['members']) else 'no_live_member_observed_in_complete_snapshot'
+        except BaseException as error:
+            value['error']=str(error) if isinstance(error,ValueError) and str(error) in ('deadline','invalid_list','invalid_job') else 'api_exception'
+            value['complete']=False;value['observation']='unknown'
+        return _bounded_job_diagnostic(value)
 
     def terminate(self):
         if self.assigned:need(self.k.TerminateJobObject(self.job,1),'private job termination failed')
@@ -465,7 +565,7 @@ class OwnedChild:
         global _ACTIVE_OWNER,_AUDIT_INSTALLED,_LAUNCH_THREAD,_LAUNCH_ARGV
         self.started=time.monotonic();self.deadline=self.started+timeout;self.scan_deadline=self.deadline;self.proc=None;self.tree=None
         self.paths=[Path(stdout_path),Path(stderr_path)];self.stream_cap=stream_cap;self.result=None;self.stable=False
-        self.readers=[];self.overflow=threading.Event();self.errors=[];self.locked=False
+        self.readers=[];self.overflow=threading.Event();self.errors=[];self.locked=False;self.job_diagnostic=None
         for path in self.paths:path.parent.mkdir(parents=True,exist_ok=True);path.touch(exist_ok=False)
         try:
             need(timeout>0 and stream_cap>0,'invalid owned deadline/budget')
@@ -497,12 +597,19 @@ class OwnedChild:
         except BaseException as error:self.errors.append(str(error));self.overflow.set()
         finally:pipe.close()
 
+    def _diagnose_lingering(self,cleanup_deadline):
+        if self.job_diagnostic is not None or not hasattr(self.tree,'diagnostic'):return
+        self.job_diagnostic=dict(complete=False,observation='unknown',error='api_exception',members=[])
+        try:self.job_diagnostic=_bounded_job_diagnostic(self.tree.diagnostic(cleanup_deadline))
+        except BaseException:pass
+
     def _end(self,failure=None,intentional=False):
         global _ACTIVE_OWNER
         if self.result is not None:return self.result
         cleanup_deadline=time.monotonic()+2 if failure else self.deadline
         self.scan_deadline=cleanup_deadline
         cleanup_ok=False;cleanup_error=None
+        if failure=='lingering-descendant':self._diagnose_lingering(cleanup_deadline)
         if self.proc is not None and not self.readers:
             for pipe in (self.proc.stdout,self.proc.stderr):
                 if pipe is not None:pipe.close()
@@ -514,7 +621,10 @@ class OwnedChild:
                     alive=self.tree.active()
                     if not alive:break
                     if not failure and not intentional:
-                        failure='lingering-descendant';raise ValueError(failure)
+                        failure='lingering-descendant'
+                        cleanup_deadline=min(cleanup_deadline,time.monotonic()+2);self.scan_deadline=cleanup_deadline
+                        self._diagnose_lingering(cleanup_deadline)
+                        raise ValueError(failure)
                     if time.monotonic()>=cleanup_deadline:raise ValueError('owned cleanup deadline exceeded')
                     if failure or intentional:self.tree.terminate()
                     time.sleep(.005)
@@ -524,7 +634,8 @@ class OwnedChild:
             cleanup_error=str(error);failure=failure or 'cleanup-failed'
             # A failed API can never become PASS, but verify any safely completed
             # teardown and restore process-local state within the failure grace.
-            cleanup_deadline=min(cleanup_deadline,time.monotonic()+2);self.scan_deadline=cleanup_deadline
+            if failure!='lingering-descendant':cleanup_deadline=min(cleanup_deadline,time.monotonic()+2)
+            self.scan_deadline=cleanup_deadline
             try:
                 if self.tree is not None:
                     while self.tree.active():
@@ -546,6 +657,7 @@ class OwnedChild:
             elapsed_seconds=round(time.monotonic()-self.started,6),stdout=descriptor(self.paths[0]),stderr=descriptor(self.paths[1]))
         if not failure and time.monotonic()>=self.deadline:value['classification']='timeout'
         value['elapsed_seconds']=round(time.monotonic()-self.started,6)
+        if self.job_diagnostic is not None:value['job_diagnostic']=self.job_diagnostic
         self.result=value
         if cleanup_ok and readers_done and self.locked:
             _ACTIVE_OWNER=None;self.locked=False;_OWNER_LOCK.release()
@@ -573,7 +685,7 @@ class OwnedChild:
             if value['classification']!='passed':raise OwnedChildError(value['classification'],self)
             return value
         except BaseException as error:
-            self._end('timeout' if time.monotonic()>=self.deadline else str(error));raise OwnedChildError(self.result['classification'],self) from error
+            self._end('timeout' if str(error)!='lingering-descendant' and time.monotonic()>=self.deadline else str(error));raise OwnedChildError(self.result['classification'],self) from error
 
     def stop(self,reason='intentional_shutdown'):
         if self.result is not None:return self.result
