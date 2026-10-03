@@ -14,8 +14,10 @@ import sys
 
 BASE = 'cfe1ef58e244b51092c2248804b663b6c28913d7'
 BASE_TREE = '75b69ad389630e51528ddb5536a27255203470df'
-CORRECTION_PARENT = '652849684fbb0758b861812dd13e68a0df819578'
-CORRECTION_PARENT_TREE = '417b0f186646d6dd7906ed75a5d331cb64937333'
+CORRECTION_PARENT = '7d6aa8dbb62b7d44af9629b5bdbd7ffcd54d6185'
+CORRECTION_PARENT_TREE = 'd8c451ae5421abcf709f5f709c243f3f97934a05'
+PHASE_PARENT = '652849684fbb0758b861812dd13e68a0df819578'
+PHASE_PARENT_TREE = '417b0f186646d6dd7906ed75a5d331cb64937333'
 PRE_PHASE_PARENT = 'a6c01c581eb77887ae33090b543a98bbd67477af'
 PRE_PHASE_PARENT_TREE = 'fe1250f174afa4eeb8241f4262d855487e1a6045'
 LAST_CORRECTION_PARENT = 'a62e648744ddeb23ca20b05421c70aab5c70ea95'
@@ -30,7 +32,7 @@ EARLIER_PARENT = 'ff61dde8150f30eec699a4e5c01554175ff37f98'
 EARLIER_PARENT_TREE = 'd8895a9792cab41cc15d71f7c248fef794829787'
 ORIGINAL_PARENT = '0c99f74436682500caeaf0bf68a7bc42310d6a50'
 ORIGINAL_PARENT_TREE = 'd91c1f258a704eed9fe899c1193df8d080ff2f56'
-CORRECTION_PATHS = frozenset(['.ci/check_n49d_sources.py', '.ci/run_n49d_qualification.py', '.ci/test_n49d_source_contract.py', '.github/workflows/n49d-mcp-directory-search.yml', 'scripts/build-cl.ps1', 'scripts/build-tests-cl.ps1', 'docs/nodes/N49D-PLAN.md', 'docs/nodes/N49D-PLAN-AUDIT.md', 'docs/nodes/N49D-HARD-AUDIT.md', 'docs/nodes/n49d-evidence/RESULT.json', 'docs/nodes/n49d-evidence/SOURCE-MANIFEST.json'])
+CORRECTION_PATHS = frozenset(['.ci/check_n49d_sources.py', '.ci/test_n49d_source_contract.py', '.github/workflows/n49d-mcp-directory-search.yml'])
 
 HANDLERS = 'src/qbrain/ops/handlers.cpp'
 SERVER = 'src/qbrain/mcp/server.cpp'
@@ -194,8 +196,12 @@ def check_ancestry(root, commit=None, tree=None, precommit=False):
     need(git(root, 'rev-parse', BASE + '^{tree}').decode().strip() == BASE_TREE, 'base object mismatch')
     need(git(root, 'rev-parse', CORRECTION_PARENT + '^{tree}').decode().strip() == CORRECTION_PARENT_TREE,
          'correction parent tree mismatch')
-    need(git(root, 'show', '-s', '--format=%P', CORRECTION_PARENT).decode().strip() == PRE_PHASE_PARENT,
+    need(git(root, 'show', '-s', '--format=%P', CORRECTION_PARENT).decode().strip() == PHASE_PARENT,
          'correction parent ancestry mismatch')
+    need(git(root, 'rev-parse', PHASE_PARENT + '^{tree}').decode().strip() == PHASE_PARENT_TREE,
+         'phase parent tree mismatch')
+    need(git(root, 'show', '-s', '--format=%P', PHASE_PARENT).decode().strip() == PRE_PHASE_PARENT,
+         'phase parent ancestry mismatch')
     need(git(root, 'rev-parse', PRE_PHASE_PARENT + '^{tree}').decode().strip() == PRE_PHASE_PARENT_TREE,
          'pre-phase parent tree mismatch')
     need(git(root, 'show', '-s', '--format=%P', PRE_PHASE_PARENT).decode().strip() == LAST_CORRECTION_PARENT,
@@ -227,8 +233,8 @@ def check_ancestry(root, commit=None, tree=None, precommit=False):
     if precommit:
         need(head == CORRECTION_PARENT and head_tree == CORRECTION_PARENT_TREE,
              'precommit requires exact correction parent/tree')
-        return head,head_tree,PRE_PHASE_PARENT,PRE_PHASE_PARENT_TREE
-    need(commit == head and tree == head_tree and head not in (BASE,ORIGINAL_PARENT,EARLIER_PARENT,PREVIOUS_PARENT,INTERMEDIATE_PARENT,PRIOR_CORRECTION_PARENT,LAST_CORRECTION_PARENT,PRE_PHASE_PARENT,CORRECTION_PARENT), 'candidate pin mismatch')
+        return head,head_tree,PHASE_PARENT,PHASE_PARENT_TREE
+    need(commit == head and tree == head_tree and head not in (BASE,ORIGINAL_PARENT,EARLIER_PARENT,PREVIOUS_PARENT,INTERMEDIATE_PARENT,PRIOR_CORRECTION_PARENT,LAST_CORRECTION_PARENT,PRE_PHASE_PARENT,PHASE_PARENT,CORRECTION_PARENT), 'candidate pin mismatch')
     need(git(root, 'show', '-s', '--format=%P', head).decode().strip() == CORRECTION_PARENT, 'candidate parent mismatch')
     return head,head_tree,CORRECTION_PARENT,CORRECTION_PARENT_TREE
 

@@ -213,7 +213,9 @@ def ancestry_controls():
     replies={('rev-parse','HEAD'):head,('rev-parse','HEAD^{tree}'):tree,
              ('rev-parse',guard.BASE+'^{tree}'):guard.BASE_TREE,
              ('rev-parse',guard.CORRECTION_PARENT+'^{tree}'):guard.CORRECTION_PARENT_TREE,
-             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.PRE_PHASE_PARENT,
+             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.PHASE_PARENT,
+             ('rev-parse',guard.PHASE_PARENT+'^{tree}'):guard.PHASE_PARENT_TREE,
+             ('show','-s','--format=%P',guard.PHASE_PARENT):guard.PRE_PHASE_PARENT,
              ('rev-parse',guard.PRE_PHASE_PARENT+'^{tree}'):guard.PRE_PHASE_PARENT_TREE,
              ('show','-s','--format=%P',guard.PRE_PHASE_PARENT):guard.LAST_CORRECTION_PARENT,
              ('rev-parse',guard.LAST_CORRECTION_PARENT+'^{tree}'):guard.LAST_CORRECTION_PARENT_TREE,
@@ -237,11 +239,11 @@ def ancestry_controls():
             if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
             return (values[args]+'\n').encode()
         with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
-        check(len(calls)==(19 if precommit else 20),'unexpected ancestry query count')
+        check(len(calls)==(21 if precommit else 22),'unexpected ancestry query count')
         return result
     control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
     pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
-    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.PRE_PHASE_PARENT,guard.PRE_PHASE_PARENT_TREE),'precommit actual parent fields'))
+    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.PHASE_PARENT,guard.PHASE_PARENT_TREE),'precommit actual parent fields'))
     def no_lazy_fetch():
         with patch.object(guard.subprocess,'check_output',return_value=b'fixture') as execute:
             check(guard.git(Path('.'),'rev-parse','HEAD')==b'fixture','git helper return')
@@ -260,6 +262,10 @@ def ancestry_controls():
            ('wrong-anchor-parent',('show','-s','--format=%P',guard.CORRECTION_PARENT),'3'*40,'correction parent ancestry'),
            ('multiple-anchor-parents',('show','-s','--format=%P',guard.CORRECTION_PARENT),guard.BASE+' '+'3'*40,'correction parent ancestry'),
            ('missing-anchor-parent',('show','-s','--format=%P',guard.CORRECTION_PARENT),'','correction parent ancestry'),
+           ('wrong-phase-tree',('rev-parse',guard.PHASE_PARENT+'^{tree}'),'3'*40,'phase parent tree'),
+           ('wrong-phase-parent',('show','-s','--format=%P',guard.PHASE_PARENT),'3'*40,'phase parent ancestry'),
+           ('multiple-phase-parents',('show','-s','--format=%P',guard.PHASE_PARENT),guard.BASE+' '+'3'*40,'phase parent ancestry'),
+           ('missing-phase-parent',('show','-s','--format=%P',guard.PHASE_PARENT),'','phase parent ancestry'),
            ('wrong-pre-phase-tree',('rev-parse',guard.PRE_PHASE_PARENT+'^{tree}'),'3'*40,'pre-phase parent tree'),
            ('wrong-pre-phase-parent',('show','-s','--format=%P',guard.PRE_PHASE_PARENT),'3'*40,'pre-phase parent ancestry'),
            ('multiple-pre-phase-parent',('show','-s','--format=%P',guard.PRE_PHASE_PARENT),guard.BASE+' '+'3'*40,'pre-phase parent ancestry'),
@@ -289,23 +295,21 @@ def ancestry_controls():
                           ('same-tree-sibling',{('rev-parse','HEAD'):'199f50694e8e020932c99e821d0d3c67586582c5'}),('wrong-tree',{('rev-parse','HEAD^{tree}'):'3'*40}),('other-tip',{('rev-parse','HEAD'):'3'*40})]:
         expect_failure('ancestry-precommit-'+label,lambda changes=changes:run(pre|changes,True),'precommit requires exact correction parent/tree')
     expect_failure('ancestry-anchor-is-not-candidate',lambda:run(pre,commit=guard.CORRECTION_PARENT,expected_tree=guard.CORRECTION_PARENT_TREE),'candidate pin mismatch')
-    for label,anchor,anchor_tree in [('pre-phase',guard.PRE_PHASE_PARENT,guard.PRE_PHASE_PARENT_TREE),('last-correction',guard.LAST_CORRECTION_PARENT,guard.LAST_CORRECTION_PARENT_TREE),('prior-correction',guard.PRIOR_CORRECTION_PARENT,guard.PRIOR_CORRECTION_PARENT_TREE),('intermediate',guard.INTERMEDIATE_PARENT,guard.INTERMEDIATE_PARENT_TREE),('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('earlier',guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),('original',guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
+    for label,anchor,anchor_tree in [('phase',guard.PHASE_PARENT,guard.PHASE_PARENT_TREE),('pre-phase',guard.PRE_PHASE_PARENT,guard.PRE_PHASE_PARENT_TREE),('last-correction',guard.LAST_CORRECTION_PARENT,guard.LAST_CORRECTION_PARENT_TREE),('prior-correction',guard.PRIOR_CORRECTION_PARENT,guard.PRIOR_CORRECTION_PARENT_TREE),('intermediate',guard.INTERMEDIATE_PARENT,guard.INTERMEDIATE_PARENT_TREE),('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('earlier',guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),('original',guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
         tip={('rev-parse','HEAD'):anchor,('rev-parse','HEAD^{tree}'):anchor_tree}
         expect_failure('ancestry-'+label+'-is-not-candidate',lambda tip=tip,anchor=anchor,anchor_tree=anchor_tree:run(tip,commit=anchor,expected_tree=anchor_tree),'candidate pin mismatch')
         expect_failure('ancestry-precommit-reject-'+label,lambda tip=tip:run(tip,True),'precommit requires exact correction parent/tree')
-    for label,key in [('missing-pre-phase-object',('rev-parse',guard.PRE_PHASE_PARENT+'^{tree}')),('missing-pre-phase-parent',('show','-s','--format=%P',guard.PRE_PHASE_PARENT)),('missing-last-correction-object',('rev-parse',guard.LAST_CORRECTION_PARENT+'^{tree}')),('missing-last-correction-parent',('show','-s','--format=%P',guard.LAST_CORRECTION_PARENT)),('missing-prior-correction-object',('rev-parse',guard.PRIOR_CORRECTION_PARENT+'^{tree}')),('missing-prior-correction-parent',('show','-s','--format=%P',guard.PRIOR_CORRECTION_PARENT)),('missing-intermediate-object',('rev-parse',guard.INTERMEDIATE_PARENT+'^{tree}')),('missing-intermediate-parent',('show','-s','--format=%P',guard.INTERMEDIATE_PARENT)),('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT)),('missing-earlier-object',('rev-parse',guard.EARLIER_PARENT+'^{tree}')),('missing-earlier-parent-metadata',('show','-s','--format=%P',guard.EARLIER_PARENT)),('missing-original-object',('rev-parse',guard.ORIGINAL_PARENT+'^{tree}')),('missing-original-parent-metadata',('show','-s','--format=%P',guard.ORIGINAL_PARENT))]:
+    for label,key in [('missing-phase-object',('rev-parse',guard.PHASE_PARENT+'^{tree}')),('missing-phase-parent-metadata',('show','-s','--format=%P',guard.PHASE_PARENT)),('missing-pre-phase-object',('rev-parse',guard.PRE_PHASE_PARENT+'^{tree}')),('missing-pre-phase-parent',('show','-s','--format=%P',guard.PRE_PHASE_PARENT)),('missing-last-correction-object',('rev-parse',guard.LAST_CORRECTION_PARENT+'^{tree}')),('missing-last-correction-parent',('show','-s','--format=%P',guard.LAST_CORRECTION_PARENT)),('missing-prior-correction-object',('rev-parse',guard.PRIOR_CORRECTION_PARENT+'^{tree}')),('missing-prior-correction-parent',('show','-s','--format=%P',guard.PRIOR_CORRECTION_PARENT)),('missing-intermediate-object',('rev-parse',guard.INTERMEDIATE_PARENT+'^{tree}')),('missing-intermediate-parent',('show','-s','--format=%P',guard.INTERMEDIATE_PARENT)),('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT)),('missing-earlier-object',('rev-parse',guard.EARLIER_PARENT+'^{tree}')),('missing-earlier-parent-metadata',('show','-s','--format=%P',guard.EARLIER_PARENT)),('missing-original-object',('rev-parse',guard.ORIGINAL_PARENT+'^{tree}')),('missing-original-parent-metadata',('show','-s','--format=%P',guard.ORIGINAL_PARENT))]:
         try:run({key:None})
         except subprocess.CalledProcessError as error:
             check(error.returncode==128 and error.cmd==['git',*key],'missing object boundary');RESULTS.append(dict(name='ancestry-'+label,passed=True))
         else:raise ValueError('missing ancestry object passed')
     parent={p:('100644',guard.blob(('parent '+p).encode())) for p in guard.ALLOW};candidate=dict(parent)
     for path in guard.CORRECTION_PATHS:candidate[path]=('100644',guard.blob(('correction '+path).encode()))
-    control('correction-exact-eleven-paths',lambda:check(guard.validate_correction(parent,candidate)==sorted(guard.CORRECTION_PATHS),'correction inventory'))
-    check(guard.CORRECTION_PATHS==frozenset({'.ci/check_n49d_sources.py','.ci/run_n49d_qualification.py',
-          '.ci/test_n49d_source_contract.py','.github/workflows/n49d-mcp-directory-search.yml',
-          'scripts/build-cl.ps1','scripts/build-tests-cl.ps1','docs/nodes/N49D-PLAN.md',
-          'docs/nodes/N49D-PLAN-AUDIT.md','docs/nodes/N49D-HARD-AUDIT.md','docs/nodes/n49d-evidence/RESULT.json',
-          'docs/nodes/n49d-evidence/SOURCE-MANIFEST.json'}) and len(guard.ALLOW)==18,'eleven correction/full18 scope')
+    control('correction-exact-three-paths',lambda:check(guard.validate_correction(parent,candidate)==sorted(guard.CORRECTION_PATHS),'correction inventory'))
+    check(guard.CORRECTION_PATHS==frozenset({'.ci/check_n49d_sources.py',
+          '.ci/test_n49d_source_contract.py','.github/workflows/n49d-mcp-directory-search.yml'}) and
+          len(guard.ALLOW)==18,'three correction/full18 scope')
     partial=dict(parent);path=sorted(guard.CORRECTION_PATHS)[0];partial[path]=candidate[path]
     control('correction-precommit-subset',lambda:check(guard.validate_correction(parent,partial,False)==[path],'correction subset'))
     expect_failure('correction-missing-final-member',lambda:guard.validate_correction(parent,partial),'required correction path missing')
@@ -317,14 +321,14 @@ def ancestry_controls():
         expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
     workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
     def workflow_contract(raw,windows=False):
-        canonical=guard.checkout_bytes(raw,'396c425b993b5dc6480947e665a3044c3943a50d',windows)
-        check(canonical.count(b'          fetch-depth: 10\n')==1 and
-              guard.sha(canonical.replace(b'          fetch-depth: 10\n',b'          fetch-depth: 9\n'))=='d5efb6a1516f96609db16db1f40583dcff360deba71c5efa47ed1c0d3cb59a3d','exact depth-ten workflow contract')
+        canonical=guard.checkout_bytes(raw,'5d5ad4346f87a24531a2f327b116d18e9d39c557',windows)
+        check(canonical.count(b'          fetch-depth: 11\n')==1 and
+              guard.sha(canonical.replace(b'          fetch-depth: 11\n',b'          fetch-depth: 10\n'))=='9cf5265dd2f90c275bff5ce2e4d8249bdd031ab342ba92ab74ad95eeef2e92f2','exact depth-eleven workflow contract')
         return canonical
-    control('workflow-only-depth-ten-change',lambda:workflow_contract(workflow,os.name=='nt'))
+    control('workflow-only-depth-eleven-change',lambda:workflow_contract(workflow,os.name=='nt'))
     canonical=workflow_contract(workflow,os.name=='nt')
-    for label,old,new in [('old-depth',b'fetch-depth: 10',b'fetch-depth: 9'),('broad-depth',b'fetch-depth: 10',b'fetch-depth: 0'),
-                          ('malformed-depth',b'fetch-depth: 10',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+    for label,old,new in [('old-depth',b'fetch-depth: 11',b'fetch-depth: 10'),('broad-depth',b'fetch-depth: 11',b'fetch-depth: 0'),
+                          ('malformed-depth',b'fetch-depth: 11',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
                           ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
         changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
         expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
@@ -2553,9 +2557,9 @@ def package_consumer_controls(root):
         binding['parent']=guard.LAST_CORRECTION_PARENT;binding['parent_tree']=guard.LAST_CORRECTION_PARENT_TREE
     packet=source_packet(previous_anchor);ancestry_packets.append(('prior-correction-pair',packet))
     expect_failure('producer-rehashed-prior-correction-pair',lambda:q.validate_recordings(packet.__getitem__,ident,files=packet),'source/candidate binding mismatch')
-    packet=source_packet(lambda binding,packet:binding.update(correction_changed=sorted({'.ci/check_n49d_sources.py','.ci/test_n49d_source_contract.py','.github/workflows/n49d-mcp-directory-search.yml'})))
-    ancestry_packets.append(('old-three-path-correction',packet))
-    expect_failure('producer-rehashed-old-four-path-correction',lambda:q.validate_recordings(packet.__getitem__,ident,files=packet),'source/candidate binding mismatch')
+    packet=source_packet(lambda binding,packet:binding.update(correction_changed=sorted(frozenset(['.ci/check_n49d_sources.py', '.ci/run_n49d_qualification.py', '.ci/test_n49d_source_contract.py', '.github/workflows/n49d-mcp-directory-search.yml', 'scripts/build-cl.ps1', 'scripts/build-tests-cl.ps1', 'docs/nodes/N49D-PLAN.md', 'docs/nodes/N49D-PLAN-AUDIT.md', 'docs/nodes/N49D-HARD-AUDIT.md', 'docs/nodes/n49d-evidence/RESULT.json', 'docs/nodes/n49d-evidence/SOURCE-MANIFEST.json']))))
+    ancestry_packets.append(('published-eleven-path-correction',packet))
+    expect_failure('producer-rehashed-published-eleven-path-correction',lambda:q.validate_recordings(packet.__getitem__,ident,files=packet),'source/candidate binding mismatch')
     omitted_source=source_packet(lambda binding,packet:(binding['changed_files'].pop(source_path),packet.pop(source_leaf)))
     expect_failure('full-source-omitted-leaf-and-map-rehashed',lambda:q.validate_recordings(omitted_source.__getitem__,ident,files=omitted_source),'fixed changed source map mismatch')
     cases=[
@@ -3534,9 +3538,25 @@ def phase_retention_controls(root,export=None):
     diagnostic_admission_controls(root/'admission',ident,originals)
 
 
+def fixture_root_controls(root):
+    data=b'canonical fixture root\n';leaf=root/'fixed-file-positive.bin';leaf.write_bytes(data)
+    expected=dict(size=len(data),sha256=hashlib.sha256(data).hexdigest())
+    control('fixed-file-canonical-root',lambda:check(q.fixed_file(root,leaf.name)==expected,
+            'canonical regular-file descriptor'))
+    def exact_rejection(label,callback,message):
+        try:callback()
+        except ValueError as error:check(str(error)==message,'fixed-file wrong rejection: '+label)
+        else:raise ValueError('fixed-file negative unexpectedly passed: '+label)
+        RESULTS.append(dict(name=label,passed=True))
+    alias=root/'..'/root.name
+    exact_rejection('fixed-file-lexical-root-alias',lambda:q.fixed_file(alias,leaf.name),'fixed root redirected')
+    directory=root/'fixed-file-directory';directory.mkdir()
+    exact_rejection('fixed-file-nonregular-leaf',lambda:q.fixed_file(root,directory.name),'fixed regular file required')
+
+
 def main():
     with tempfile.TemporaryDirectory(prefix='n49d-tiny-controls-') as tmp:
-        root=Path(tmp);source_controls();ancestry_controls();privacy_assertion_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();image_model=windows_diagnostic_controls(root/'diagnostics');windows_image_controls(root/'images',image_model);failure_detail_controls(root/'failure-detail');initial_parent_controls(root/'initial-parent');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');root_terminal_controls(root/'root-terminal');root_terminal_native_controls(root/'root-native');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned');phase_report_controls(root/'phase-reports');phase_pair_controls(root/'phase-pair');build_lifecycle_controls(root/'build-model');build_native_controls(root/'build-native');windows_wrapper_controls(root/'wrapper-native');phase_packet_controls(root/'phase-packets');phase_retention_controls(root/'phase-retention');failed_envelope_controls();failure_detail_retention_controls(root/'failure-detail-retention')
+        root=Path(tmp).resolve(strict=True);fixture_root_controls(root);source_controls();ancestry_controls();privacy_assertion_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();image_model=windows_diagnostic_controls(root/'diagnostics');windows_image_controls(root/'images',image_model);failure_detail_controls(root/'failure-detail');initial_parent_controls(root/'initial-parent');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');root_terminal_controls(root/'root-terminal');root_terminal_native_controls(root/'root-native');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned');phase_report_controls(root/'phase-reports');phase_pair_controls(root/'phase-pair');build_lifecycle_controls(root/'build-model');build_native_controls(root/'build-native');windows_wrapper_controls(root/'wrapper-native');phase_packet_controls(root/'phase-packets');phase_retention_controls(root/'phase-retention');failed_envelope_controls();failure_detail_retention_controls(root/'failure-detail-retention')
     print(json.dumps(dict(passed=True,python_optimized=sys.flags.optimize>0,controls=RESULTS,
         linux_reader_backend=('stat-adapter' if q._PROC_STAT_CHILD_ADAPTER else 'native-children') if os.name!='nt' else 'not_applicable',
         n49d_package_wrapper_executed=True,generic_package_fixture_seam=True,inherited_packager_executed=False,inherited_packager_reason='unchanged 1152 MiB reserve; native CI only'),sort_keys=True))
