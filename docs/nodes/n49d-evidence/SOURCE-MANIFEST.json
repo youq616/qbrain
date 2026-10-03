@@ -1,13 +1,20 @@
 {
-  "schema": "qbrain-n49d-source-contract-v1",
+  "schema": "qbrain-n49d-source-contract-v2",
   "accepted_base_commit": "cfe1ef58e244b51092c2248804b663b6c28913d7",
   "accepted_base_tree": "75b69ad389630e51528ddb5536a27255203470df",
-  "approved_technical_plan_sha256": "df0d8a44cff5f6f920090020ea643560daa1c506e0f758134b9da6fad762595e",
   "production_delta_regions": {
     "src/qbrain/ops/handlers.cpp": "One directory.hpp include plus existing search registration/body only",
     "src/qbrain/mcp/server.cpp": "Search-only present-uri nonstring check before generic argument conversion"
   },
-  "inherited_other_files": "Exact accepted Git blob and mode identities are required",
+  "inherited_other_files": "Outside the complete approved delta, exact accepted Git blob and mode identities are required",
   "candidate_binding": "The qualification artifact carries independently checked candidate commit/tree, complete Git inventory, and exact changed-source bytes",
-  "outcome": "pending"
+  "outcome": "pending",
+  "original_technical_plan_sha256": "df0d8a44cff5f6f920090020ea643560daa1c506e0f758134b9da6fad762595e",
+  "qualification_contract": "qbrain-n49d-qualification-v2",
+  "inherited_build_delta_files": [
+    "scripts/build-cl.ps1",
+    "scripts/build-tests-cl.ps1"
+  ],
+  "inherited_build_binding": "Exact reviewed canonical wrapper blobs are pinned by the candidate source checker",
+  "accepted_base_delta_paths": 18
 }

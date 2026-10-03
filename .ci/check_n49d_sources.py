@@ -14,8 +14,10 @@ import sys
 
 BASE = 'cfe1ef58e244b51092c2248804b663b6c28913d7'
 BASE_TREE = '75b69ad389630e51528ddb5536a27255203470df'
-CORRECTION_PARENT = 'a6c01c581eb77887ae33090b543a98bbd67477af'
-CORRECTION_PARENT_TREE = 'fe1250f174afa4eeb8241f4262d855487e1a6045'
+CORRECTION_PARENT = '652849684fbb0758b861812dd13e68a0df819578'
+CORRECTION_PARENT_TREE = '417b0f186646d6dd7906ed75a5d331cb64937333'
+PRE_PHASE_PARENT = 'a6c01c581eb77887ae33090b543a98bbd67477af'
+PRE_PHASE_PARENT_TREE = 'fe1250f174afa4eeb8241f4262d855487e1a6045'
 LAST_CORRECTION_PARENT = 'a62e648744ddeb23ca20b05421c70aab5c70ea95'
 LAST_CORRECTION_PARENT_TREE = '194cbd3f6d486e72f10472234a907e3bf5c1f97e'
 PRIOR_CORRECTION_PARENT = 'f64b2eff3c46324f5a8d100748ec6b92ccd4981d'
@@ -28,8 +30,8 @@ EARLIER_PARENT = 'ff61dde8150f30eec699a4e5c01554175ff37f98'
 EARLIER_PARENT_TREE = 'd8895a9792cab41cc15d71f7c248fef794829787'
 ORIGINAL_PARENT = '0c99f74436682500caeaf0bf68a7bc42310d6a50'
 ORIGINAL_PARENT_TREE = 'd91c1f258a704eed9fe899c1193df8d080ff2f56'
-CORRECTION_PATHS = frozenset({'.ci/check_n49d_sources.py',
-                              '.ci/test_n49d_source_contract.py', '.github/workflows/n49d-mcp-directory-search.yml'})
+CORRECTION_PATHS = frozenset(['.ci/check_n49d_sources.py', '.ci/run_n49d_qualification.py', '.ci/test_n49d_source_contract.py', '.github/workflows/n49d-mcp-directory-search.yml', 'scripts/build-cl.ps1', 'scripts/build-tests-cl.ps1', 'docs/nodes/N49D-PLAN.md', 'docs/nodes/N49D-PLAN-AUDIT.md', 'docs/nodes/N49D-HARD-AUDIT.md', 'docs/nodes/n49d-evidence/RESULT.json', 'docs/nodes/n49d-evidence/SOURCE-MANIFEST.json'])
+
 HANDLERS = 'src/qbrain/ops/handlers.cpp'
 SERVER = 'src/qbrain/mcp/server.cpp'
 LEDGER = 'docs/OPS-PARITY-LEDGER.md'
@@ -46,7 +48,10 @@ docs/nodes/N49D-HARD-AUDIT.md
 docs/integration/MCP-DIRECTORY-SEARCH.md
 docs/nodes/n49d-evidence/RESULT.json
 docs/nodes/n49d-evidence/SOURCE-MANIFEST.json'''.splitlines())
-ALLOW = NEW | {HANDLERS, SERVER, LEDGER}
+WRAPPERS = {'scripts/build-cl.ps1': '0d70d018ccfd206aa09d6a8dd52f2f21be0ee5d1', 'scripts/build-tests-cl.ps1': 'fd674ec09cc9f3b2432290a5d66c98e6d92e4411'}
+WRAPPER_BASE = {'scripts/build-cl.ps1':'bc9aae3592cefe727b78c2649802e35ee4e94b6c','scripts/build-tests-cl.ps1':'375e7f8f80524dfe94e3f0275b8350fec003436c'}
+INHERITED = {HANDLERS, SERVER, LEDGER} | set(WRAPPERS)
+ALLOW = NEW | INHERITED
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -64,7 +69,7 @@ def blob(raw):
 
 
 def git(root, *args):
-    return subprocess.check_output(['git', *args], cwd=root, timeout=60, env=dict(os.environ,GIT_NO_LAZY_FETCH='1'))
+    return subprocess.check_output(['git', *args], cwd=root, timeout=60, env=dict(os.environ,GIT_NO_LAZY_FETCH='1',GIT_ALLOW_PROTOCOL=''))
 
 
 def generic_tree_reader(root):
@@ -97,7 +102,9 @@ def one_split(raw, anchor):
 
 
 def approved_regions(path, before, after):
-    if path == HANDLERS:
+    if path in WRAPPERS:
+        need(blob(before)==WRAPPER_BASE[path] and blob(after)==WRAPPERS[path],'reviewed wrapper identity mismatch')
+    elif path == HANDLERS:
         header = b'#include "qbrain/search/hybrid.hpp"\n'
         added = b'#include "qbrain/search/directory.hpp"\n'
         need(after.count(added) == 1 and header + added in after, 'directory header location')
@@ -140,9 +147,9 @@ def validate_delta(base, candidate, read_before, read_after, base_commit=BASE, b
     if require_complete:
         need(new == NEW, 'required new file missing')
     changed = sorted(p for p in set(base) & set(candidate) if base[p] != candidate[p])
-    need(set(changed) <= {HANDLERS, SERVER, LEDGER}, 'inherited file identity changed')
+    need(set(changed) <= INHERITED, 'inherited file identity changed')
     if require_complete:
-        need(set(changed) == {HANDLERS, SERVER, LEDGER}, 'required production/ledger delta missing')
+        need(set(changed) == INHERITED, 'required production/ledger delta missing')
     for path in changed:
         need(base[path][0] == candidate[path][0] == '100644', 'inherited mode changed')
         approved_regions(path, read_before(path), read_after(path))
@@ -174,7 +181,7 @@ def precommit_index(base, index, untracked):
     for path,value in index.items():
         if path in base:
             need(value[0]==base[path][0], 'staged inherited mode changed')
-            need(value==base[path] or path in {HANDLERS,SERVER,LEDGER}, 'staged inherited identity changed')
+            need(value==base[path] or path in INHERITED, 'staged inherited identity changed')
         else:
             need(value[0]=='100644', 'staged new file mode unsupported')
     return dict(index)
@@ -187,8 +194,12 @@ def check_ancestry(root, commit=None, tree=None, precommit=False):
     need(git(root, 'rev-parse', BASE + '^{tree}').decode().strip() == BASE_TREE, 'base object mismatch')
     need(git(root, 'rev-parse', CORRECTION_PARENT + '^{tree}').decode().strip() == CORRECTION_PARENT_TREE,
          'correction parent tree mismatch')
-    need(git(root, 'show', '-s', '--format=%P', CORRECTION_PARENT).decode().strip() == LAST_CORRECTION_PARENT,
+    need(git(root, 'show', '-s', '--format=%P', CORRECTION_PARENT).decode().strip() == PRE_PHASE_PARENT,
          'correction parent ancestry mismatch')
+    need(git(root, 'rev-parse', PRE_PHASE_PARENT + '^{tree}').decode().strip() == PRE_PHASE_PARENT_TREE,
+         'pre-phase parent tree mismatch')
+    need(git(root, 'show', '-s', '--format=%P', PRE_PHASE_PARENT).decode().strip() == LAST_CORRECTION_PARENT,
+         'pre-phase parent ancestry mismatch')
     need(git(root, 'rev-parse', LAST_CORRECTION_PARENT + '^{tree}').decode().strip() == LAST_CORRECTION_PARENT_TREE,
          'last correction parent tree mismatch')
     need(git(root, 'show', '-s', '--format=%P', LAST_CORRECTION_PARENT).decode().strip() == PRIOR_CORRECTION_PARENT,
@@ -216,8 +227,8 @@ def check_ancestry(root, commit=None, tree=None, precommit=False):
     if precommit:
         need(head == CORRECTION_PARENT and head_tree == CORRECTION_PARENT_TREE,
              'precommit requires exact correction parent/tree')
-        return head,head_tree,LAST_CORRECTION_PARENT,LAST_CORRECTION_PARENT_TREE
-    need(commit == head and tree == head_tree and head not in (BASE,ORIGINAL_PARENT,EARLIER_PARENT,PREVIOUS_PARENT,INTERMEDIATE_PARENT,PRIOR_CORRECTION_PARENT,LAST_CORRECTION_PARENT,CORRECTION_PARENT), 'candidate pin mismatch')
+        return head,head_tree,PRE_PHASE_PARENT,PRE_PHASE_PARENT_TREE
+    need(commit == head and tree == head_tree and head not in (BASE,ORIGINAL_PARENT,EARLIER_PARENT,PREVIOUS_PARENT,INTERMEDIATE_PARENT,PRIOR_CORRECTION_PARENT,LAST_CORRECTION_PARENT,PRE_PHASE_PARENT,CORRECTION_PARENT), 'candidate pin mismatch')
     need(git(root, 'show', '-s', '--format=%P', head).decode().strip() == CORRECTION_PARENT, 'candidate parent mismatch')
     return head,head_tree,CORRECTION_PARENT,CORRECTION_PARENT_TREE
 

@@ -213,7 +213,9 @@ def ancestry_controls():
     replies={('rev-parse','HEAD'):head,('rev-parse','HEAD^{tree}'):tree,
              ('rev-parse',guard.BASE+'^{tree}'):guard.BASE_TREE,
              ('rev-parse',guard.CORRECTION_PARENT+'^{tree}'):guard.CORRECTION_PARENT_TREE,
-             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.LAST_CORRECTION_PARENT,
+             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.PRE_PHASE_PARENT,
+             ('rev-parse',guard.PRE_PHASE_PARENT+'^{tree}'):guard.PRE_PHASE_PARENT_TREE,
+             ('show','-s','--format=%P',guard.PRE_PHASE_PARENT):guard.LAST_CORRECTION_PARENT,
              ('rev-parse',guard.LAST_CORRECTION_PARENT+'^{tree}'):guard.LAST_CORRECTION_PARENT_TREE,
              ('show','-s','--format=%P',guard.LAST_CORRECTION_PARENT):guard.PRIOR_CORRECTION_PARENT,
              ('rev-parse',guard.PRIOR_CORRECTION_PARENT+'^{tree}'):guard.PRIOR_CORRECTION_PARENT_TREE,
@@ -235,11 +237,11 @@ def ancestry_controls():
             if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
             return (values[args]+'\n').encode()
         with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
-        check(len(calls)==(17 if precommit else 18),'unexpected ancestry query count')
+        check(len(calls)==(19 if precommit else 20),'unexpected ancestry query count')
         return result
     control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
     pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
-    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.LAST_CORRECTION_PARENT,guard.LAST_CORRECTION_PARENT_TREE),'precommit actual parent fields'))
+    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.PRE_PHASE_PARENT,guard.PRE_PHASE_PARENT_TREE),'precommit actual parent fields'))
     def no_lazy_fetch():
         with patch.object(guard.subprocess,'check_output',return_value=b'fixture') as execute:
             check(guard.git(Path('.'),'rev-parse','HEAD')==b'fixture','git helper return')
@@ -258,6 +260,9 @@ def ancestry_controls():
            ('wrong-anchor-parent',('show','-s','--format=%P',guard.CORRECTION_PARENT),'3'*40,'correction parent ancestry'),
            ('multiple-anchor-parents',('show','-s','--format=%P',guard.CORRECTION_PARENT),guard.BASE+' '+'3'*40,'correction parent ancestry'),
            ('missing-anchor-parent',('show','-s','--format=%P',guard.CORRECTION_PARENT),'','correction parent ancestry'),
+           ('wrong-pre-phase-tree',('rev-parse',guard.PRE_PHASE_PARENT+'^{tree}'),'3'*40,'pre-phase parent tree'),
+           ('wrong-pre-phase-parent',('show','-s','--format=%P',guard.PRE_PHASE_PARENT),'3'*40,'pre-phase parent ancestry'),
+           ('multiple-pre-phase-parent',('show','-s','--format=%P',guard.PRE_PHASE_PARENT),guard.BASE+' '+'3'*40,'pre-phase parent ancestry'),
            ('wrong-last-correction-tree',('rev-parse',guard.LAST_CORRECTION_PARENT+'^{tree}'),'3'*40,'last correction parent tree'),
            ('wrong-last-correction-parent',('show','-s','--format=%P',guard.LAST_CORRECTION_PARENT),'3'*40,'last correction parent ancestry'),
            ('multiple-last-correction-parents',('show','-s','--format=%P',guard.LAST_CORRECTION_PARENT),guard.BASE+' '+'3'*40,'last correction parent ancestry'),
@@ -284,24 +289,27 @@ def ancestry_controls():
                           ('same-tree-sibling',{('rev-parse','HEAD'):'199f50694e8e020932c99e821d0d3c67586582c5'}),('wrong-tree',{('rev-parse','HEAD^{tree}'):'3'*40}),('other-tip',{('rev-parse','HEAD'):'3'*40})]:
         expect_failure('ancestry-precommit-'+label,lambda changes=changes:run(pre|changes,True),'precommit requires exact correction parent/tree')
     expect_failure('ancestry-anchor-is-not-candidate',lambda:run(pre,commit=guard.CORRECTION_PARENT,expected_tree=guard.CORRECTION_PARENT_TREE),'candidate pin mismatch')
-    for label,anchor,anchor_tree in [('last-correction',guard.LAST_CORRECTION_PARENT,guard.LAST_CORRECTION_PARENT_TREE),('prior-correction',guard.PRIOR_CORRECTION_PARENT,guard.PRIOR_CORRECTION_PARENT_TREE),('intermediate',guard.INTERMEDIATE_PARENT,guard.INTERMEDIATE_PARENT_TREE),('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('earlier',guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),('original',guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
+    for label,anchor,anchor_tree in [('pre-phase',guard.PRE_PHASE_PARENT,guard.PRE_PHASE_PARENT_TREE),('last-correction',guard.LAST_CORRECTION_PARENT,guard.LAST_CORRECTION_PARENT_TREE),('prior-correction',guard.PRIOR_CORRECTION_PARENT,guard.PRIOR_CORRECTION_PARENT_TREE),('intermediate',guard.INTERMEDIATE_PARENT,guard.INTERMEDIATE_PARENT_TREE),('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('earlier',guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),('original',guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
         tip={('rev-parse','HEAD'):anchor,('rev-parse','HEAD^{tree}'):anchor_tree}
         expect_failure('ancestry-'+label+'-is-not-candidate',lambda tip=tip,anchor=anchor,anchor_tree=anchor_tree:run(tip,commit=anchor,expected_tree=anchor_tree),'candidate pin mismatch')
         expect_failure('ancestry-precommit-reject-'+label,lambda tip=tip:run(tip,True),'precommit requires exact correction parent/tree')
-    for label,key in [('missing-last-correction-object',('rev-parse',guard.LAST_CORRECTION_PARENT+'^{tree}')),('missing-last-correction-parent',('show','-s','--format=%P',guard.LAST_CORRECTION_PARENT)),('missing-prior-correction-object',('rev-parse',guard.PRIOR_CORRECTION_PARENT+'^{tree}')),('missing-prior-correction-parent',('show','-s','--format=%P',guard.PRIOR_CORRECTION_PARENT)),('missing-intermediate-object',('rev-parse',guard.INTERMEDIATE_PARENT+'^{tree}')),('missing-intermediate-parent',('show','-s','--format=%P',guard.INTERMEDIATE_PARENT)),('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT)),('missing-earlier-object',('rev-parse',guard.EARLIER_PARENT+'^{tree}')),('missing-earlier-parent-metadata',('show','-s','--format=%P',guard.EARLIER_PARENT)),('missing-original-object',('rev-parse',guard.ORIGINAL_PARENT+'^{tree}')),('missing-original-parent-metadata',('show','-s','--format=%P',guard.ORIGINAL_PARENT))]:
+    for label,key in [('missing-pre-phase-object',('rev-parse',guard.PRE_PHASE_PARENT+'^{tree}')),('missing-pre-phase-parent',('show','-s','--format=%P',guard.PRE_PHASE_PARENT)),('missing-last-correction-object',('rev-parse',guard.LAST_CORRECTION_PARENT+'^{tree}')),('missing-last-correction-parent',('show','-s','--format=%P',guard.LAST_CORRECTION_PARENT)),('missing-prior-correction-object',('rev-parse',guard.PRIOR_CORRECTION_PARENT+'^{tree}')),('missing-prior-correction-parent',('show','-s','--format=%P',guard.PRIOR_CORRECTION_PARENT)),('missing-intermediate-object',('rev-parse',guard.INTERMEDIATE_PARENT+'^{tree}')),('missing-intermediate-parent',('show','-s','--format=%P',guard.INTERMEDIATE_PARENT)),('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT)),('missing-earlier-object',('rev-parse',guard.EARLIER_PARENT+'^{tree}')),('missing-earlier-parent-metadata',('show','-s','--format=%P',guard.EARLIER_PARENT)),('missing-original-object',('rev-parse',guard.ORIGINAL_PARENT+'^{tree}')),('missing-original-parent-metadata',('show','-s','--format=%P',guard.ORIGINAL_PARENT))]:
         try:run({key:None})
         except subprocess.CalledProcessError as error:
             check(error.returncode==128 and error.cmd==['git',*key],'missing object boundary');RESULTS.append(dict(name='ancestry-'+label,passed=True))
         else:raise ValueError('missing ancestry object passed')
     parent={p:('100644',guard.blob(('parent '+p).encode())) for p in guard.ALLOW};candidate=dict(parent)
     for path in guard.CORRECTION_PATHS:candidate[path]=('100644',guard.blob(('correction '+path).encode()))
-    control('correction-exact-three-paths',lambda:check(guard.validate_correction(parent,candidate)==sorted(guard.CORRECTION_PATHS),'correction inventory'))
-    check(guard.CORRECTION_PATHS==frozenset({'.ci/check_n49d_sources.py','.ci/test_n49d_source_contract.py','.github/workflows/n49d-mcp-directory-search.yml'}) and
-          len(guard.ALLOW)==16 and '.ci/run_n49d_qualification.py' in guard.ALLOW,'three correction/full16 scope')
+    control('correction-exact-eleven-paths',lambda:check(guard.validate_correction(parent,candidate)==sorted(guard.CORRECTION_PATHS),'correction inventory'))
+    check(guard.CORRECTION_PATHS==frozenset({'.ci/check_n49d_sources.py','.ci/run_n49d_qualification.py',
+          '.ci/test_n49d_source_contract.py','.github/workflows/n49d-mcp-directory-search.yml',
+          'scripts/build-cl.ps1','scripts/build-tests-cl.ps1','docs/nodes/N49D-PLAN.md',
+          'docs/nodes/N49D-PLAN-AUDIT.md','docs/nodes/N49D-HARD-AUDIT.md','docs/nodes/n49d-evidence/RESULT.json',
+          'docs/nodes/n49d-evidence/SOURCE-MANIFEST.json'}) and len(guard.ALLOW)==18,'eleven correction/full18 scope')
     partial=dict(parent);path=sorted(guard.CORRECTION_PATHS)[0];partial[path]=candidate[path]
     control('correction-precommit-subset',lambda:check(guard.validate_correction(parent,partial,False)==[path],'correction subset'))
     expect_failure('correction-missing-final-member',lambda:guard.validate_correction(parent,partial),'required correction path missing')
-    for label,changes,removed in [('runner',{'.ci/run_n49d_qualification.py':('100644','0'*40)},None),('production',{guard.HANDLERS:('100644','0'*40)},None),('documentation',{guard.LEDGER:('100644','0'*40)},None),
+    for label,changes,removed in [('driver',{'.ci/test_mcp_directory_search.py':('100644','0'*40)},None),('production',{guard.HANDLERS:('100644','0'*40)},None),('documentation',{guard.LEDGER:('100644','0'*40)},None),
                                   ('extra',{'unexpected.txt':('100644','0'*40)},None),('deleted',{},path),('mode',{path:('100755',candidate[path][1])},None)]:
         changed=dict(candidate);changed.update(changes)
         if removed is not None:del changed[removed]
@@ -309,14 +317,14 @@ def ancestry_controls():
         expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
     workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
     def workflow_contract(raw,windows=False):
-        canonical=guard.checkout_bytes(raw,'7e689b6e8803d47c2bba835a9d8cec4c7c06b947',windows)
-        check(canonical.count(b'          fetch-depth: 9\n')==1 and
-              guard.sha(canonical.replace(b'          fetch-depth: 9\n',b'          fetch-depth: 8\n'))=='d6c17ab8e034c5adb43d7c996cfe459e1e3eab10a0d1141bd36b750fba71b72d','exact depth-nine workflow contract')
+        canonical=guard.checkout_bytes(raw,'396c425b993b5dc6480947e665a3044c3943a50d',windows)
+        check(canonical.count(b'          fetch-depth: 10\n')==1 and
+              guard.sha(canonical.replace(b'          fetch-depth: 10\n',b'          fetch-depth: 9\n'))=='d5efb6a1516f96609db16db1f40583dcff360deba71c5efa47ed1c0d3cb59a3d','exact depth-ten workflow contract')
         return canonical
-    control('workflow-only-depth-nine-change',lambda:workflow_contract(workflow,os.name=='nt'))
+    control('workflow-only-depth-ten-change',lambda:workflow_contract(workflow,os.name=='nt'))
     canonical=workflow_contract(workflow,os.name=='nt')
-    for label,old,new in [('old-depth',b'fetch-depth: 9',b'fetch-depth: 8'),('broad-depth',b'fetch-depth: 9',b'fetch-depth: 0'),
-                          ('malformed-depth',b'fetch-depth: 9',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+    for label,old,new in [('old-depth',b'fetch-depth: 10',b'fetch-depth: 9'),('broad-depth',b'fetch-depth: 10',b'fetch-depth: 0'),
+                          ('malformed-depth',b'fetch-depth: 10',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
                           ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
         changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
         expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
@@ -769,7 +777,8 @@ def initial_parent_controls(root):
         owner=owner_model(label,tree)
         check(owner.result['failure_detail']==payload,'actual owner transfer lost fields')
         record=q.Recorder(root/('record-'+label),identity(),['tiny'],dict(os.environ),root,stream_cap=2048)
-        def cached_owner(argv,cwd,env,stdin,stdout,stderr,timeout,cap):
+        def cached_owner(argv,cwd,env,stdin,stdout,stderr,timeout,cap,*,completion_policy="strict-v1",deadline=None):
+            check(completion_policy=="strict-v1" and type(deadline) in (int,float),"cached owner strict policy/deadline")
             Path(stdout).write_bytes(b'fixture\n');Path(stderr).write_bytes(b'fixture\n');return owner
         with patch.object(q,'OwnedChild',cached_owner):
             expect_failure('initial-recorder-'+label,lambda:record.run('tiny',['fixture'],3),'ambiguous descendant ancestry',record=False)
@@ -867,7 +876,7 @@ def failure_detail_retention_controls(root):
                 if platform=='linux':terminal['failure_detail']=detail
                 FAILURE_DETAIL=detail if platform=='windows' else None
                 failure=_selftest_failure(ValueError('timeout fixture boundary not proved'));failure['controls']=final_controls
-                stderr=(json.dumps(failure)+'\n') if platform=='windows' else 'tiny build diagnostic\n'
+                stderr=(render_selftest_failure(failure)+'\n') if platform=='windows' else 'tiny build diagnostic\n'
                 if newline=='CRLF':stderr=stderr.replace('\n','\r\n')
                 (stage/'stderr.bin').write_bytes(stderr.encode());(stage/'stdout.bin').write_bytes(b'')
                 row=dict(schema='qbrain-n49d-stage-v1',name='tiny',identity=identity(),ownership=terminal,
@@ -884,6 +893,7 @@ def failure_detail_retention_controls(root):
                     check(entry['truncated'] is False and entry['retained_offset']==0 and base64.b64decode(entry['data'])==actual and
                           entry['size']==len(actual) and entry['sha256']==hashlib.sha256(actual).hexdigest(),'failure detail retention bytes/hash')
                 retained=json.loads(base64.b64decode(payload['files']['stages/tiny/'+('stderr.bin' if platform=='windows' else 'result.json')]['data']))
+                if platform=='windows':check(failure_equal(expand_failure_v2(base64.b64decode(payload['files']['stages/tiny/stderr.bin']['data'])),failure),'retained full control facts changed')
                 observed=retained['failure_detail'] if platform=='windows' else retained['ownership']['failure_detail']
                 check(observed==detail and payload['passed'] is False and payload['status']=='failed-partial-diagnostics' and
                       (case/'failure.json').stat().st_size<=256*1024,'retained failure detail/outcome changed')
@@ -1498,7 +1508,7 @@ def windows_image_controls(root,model):
             def terminate(self):pass
             def active(self):return []
             def close(self):pass
-        def owner_factory(argv,cwd,env,stdin,stdout,stderr,timeout,cap):
+        def owner_factory(argv,cwd,env,stdin,stdout,stderr,timeout,cap,**options):
             owner=object.__new__(original);owner.started=time.monotonic();owner.deadline=owner.started+timeout;owner.scan_deadline=owner.deadline
             owner.paths=[Path(stdout),Path(stderr)]
             for path in owner.paths:path.write_bytes(b'')
@@ -1736,8 +1746,10 @@ def root_terminal_controls(root):
         if label=='write':check(row['evidence_error']=='result-write-unavailable' and not (recorder.root/'stages/tiny/result.json').exists(),'write failure claimed record')
         if label=='collector':
             with patch.object(q,'descriptor',side_effect=OSError('collector-fixture')):
-                expect_failure('root-recorder-collector-unavailable',lambda:q.failure_diagnostics(recorder.root,recorder.root/'failure.json',identity(),['tiny'],['tiny'],ValueError(expected)),'collector-fixture')
-            check(row['classification']==expected and not (recorder.root/'failure.json').exists(),'collector failure erased primary')
+                partial=q.failure_diagnostics(recorder.root,recorder.root/'failure.json',identity(),['tiny'],['tiny'],ValueError(expected))
+            check(row['classification']==expected and partial['passed'] is False and
+                  {k:v['status'] for k,v in partial['files'].items()}=={'stages/tiny/result.json':'unreadable','stages/tiny/stdout.bin':'missing','stages/tiny/stderr.bin':'missing'},'collector failure erased primary')
+            RESULTS.append(dict(name='root-recorder-collector-unavailable',passed=True))
 
 
 def root_terminal_native_controls(root):
@@ -2341,11 +2353,53 @@ def lifecycle_controls(root):
     control('recorder-intentional-stop-in-owned-command',lambda:run('recorder','intentional',code,3))
 
 
-def tiny_bundle(root):
+def synthetic_windows_reports(root,ident,locations,bd):
+    """Schema fixture only; none of these bytes are native execution."""
+    import ntpath
+    if ident['job_key']=='windows-msvc':
+        objects=q.phase_seed('objects',ident);objects.update(state='ready',produced=[dict(name=n,**bd) for n in q.PRODUCTION_OBJECTS],
+            consumed=list(q.CONSUMED_OBJECTS),production_executable=bd)
+        q.write_phase(root/q.PHASE_REPORTS['objects'][0],'objects',objects,ident)
+        build=q.phase_seed('build-context',ident);build.update(state='ready',vcvars=dict(path=q.path_identity('C:/fixture/vcvars'),file=bd),
+            runtime_prefix=dict(present=False,identity=None),production_objects=q.descriptor(root/q.PHASE_REPORTS['objects'][0]),production_executable=bd,canonical_binary=bd)
+        q.write_phase(root/q.PHASE_REPORTS['build-context'][0],'build-context',build,ident)
+        run=q.phase_seed('run-context',ident);run.update(state='ready',build_context=q.descriptor(root/q.PHASE_REPORTS['build-context'][0]),
+            canonical_binary=bd,context_matched=True,test_exit=0)
+        q.write_phase(root/q.PHASE_REPORTS['run-context'][0],'run-context',run,ident)
+    else:
+        report=q.phase_seed('configure',ident);report.update(state='ready',source_location=q.path_identity(locations['source']),
+            build_location=q.path_identity(locations['build']),overlay_location=q.path_identity(ntpath.join(locations['source'],'.ci','mcp_directory_search_targets.cmake')),
+            generator='vs17-2022',checks=dict.fromkeys(q.CONFIGURE_CHECKS,True),files={n:bd for n in q.CONFIGURE_FILES})
+        q.write_phase(root/q.PHASE_REPORTS['configure'][0],'configure',report,ident)
+        for mode in ('normal','optimized'):q.dump(root/'reports'/('winhttp-'+mode+'.json'),dict(result='PASS',native_windows=True,
+            checks=[True],check_count=1,source_commit=ident['commit'],probe_sha256=bd['sha256']))
+    for mode in ('normal','optimized'):
+        path=root/'reports'/('mcp_directory_search-'+mode)/'RESULT.json';report=json.loads(path.read_bytes())
+        report['http']=dict(required=True,status='passed',profiles=['full','memory'],authentication='synthetic fixture')
+        provider=dict(required=True,status='passed',profiles=['full','memory'],transports=['stdio','http'],
+            negative_query_count=108,negative_request_count=0,positive_request_count=8,batches=[],requests=[])
+        for profile in ('full','memory'):
+            for transport in ('stdio','http'):
+                prefix=profile+'-'+transport;positives=[]
+                for slot in range(2):
+                    index=len(provider['requests']);query=prefix+'-positive-'+str(slot)
+                    wire=b'POST / HTTP/1.1\r\n\r\n'+json.dumps({'input':[query]}).encode();response=b'HTTP/1.1 200 OK\r\n\r\n{}'
+                    capture=dict(query=query,status='completed')
+                    for key,raw in [('request',wire),('response',response)]:
+                        leaf='raw/provider-'+str(index)+'-'+key+'.bin';(path.parent/leaf).write_bytes(raw)
+                        capture[key]=dict(path=leaf,bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+                    provider['requests'].append(capture);positives.append(dict(query=query,record_index=index,provider_requests=1))
+                provider['batches'].append(dict(profile=profile,transport=transport,status='passed',negative_query_count=27,negative_request_count=0,
+                    negative_cases=[dict(query=prefix+'-negative-'+str(i),expected_error='synthetic',provider_requests=0) for i in range(27)],positive_controls=positives))
+        report['provider_http']=provider;q.dump(path,report)
+
+
+def tiny_bundle(root,job="linux-cmake"):
     """Synthetic complete approved-source/command fixture, not native execution."""
     root.mkdir();paths=sorted(guard.ALLOW);nodes={};rows={};inventory=b''
     for path in paths:
-        data=('synthetic source fixture only: '+path+'\n').encode('utf-8');oid=guard.blob(data)
+        data=(guard.checkout_bytes((q.ROOT/path).read_bytes(),guard.WRAPPERS[path],os.name=='nt') if path in guard.WRAPPERS else
+              ('synthetic source fixture only: '+path+'\n').encode('utf-8'));oid=guard.blob(data)
         dest=root/'source/changed'/path;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(data)
         rows[path]=dict(mode='100644',blob=oid,sha256=hashlib.sha256(data).hexdigest())
         inventory+=b'100644 blob '+oid.encode()+b'\t'+path.encode()+b'\0'
@@ -2358,16 +2412,18 @@ def tiny_bundle(root):
             directory=isinstance(value,dict)
             body+=(b'40000' if directory else b'100644')+b' '+name.encode()+b'\0'+bytes.fromhex(tree_hash(value) if directory else value)
         return hashlib.sha1(b'tree '+str(len(body)).encode()+b'\0'+body).hexdigest()
-    tree=tree_hash(nodes);ident=identity(tree)
+    tree=tree_hash(nodes);ident=dict(identity(tree),job_key=job,job_label=job)
     source=dict(passed=True,commit=ident['commit'],tree=tree,base=guard.BASE,base_tree=guard.BASE_TREE,
                 parent=guard.CORRECTION_PARENT,parent_tree=guard.CORRECTION_PARENT_TREE,correction_changed=sorted(guard.CORRECTION_PATHS),precommit=False,
                 inventory_sha256=hashlib.sha256(inventory).hexdigest(),changed=paths,changed_files=rows,dependency_sha256={})
     q.dump(root/'reports/source-before.json',source);q.dump(root/'reports/source-after.json',source)
     (root/'source/tree-inventory.bin').write_bytes(inventory);q.dump(root/'source/dependencies.json',{})
-    (root/'binaries').mkdir();binary=root/'binaries/qbrain';binary.write_bytes(b'fixture binary only')
+    (root/'binaries').mkdir();binary=root/'binaries'/('qbrain.exe' if job.startswith('windows') else 'qbrain');binary.write_bytes(b'fixture binary only')
     bd=q.descriptor(binary);required=q.required_stages(ident['job_key'])
     locations=dict(source='/fixture/source',build='/fixture/build',output='/fixture/evidence',python='/fixture/python')
-    specs=q.stage_contract(ident,locations);prod='/fixture/build/qbrain'
+    if job.startswith('windows'):locations=dict(source='C:\\source',build='C:\\build',output='C:\\evidence',python='C:\\python.exe')
+    specs=q.stage_contract(ident,locations)
+    prod='C:\\source\\build\\cl\\qbrain.exe' if job=='windows-msvc' else 'C:\\build\\Debug\\qbrain.exe' if job.startswith('windows') else '/fixture/build/qbrain'
     for mode in ('normal','optimized'):
         mcp=root/'reports'/('mcp_directory_search-'+mode);(mcp/'raw').mkdir(parents=True)
         (mcp/'raw/fixture.bin').write_bytes(b'fixture')
@@ -2381,21 +2437,47 @@ def tiny_bundle(root):
         q.dump(root/'reports'/('directory_search-'+mode)/'RESULT.json',dict(passed=True,checks=[dict(passed=True)],check_count=1,commands=[dict(fixture=True)],command_count=1))
         q.dump(root/'reports'/('context_process-'+mode+'.json'),dict(format_version=1,checks=1,provider_calls=0))
         q.dump(root/'reports'/('named_arguments-'+mode+'.json'),dict(passed=1,failed=0,checks=[dict(passed=True)],commands=[dict(fixture=True)],command_count=1,binary_sha256=bd['sha256']))
+    if job.startswith('windows'):synthetic_windows_reports(root,ident,locations,bd)
     (root/'reports/ctest.xml').write_text('<testsuite>'+''.join('<testcase name="'+name+'"/>' for name in q.TESTS)+'</testsuite>')
     for name in required:
         spec=specs[name];folder=root/'stages'/name;folder.mkdir(parents=True)
         stdout=b'fixture-only\n'
-        if name=='ctest-inventory':stdout=json.dumps(dict(tests=[dict(name=n) for n in q.TESTS])).encode()
+        if name in ('direct-tests-run','canonical-run','canonical-groups'):
+            names=q.re.findall(r'\{"([^"]+)",\s*test_\w+\}',(q.ROOT/'tests/test_main.cpp').read_text())
+            log=''.join('[PASS] '+n+'\n' for n in names);groups=q.native_groups((q.ROOT/'tests/test_main.cpp').read_text(),log)
+            stdout=json.dumps(groups).encode() if name=='canonical-groups' else log.encode()
+        elif name=='ctest-inventory':stdout=json.dumps(dict(tests=[dict(name=n) for n in q.TESTS])).encode()
         elif name=='ctest-completeness':stdout=json.dumps(list(q.TESTS)).encode()
-        elif name.startswith('selftest-'):stdout=json.dumps(dict(passed=True,python_optimized=name.endswith('optimized'),linux_reader_backend='native-children',controls=[dict(name='fixture',passed=True)])).encode()
+        elif name.startswith('selftest-'):stdout=json.dumps(dict(passed=True,python_optimized=name.endswith('optimized'),linux_reader_backend='native-children',controls=[dict(name=n,passed=True) for n in (sorted(q.WINDOWS_PHASE_CONTROL_NAMES) if job.startswith('windows') else ['fixture'])])).encode()
         (folder/'stdout.bin').write_bytes(stdout);(folder/'stderr.bin').write_bytes(b'')
-        q.dump(folder/'result.json',dict(name=name,identity=ident,argv=spec['argv'],timeout_seconds=spec['timeout_seconds'],cwd=locations['source'],exit=0,classification='passed',ownership=dict(classification='passed',cleanup_ok=True,stable=True,readers_done=True,exit=0,stdout=q.descriptor(folder/'stdout.bin'),stderr=q.descriptor(folder/'stderr.bin')),
+        q.dump(folder/'result.json',dict(schema='qbrain-n49d-stage-v2',completion_policy=spec['completion_policy'],phase_window=None,
+            stream_limit=8*q.MIB,runtime_options={},available_reports={p:q.descriptor(root/p) for p in spec['reports']},elapsed_seconds=.1,name=name,identity=ident,argv=spec['argv'],timeout_seconds=spec['timeout_seconds'],cwd=locations['source'],exit=0,classification='passed',ownership=dict(classification='passed',cleanup_ok=True,cleanup_error=None,owned_tree_empty=True,root_pid=17,
+            process_backend='linux-children-pidfd-subreaper',elapsed_seconds=.01,stable=True,readers_done=True,exit=0,
+            stdout=q.descriptor(folder/'stdout.bin'),stderr=q.descriptor(folder/'stderr.bin')),
             stdout=q.descriptor(folder/'stdout.bin'),stderr=q.descriptor(folder/'stderr.bin'),requested_reports=spec['reports'],reports={p:q.descriptor(root/p) for p in spec['reports']},
             binaries_before={p:bd for p in spec['binaries_before']},binaries_after={p:bd for p in spec['binaries_after']}))
+    for name in required:
+        path=root/'stages'/name/'result.json';row=json.loads(path.read_bytes())
+        if job.startswith('windows'):row['ownership']['process_backend']='windows-private-job'
+        if specs[name]['completion_policy']=='trusted-build-v1':
+            owner=build_owner_fixture();owner.update(stdout=row['stdout'],stderr=row['stderr']);row['ownership']=owner
+        if name in ('direct-tests-build','direct-tests-run'):
+            start=0 if name=='direct-tests-build' else 200000
+            row['phase_window']=dict(phase=name,start_us=start,effective_deadline_us=1200000000 if start==0 else 600200000,pair_budget_us=1800000000)
+        q.dump(path,row)
+    top_reports={}
+    if job=='windows-msvc':
+        pair=q.phase_seed('pair',ident);pair.update(state='complete',finalize_begin_us=400000,
+            build=dict(stage='direct-tests-build',start_us=0,end_us=100000,effective_deadline_us=1200000000,result=q.descriptor(root/'stages/direct-tests-build/result.json')),
+            run=dict(stage='direct-tests-run',start_us=200000,end_us=300000,effective_deadline_us=600200000,result=q.descriptor(root/'stages/direct-tests-run/result.json')))
+        desc=q.write_phase(root/q.PHASE_REPORTS['pair'][0],'pair',pair,ident)
+        top_reports[q.PHASE_REPORTS['pair'][0]]=dict(**desc,finalized_us=400001)
     binding=q.descriptor(root/'reports/source-before.json')
-    q.dump(root/'qualification.json',dict(passed=True,identity=ident,required=required,stages=required,locations=locations,
+    q.dump(root/'qualification.json',dict(schema='qbrain-n49d-qualification-v2',passed=True,identity=ident,reports=top_reports,
+        native_http='required-and-executed' if job.startswith('windows') else 'not-applicable-non-Windows-stub',acceptance='native evidence only; independent outcome acceptance pending',
+        required=required,stages=required,locations=locations,
         source_before=binding,source_after=binding,binaries={p:bd for spec in specs.values() for p in spec['binaries_after']},
-        retained_binaries={prod:dict(path='binaries/qbrain',**bd)}))
+        retained_binaries={prod:dict(path='binaries/'+binary.name,**bd)}))
     return ident
 
 
@@ -2454,7 +2536,7 @@ def package_consumer_controls(root):
         # Rebind every recorded report descriptor, so negatives reach source semantics.
         for label in ('source-before','source-after'):
             report='reports/'+label+'.json';packet[report]=binding_raw
-            stage_path='stages/'+label+'/result.json';stage=json.loads(packet[stage_path]);stage['reports'][report]=desc
+            stage_path='stages/'+label+'/result.json';stage=json.loads(packet[stage_path]);stage['reports'][report]=desc;stage['available_reports'][report]=desc
             packet[stage_path]=json.dumps(stage).encode()
         result=json.loads(packet['qualification.json']);result['source_before']=desc;result['source_after']=desc
         packet['qualification.json']=json.dumps(result).encode()
@@ -2471,8 +2553,8 @@ def package_consumer_controls(root):
         binding['parent']=guard.LAST_CORRECTION_PARENT;binding['parent_tree']=guard.LAST_CORRECTION_PARENT_TREE
     packet=source_packet(previous_anchor);ancestry_packets.append(('prior-correction-pair',packet))
     expect_failure('producer-rehashed-prior-correction-pair',lambda:q.validate_recordings(packet.__getitem__,ident,files=packet),'source/candidate binding mismatch')
-    packet=source_packet(lambda binding,packet:binding.update(correction_changed=sorted(guard.CORRECTION_PATHS|{'.ci/run_n49d_qualification.py'})))
-    ancestry_packets.append(('old-four-path-correction',packet))
+    packet=source_packet(lambda binding,packet:binding.update(correction_changed=sorted({'.ci/check_n49d_sources.py','.ci/test_n49d_source_contract.py','.github/workflows/n49d-mcp-directory-search.yml'})))
+    ancestry_packets.append(('old-three-path-correction',packet))
     expect_failure('producer-rehashed-old-four-path-correction',lambda:q.validate_recordings(packet.__getitem__,ident,files=packet),'source/candidate binding mismatch')
     omitted_source=source_packet(lambda binding,packet:(binding['changed_files'].pop(source_path),packet.pop(source_leaf)))
     expect_failure('full-source-omitted-leaf-and-map-rehashed',lambda:q.validate_recordings(omitted_source.__getitem__,ident,files=omitted_source),'fixed changed source map mismatch')
@@ -2593,9 +2675,868 @@ def package_consumer_controls(root):
     check(process.returncode!=0,'consumer CLI failure status');RESULTS.append(dict(name='consumer-nonzero-return',passed=True))
 
 
+def phase_identity(job='windows-msvc'):
+    return dict(identity(),job_key=job,job_label=job)
+
+
+def build_owner_fixture():
+    d=dict(size=0,sha256=hashlib.sha256(b'').hexdigest())
+    proof=dict(schema='qbrain-n49d-build-completion-v1',policy='trusted-build-v1',state='complete',reason=None,
+        root_exit=0,root_observed_us=1,teardown_requested=False,termination_requested_us=None,termination_succeeded=None,
+        empty_observed_us=2,close_attempted_us=3,close_returned_us=4,streams_finalized_us=5,success_deadline_us=3000000,
+        close_attempted=True,close_returned=True,close_in_budget=True)
+    return dict(classification='build-completed',exit=0,process_backend='windows-private-job',root_pid=17,
+        owned_tree_empty=True,cleanup_ok=True,cleanup_error=None,stable=True,readers_done=True,elapsed_seconds=.001,
+        stdout=d,stderr=d,build_completion=proof)
+
+
+def phase_report_controls(root):
+    root.mkdir();ident=phase_identity();source=root/'source';objects=source/'build/cl/obj';objects.mkdir(parents=True)
+    for name in q.PRODUCTION_OBJECTS:(objects/name).write_bytes(('object '+name).encode())
+    (objects.parent/'qbrain.exe').write_bytes(b'production fixture')
+    (objects.parent/'qbrain_tests.exe').write_bytes(b'canonical fixture')
+    generated=q.object_report(source,ident)
+    build=q.phase_seed('build-context',ident);build.update(state='ready',vcvars=dict(path=q.path_identity('C:/vcvars'),file=dict(size=1,sha256='a'*64)),
+        runtime_prefix=dict(present=False,identity=None),production_objects=dict(size=1,sha256='b'*64),
+        production_executable=generated['production_executable'],canonical_binary=q.descriptor(objects.parent/'qbrain_tests.exe'))
+    run=q.phase_seed('run-context',ident);run.update(state='ready',build_context=dict(size=1,sha256='c'*64),
+        canonical_binary=build['canonical_binary'],context_matched=True,test_exit=0)
+    samples={'objects':generated,'build-context':build,'run-context':run}
+    for role,value in samples.items():
+        for newline in ('LF','CRLF'):
+            raw=q.canonical_phase_bytes(value)
+            if newline=='CRLF':raw=raw.replace(b'\n',b'\r\n')
+            control('phase-parser-valid-'+role+'-'+newline,lambda raw=raw,role=role,value=value:
+                check(q.read_phase_bytes(raw,role,ident,True)==value,'phase parser roundtrip'))
+        for state in ('prepared','failed'):
+            partial=q.phase_seed(role,ident)
+            if state=='failed':partial.update(state=state,failure=q.PHASE_FAILURES[role].split()[0])
+            control('phase-parser-partial-'+role+'-'+state,lambda partial=partial,role=role:
+                q.read_phase_bytes(q.canonical_phase_bytes(partial),role,ident))
+            expect_failure('phase-partial-not-ready-'+role+'-'+state,
+                lambda partial=partial,role=role:q.phase_report(role,partial,ident,True),'phase report not ready')
+    valid=q.canonical_phase_bytes(run)
+    cases={'duplicate':valid.replace(b'"mode":',b'"mode":"run-only","mode":'),
+        'case-key':valid.replace(b'"mode":',b'"Mode":'),'unknown':valid.replace(b'{',b'{"extra":null,',1),
+        'bom':b'\xef\xbb\xbf'+valid,'unicode':valid.replace(b'run-only',b'run-onl\xc3\xa9'),
+        'escape':valid.replace(b'run-only',b'run\\u002donly'),'missing-newline':valid[:-1],
+        'extra-newline':valid+b'\n','space':b' '+valid,'mixed-newline':valid[:-1]+b'\r\r\n',
+        'key-order':json.dumps(run,separators=(',',':')).encode()+b'\n',
+        'bool-int':valid.replace(b'"test_exit":0',b'"test_exit":false'),
+        'float':valid.replace(b'"test_exit":0',b'"test_exit":0.0'),
+        'exponent':valid.replace(b'"test_exit":0',b'"test_exit":0e0'),
+        'negative':valid.replace(b'"test_exit":0',b'"test_exit":-1'),
+        'large-int':valid.replace(b'"test_exit":0',b'"test_exit":9007199254740992'),
+        'uppercase-hash':valid.replace(b'c'*64,b'C'*64),
+        'case-schema':valid.replace(b'qbrain-n49d',b'QBRAIN-n49d'),
+        'case-state':valid.replace(b'"ready"',b'"READY"'),
+        'depth':b'['*7+b'0'+b']'*7+b'\n','containers':b'['+b','.join([b'{}']*257)+b']\n',
+        'numeric-token':valid.replace(b'"test_exit":0',b'"test_exit":12345678901234567'),
+        'string-token':valid.replace(b'"run-only"',b'"'+b'x'*129+b'"'),
+        'cap':b'x'*2049,'case-collision':valid.replace(b'"mode":',b'"Mode":"run-only","mode":')}
+    for label,raw in cases.items():
+        expect_failure('phase-parser-reject-'+label,lambda raw=raw:q.read_phase_bytes(raw,'run-context',ident,True))
+    for role,field,bad in [('objects','consumed',[]),('objects','produced',generated['produced'][:-1]),
+        ('build-context','vcvars',None),('build-context','runtime_prefix',dict(present=False,identity=q.path_identity('x'))),
+        ('run-context','context_matched',1),('run-context','test_exit',259)]:
+        changed=copy.deepcopy(samples[role]);changed[field]=bad
+        expect_failure('phase-semantic-'+role+'-'+field,lambda changed=changed,role=role:q.phase_report(role,changed,ident,True))
+    original=(objects/q.CONSUMED_OBJECTS[0]).read_bytes();(objects/q.CONSUMED_OBJECTS[0]).write_bytes(b'changed')
+    expect_failure('phase-real-object-mutation',lambda:q.object_report(source,ident,generated),'production object continuity mismatch')
+    (objects/q.CONSUMED_OBJECTS[0]).write_bytes(original)
+    control('phase-real-object-match',lambda:q.object_report(source,ident,generated))
+    absent=objects/q.PRODUCTION_OBJECTS[0];saved=absent.read_bytes();absent.write_bytes(b'')
+    expect_failure('phase-real-empty-object',lambda:q.object_report(source,ident),'fixed regular file required');absent.write_bytes(saved)
+    # Actual BuildOnly observation promotion, with a real changed canonical leaf.
+    from types import SimpleNamespace
+    evidence=root/'evidence';rec=SimpleNamespace(root=evidence,cwd=source,identity=ident)
+    q.write_phase(evidence/q.PHASE_REPORTS['objects'][0],'objects',generated,ident)
+    build['production_objects']=q.descriptor(evidence/q.PHASE_REPORTS['objects'][0])
+    for label,observed in [('matching',build['canonical_binary']),('missing',None),('changed',dict(size=1,sha256='d'*64))]:
+        prepared=copy.deepcopy(build);prepared.update(state='prepared',canonical_binary=observed)
+        q.write_phase(evidence/q.PHASE_REPORTS['build-context'][0],'build-context',prepared,ident)
+        if label=='matching':
+            q.finalize_test_build(rec,time.monotonic()+3)
+            check(q._read_phase_file(rec,'build-context',True)['canonical_binary']==observed,'build promotion lost observation')
+            RESULTS.append(dict(name='phase-actual-build-observation-matching',passed=True))
+        else:expect_failure('phase-actual-build-observation-'+label,lambda:q.finalize_test_build(rec,time.monotonic()+3),
+                            'copied binary observation '+('missing' if label=='missing' else 'mismatch'))
+    prepared=copy.deepcopy(build);prepared['state']='prepared'
+    q.write_phase(evidence/q.PHASE_REPORTS['build-context'][0],'build-context',prepared,ident)
+    canonical=objects.parent/'qbrain_tests.exe';old=canonical.read_bytes();canonical.write_bytes(old+b' changed after observation')
+    expect_failure('phase-actual-post-observation-file-change',lambda:q.finalize_test_build(rec,time.monotonic()+3),'copied binary observation mismatch')
+    canonical.write_bytes(old)
+    # The bounded readiness producer reads only newly generated tiny cache/project files.
+    configured=root/'configured';configured.mkdir()
+    locations=dict(source='C:\\source',build=str(configured),output='C:\\evidence',python='C:\\python.exe')
+    cache_lines=['CMAKE_HOME_DIRECTORY:INTERNAL=C:\\source','CMAKE_CACHEFILE_DIR:INTERNAL='+str(configured),
+        'CMAKE_PROJECT_NAME:STATIC=qbrain','CMAKE_GENERATOR:INTERNAL=Visual Studio 17 2022',
+        'CMAKE_BUILD_TYPE:STRING=Debug','CMAKE_CONFIGURATION_TYPES:STRING=Debug;Release','QBRAIN_WITH_PG:BOOL=OFF',
+        'CMAKE_PROJECT_qbrain_INCLUDE:FILEPATH=C:\\source\\.ci\\mcp_directory_search_targets.cmake']
+    cache=('\n'.join(cache_lines)+'\n').encode()
+    for name in q.CONFIGURE_FILES:(configured/name).write_bytes(cache if name=='CMakeCache.txt' else b'generated fixture')
+    cmake=phase_identity('windows-cmake')
+    ready=q.configure_report(locations,cmake)
+    for newline in ('LF','CRLF'):
+        raw=q.canonical_phase_bytes(ready);raw=raw if newline=='LF' else raw.replace(b'\n',b'\r\n')
+        control('phase-configure-canonical-'+newline,lambda raw=raw:q.read_phase_bytes(raw,'configure',cmake,True))
+    mutations={'duplicate':cache+cache_lines[0].encode()+b'\n','missing':b'\n'.join(cache.splitlines()[1:])+b'\n',
+        'type':cache.replace(b'PROJECT_NAME:STATIC',b'PROJECT_NAME:BOOL'),
+        'generator':cache.replace(b'Visual Studio 17 2022',b'Ninja'),'debug':cache.replace(b'BUILD_TYPE:STRING=Debug',b'BUILD_TYPE:STRING=Release'),
+        'config-duplicate':cache.replace(b'Debug;Release',b'Debug;Debug'),'pg':cache.replace(b'BOOL=OFF',b'BOOL=ON'),
+        'path':cache.replace(b'INTERNAL=C:\\source',b'INTERNAL=C:\\other'),'line-cap':cache+b'x'*16385+b'\n',
+        'line-count':cache+b'\n'*4097}
+    for label,raw in mutations.items():
+        (configured/'CMakeCache.txt').write_bytes(raw)
+        expect_failure('phase-configure-producer-'+label,lambda:q.configure_report(locations,cmake))
+    (configured/'CMakeCache.txt').write_bytes(cache)
+    target=configured/'qbrain.vcxproj';target.write_bytes(b'')
+    expect_failure('phase-configure-empty-generated-file',lambda:q.configure_report(locations,cmake),'fixed regular file required')
+    target.write_bytes(b'generated fixture')
+    rec=SimpleNamespace(root=root/'configure-evidence',locations=locations,identity=cmake)
+    q.write_phase(rec.root/q.PHASE_REPORTS['configure'][0],'configure',ready,cmake)
+    control('phase-configure-handoff-match',lambda:q.prepare_cmake_build(rec,time.monotonic()+3))
+    target.write_bytes(b'changed generated file')
+    expect_failure('phase-configure-handoff-mutation',lambda:q.prepare_cmake_build(rec,time.monotonic()+3),'configure handoff changed')
+    owner=build_owner_fixture();control('phase-owner-natural-proof',lambda:q.validate_build_proof(owner))
+    terminated=copy.deepcopy(owner);terminated['build_completion'].update(teardown_requested=True,termination_requested_us=1,termination_succeeded=True)
+    control('phase-owner-termination-proof',lambda:q.validate_build_proof(terminated))
+    for field in q.BUILD_PROOF_KEYS:
+        broken=copy.deepcopy(owner);del broken['build_completion'][field]
+        expect_failure('phase-owner-missing-'+field,lambda broken=broken:q.validate_build_proof(broken),'build completion proof keys')
+    for field,value in [('root_exit',False),('root_exit',259),('close_returned',False),('state','failed'),
+                        ('success_deadline_us',5),('termination_succeeded',True),('root_observed_us',4),('empty_observed_us',4)]:
+        broken=copy.deepcopy(owner);broken['build_completion'][field]=value
+        expect_failure('phase-owner-false-'+field+'-'+str(value),lambda broken=broken:q.validate_build_proof(broken))
+    for field,value in [('classification','passed'),('classification','stopped'),('exit',259),('owned_tree_empty',False),
+                        ('process_backend','linux-children-pidfd-subreaper'),('root_pid',False),('job_diagnostic',{})]:
+        broken=copy.deepcopy(owner);broken[field]=value
+        expect_failure('phase-owner-substitute-'+field+'-'+str(value),lambda broken=broken:q.validate_build_proof(broken))
+    return samples
+
+
+def phase_pair_controls(root):
+    from types import SimpleNamespace
+    root.mkdir();ident=phase_identity();clock=[100.]
+    def make(name):
+        rec=SimpleNamespace(root=root/name,identity=ident,sealed={},qualification_reports={})
+        return rec,q.DirectTestPair(rec)
+    def complete(rec,pair):
+        b=pair.phase('direct-tests-build');clock[0]+=1
+        rec.sealed['direct-tests-build']=dict(result=dict(size=1,sha256='a'*64),ended=clock[0]);pair.sealed('direct-tests-build')
+        r=pair.phase('direct-tests-run');clock[0]+=1
+        rec.sealed['direct-tests-run']=dict(result=dict(size=1,sha256='b'*64),ended=clock[0]);pair.sealed('direct-tests-run')
+        return b,r
+    with patch.object(q.time,'monotonic',side_effect=lambda:clock[0]):
+        rec,pair=make('valid');b,r=complete(rec,pair);binding=pair.finish()
+        check(pair.finish() is binding and rec.qualification_reports[q.PHASE_REPORTS['pair'][0]] is binding,'pair cached binding')
+        check(b['window']['start_us']==0 and b['window']['effective_deadline_us']==1200000000 and
+              r['window']['effective_deadline_us']==601000000,'pair window budgets')
+        RESULTS.append(dict(name='phase-pair-real-publication-and-cache',passed=True))
+        for label,kind in [('equal','equal'),('after','after'),('write-error','write'),('readback-error','readback')]:
+            clock[0]=100.;rec,pair=make(label);complete(rec,pair);real=q.write_phase;calls=[]
+            def publish(*args,**kwargs):
+                calls.append('write')
+                if kind=='write':raise OSError('fixture publication failure')
+                result=real(*args,**kwargs)
+                if kind=='readback':raise OSError('fixture readback failure')
+                clock[0]=pair.deadline+(0 if kind=='equal' else .01);return result
+            with patch.object(q,'write_phase',publish):
+                expected='pair-report-unavailable' if kind in ('write','readback') else 'pair-finalization-timeout'
+                expect_failure('phase-pair-'+label,lambda:pair.finish(),expected)
+                first=copy.deepcopy(pair.value);expect_failure('phase-pair-permanent-'+label,lambda:pair.finish(),expected)
+            check(calls==['write'] and pair.result is None and pair.failure==expected and pair.value==first and
+                  not rec.qualification_reports,'failed pair was renewed')
+        clock[0]=100.;rec,pair=make('failed-build');pair.fail('build-failed')
+        expect_failure('phase-pair-no-run-after-build-failure',lambda:pair.phase('direct-tests-run'),'pair already terminal')
+        clock[0]=100.;rec,pair=make('handoff');b=pair.phase('direct-tests-build');clock[0]=1300
+        rec.sealed['direct-tests-build']=dict(result=dict(size=1,sha256='a'*64),ended=1300)
+        expect_failure('phase-build-equal-deadline',lambda:pair.sealed('direct-tests-build'),'pair phase sealing deadline')
+
+
+def build_lifecycle_controls(root):
+    """Actual owner methods with finite API models; Windows runs stay separate."""
+    from types import SimpleNamespace
+    root.mkdir();clock=[100.]
+    def run(label,alive=False,exit_code=0,fault=None,method='build'):
+        folder=root/label;folder.mkdir();events=[];state=dict(alive=alive,shifted=False)
+        owner=object.__new__(q.OwnedChild)
+        owner.started=100.;owner.deadline=103.;owner.scan_deadline=103.
+        owner.completion_policy='strict-v1' if method=='strict' else 'trusted-build-v1'
+        owner.paths=[folder/'stdout',folder/'stderr'];owner.readers=[];owner.errors=[];owner.overflow=q.threading.Event()
+        owner.result=None;owner.stable=False;owner.locked=False;owner.job_diagnostic=None
+        for path in owner.paths:path.write_bytes(b'fixture streams')
+        owner.build_proof=None
+        if method!='strict':
+            owner.build_proof=dict.fromkeys(q.BUILD_PROOF_KEYS)
+            owner.build_proof.update(schema='qbrain-n49d-build-completion-v1',policy='trusted-build-v1',state='failed',
+                reason='root-unavailable',success_deadline_us=3000000,teardown_requested=False,
+                close_attempted=False,close_returned=False,close_in_budget=False)
+        def poll():
+            events.append('poll')
+            if fault=='poll':raise OSError('poll-fixture')
+            if fault=='null-root':clock[0]+=.7;return None
+            if fault in ('equal','after') and not state['shifted']:
+                state['shifted']=True;clock[0]=103.+(.01 if fault=='after' else 0);events.append('poll-exhausted')
+            return exit_code
+        class Tree:
+            def active(self):
+                events.append('active')
+                if fault=='accounting':raise OSError('accounting-fixture')
+                return [17] if state['alive'] else []
+            def terminate(self):
+                events.append('terminate')
+                if fault=='terminate':raise OSError('termination-fixture')
+                state['alive']=False
+                if fault=='termination-deadline':clock[0]=103.
+            def close(self):
+                events.append('close')
+                if fault=='close':raise OSError('close-fixture')
+                if fault=='late-close':clock[0]=103.
+            def diagnostic(self,*args):events.append('diagnostic');raise AssertionError('build eligibility diagnostic')
+        owner.proc=SimpleNamespace(pid=17,poll=poll,stdout=None,stderr=None);owner.tree=Tree()
+        if fault=='output':owner.overflow.set()
+        if fault=='reader':owner.errors=['reader-fixture']
+        real=q.descriptor;validator=q.validate_build_proof
+        def verify(value):
+            result=validator(value)
+            if fault in ('proof-equal','proof-after'):clock[0]=103.+(.01 if fault=='proof-after' else 0)
+            return result
+        def describe(path):
+            events.append('hash')
+            if fault=='hash':raise OSError('hash-fixture')
+            if fault=='hash-deadline':clock[0]=103.
+            return real(path)
+        clock[0]=100.001
+        with patch.object(q.time,'monotonic',side_effect=lambda:clock[0]),patch.object(q,'os',SimpleNamespace(name='nt')),patch.object(q,'descriptor',describe),patch.object(q,'validate_build_proof',verify):
+            try:value=owner.wait() if method=='strict' else owner._end() if method=='late' else owner.complete_build()
+            except q.OwnedChildError:value=owner.result
+            check(value is owner.result and value is not None,'build terminal cache absent')
+            first=copy.deepcopy(value);before=list(events)
+            try:again=owner.wait() if method=='strict' else owner.complete_build()
+            except q.OwnedChildError:again=owner.result
+            check(again is value and value==first and events==before,'build repeat changed result')
+            if method!='strict':
+                expect_failure('build-repeat-wrong-strict',lambda:owner.wait(),'owned completion policy mismatch',record=False)
+                expect_failure('build-repeat-wrong-http',lambda:owner.stop(),'owned completion policy mismatch',record=False)
+                check(events==before,'wrong policy operated')
+        if 'close' in events:check(not any(e in ('active','terminate','close','poll') for e in events[events.index('close')+1:]),'operation after close')
+        if method!='strict':check('diagnostic' not in events,'build diagnostic eligibility query')
+        return value,events
+    for label,alive,method in [('natural',False,'build'),('child',True,'build'),('late-child',True,'late')]:
+        value,events=run(label,alive,method=method);q.validate_build_proof(value)
+        check(events.count('close')==1 and events.count('terminate')==int(alive) and
+              value['build_completion']['teardown_requested'] is alive,'build natural/teardown facts')
+        if alive:check(events.index('poll')<events.index('terminate')<events.index('close'),'build root order')
+        RESULTS.append(dict(name='build-model-'+label,passed=True))
+    value,_=run('strict',True,method='strict')
+    check(value['classification']=='lingering-descendant' and 'build_completion' not in value,'strict became build')
+    RESULTS.append(dict(name='build-strict-stays-strict',passed=True))
+    for label,fault,alive,exit_code in [('nonzero',None,False,259),('poll','poll',False,0),('accounting','accounting',False,0),
+        ('terminate','terminate',True,0),('termination-deadline','termination-deadline',True,0),('close','close',False,0),
+        ('late-close','late-close',False,0),('hash','hash',False,0),('hash-deadline','hash-deadline',False,0),
+        ('null-root','null-root',False,0),('equal','equal',False,0),('after','after',False,0),
+        ('output','output',False,0),('reader','reader',False,0),('proof-equal','proof-equal',False,0),('proof-after','proof-after',False,0)]:
+        value,events=run(label,alive,exit_code,fault);proof=value['build_completion']
+        check(value['classification']!='build-completed' and proof['state']=='failed','failed build passed')
+        check(proof['close_attempted']==('close' in events) and
+              proof['close_returned']==('close' in events and fault!='close'),'failed close facts falsified')
+        if label in ('hash','hash-deadline'):
+            check(proof['root_exit']==0 and proof['close_attempted'] is True and proof['close_returned'] is True and
+                  proof['close_in_budget'] is True,'observed close facts lost')
+        if label=='termination-deadline':check(proof['termination_succeeded'] is True,'termination fact lost')
+        if label in ('equal','after'):
+            check(events[events.index('poll-exhausted')+1]=='terminate','expired build poll queried success tree')
+        expect_failure('build-failed-proof-'+label,lambda value=value:q.validate_build_proof(value),'build proof incomplete')
+        RESULTS.append(dict(name='build-failure-facts-'+label,passed=True))
+    if os.name!='nt':
+        case=root/'linux';case.mkdir()
+        expect_failure('build-Linux-policy-denied',lambda:q.OwnedChild([sys.executable,'-c','pass'],case,dict(os.environ),
+            subprocess.DEVNULL,case/'out',case/'err',3,1024,completion_policy='trusted-build-v1'),'unsupported owned completion policy')
+        check(q._ACTIVE_OWNER is None and not q._OWNER_LOCK.locked(),'unsupported policy took ownership')
+
+
+def windows_wrapper_controls(root):
+    if os.name!='nt':return
+    root.mkdir();wrapper=q.ROOT/'scripts/build-tests-cl.ps1'
+    guard.checkout_bytes(wrapper.read_bytes(),guard.WRAPPERS['scripts/build-tests-cl.ps1'],True)
+    body=r'''param([string]$Wrapper,[string]$Python)
+$ErrorActionPreference='Stop'
+function Need($c,$m){if(-not $c){throw $m}}
+function Reject([scriptblock]$f){$bad=$false;try{& $f}catch{$bad=$true};Need $bad 'Expected rejection'}
+function Bytes($s){return ,[Text.Encoding]::UTF8.GetBytes($s)}
+$t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($Wrapper,[ref]$t,[ref]$e)
+Need (-not $e.Count) 'Wrapper syntax'
+$functions=@($ast.EndBlock.Statements|Where-Object{$_ -is [Management.Automation.Language.FunctionDefinitionAst]})
+foreach($f in $functions){. ([scriptblock]::Create($f.Extent.Text))}
+$root=Join-Path ([IO.Path]::GetTempPath()) ('qbrain-phase-'+[guid]::NewGuid().ToString('N'))
+$out=Join-Path $root 'build\cl';$obj=Join-Path $out 'obj';$reports=Join-Path $root 'reports'
+$oldTemp=$env:TEMP;$oldTmp=$env:TMP;$oldShadow=$env:ERRORLEVEL
+try{
+ $null=New-Item -ItemType Directory -Path $obj,$reports;$env:TEMP=$root;$env:TMP=$root
+ $vc=Join-Path $root 'vcvars.bat';[IO.File]::WriteAllText($vc,'@exit /b 0')
+ $context=[pscustomobject]@{Root=$root;Out=$out;ObjDir=$obj;Vcvars=$vc;Sqlite=$root;Inc=$root;Third=$root;PgRoot=$root}
+ $inputs=Get-QbrainTestInputs
+ foreach($n in $inputs.Produced){[IO.File]::WriteAllBytes((Join-Path $obj ($n+'.obj')),[byte[]](111))}
+ [IO.File]::WriteAllBytes((Join-Path $out 'qbrain.exe'),[byte[]](112));$binary=Join-Path $out 'qbrain_tests.exe'
+ $script:resolved=0;$script:executed=0;$script:rebuilt=0;$script:batch=''
+ $resolver={$script:resolved++;return $context}
+ $production={param($c,$r);$script:rebuilt++;Need ($c.Root -ceq $root) 'Production forwarding';$r.ExitCode=0}
+ $adapter={param($b,$r);$script:executed++;$script:batch=$b;if($b -match '(?m)^cl '){[IO.File]::WriteAllBytes($binary,[byte[]](116))};$r.ExitCode=0}
+ function Dispatch($o,[scriptblock]$exec=$adapter,[object[]]$extra=@()){
+  $r=[pscustomobject]@{ExitCode=0};Invoke-QbrainTestsDispatcher $o $extra $resolver $exec $production $r 2>$null;return $r.ExitCode
+ }
+ $invalid=@(@{BuildOnly=$true;RunOnly=$true},@{RunOnly=$true},@{RunOnly=$true;PhaseContext='x';RunReport='y';SkipProductionBuild=$true},
+  @{RunOnly=$true;PhaseContext='x';RunReport='y';TestSources=@('z')},@{RunOnly=$true;PhaseContext='x';RunReport='y';ProductionManifest='z'},
+  @{BuildOnly=$true},@{BuildOnly=$true;SkipProductionBuild=$true;ProductionManifest='x';PhaseContext='y';TestSources=@('z')},
+  @{BuildOnly=$true;SkipProductionBuild=$true;ProductionManifest='x';PhaseContext='y';RunReport='z'},
+  @{PhaseContext='x'},@{ProductionManifest='x'},@{RunReport='x'},@{Unknown='x'})
+ foreach($o in $invalid){Reject {Dispatch $o}}
+ Reject {Dispatch @{} $adapter @('unused')}
+ Need (($script:resolved+$script:executed+$script:rebuilt) -eq 0) 'Invalid arguments reached adapters'
+ Reject {& $Wrapper -BuildOnly -RunOnly}
+ Reject {& $Wrapper -RunOnly -SkipProductionBuild -PhaseContext x -RunReport y}
+ Reject {& $Wrapper '-UnexpectedFixtureArgument'}
+ Need ((Dispatch @{TestSources=@('tests\extra.cpp')}) -eq 0) 'Combined'
+ Need ($script:rebuilt -eq 1) 'Production rebuild';Need ($script:batch.Contains('tests\extra.cpp')) 'Source forwarding'
+ foreach($s in $inputs.TestSources){Need ($script:batch.Contains((Join-Path $root $s))) 'Canonical closure'}
+ $b=$script:batch.Replace("`r`n","`n");$last=-1
+ foreach($token in @('call "','cd /d ','cl /nologo','link /nologo','copy /y','echo TESTS_BUILD_OK',"qbrain_tests.exe`nexit /b")){
+  $position=$b.IndexOf($token,$last+1,[StringComparison]::Ordinal);Need ($position -gt $last) 'Batch order';$last=$position
+ }
+ $guard=($b.Split("`n")[2..3]) -join "`n"
+ Need ($guard -ceq "if errorlevel 1 exit /b 1`nif not errorlevel 0 exit /b 1") 'Exact zero guards'
+ foreach($line in $b.Split("`n")){if($line -match '^(call |cd /d |cl |link |copy )'){Need ($b.Contains($line+"`n"+$guard)) 'Immediate guards'}}
+ Need ((Dispatch @{SkipProductionBuild=$true}) -eq 0 -and $script:rebuilt -eq 1) 'Combined skip'
+ $id=[pscustomobject]@{commit=('c'*40);tree=('d'*40);run_id='1';run_attempt='1';job_key='windows-msvc';job_label='windows-msvc'}
+ [string[]]$produced=@($inputs.Produced|ForEach-Object{$_+'.obj'});[string[]]$consumed=@($inputs.Consumed|ForEach-Object{$_+'.obj'})
+ [Array]::Sort($produced,[StringComparer]::Ordinal);[Array]::Sort($consumed,[StringComparer]::Ordinal)
+ $entries=@(foreach($n in $produced){$d=Get-QbrainFileDescriptor (Join-Path $obj $n);[pscustomobject]@{name=$n;size=$d.size;sha256=$d.sha256}})
+ $manifest=[pscustomobject]@{schema='qbrain-n49d-build-objects-v1';state='ready';identity=$id;produced=[object[]]$entries;consumed=[object[]]$consumed;production_executable=(Get-QbrainFileDescriptor (Join-Path $out 'qbrain.exe'));failure=$null}
+ $mp=Join-Path $reports 'direct-production-objects.json';$bp=Join-Path $reports 'direct-tests-build-context.json';$rp=Join-Path $reports 'direct-tests-run-context.json'
+ Write-QbrainPhaseReport $mp $manifest objects
+ $bo=@{BuildOnly=$true;SkipProductionBuild=$true;ProductionManifest=$mp;PhaseContext=$bp}
+ Need ((Dispatch $bo) -eq 0) 'BuildOnly'
+ Need ($script:batch -notmatch '(?m)^(qbrain_tests\.exe|".*qbrain_tests\.exe")\r?$') 'BuildOnly ran tests'
+ $build=Read-QbrainPhaseReport $bp build
+ Need ($build.state -ceq 'prepared' -and $null -ne $build.canonical_binary) 'Prepared binary missing'
+ $ro=@{RunOnly=$true;PhaseContext=$bp;RunReport=$rp};$before=$script:executed
+ Need ((Dispatch $ro) -ne 0 -and $script:executed -eq $before) 'Prepared accepted'
+ Assert-QbrainEqual (Get-QbrainFileDescriptor $binary) $build.canonical_binary
+ $build.state='ready';Write-QbrainPhaseReport $bp $build build
+ Need ((Dispatch $ro) -eq 0) 'RunOnly'
+ Need ($script:batch.Contains('"'+$binary+'"')) 'Absolute launch'
+ Need ($script:batch -notmatch '(?m)^(cl |link |copy |echo TESTS_BUILD_OK)') 'RunOnly build work'
+ Assert-QbrainProductionInputs $context $manifest
+ $body=($functions|Where-Object Name -eq Invoke-QbrainRunPhase).Extent.Text
+ Need ($body -notmatch 'New-Item|Remove-Item|New-QbrainTestsBatch|Get-QbrainTestInputs|ProductionBuilder') 'RunOnly object work'
+ $before=$script:executed;$saved=$build.vcvars.path.sha256;$build.vcvars.path.sha256='e'*64
+ Write-QbrainPhaseReport $bp $build build;Need ((Dispatch $ro) -ne 0 -and $script:executed -eq $before) 'Context mismatch ran'
+ $build.vcvars.path.sha256=$saved;Write-QbrainPhaseReport $bp $build build
+ [IO.File]::WriteAllBytes($binary,[byte[]](117));Need ((Dispatch $ro) -ne 0 -and $script:executed -eq $before) 'Binary mismatch ran'
+ [IO.File]::WriteAllBytes($binary,[byte[]](116))
+ $op=Join-Path $obj $consumed[0];[IO.File]::WriteAllBytes($op,[byte[]](118))
+ Need ((Dispatch $bo) -ne 0 -and $script:executed -eq $before) 'Object mismatch compiled'
+ [IO.File]::WriteAllBytes($op,[byte[]](111));Write-QbrainPhaseReport $bp $build build
+ Need ((Dispatch $ro) -eq 0) 'Restored run'
+ $value=Read-QbrainPhaseReport $rp run;$lf=(ConvertTo-QbrainCanonical $value)+"`n"
+ foreach($text in @($lf,$lf.Replace("`n","`r`n"))){$null=ConvertFrom-QbrainPhaseBytes (Bytes $text) run}
+ $bad=@($lf.Replace('"mode":"run-only"','"mode":"run-only","mode":"run-only"'),
+ $lf.Replace('"mode":"run-only"','"mode":"run-only","Mode":"run-only"'),$lf.Replace('"mode":"run-only",',''),
+ $lf.Replace('"mode":"run-only"','"mode":"run-only","unknown":null'),$lf.Replace('"context_matched":true','"context_matched":null'),
+ $lf.Replace('"state":"ready"','"state":"READY"'),$lf.Replace('c'*40,'C'*40),
+ $lf.Replace($value.canonical_binary.sha256,$value.canonical_binary.sha256.ToUpperInvariant()),
+ $lf.Replace('"run-only"','"run\u002donly"'),$lf+"`n",' '+$lf,
+ ('['*7+'0'+']'*7+"`n"),('['+((@('{}')*257)-join ',')+']'+"`n"),
+ $lf.Replace('"run-only"',('"'+('x'*129)+'"')),$lf.Replace('"run-only"','"rún-only"'))
+ foreach($token in @('true','1.0','1e0','-1','9007199254740992','12345678901234567','"1"')){
+  $bad+=$lf.Replace('"size":1}','"size":'+$token+'}')
+ }
+ foreach($text in $bad){Reject {$null=ConvertFrom-QbrainPhaseBytes (Bytes $text) run}}
+ Reject {$null=ConvertFrom-QbrainPhaseBytes ([byte[]](239,187,191)+(Bytes $lf)) run}
+ $empty=[pscustomobject]@{schema=$manifest.schema;state='prepared';identity=$id;produced=[object[]]@();consumed=[object[]]@();production_executable=$null;failure=$null}
+ $null=ConvertFrom-QbrainPhaseBytes (Bytes ((ConvertTo-QbrainCanonical $empty)+"`n")) objects
+ $empty.consumed=[object[]]@('x.obj');Reject {Assert-QbrainPhaseReport $empty objects}
+ $env:ERRORLEVEL='0';$marker=Join-Path $root 'later'
+ foreach($status in @(0,7,259,-2147483648,-1)){
+  $command='"'+$Python+'" -c "import os;os._exit('+[string]$status+')"';$result=[pscustomobject]@{ExitCode=0}
+  Invoke-QbrainNativeBatch ("@echo off`r`n"+$command+"`r`nexit /b") $result
+  Need (([long]$result.ExitCode -band 4294967295L) -eq ([long]$status -band 4294967295L)) 'Actual 32bit exit'
+  Remove-Item $marker -ErrorAction SilentlyContinue;$result.ExitCode=0
+  Invoke-QbrainNativeBatch ("@echo off`r`n"+$command+"`r`n"+$guard.Replace("`n","`r`n")+"`r`necho later>`"$marker`"`r`nexit /b") $result
+  Need (($status -eq 0 -and $result.ExitCode -eq 0 -and (Test-Path $marker)) -or
+   ($status -ne 0 -and $result.ExitCode -eq 1 -and -not (Test-Path $marker))) 'Later operation after rejection'
+ }
+ $check="import os,sys;sys.exit(0 if os.getcwd()==sys.argv[1] and os.environ['PATH'].startswith(sys.argv[2]+';') and os.environ['QBRAIN_PHASE_FIXTURE']=='kept' else 91)"
+ $result=[pscustomobject]@{ExitCode=0}
+ Invoke-QbrainNativeBatch ("@echo off`r`ncd /d `"$out`"`r`n"+$guard+"`r`nset PATH=$root\bin;%PATH%`r`nset QBRAIN_PHASE_FIXTURE=kept`r`n`"$Python`" -c `"$check`" `"$out`" `"$root\bin`"`r`nexit /b") $result
+ Need ($result.ExitCode -eq 0) 'Actual cwd/environment'
+ foreach($status in @(37,0)){
+  if(Test-Path $rp){Remove-Item $rp -Recurse -Force}
+  $publishFailure={param($batch,$result)
+   Invoke-QbrainNativeBatch ("@echo off`r`n`"$Python`" -c `"import os;os._exit($status)`"`r`nexit /b") $result
+   Remove-Item $rp;$null=New-Item -ItemType Directory $rp
+  }
+  $observed=Dispatch $ro $publishFailure
+  Need (($status -eq 37 -and $observed -eq 37) -or ($status -eq 0 -and $observed -ne 0)) 'Publication changed exit'
+ }
+ 'WRAPPER_CONTROLS_OK'
+}finally{
+ $env:ERRORLEVEL=$oldShadow;$env:TEMP=$oldTemp;$env:TMP=$oldTmp
+ if(Test-Path $root){Remove-Item -LiteralPath $root -Recurse -Force}
+}
+'''
+    script=root/'wrapper-controls.ps1';script.write_bytes(body.encode('utf-8-sig'))
+    owner=q.OwnedChild(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(script),'-Wrapper',str(wrapper),'-Python',sys.executable],root,dict(os.environ),subprocess.DEVNULL,root/'stdout.bin',root/'stderr.bin',20,65536)
+    owner.wait();check((root/'stdout.bin').read_text().strip().endswith('WRAPPER_CONTROLS_OK'),'actual wrapper API controls incomplete')
+    RESULTS.append(dict(name='windows-actual-wrapper-dispatch-parser-exit',passed=True))
+
+
+def phase_packet_controls(root):
+    root.mkdir()
+    for job in ('windows-msvc','windows-cmake'):
+        case=root/job;case.mkdir();evidence=case/'evidence';ident=tiny_bundle(evidence,job)
+        original={p.relative_to(evidence).as_posix():p.read_bytes() for p in evidence.rglob('*') if p.is_file()}
+        desc=lambda raw:dict(size=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+        def rebind(packet,bind_phase_results=True):
+            result=json.loads(packet['qualification.json'])
+            for name in result['required']:
+                path='stages/'+name+'/result.json';row=json.loads(packet[path])
+                for k in ('stdout','stderr'):
+                    row[k]=desc(packet['stages/'+name+'/'+k+'.bin']);row['ownership'][k]=row[k]
+                for p in row['reports']:
+                    if p in packet:row['reports'][p]=desc(packet[p])
+                row['available_reports']=copy.deepcopy(row['reports']);packet[path]=json.dumps(row,sort_keys=True).encode()
+            pair=q.PHASE_REPORTS['pair'][0]
+            if pair in packet:
+                value=json.loads(packet[pair])
+                if bind_phase_results:
+                    for role in ('build','run'):
+                        value[role]['result']=desc(packet['stages/direct-tests-'+role+'/result.json'])
+                packet[pair]=q.canonical_phase_bytes(value)
+                if pair in result['reports']:
+                    result['reports'][pair].update(desc(packet[pair]))
+            packet['qualification.json']=json.dumps(result,sort_keys=True).encode()
+            return packet
+        def materialize(packet):
+            for path,raw in packet.items():(evidence/path).write_bytes(raw)
+        called=[]
+        def pack(src,staging,identity):
+            called.append(True);staging=Path(staging);staging.mkdir();part=staging/'parts/00';part.mkdir(parents=True)
+            archive=part/'evidence.part';raw=make_archive(Path(src),archive,identity);(part/'manifest.json').write_bytes(raw)
+            return dict(passed=True,identity=identity,parts_root=str(staging/'parts'),part_count=1,
+                manifest_sha256=hashlib.sha256(raw).hexdigest(),manifest_bytes=len(raw),archive_sha256=q.digest(archive),archive_size=archive.stat().st_size)
+        control('phase-packet-valid-'+job,lambda:q.validate_recordings(original.__getitem__,ident,files=original))
+        control('phase-package-valid-'+job,lambda:q.package(evidence,case/'package',ident,_generic_packager=pack))
+        review=case/'review';review.mkdir();archive=case/'tiny.zip';raw=make_archive(evidence,archive,ident);outer=review/'valid.zip';wrap(archive,raw,outer)
+        control('phase-consumer-valid-'+job,lambda:q.consume(outer,review,ident,hashlib.sha256(raw).hexdigest(),q.digest(outer)))
+        build='direct-tests-build' if job=='windows-msvc' else 'build'
+        cases=[
+            ('policy','stages/'+build+'/result.json',lambda v:v.update(completion_policy='strict-v1'),'fixed stage completion policy'),
+            ('http-stop','stages/'+build+'/result.json',lambda v:v['ownership'].update(classification='stopped'),'build owner facts'),
+            ('nonzero','stages/'+build+'/result.json',lambda v:v['ownership'].update(exit=259),'build owner facts'),
+            ('close-false','stages/'+build+'/result.json',lambda v:v['ownership']['build_completion'].update(close_returned=False),'build close proof'),
+            ('order','stages/'+build+'/result.json',lambda v:v['ownership']['build_completion'].update(root_observed_us=6),'build event ordering'),
+            ('deadline','stages/'+build+'/result.json',lambda v:v['ownership']['build_completion'].update(success_deadline_us=9999999999),'build success deadline extended'),
+            ('argv','stages/'+build+'/result.json',lambda v:v.update(argv=['unreviewed']),'fixed stage command'),
+            ('v1','stages/'+build+'/result.json',lambda v:v.update(schema='qbrain-n49d-stage-v1'),'stage schema'),
+            ('extra','stages/'+build+'/result.json',lambda v:v.update(unreviewed=True),'stage success key inventory'),
+            ('qualification-v1','qualification.json',lambda v:v.update(schema='qbrain-n49d-qualification-v1'),'qualification schema')]
+        if job=='windows-msvc':
+            cases += [
+                ('strict-substitution','stages/direct-tests-run/result.json',lambda v:v.update(completion_policy='trusted-build-v1'),'fixed stage completion policy'),
+                ('objects','reports/direct-production-objects.json',lambda v:v['consumed'].reverse(),'object inventory'),
+                ('prepared','reports/direct-tests-build-context.json',lambda v:v.update(state='prepared'),'phase report not ready'),
+                ('binary','reports/direct-tests-build-context.json',lambda v:v['canonical_binary'].update(sha256='e'*64),'phase canonical binding'),
+                ('test-exit','reports/direct-tests-run-context.json',lambda v:v.update(test_exit=259),'run context success'),
+                ('reverse','reports/direct-tests-pair.json',lambda v:v['run'].update(start_us=350000),'pair interval/deadline'),
+                ('pair-budget','reports/direct-tests-pair.json',lambda v:v.update(pair_budget_us=1800000001),'pair fixed budget'),
+                ('pair-role','reports/direct-tests-pair.json',lambda v:v['build'].update(stage='direct-production'),'pair stage role'),
+                ('pair-ref','reports/direct-tests-pair.json',lambda v:v['build']['result'].update(sha256='f'*64),'pair sealed stage binding'),
+                ('pair-missing','qualification.json',lambda v:v.update(reports={}),'qualification report inventory'),
+                ('pair-late','qualification.json',lambda v:v['reports']['reports/direct-tests-pair.json'].update(finalized_us=1800000000),'pair publication binding/deadline'),
+                ('phase-window','stages/direct-tests-run/result.json',lambda v:v['phase_window'].update(start_us=1),'pair phase window'),
+                ('pair-cycle','stages/direct-tests-run/result.json',lambda v:(v['requested_reports'].append('reports/direct-tests-pair.json'),v['reports'].update({'reports/direct-tests-pair.json':{}})),'fixed required report inventory')]
+        else:
+            cases += [('generator','reports/configure-readiness.json',lambda v:v.update(generator='other'),'configure readiness facts'),
+                ('readiness-false','reports/configure-readiness.json',lambda v:v['checks'].update(pg_off=False),'configure readiness facts'),
+                ('configure-file','reports/configure-readiness.json',lambda v:v['files'].pop('qbrain.sln'),'report key inventory'),
+                ('configure-location','reports/configure-readiness.json',lambda v:v['source_location'].update(sha256='e'*64),'configure location identity')]
+        for label,path,mutate,boundary in cases:
+            packet=dict(original);value=json.loads(packet[path]);mutate(value)
+            packet[path]=q.canonical_phase_bytes(value) if path.startswith('reports/') else json.dumps(value).encode()
+            rebind(packet,not path.endswith('direct-tests-pair.json'))
+            tag=job+'-'+label
+            expect_failure('phase-producer-'+tag,lambda:q.validate_recordings(packet.__getitem__,ident,files=packet),boundary)
+            materialize(packet);before=len(called)
+            expect_failure('phase-package-'+tag,lambda:q.package(evidence,case/'rejected',ident,_generic_packager=pack),boundary)
+            check(len(called)==before,'invalid phase reached generic packager')
+            raw=make_archive(evidence,archive,ident);bad=review/'bad.zip';wrap(archive,raw,bad)
+            expect_failure('phase-consumer-'+tag,lambda:q.consume(bad,review,ident,hashlib.sha256(raw).hexdigest(),q.digest(bad)),boundary)
+            materialize(original)
+        if job=='windows-msvc':
+            packet=dict(original);packet['stages/direct-tests-run/stdout.bin']=b'TESTS_BUILD_OK\n';rebind(packet)
+            expect_failure('phase-old-build-log-not-canonical',lambda:q.validate_recordings(packet.__getitem__,ident,files=packet),'Native group evidence')
+        for duplicate_path in ('qualification.json','stages/'+build+'/result.json'):
+            packet=dict(original);packet[duplicate_path]=packet[duplicate_path].replace(b'{',b'{"schema":"duplicate",',1)
+            expect_failure('phase-duplicate-'+job+'-'+duplicate_path,lambda:q.validate_recordings(packet.__getitem__,ident,files=packet),'duplicate JSON key')
+
+
+FAILURE_V2='qbrain-n49d-source-controls-failure-v2'
+FAILURE_LEGACY='qbrain-n49d-source-controls-failure-legacy-v1'
+FAILURE_UNAVAILABLE='qbrain-n49d-source-controls-failure-unavailable-v1'
+
+
+def ordinary_failure_value(value):
+    kind=type(value)
+    check(kind in (type(None),bool,str,int,float,list,dict),'failure ordinary JSON type')
+    if kind is float:check(math.isfinite(value),'failure nonfinite number')
+    elif kind is list:
+        for item in value:ordinary_failure_value(item)
+    elif kind is dict:
+        check(all(type(k) is str for k in value),'failure key type')
+        for item in value.values():ordinary_failure_value(item)
+
+
+def failure_equal(a,b):
+    if type(a) is not type(b):return False
+    if type(a) is dict:return set(a)==set(b) and all(failure_equal(a[k],b[k]) for k in a)
+    if type(a) is list:return len(a)==len(b) and all(failure_equal(x,y) for x,y in zip(a,b))
+    if type(a) is float:return math.isfinite(a) and math.isfinite(b) and a.hex()==b.hex()
+    return a==b
+
+
+def validate_failure_facts(value):
+    ordinary_failure_value(value)
+    check(type(value) is dict and set(value) in ({'passed','error','controls'},{'passed','error','controls','failure_detail'}),
+          'failure fact keys')
+    check(value['passed'] is False and type(value['error']) is str and type(value['controls']) is list,'failure fact types')
+    names=set()
+    for row in value['controls']:
+        check(type(row) is dict and {'name','passed'}<=set(row),'failure control row')
+        check(type(row['name']) is str and bool(row['name']) and type(row['passed']) is bool,'failure control fields')
+        check(row['name'] not in names,'duplicate failure control');names.add(row['name'])
+
+
+def pack_failure_rows(rows):
+    return [[row['name'],row['passed'],{k:v for k,v in row.items() if k not in ('name','passed')}]
+            if set(row)-{'name','passed'} else [row['name'],row['passed']] for row in rows]
+
+
+def expand_failure_v2(raw):
+    check(type(raw) is bytes and len(raw)<=65536,'failure byte bound')
+    value=q.json_unique(raw);ordinary_failure_value(value)
+    check(type(value) is dict and value.get('schema')==FAILURE_V2,'failure v2 schema')
+    check(set(value) in ({'schema','passed','error','controls'},{'schema','passed','error','controls','failure_detail'}),
+          'failure v2 keys')
+    check(type(value['controls']) is list,'failure encoded rows')
+    rows=[]
+    for row in value['controls']:
+        check(type(row) is list and len(row) in (2,3),'failure pair/triple length')
+        extras=row[2] if len(row)==3 else {}
+        check(type(extras) is dict and (len(row)==2 or bool(extras)) and not {'name','passed'}&set(extras),'failure extra fields')
+        rows.append(dict(name=row[0],passed=row[1],**extras))
+    result={k:v for k,v in value.items() if k!='schema'};result['controls']=rows
+    validate_failure_facts(result);return result
+
+
+def failure_text(value):
+    ordinary_failure_value(value)
+    text=json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False)
+    check(len((text+'\n').encode())<=65536 and len((text+'\r\n').encode())<=65536,'failure representation limit')
+    return text
+
+
+def render_selftest_failure(value):
+    check(type(value) is dict and type(value.get('error')) is str,'primary failure unavailable')
+    primary=value['error'];validated=False;reason='control-encoding-unavailable'
+    try:
+        validate_failure_facts(value);validated=True
+        packed=dict(value,schema=FAILURE_V2,controls=pack_failure_rows(value['controls']))
+        text=failure_text(packed)
+        check(failure_equal(expand_failure_v2((text+'\n').encode()),value),'failure full roundtrip')
+        return text
+    except Exception as error:
+        if str(error)=='failure representation limit':reason='representation-limit'
+    if validated:
+        try:return failure_text(dict(value,schema=FAILURE_LEGACY))
+        except Exception:reason='representation-limit'
+    incomplete=dict(schema=FAILURE_UNAVAILABLE,passed=False,error=primary,controls_available=False,reason=reason,
+                    failure_detail_status='absent' if 'failure_detail' not in value else 'unavailable')
+    if 'failure_detail' in value:
+        try:
+            ordinary_failure_value(value['failure_detail'])
+            json.dumps(value['failure_detail'],allow_nan=False)
+            incomplete.update(failure_detail_status='retained',failure_detail=value['failure_detail'])
+        except Exception:pass
+    try:return failure_text(incomplete)
+    except Exception:raise ValueError(primary) from None
+
+
+def failed_envelope_controls():
+    value=dict(passed=False,error='original primary',controls=[
+        dict(name='first',passed=True),dict(name='second',passed=False,trace=dict(
+            events=['root','close'],deadline=1.25,signed_zero=-0.0,complete=True))],failure_detail=None)
+    before=copy.deepcopy(value);identities=(id(value['controls']),id(value['controls'][1]['trace']))
+    raw=(render_selftest_failure(value)+'\n').encode()
+    for newline in (b'\n',b'\r\n'):
+        restored=expand_failure_v2(raw[:-1]+newline)
+        check(failure_equal(restored,value),'failure reconstruction changed facts')
+    check(failure_equal(value,before) and identities==(id(value['controls']),id(value['controls'][1]['trace'])),'failure renderer mutated input')
+    absent=dict(value);del absent['failure_detail']
+    check('failure_detail' not in expand_failure_v2((render_selftest_failure(absent)+'\n').encode()),'absent detail became null')
+    check(not failure_equal(True,1) and not failure_equal(1,1.0) and not failure_equal(0.0,-0.0),'failure comparison coerced')
+    for label,mutate in [
+        ('duplicate',lambda v:v['controls'].append(copy.deepcopy(v['controls'][0]))),
+        ('name',lambda v:v['controls'][0].update(name=1)),('status',lambda v:v['controls'][0].update(passed=1)),
+        ('detail',lambda v:v.update(failure_detail=float('nan'))),('extra',lambda v:v['controls'][1].update(other=object())),
+        ('keys',lambda v:v.update(extra=True))]:
+        bad=copy.deepcopy(value);mutate(bad);out=json.loads(render_selftest_failure(bad))
+        check(out['schema']==FAILURE_UNAVAILABLE and out['error']==value['error'] and out['passed'] is False and
+              out['controls_available'] is False,'malformed facts passed encoding')
+    with patch(__name__+'.pack_failure_rows',side_effect=ValueError('private-copy-fault')):
+        legacy=json.loads(render_selftest_failure(value))
+    check(legacy['schema']==FAILURE_LEGACY and failure_equal({k:v for k,v in legacy.items() if k!='schema'},value),'legacy fallback lost facts')
+    expect_failure('failure-v2-rejects-legacy',lambda:expand_failure_v2(json.dumps(legacy).encode()),'failure v2 schema')
+    unavailable=json.loads(render_selftest_failure(dict(value,controls=[None])))
+    expect_failure('failure-v2-rejects-unavailable',lambda:expand_failure_v2(json.dumps(unavailable).encode()),'failure v2 schema')
+    encoded=json.loads(raw)
+    for label,row in [('length',[]),('empty-extra',['x',True,{}]),('collision',['x',True,{'name':'y'}]),('scalar','x')]:
+        bad=dict(encoded,controls=[row])
+        expect_failure('failure-v2-'+label,lambda bad=bad:expand_failure_v2(json.dumps(bad).encode()))
+    duplicate=raw.replace(b'"error":',b'"error":"other","error":',1)
+    expect_failure('failure-v2-duplicate-key',lambda:expand_failure_v2(duplicate),'duplicate JSON key')
+    class Text(str):pass
+    class Row(dict):pass
+    for label,bad in [('subclass',dict(value,error=Text('primary'))),('row-subclass',dict(value,controls=[Row(name='x',passed=True)]))]:
+        if label=='subclass':expect_failure('failure-'+label,lambda:render_selftest_failure(bad),'primary failure unavailable')
+        else:check(json.loads(render_selftest_failure(bad))['schema']==FAILURE_UNAVAILABLE,'subclass encoded')
+    huge=dict(value,error='x'*65536)
+    expect_failure('failure-unrepresentable-primary',lambda:render_selftest_failure(huge),'x'*65536)
+    RESULTS.append(dict(name='failure-v2-full-facts-roundtrip-fallback',passed=True))
+
+
+def build_native_controls(root):
+    if os.name!='nt':return
+    root.mkdir();release=root/'sentinel-release'
+    sentinel=subprocess.Popen([sys.executable,'-c',"import time;from pathlib import Path;p=Path("+repr(str(release))+");end=time.monotonic()+30\nwhile not p.exists() and time.monotonic()<end:time.sleep(.01)"],
+        stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    try:
+        for api in ('owner','recorder'):
+            for style in ('inherited','redirected','late'):
+                for policy in ('strict-v1','trusted-build-v1'):
+                    folder=root/(api+'-'+style+'-'+policy);folder.mkdir();ready=folder/'ready'
+                    child="import os,time;from pathlib import Path;Path("+repr(str(ready))+").write_text(str(os.getpid()));print('owned-ready',flush=True);time.sleep(10);print('late-write',flush=True)"
+                    redirection=',stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL' if style!='inherited' else ''
+                    leader="import sys,subprocess,time;from pathlib import Path;subprocess.Popen([sys.executable,'-c',"+repr(child)+"]"+redirection+");end=time.monotonic()+1\nwhile not Path("+repr(str(ready))+").exists():\n if time.monotonic()>=end:raise SystemExit(8)\n time.sleep(.005)\nprint('root-ready',flush=True)"
+                    argv=[sys.executable,'-c',leader];owners=[];entered=[];hidden=[]
+                    real_owner=q.OwnedChild;real_active=q._WindowsTree.active;real_end=q.OwnedChild._end
+                    def factory(*args,**kwargs):
+                        owner=real_owner(*args,**kwargs);owners.append(owner);return owner
+                    def active(tree):
+                        value=real_active(tree)
+                        if style=='late' and owners and tree is owners[0].tree and not entered and owners[0].proc.poll()==0 and value:
+                            hidden.append(True);return []
+                        return value
+                    def end(owner,failure=None,intentional=False):
+                        if style=='late' and not entered:
+                            check(owner is owners[0] and failure is None and intentional is False and owner.proc.poll()==0 and
+                                  not any(t.is_alive() for t in owner.readers) and hidden,'native late entry not proved')
+                            entered.append(True)
+                        return real_end(owner,failure,intentional)
+                    with patch.object(q._WindowsTree,'active',active),patch.object(q.OwnedChild,'_end',end):
+                        if api=='owner':
+                            owner=factory(argv,folder,dict(os.environ),subprocess.DEVNULL,folder/'stdout',folder/'stderr',3,4096,completion_policy=policy)
+                            try:owner.complete_build() if policy=='trusted-build-v1' else owner.wait()
+                            except q.OwnedChildError:pass
+                        else:
+                            rec=q.Recorder(folder/'record',phase_identity(),['direct-production'],dict(os.environ),folder,4096)
+                            rec.locations=dict(source=str(folder),build=str(folder/'build'),output=str(rec.root),python=sys.executable)
+                            spec=dict(argv=argv,timeout_seconds=3,reports=[],binaries_before=[],binaries_after=[],completion_policy=policy)
+                            with patch.object(q,'OwnedChild',factory),patch.object(q,'stage_contract',return_value={'direct-production':spec}),patch.object(q,'ROOT',folder):
+                                try:rec.run('direct-production',argv,3)
+                                except ValueError:pass
+                            owner=owners[0]
+                    value=owner.result
+                    check(ready.is_file() and ready.read_text().isdigit() and sentinel.poll() is None,'native owned/sentinel readiness')
+                    if policy=='trusted-build-v1':q.validate_build_proof(value)
+                    else:check(value['classification']=='lingering-descendant','native strict policy changed')
+                    check(value['exit']==0 and all(value[k] is True for k in ('cleanup_ok','owned_tree_empty','stable','readers_done')),'native teardown incomplete')
+                    before=[q.descriptor(p) for p in owner.paths];time.sleep(.02)
+                    check(before==[q.descriptor(p) for p in owner.paths],'native post-close output mutation')
+                    RESULTS.append(dict(name='build-native-'+api+'-'+style+'-'+policy,passed=True))
+    finally:
+        release.write_text('release');check(sentinel.wait(timeout=3)==0,'unrelated sentinel did not exit independently')
+
+
+def diagnostic_admission_controls(root,ident,originals):
+    """Actual caller/collector; failed-stage and POSIX Windows-path models only."""
+    import io,types
+    from contextlib import redirect_stderr
+    pair=dict(acceptance=False,failure='pair-finalization-timeout',report=None)
+    boundary=lambda quotes:chr(0x1f600)*634+'\x01'+'"'*quotes+'x'*(389-quotes)
+    errors=[
+        ('ascii','x'*1024,None),
+        ('below',boundary(3),12287),('equal',boundary(4),12288),
+        ('over',boundary(5),12289),
+        ('old-lf-admitted',chr(0x1f600)*647+'\x01'+'"'+'x'*375,12428),
+        ('supplementary',chr(0x1f600)*1024,16569)]
+    cases=[(name,error,meta,'fresh') for name,error,meta in errors]
+    cases.extend((name,error,meta,'prior') for name,error,meta in errors[3:])
+    cases.extend([('primary-storage',errors[4][1],12428,'primary-directory'),
+                  ('collector-storage',errors[1][1],12287,'packet-directory')])
+    real_contract=q.stage_contract;reference=None
+    for name,error,metadata,state in cases:
+        case=root/(name+'-'+state);source=case/'source';source.mkdir(parents=True)
+        output=case/'output';destination=case/'n49d-diagnostics/failure.json'
+        if state in ('prior','packet-directory'):
+            destination.parent.mkdir()
+            if state=='prior':destination.write_bytes(b'prior diagnostics\n')
+            else:destination.mkdir()
+        seen=[];inputs={}
+        class FailedRecorder:
+            def __init__(self,folder,identity,required,environment,cwd):
+                self.root=folder;folder.mkdir();self.required=required;self.stages=[]
+            def run(self,name,*args,**kwargs):
+                check(name=='source-before' and not seen,'model native launch')
+                seen.append(name);self.stages=self.required[:6]
+                self.pair=types.SimpleNamespace(result=None,failure=pair['failure'],
+                    value={'state':'complete'},diagnostic=lambda:dict(pair))
+                for leaf,raw in originals.items():
+                    if leaf=='stages/direct-tests-run/result.json':
+                        value=json.loads(raw);value['ownership']['stable']=None
+                        encoded=json.dumps(value).encode();raw=encoded+b' '*(len(raw)-len(encoded))
+                    target=self.root/leaf;target.parent.mkdir(parents=True,exist_ok=True)
+                    target.write_bytes(raw);inputs[leaf]=raw
+                if state=='primary-directory':(self.root/'failure.json').mkdir()
+                raise ValueError(error)
+        def launch_contract(identity,locations):
+            actual=real_contract(identity,locations);modeled=copy.deepcopy(actual)
+            if os.name!='nt':
+                for position in (1,9):
+                    modeled['source-before']['argv'][position]=actual['source-before']['argv'][position].replace('\\','/')
+            restored=copy.deepcopy(modeled)
+            for position in (1,9):restored['source-before']['argv'][position]=actual['source-before']['argv'][position]
+            check(restored==actual,'platform model changed non-launch contract')
+            return modeled
+        args=types.SimpleNamespace(source=source,build=case/'build',output=output,
+            package=case/'package',job='windows-msvc',commit=ident['commit'],tree=ident['tree'],
+            run_id=ident['run_id'],run_attempt=ident['run_attempt'])
+        captured=io.StringIO()
+        with patch.object(q,'ROOT',source),patch.object(q,'os',types.SimpleNamespace(name='nt',environ={})),\
+             patch.object(q,'Recorder',FailedRecorder),patch.object(q,'stage_contract',launch_contract),redirect_stderr(captured):
+            code=q.run_job(args)
+        text=captured.getvalue()
+        check(code==1 and seen==['source-before'] and text.startswith(error+'\n') and text.count(error)==1,
+              'actual caller replaced primary')
+        check(not (output/'qualification.json').exists() and not args.package.exists(),'model qualified/package')
+        primary=output/'failure.json'
+        if state=='primary-directory':
+            check(not primary.is_file() and 'incomplete-primary-record: ' in text,'missing primary record hidden')
+        else:check(json.loads(primary.read_bytes())['error']==error,'primary record changed')
+        rejected=metadata is not None and metadata>12288
+        if rejected:
+            reason='diagnostics metadata cap' if name=='supplementary' else 'diagnostics CRLF metadata cap'
+            check('incomplete-diagnostics: '+reason+'\n' in text,'wrong real collector rejection')
+            if state=='prior':check(destination.read_bytes()==b'prior diagnostics\n','rejection replaced prior packet')
+            else:check(not destination.exists() and not destination.parent.exists(),'rejection created fresh destination')
+        elif state=='packet-directory':
+            check(destination.is_dir() and 'incomplete-diagnostics: ' in text,'collector storage failure hidden')
+        else:
+            check(text==error+'\n','admitted collection gained secondary failure')
+            actual=destination.read_bytes();payload=json.loads(actual)
+            check(set(payload['files'])==set(inputs),'admitted role inventory')
+            for leaf,raw in inputs.items():
+                row=payload['files'][leaf]
+                check(base64.b64decode(row['data'])==raw and row['size']==len(raw)==row['retained_bytes'] and
+                      row['sha256']==hashlib.sha256(raw).hexdigest() and row['retained_offset']==0 and
+                      row['truncated'] is False and row['complete'] is False and row['status']=='stability-unknown',
+                      'admitted selected facts changed')
+            if reference is None:reference=copy.deepcopy(payload)
+        expected=copy.deepcopy(reference)
+        expected.update(error=error,error_size=len(error.encode()),error_sha256=hashlib.sha256(error.encode()).hexdigest())
+        lf=json.dumps(expected,sort_keys=True,indent=2).encode();crlf=lf.replace(b'\n',b'\r\n')
+        check(len(crlf)==len(lf)+lf.count(b'\n') and json.loads(lf)==json.loads(crlf),'newline identity')
+        check(sum(len(row['data']) for row in expected['files'].values())==245776,'base64 role sum')
+        if metadata is not None:check(len(crlf)-245776==metadata,'exact metadata boundary')
+        if not rejected and state!='packet-directory':check(actual==lf,'admitted LF bytes changed')
+        check(245776+12288==258064<262144,'conditional envelope bound')
+        RESULTS.append(dict(name='diagnostic-admission-caller-'+name+'-'+state,passed=True))
+
+
+def phase_retention_controls(root,export=None):
+    root.mkdir();ident=phase_identity();ident.update(run_id='9'*20,run_attempt='8'*20)
+    objects=dict(schema=q.PHASE_REPORTS['objects'][1],state='ready',identity=ident,
+        produced=[dict(name=n,size=9007199254740991,sha256='f'*64) for n in q.PRODUCTION_OBJECTS],
+        consumed=list(q.CONSUMED_OBJECTS),production_executable=dict(size=9007199254740991,sha256='f'*64),failure=None)
+    reports={'objects':objects,'build-context':q.phase_seed('build-context',ident),
+             'run-context':q.phase_seed('run-context',ident),'pair':q.phase_seed('pair',ident)}
+    # Whole failed-report capacity fixtures preserve all fields; whitespace makes
+    # them intentionally noncanonical and incapable of qualifying a job.
+    originals={}
+    for role,value in reports.items():
+        path,_,cap=q.PHASE_REPORTS[role];raw=q.canonical_phase_bytes(value);raw=raw[:-1]+b' '*(cap-len(raw))+b'\n'
+        dest=root/path;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(raw);originals[path]=raw
+    stage='direct-tests-run'
+    for name in (stage,'direct-tests-build'):
+        folder=root/'stages'/name;folder.mkdir(parents=True)
+        row=dict(ownership=dict(stable=True),classification='failed',schema='retention-fixture')
+        raw=json.dumps(row).encode();raw+=b' '*(16384-len(raw));(folder/'result.json').write_bytes(raw)
+        originals['stages/'+name+'/result.json']=raw
+    for name in ('stdout','stderr'):
+        raw=bytes(range(256))*256;(root/'stages'/stage/(name+'.bin')).write_bytes(raw)
+        originals['stages/'+stage+'/'+name+'.bin']=raw
+    payload=q.failure_diagnostics(root,root/'actual.json',ident,[stage],q.required_stages('windows-msvc'),'x'*1024)
+    check(set(payload['files'])==set(originals),'maximal failure role inventory')
+    for name,raw in originals.items():
+        row=payload['files'][name]
+        check(base64.b64decode(row['data'])==raw and row['size']==len(raw) and not row['truncated'] and
+              row['sha256']==hashlib.sha256(raw).hexdigest(),'maximal retained bytes changed')
+    text=json.dumps(payload,sort_keys=True,indent=2)
+    check(sum(len(v['data']) for v in payload['files'].values())==245776,'per-leaf base64 arithmetic')
+    for label,newline in [('LF','\n'),('CRLF','\r\n')]:
+        raw=text.replace('\n',newline).encode()
+        check(len(raw)<=262144 and len(raw)-245776<=12288,'complete diagnostic envelope bound')
+        check(json.loads(raw)==payload,'newline envelope semantics')
+        if export is not None:
+            export.mkdir(parents=True,exist_ok=True);(export/(label+'.json')).write_bytes(raw)
+    RESULTS.append(dict(name='phase-maximal-LF-CRLF-retention',passed=True))
+    for job in ('windows-msvc','windows-cmake'):
+        for name in q.required_stages(job):
+            prior,roles=q.diagnostic_roles(phase_identity(job),name)
+            check(len(roles)<=4 and all(len(x)==3 for x in roles),'diagnostic role expansion')
+            if job=='windows-msvc' and name=='canonical-groups':check(prior=='direct-tests-run' and roles==[(q.PHASE_REPORTS['pair'][0],4096,True)],'canonical diagnostic priority')
+            if name.endswith(('-normal','-optimized')) and any(name.startswith(d+'-') for d in q.DRIVERS):
+                expected=[('reports/'+name+'/RESULT.json',8192,False)] if name.startswith(('mcp_directory_search-','directory_search-')) else [('reports/'+name+'.json',8192,False)] if name.startswith(('context_process-','named_arguments-')) else []
+                check(roles==expected and prior==('direct-tests-build' if job=='windows-msvc' else 'canonical-build'),'current driver report priority')
+    result=root/'stages'/stage/'result.json';saved=result.read_bytes();result.write_bytes(b'{invalid')
+    packet=q.failure_diagnostics(root,root/'malformed.json',ident,[stage],[], 'fixture')
+    check(all(p in packet['files'] and base64.b64decode(packet['files'][p]['data'])==raw for p,raw in originals.items() if p.startswith('reports/')),'malformed result hid fixed reports')
+    result.write_bytes(saved)
+    path=root/q.PHASE_REPORTS['objects'][0];path.write_bytes(path.read_bytes()+b'x')
+    packet=q.failure_diagnostics(root,root/'oversized.json',ident,[stage],[],'fixture')
+    check(packet['files'][q.PHASE_REPORTS['objects'][0]]['status']=='oversized' and
+          'data' not in packet['files'][q.PHASE_REPORTS['objects'][0]],'oversized report truncated into complete evidence')
+
+    for job,table in [
+        ('windows-msvc',{'direct-production':(None,['objects']),'direct-tests-build':('direct-production',['objects','build-context','pair']),
+                         'direct-tests-run':('direct-tests-build',['objects','build-context','run-context','pair']),'canonical-groups':('direct-tests-run',['pair'])}),
+        ('windows-cmake',{'configure':(None,['configure']),'build':('configure',['configure']),'canonical-build':('build',['configure']),
+                          'ctest-inventory':('build',[]),'ctest-completeness':('build',[]),'canonical-run':('canonical-build',[]),'canonical-groups':('canonical-build',[])})]:
+        for name,(prior,roles) in table.items():
+            check(q.diagnostic_roles(phase_identity(job),name)==(prior,[(q.PHASE_REPORTS[r][0],q.PHASE_REPORTS[r][2],True) for r in roles]),'fixed diagnostic matrix')
+    for name,prior,report in [('ctest-run','build','reports/ctest.xml'),('winhttp-normal','canonical-build','reports/winhttp-normal.json'),
+                              ('source-after','canonical-build','reports/source-after.json')]:
+        check(q.diagnostic_roles(phase_identity('windows-cmake'),name)==(prior,[(report,8192,False)]),'later diagnostic priority')
+    check(q.diagnostic_roles(ident,'direct-tests-run',pair={'failure':'pair-finalization-timeout'})==
+          ('direct-tests-build',[(q.PHASE_REPORTS[r][0],q.PHASE_REPORTS[r][2],True) for r in reports]),'pair diagnostic priority')
+    RESULTS.append(dict(name='phase-fixed-failure-role-and-unavailable',passed=True))
+    diagnostic_admission_controls(root/'admission',ident,originals)
+
+
 def main():
     with tempfile.TemporaryDirectory(prefix='n49d-tiny-controls-') as tmp:
-        root=Path(tmp);source_controls();ancestry_controls();privacy_assertion_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();image_model=windows_diagnostic_controls(root/'diagnostics');windows_image_controls(root/'images',image_model);failure_detail_controls(root/'failure-detail');initial_parent_controls(root/'initial-parent');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');root_terminal_controls(root/'root-terminal');root_terminal_native_controls(root/'root-native');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned');failure_detail_retention_controls(root/'failure-detail-retention')
+        root=Path(tmp);source_controls();ancestry_controls();privacy_assertion_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();image_model=windows_diagnostic_controls(root/'diagnostics');windows_image_controls(root/'images',image_model);failure_detail_controls(root/'failure-detail');initial_parent_controls(root/'initial-parent');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');root_terminal_controls(root/'root-terminal');root_terminal_native_controls(root/'root-native');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned');phase_report_controls(root/'phase-reports');phase_pair_controls(root/'phase-pair');build_lifecycle_controls(root/'build-model');build_native_controls(root/'build-native');windows_wrapper_controls(root/'wrapper-native');phase_packet_controls(root/'phase-packets');phase_retention_controls(root/'phase-retention');failed_envelope_controls();failure_detail_retention_controls(root/'failure-detail-retention')
     print(json.dumps(dict(passed=True,python_optimized=sys.flags.optimize>0,controls=RESULTS,
         linux_reader_backend=('stat-adapter' if q._PROC_STAT_CHILD_ADAPTER else 'native-children') if os.name!='nt' else 'not_applicable',
         n49d_package_wrapper_executed=True,generic_package_fixture_seam=True,inherited_packager_executed=False,inherited_packager_reason='unchanged 1152 MiB reserve; native CI only'),sort_keys=True))
@@ -2605,4 +3546,4 @@ def main():
 if __name__=='__main__':
     try:sys.exit(main())
     except Exception as e:
-        print(json.dumps(_selftest_failure(e)),file=sys.stderr);sys.exit(1)
+        print(render_selftest_failure(_selftest_failure(e)),file=sys.stderr);sys.exit(1)

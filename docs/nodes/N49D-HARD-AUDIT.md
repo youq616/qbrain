@@ -9,10 +9,12 @@ Required current-candidate evidence includes:
 
 - Exact accepted-base, candidate/tree, approved file-delta and binary binding
 - Linux and Windows CMake builds and the twelve named focused CTests
-- The Windows CMake and direct-MSVC canonical sixty-group suites
+- The Windows CMake and direct-MSVC canonical sixty-group suites, with direct-MSVC proof from the strict RunOnly phase
 - The six listed process drivers in normal and optimized Python on all three products
 - Actual Windows MCP HTTP on both Windows build paths and the Windows CMake WinHTTP regression
 - The two ASan/UBSan focused executables with effective flags, runtime options, and clean diagnostics
+- Version 2 build/readiness/object/context/pair records, exact policy binding and the original shared direct-test deadline
+- Actual Windows wrapper dispatcher/parser/exit behavior, owned-job completion, strict product ownership and full bounded failure retention
 - Finite fail-closed source/recorder/package/consumer controls and all four bounded native job artifacts
 - A separate outcome review of the exact frozen candidate and raw evidence
 

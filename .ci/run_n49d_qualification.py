@@ -65,12 +65,276 @@ def descriptor(path):
 
 
 def same_identity(value, expected):
-    need(value == expected and set(value) == {'commit','tree','run_id','run_attempt','job_key','job_label'},
-         'candidate/job/run identity mismatch')
-    need(all(isinstance(v,str) and v for v in value.values()), 'identity strings required')
+    need(type(value) is dict and type(expected) is dict, 'identity object type')
+    need(set(value)==set(expected)=={'commit','tree','run_id','run_attempt','job_key','job_label'},'candidate/job/run identity mismatch')
+    need(all(type(v) is str and v for v in [*value.values(),*expected.values()]),'identity strings required')
+    need(value==expected,'candidate/job/run identity mismatch')
     need(all(re.fullmatch('[0-9a-f]{40}', value[k]) for k in ('commit','tree')), 'invalid candidate identity')
-    need(value['run_id'].isdigit() and value['run_attempt'].isdigit(), 'invalid run identity')
+    need(all(re.fullmatch('[0-9]{1,20}',value[k]) for k in ('run_id','run_attempt')), 'invalid run identity')
     need(value['job_key'] in JOBS and value['job_label'] == value['job_key'], 'unknown job')
+
+
+# The five build roles are fixed here, never inferred from a command or image.
+TRUSTED_BUILD = frozenset({('windows-cmake','configure'),('windows-cmake','build'),
+    ('windows-cmake','canonical-build'),('windows-msvc','direct-production'),('windows-msvc','direct-tests-build')})
+WINDOWS_PHASE_CONTROL_NAMES = {'windows-actual-wrapper-dispatch-parser-exit'} | {
+    'build-native-'+a+'-'+b+'-'+c for a in ('owner','recorder') for b in ('inherited','redirected','late') for c in ('strict-v1','trusted-build-v1')}
+PHASE_REPORTS = {
+    'objects':('reports/direct-production-objects.json','qbrain-n49d-build-objects-v1',12*1024),
+    'build-context':('reports/direct-tests-build-context.json','qbrain-n49d-build-context-v1',2*1024),
+    'run-context':('reports/direct-tests-run-context.json','qbrain-n49d-run-context-v1',2*1024),
+    'pair':('reports/direct-tests-pair.json','qbrain-n49d-build-test-pair-v1',4*1024),
+    'configure':('reports/configure-readiness.json','qbrain-n49d-configure-readiness-v1',8*1024)}
+PRODUCTION_OBJECTS = tuple(sorted(n+'.obj' for n in (
+    'paths hash log string_util time_util database migrate pg_backend transaction_state types brain '
+    'extract traverse analytics scan astlite packs lint store image_meta vector rrf hybrid directory rerank minions embedding_queue dream '
+    'chunker markdown import http_client embed chat registry handlers memory_ops session_memory fact_store hook diagnostics context context_ops '
+    'inbox_watch live_sync jsonrpc server auth http_server app commands main sqlite3').split()))
+CONSUMED_OBJECTS = tuple(n for n in PRODUCTION_OBJECTS if n not in ('app.obj','main.obj'))
+CONFIGURE_FILES = tuple(sorted(('CMakeCache.txt','qbrain.sln','qbrain.vcxproj','qbrain_tests.vcxproj','qbrain_http_probe.vcxproj',
+                                *(t+'.vcxproj' for t in TARGETS))))
+CONFIGURE_CHECKS = ('home_matches','build_matches','project_qbrain','generator_matches','debug_requested',
+                    'debug_available','pg_off','overlay_matches','inputs_regular')
+PHASE_KEYS = {
+    'objects':'schema state identity produced consumed production_executable failure',
+    'build-context':'schema state identity mode architecture cwd_role vcvars runtime_prefix production_objects production_executable canonical_binary failure',
+    'run-context':'schema state identity mode build_context canonical_binary context_matched test_exit failure',
+    'configure':'schema state identity source_location build_location overlay_location generator checks files failure',
+    'pair':'schema state identity pair_budget_us build_budget_us run_budget_us build run finalize_begin_us failure'}
+PHASE_FAILURES = {
+    'objects':'missing-object object-type object-inventory object-changed binary-unavailable deadline storage',
+    'build-context':'input-invalid context-mismatch object-mismatch compile-failed copy-failed binary-unavailable binary-mismatch deadline storage',
+    'run-context':'input-invalid context-mismatch binary-mismatch launch-failed test-nonzero deadline storage',
+    'configure':'cache-unavailable cache-limit cache-syntax cache-duplicate cache-value generated-input deadline storage',
+    'pair':'build-failed run-failed handoff-failed pair-finalization-timeout pair-report-unavailable'}
+BUILD_PROOF_KEYS = ('schema policy state reason root_exit root_observed_us teardown_requested termination_requested_us '
+    'termination_succeeded empty_observed_us close_attempted_us close_returned_us streams_finalized_us success_deadline_us '
+    'close_attempted close_returned close_in_budget').split()
+BUILD_TIMES = ('root_observed_us','termination_requested_us','empty_observed_us','close_attempted_us',
+               'close_returned_us','streams_finalized_us','success_deadline_us')
+
+
+def exact_keys(value, keys, reason='report key inventory'):
+    need(type(value) is dict and set(value)==set(keys.split() if type(keys) is str else keys),reason)
+
+
+def uint(value):
+    need(type(value) is int and 0<=value<=9007199254740991,'report unsigned integer')
+
+
+def report_descriptor(value, path=False):
+    exact_keys(value,'bytes sha256' if path else 'size sha256')
+    number=value['bytes' if path else 'size'];uint(number)
+    need(number>0 and (not path or number<=131072),'report descriptor size')
+    need(type(value['sha256']) is str and re.fullmatch('[0-9a-f]{64}',value['sha256']) is not None,'report descriptor digest')
+
+
+def json_unique(raw):
+    def pairs(rows):
+        result={}
+        for key,value in rows:
+            need(key not in result,'duplicate JSON key');result[key]=value
+        return result
+    def constant(value):raise ValueError('nonstandard JSON number')
+    return json.loads(raw,object_pairs_hook=pairs,parse_constant=constant)
+
+
+def canonical_phase_bytes(value):
+    return (json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True)+'\n').encode('ascii')
+
+
+def phase_report(role,value,identity,ready=False):
+    need(role in PHASE_REPORTS,'unknown phase report role')
+    exact_keys(value,PHASE_KEYS[role]);same_identity(value['identity'],identity)
+    need(value['schema']==PHASE_REPORTS[role][1] and type(value['state']) is str,'phase report schema')
+    need(identity['job_key']==('windows-cmake' if role=='configure' else 'windows-msvc'),'phase report job')
+    state=value['state'];complete='complete' if role=='pair' else 'ready'
+    need(state in ('prepared','failed',complete),'phase report state')
+    if ready:need(state==complete,'phase report not ready')
+    need(value['failure'] is None if state!='failed' else
+         type(value['failure']) is str and value['failure'] in PHASE_FAILURES[role].split(),'phase report failure reason')
+    def optional(key,path=False):
+        if value[key] is not None:report_descriptor(value[key],path)
+    if role=='objects':
+        need(type(value['produced']) is list and type(value['consumed']) is list,'object inventory arrays')
+        if state=='ready':
+            need(len(value['produced'])==53 and value['consumed']==list(CONSUMED_OBJECTS) and
+                 all(type(n) is str for n in value['consumed']),'object inventory mismatch')
+            for row,name in zip(value['produced'],PRODUCTION_OBJECTS):
+                exact_keys(row,'name size sha256');need(type(row['name']) is str and row['name']==name,'object basename mismatch')
+                report_descriptor({k:row[k] for k in ('size','sha256')})
+            report_descriptor(value['production_executable'])
+        else:need(value['produced']==[] and value['consumed']==[] and value['production_executable'] is None,'partial object inventory')
+    elif role=='build-context':
+        need(value['mode']=='build-only' and value['architecture']=='x64' and value['cwd_role']=='build/cl','build context constants')
+        v=value['vcvars'];r=value['runtime_prefix']
+        if v is not None:
+            exact_keys(v,'path file');report_descriptor(v['path'],True);report_descriptor(v['file'])
+        if r is not None:
+            exact_keys(r,'present identity');need(type(r['present']) is bool,'runtime presence type')
+            if r['present']:report_descriptor(r['identity'],True)
+            else:need(r['identity'] is None,'runtime absence identity')
+        for key in ('production_objects','production_executable','canonical_binary'):optional(key)
+        if state=='ready':need(all(value[k] is not None for k in ('vcvars','runtime_prefix','production_objects','production_executable','canonical_binary')),'build observations missing')
+    elif role=='run-context':
+        need(value['mode']=='run-only','run context mode')
+        optional('build_context');optional('canonical_binary')
+        if state=='ready':
+            need(value['build_context'] is not None and value['canonical_binary'] is not None and
+                 value['context_matched'] is True and type(value['test_exit']) is int and value['test_exit']==0,'run context success')
+        else:need(value['context_matched'] is None and value['test_exit'] is None,'partial run claims completion')
+    elif role=='configure':
+        for key in ('source_location','build_location','overlay_location'):optional(key,True)
+        exact_keys(value['checks'],CONFIGURE_CHECKS)
+        need(type(value['files']) is dict,'configure file inventory type')
+        if state=='ready':
+            need(all(value[k] is not None for k in ('source_location','build_location','overlay_location')) and
+                 value['generator']=='vs17-2022' and all(v is True for v in value['checks'].values()),'configure readiness facts')
+            exact_keys(value['files'],CONFIGURE_FILES)
+            for v in value['files'].values():report_descriptor(v)
+        else:
+            need(value['generator'] is None and all(v is None for v in value['checks'].values()) and value['files']=={},'partial configure claims readiness')
+    else:
+        for key,expected in (('pair_budget_us',1800000000),('build_budget_us',1200000000),('run_budget_us',600000000)):
+            need(type(value[key]) is int and value[key]==expected,'pair fixed budget')
+        for key,name in (('build','direct-tests-build'),('run','direct-tests-run')):
+            entry=value[key]
+            if entry is not None:
+                exact_keys(entry,'stage start_us end_us effective_deadline_us result')
+                need(entry['stage']==name,'pair stage role')
+                for field in ('start_us','end_us','effective_deadline_us'):uint(entry[field])
+                report_descriptor(entry['result'])
+        if state=='complete':
+            b,r=value['build'],value['run'];uint(value['finalize_begin_us'])
+            need(b is not None and r is not None and
+                 0==b['start_us']<=b['end_us']<=r['start_us']<=r['end_us']<=value['finalize_begin_us']<1800000000 and
+                 b['effective_deadline_us']==1200000000 and b['end_us']<1200000000 and
+                 r['effective_deadline_us']==min(r['start_us']+600000000,1800000000) and
+                 r['end_us']<r['effective_deadline_us'],'pair interval/deadline mismatch')
+        else:
+            need(value['finalize_begin_us'] is None,'partial pair completion time')
+            if state=='prepared':need(value['build'] is None and value['run'] is None,'prepared pair stage claim')
+    return value
+
+
+def read_phase_bytes(raw,role,identity,ready=False):
+    need(type(raw) is bytes and 0<len(raw)<=PHASE_REPORTS[role][2],'phase report byte cap')
+    need(all(b<128 for b in raw) and b'\\' not in raw and not raw.startswith(b'\xef\xbb\xbf'),'phase report ASCII grammar')
+    quoted=False;token=0;depth=0;containers=0
+    for b in raw:
+        if b==34:
+            quoted=not quoted;token=0
+        elif quoted:
+            token+=1;need(token<=128 and b>=32,'phase string token bound')
+        elif b in (123,91):
+            depth+=1;containers+=1;need(depth<=6 and containers<=256,'phase structure bound')
+        elif b in (125,93):depth-=1
+    need(not quoted and depth==0,'phase structure incomplete')
+    need(all(len(t)<=16 for t in re.findall(rb'(?<![A-Za-z0-9_"])[-+0-9.eE]+',re.sub(rb'"[^"]*"',b'""',raw))),'phase numeric token bound')
+    value=phase_report(role,json_unique(raw),identity,ready)
+    encoded=canonical_phase_bytes(value)
+    need(raw in (encoded,encoded.replace(b'\n',b'\r\n')),'phase canonical bytes mismatch')
+    return value
+
+
+def write_phase(path,role,value,identity,deadline=None):
+    phase_report(role,value,identity);raw=canonical_phase_bytes(value)
+    read_phase_bytes(raw,role,identity)
+    if deadline is not None:need(time.monotonic()<deadline,'timeout during phase publication')
+    path=Path(path);path.parent.mkdir(parents=True,exist_ok=True);temporary=path.with_suffix(path.suffix+'.tmp')
+    with temporary.open('wb') as stream:stream.write(raw)
+    os.replace(temporary,path)
+    back=path.read_bytes();need(back==raw,'phase publication changed')
+    result=dict(size=len(back),sha256=hashlib.sha256(back).hexdigest())
+    if deadline is not None:need(time.monotonic()<deadline,'timeout during phase publication')
+    return result
+
+
+def path_identity(value):
+    raw=str(value).encode('utf-8');need(0<len(raw)<=131072,'path identity bound')
+    return dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+
+
+def fixed_file(root,name,cap=None):
+    root=Path(root);path=root/name
+    need(root.resolve(strict=True)==root.absolute(),'fixed root redirected')
+    need(path.is_relative_to(root),'fixed file root mismatch')
+    for item in [root,*list(path.relative_to(root).parents)[:-1]]:
+        current=item if item==root else root/item
+        info=current.lstat();need(not stat.S_ISLNK(info.st_mode) and not getattr(info,'st_file_attributes',0)&0x400,'reparse file component')
+    info=path.lstat()
+    need(stat.S_ISREG(info.st_mode) and not stat.S_ISLNK(info.st_mode) and not getattr(info,'st_file_attributes',0)&0x400 and info.st_size>0,'fixed regular file required')
+    need(cap is None or info.st_size<=cap,'fixed file byte cap')
+    return descriptor(path)
+
+
+def object_report(source,identity,expected=None):
+    root=Path(source)/'build/cl';produced=[]
+    for name in PRODUCTION_OBJECTS:produced.append(dict(name=name,**fixed_file(root,'obj/'+name)))
+    value=dict(schema=PHASE_REPORTS['objects'][1],state='ready',identity=identity,produced=produced,
+               consumed=list(CONSUMED_OBJECTS),production_executable=fixed_file(root,'qbrain.exe'),failure=None)
+    phase_report('objects',value,identity,True)
+    if expected is not None:
+        phase_report('objects',expected,identity,True)
+        before={r['name']:{k:r[k] for k in ('size','sha256')} for r in expected['produced']}
+        need(value['production_executable']==expected['production_executable'] and
+             all({k:r[k] for k in ('size','sha256')}==before[r['name']] for r in produced if r['name'] in CONSUMED_OBJECTS),'production object continuity mismatch')
+    return value
+
+
+def configure_report(locations,identity):
+    import ntpath
+    root=Path(locations['build']);fixed_file(root,'CMakeCache.txt',MIB)
+    raw=(root/'CMakeCache.txt').read_bytes();need(len(raw)<=MIB,'configure cache byte cap')
+    lines=raw.splitlines();need(len(lines)<=4096 and all(len(line)<=16*1024 for line in lines),'configure cache line cap')
+    expected={'CMAKE_HOME_DIRECTORY':(('INTERNAL',),locations['source']),
+        'CMAKE_CACHEFILE_DIR':(('INTERNAL',),locations['build']),'CMAKE_PROJECT_NAME':(('STATIC',),'qbrain'),
+        'CMAKE_GENERATOR':(('INTERNAL',),'Visual Studio 17 2022'),'CMAKE_BUILD_TYPE':(('STRING','UNINITIALIZED'),'Debug'),
+        'CMAKE_CONFIGURATION_TYPES':(('STRING',),None),'QBRAIN_WITH_PG':(('BOOL',),'OFF'),
+        'CMAKE_PROJECT_qbrain_INCLUDE':(('FILEPATH','UNINITIALIZED'),ntpath.join(locations['source'],'.ci','mcp_directory_search_targets.cmake'))}
+    seen={}
+    for line in lines:
+        if not line or line.startswith((b'#',b'//')):continue
+        key=line.split(b':',1)[0].decode('utf-8',errors='strict')
+        if key not in expected:continue
+        need(key not in seen,'configure duplicate selected key')
+        match=re.fullmatch(rb'([^:]+):([^=]+)=(.*)',line);need(match is not None,'configure selected cache syntax')
+        kind,value=match[2].decode('ascii'),match[3].decode('utf-8')
+        kinds,wanted=expected[key];need(kind in kinds,'configure selected cache type')
+        if key=='CMAKE_CONFIGURATION_TYPES':
+            parts=value.split(';');need(1<=len(parts)<=8 and len(set(parts))==len(parts) and parts.count('Debug')==1 and
+                all(re.fullmatch('[A-Za-z0-9_+-]{1,32}',p) for p in parts),'configure selected cache value')
+        elif key in ('CMAKE_HOME_DIRECTORY','CMAKE_CACHEFILE_DIR','CMAKE_PROJECT_qbrain_INCLUDE'):
+            need(ntpath.isabs(value) and ntpath.normcase(ntpath.normpath(value))==ntpath.normcase(ntpath.normpath(wanted)),'configure selected cache path')
+        else:need(value==wanted,'configure selected cache value')
+        seen[key]=True
+    need(set(seen)==set(expected),'configure missing selected key')
+    value=dict(schema=PHASE_REPORTS['configure'][1],state='ready',identity=identity,
+        source_location=path_identity(locations['source']),build_location=path_identity(locations['build']),
+        overlay_location=path_identity(expected['CMAKE_PROJECT_qbrain_INCLUDE'][1]),generator='vs17-2022',
+        checks=dict.fromkeys(CONFIGURE_CHECKS,True),files={n:fixed_file(root,n,MIB) for n in CONFIGURE_FILES},failure=None)
+    return phase_report('configure',value,identity,True)
+
+
+def validate_build_proof(owner):
+    proof=owner.get('build_completion');exact_keys(proof,BUILD_PROOF_KEYS,'build completion proof keys')
+    need(proof['schema']=='qbrain-n49d-build-completion-v1' and proof['policy']=='trusted-build-v1','build proof schema/policy')
+    need(proof['state']=='complete' and proof['reason'] is None and type(proof['root_exit']) is int and proof['root_exit']==0,'build proof incomplete')
+    for key in BUILD_TIMES:
+        if key=='termination_requested_us' and not proof['teardown_requested']:continue
+        uint(proof[key])
+    need(type(proof['teardown_requested']) is bool,'build teardown type')
+    need(all(proof[k] is True for k in ('close_attempted','close_returned','close_in_budget')),'build close proof')
+    need(proof['root_observed_us']<=proof['empty_observed_us']<=proof['close_attempted_us']<=proof['close_returned_us']<=
+         proof['streams_finalized_us']<proof['success_deadline_us'],'build event ordering')
+    if proof['teardown_requested']:
+        need(proof['termination_succeeded'] is True and proof['root_observed_us']<=proof['termination_requested_us']<=proof['empty_observed_us'],'build termination ordering')
+    else:need(proof['termination_requested_us'] is None and proof['termination_succeeded'] is None,'natural completion termination claim')
+    need(owner.get('classification')=='build-completed' and owner.get('process_backend')=='windows-private-job' and
+         type(owner.get('root_pid')) is int and owner['root_pid']>0 and type(owner.get('exit')) is int and owner['exit']==0 and
+         all(owner.get(k) is True for k in ('owned_tree_empty','cleanup_ok','readers_done','stable')) and owner.get('cleanup_error') is None,'build owner facts')
+    need(not any(k in owner for k in ('stop_reason','failure_detail','capture_error','job_diagnostic')),'build success failure metadata')
+    return proof
 
 
 def generic_archive(root=ROOT):
@@ -99,7 +363,7 @@ def required_stages(job):
     need(job in JOBS, 'unknown job')
     result = ['source-before','selftest-normal','selftest-optimized']
     if job == 'windows-msvc':
-        result += ['direct-production','direct-tests','canonical-groups']
+        result += ['direct-production','direct-tests-build','direct-tests-run','canonical-groups']
     else:
         result += ['configure','build']
         if job == 'linux-sanitizers':
@@ -129,16 +393,17 @@ def stage_contract(identity, locations):
     exe=lambda name:join(build,'Debug',name+'.exe') if windows else join(build,name)
     runner=ci('run_n49d_qualification.py'); specs={}
     def add(name,argv,timeout=600,reports=()):
-        specs[name]=dict(argv=list(argv),timeout_seconds=timeout,reports=list(reports))
+        specs[name]=dict(argv=list(argv),timeout_seconds=timeout,reports=list(reports),completion_policy='trusted-build-v1' if (job,name) in TRUSTED_BUILD else 'strict-v1')
     for name in ('source-before','source-after'):
         add(name,[python,ci('check_n49d_sources.py'),'--source',source,'--commit',identity['commit'],'--tree',identity['tree'],'--report',report(name+'.json')],120,['reports/'+name+'.json'])
     for mode in ('normal','optimized'):
         add('selftest-'+mode,[python,*(['-O'] if mode=='optimized' else []),ci('test_n49d_source_contract.py')],120)
     if job=='windows-msvc':
         production=join(source,'build','cl','qbrain.exe')
-        add('direct-production',['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/build-cl.ps1'],1800)
-        add('direct-tests',['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/build-tests-cl.ps1','-SkipProductionBuild'],1800)
-        native_log=join(output,'stages','direct-tests','stdout.bin')
+        add('direct-production',['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/build-cl.ps1'],1800,[PHASE_REPORTS['objects'][0]])
+        add('direct-tests-build',['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/build-tests-cl.ps1','-SkipProductionBuild','-BuildOnly','-ProductionManifest',report('direct-production-objects.json'),'-PhaseContext',report('direct-tests-build-context.json')],1200,[PHASE_REPORTS['build-context'][0]])
+        add('direct-tests-run',['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/build-tests-cl.ps1','-RunOnly','-PhaseContext',report('direct-tests-build-context.json'),'-RunReport',report('direct-tests-run-context.json')],600,[PHASE_REPORTS['run-context'][0]])
+        native_log=join(output,'stages','direct-tests-run','stdout.bin')
     else:
         configure=['cmake','-S',source,'-B',build,'-DQBRAIN_WITH_PG=OFF','-DCMAKE_PROJECT_qbrain_INCLUDE='+ci('mcp_directory_search_targets.cmake'),'-DCMAKE_BUILD_TYPE=Debug']
         targets=['qbrain',*TARGETS];production=exe('qbrain')
@@ -148,7 +413,7 @@ def stage_contract(identity, locations):
                 '-DCMAKE_C_FLAGS_DEBUG=-O1 -g0','-DCMAKE_CXX_FLAGS_DEBUG=-O1 -g0','-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined']
             targets=list(TARGETS[:2])
         elif job=='linux-cmake':configure+=['-DCMAKE_CXX_FLAGS_DEBUG=-O0 -g0','-DCMAKE_C_FLAGS_DEBUG=-O0 -g0']
-        add('configure',configure,180)
+        add('configure',configure,180,[PHASE_REPORTS['configure'][0]] if job=='windows-cmake' else [])
         add('build',['cmake','--build',build,'--config','Debug','--target',*targets,'--parallel','2'],1800)
         if job=='linux-sanitizers':
             add('sanitizer-flags',[python,runner,'verify-sanitizer','--build',build,'--report',report('sanitizer-effective.json')],120,['reports/sanitizer-effective.json'])
@@ -180,7 +445,8 @@ def stage_contract(identity, locations):
         before=[];after=[]
         if name=='build':after=selected
         elif name=='direct-production':after=[production]
-        elif name=='direct-tests':before=[production];after=[production,canonical]
+        elif name=='direct-tests-build':before=[production];after=[production,canonical]
+        elif name=='direct-tests-run':before=[production,canonical]
         elif name in ('ctest-inventory','ctest-run','ctest-completeness','sanitizer-flags','sanitize-mcp','sanitize-directory'):before=selected
         elif name=='canonical-build':before=selected;after=selected+[canonical,exe('qbrain_http_probe')]
         elif name in ('canonical-run','canonical-groups'):before=[canonical,production]
@@ -875,14 +1141,24 @@ class OwnedChildError(ValueError):
 
 class OwnedChild:
     """One owned command, no overlapping/unmanaged launches in this interpreter."""
-    def __init__(self,argv,cwd,env,stdin,stdout_path,stderr_path,timeout,stream_cap):
+    def __init__(self,argv,cwd,env,stdin,stdout_path,stderr_path,timeout,stream_cap,*,completion_policy='strict-v1',deadline=None):
         global _ACTIVE_OWNER,_AUDIT_INSTALLED,_LAUNCH_THREAD,_LAUNCH_ARGV
-        self.started=time.monotonic();self.deadline=self.started+timeout;self.scan_deadline=self.deadline;self.proc=None;self.tree=None
+        self.started=time.monotonic();self.deadline=min(self.started+timeout,deadline) if deadline is not None else self.started+timeout
+        self.scan_deadline=self.deadline;self.proc=None;self.tree=None;self.completion_policy=completion_policy
+        self.build_proof=None
+        if completion_policy=='trusted-build-v1':
+            self.build_proof=dict.fromkeys(BUILD_PROOF_KEYS)
+            self.build_proof.update(schema='qbrain-n49d-build-completion-v1',policy=completion_policy,state='failed',
+                reason='root-unavailable',success_deadline_us=max(0,int((self.deadline-self.started)*1000000)),
+                teardown_requested=False,close_attempted=False,close_returned=False,close_in_budget=False)
         self.paths=[Path(stdout_path),Path(stderr_path)];self.stream_cap=stream_cap;self.result=None;self.stable=False
         self.readers=[];self.overflow=threading.Event();self.errors=[];self.locked=False;self.job_diagnostic=None
         for path in self.paths:path.parent.mkdir(parents=True,exist_ok=True);path.touch(exist_ok=False)
         try:
             need(timeout>0 and stream_cap>0,'invalid owned deadline/budget')
+            need(completion_policy in ('strict-v1','trusted-build-v1') and
+                 (completion_policy=='strict-v1' or os.name=='nt'),'unsupported owned completion policy')
+            need(time.monotonic()<self.deadline,'timeout')
             need(threading.current_thread() is threading.main_thread(),'owned launch requires serial main-thread caller')
             need(_OWNER_LOCK.acquire(blocking=False),'concurrent owned process rejected');self.locked=True
             _ACTIVE_OWNER=self
@@ -923,6 +1199,17 @@ class OwnedChild:
         cleanup_deadline=time.monotonic()+2 if failure else self.deadline
         self.scan_deadline=cleanup_deadline;self.stable=False
         root_exit=None;no_root_failure=self.proc is None and bool(failure)
+        build=getattr(self,'completion_policy','strict-v1')=='trusted-build-v1' and not intentional
+        proof=getattr(self,'build_proof',None)
+        if type(proof) is not dict:proof=None
+        def observed(key,value=None):
+            if proof is not None:
+                proof[key]=max(0,int((time.monotonic()-self.started)*1000000)) if value is None else value
+        def terminate():
+            if proof is not None and proof.get('teardown_requested') is not True:
+                observed('teardown_requested',True);observed('termination_requested_us')
+            self.tree.terminate()
+            if proof is not None:observed('termination_succeeded',True)
         close_attempted=False;close_returned=False;close_in_budget=False
         cleanup_ok=False;cleanup_error=None;capture_error=None
         streams={'stdout':None,'stderr':None}
@@ -937,26 +1224,36 @@ class OwnedChild:
             if self.tree is None:
                 need(no_root_failure,'owned root/tree unavailable');return
             if failure or intentional:
-                self.tree.terminate();budget('owned cleanup deadline exceeded')
+                terminate();budget('owned cleanup deadline exceeded')
             while True:
                 budget('owned cleanup deadline exceeded')
-                if self.proc is not None and root_exit is None:root_exit=self.proc.poll()
+                if self.proc is not None and root_exit is None:
+                    root_exit=self.proc.poll()
+                    if root_exit is not None:
+                        observed('root_exit',root_exit);observed('root_observed_us')
                 budget('owned cleanup deadline exceeded')
                 alive=self.tree.active();budget('owned cleanup deadline exceeded')
                 need(self.proc is not None or no_root_failure,'owned root unavailable')
+                if build and not failure:
+                    need(root_exit is not None,'build root unavailable')
+                    need(type(root_exit) is int and root_exit==0,'nonzero child exit')
+                    if alive:
+                        terminate();budget('owned cleanup deadline exceeded')
+                        continue
                 if alive and not failure and not intentional:
                     failure='lingering-descendant'
                     cleanup_deadline=min(cleanup_deadline,time.monotonic()+2);self.scan_deadline=cleanup_deadline
                     self._diagnose_lingering(cleanup_deadline)
                     raise ValueError(failure)
-                if not alive and (root_exit is not None or no_root_failure):break
+                if not alive and (root_exit is not None or no_root_failure):
+                    observed('empty_observed_us');break
                 if alive and (failure or intentional):
-                    self.tree.terminate();budget('owned cleanup deadline exceeded')
+                    terminate();budget('owned cleanup deadline exceeded')
                 time.sleep(min(.005,max(0,cleanup_deadline-time.monotonic())))
             budget('owned cleanup deadline exceeded')
-            close_attempted=True
-            self.tree.close();close_returned=True
-            budget('owned cleanup deadline exceeded');close_in_budget=True
+            close_attempted=True;observed('close_attempted',True);observed('close_attempted_us')
+            self.tree.close();close_returned=True;observed('close_returned',True);observed('close_returned_us')
+            budget('owned cleanup deadline exceeded');close_in_budget=True;observed('close_in_budget',True)
         if failure=='lingering-descendant':self._diagnose_lingering(cleanup_deadline)
         try:
             if self.proc is not None and not self.readers:
@@ -993,7 +1290,8 @@ class OwnedChild:
         if not self.stable:failure=failure or ('timeout' if time.monotonic()>=self.deadline else 'capture-not-finalized')
         if self.overflow.is_set() or self.errors:failure=failure or 'output-limit'
         if not failure and time.monotonic()>=self.deadline:failure='timeout'
-        value=dict(classification=failure or ('stopped' if intentional else 'passed'),exit=root_exit,
+        if proof is not None and capture_error is None and readers_done:observed('streams_finalized_us')
+        value=dict(classification=failure or ('stopped' if intentional else ('build-completed' if build else 'passed')),exit=root_exit,
             process_backend='windows-private-job' if os.name=='nt' else ('linux-stat-pidfd-subreaper' if _PROC_STAT_CHILD_ADAPTER else 'linux-children-pidfd-subreaper'),
             root_pid=self.proc.pid if self.proc else None,owned_tree_empty=cleanup_ok,
             cleanup_ok=cleanup_ok,cleanup_error=cleanup_error,stable=self.stable,readers_done=readers_done,
@@ -1009,6 +1307,28 @@ class OwnedChild:
             failure=failure or 'timeout';self.stable=False;cleanup_ok=False
             value.update(classification=failure,owned_tree_empty=False,cleanup_ok=False,stable=False)
             value.setdefault('capture_error','capture-deadline')
+        if proof is not None:
+            if not failure and build:
+                proof.update(state='complete',reason=None)
+            else:
+                reason=('deadline' if failure=='timeout' or time.monotonic()>=self.deadline else
+                        'output-limit' if failure=='output-limit' else
+                        'close-error' if close_attempted and not (close_returned and close_in_budget) else
+                        'capture-error' if capture_error is not None else
+                        'root-nonzero' if root_exit not in (None,0) else
+                        'root-unavailable' if root_exit is None else 'ownership-error')
+                proof.update(state='failed',reason=reason)
+            value['build_completion']=dict(proof)
+        if build and not failure:
+            try:validate_build_proof(value)
+            except Exception:
+                failure='build-proof-incomplete';value['classification']=failure
+                if type(value.get('build_completion')) is dict:value['build_completion'].update(state='failed',reason='evidence-error')
+        if build and time.monotonic()>=cleanup_deadline:
+            failure=failure or 'timeout';self.stable=False;cleanup_ok=False
+            value.update(classification=failure,owned_tree_empty=False,cleanup_ok=False,stable=False)
+            value.setdefault('capture_error','capture-deadline')
+            if type(value.get('build_completion')) is dict:value['build_completion'].update(state='failed',reason='deadline')
         value['elapsed_seconds']=round(time.monotonic()-self.started,6)
         self.result=value
         if cleanup_ok and readers_done and self.locked:
@@ -1020,26 +1340,40 @@ class OwnedChild:
         if failure:self._end(failure);raise OwnedChildError(failure,self)
 
     def wait(self,expected=0,timeout=None):
+        need(getattr(self,'completion_policy','strict-v1')=='strict-v1','owned completion policy mismatch')
+        return self._wait(expected,timeout,False)
+
+    def complete_build(self):
+        need(getattr(self,'completion_policy','strict-v1')=='trusted-build-v1' and os.name=='nt',
+             'owned completion policy mismatch')
+        return self._wait(0,None,True)
+
+    def _wait(self,expected,timeout,build):
+        classification='build-completed' if build else 'passed'
         if timeout is not None:self.deadline=min(self.deadline,self.started+timeout);self.scan_deadline=self.deadline
         if self.result is not None:
-            if self.result['classification']!='passed':raise OwnedChildError(self.result['classification'],self)
+            if self.result['classification']!=classification:raise OwnedChildError(self.result['classification'],self)
             return self.result
         try:
             while True:
                 self.check_budget();code=self.proc.poll()
+                if build:self.check_budget()
                 active=self.tree.active()
+                if build:self.check_budget()
                 if code is not None:
-                    if active:raise ValueError('lingering-descendant')
+                    if active and not build:raise ValueError('lingering-descendant')
                     if code!=expected:raise ValueError('nonzero child exit')
+                    if build:break
                     if not any(t.is_alive() for t in self.readers):break
                 time.sleep(.005)
             value=self._end()
-            if value['classification']!='passed':raise OwnedChildError(value['classification'],self)
+            if value['classification']!=classification:raise OwnedChildError(value['classification'],self)
             return value
         except BaseException as error:
             self._end('timeout' if str(error)!='lingering-descendant' and time.monotonic()>=self.deadline else str(error));raise OwnedChildError(self.result['classification'],self) from error
 
     def stop(self,reason='intentional_shutdown'):
+        need(getattr(self,'completion_policy','strict-v1')=='strict-v1','owned completion policy mismatch')
         if self.result is not None:return self.result
         failure='timeout' if time.monotonic()>=self.deadline else None
         result=self._end(failure,intentional=True);result['stop_reason']=reason
@@ -1053,15 +1387,27 @@ class Recorder:
         self.identity = identity; same_identity(identity, identity)
         self.required = list(required); need(len(set(required)) == len(required), 'duplicate required stage')
         self.environment = environment; self.cwd = Path(cwd); self.stream_cap = stream_cap
-        self.stages = []; self.binary_pins = {}
+        self.stages = []; self.binary_pins = {};self.sealed={};self.qualification_reports={}
 
-    def run(self, name, argv, timeout, binaries=(), produced=(), reports=(), check=None):
-        start=time.monotonic();deadline=start+timeout
+    def run(self, name, argv, timeout, binaries=(), produced=(), reports=(), check=None,prepare=None,finalize=None,phase=None):
+        start=time.monotonic() if phase is None else phase['start']
+        deadline=start+timeout if phase is None else phase['deadline']
+        policy='strict-v1'
+        if hasattr(self,'locations'):
+            spec=stage_contract(self.identity,self.locations)[name]
+            need(list(map(str,argv))==spec['argv'] and timeout==spec['timeout_seconds'] and
+                 str(self.cwd)==self.locations['source'] and self.cwd.resolve()==ROOT and
+                 [Path(p).relative_to(self.root).as_posix() for p in reports]==spec['reports'] and
+                 sorted(map(str,binaries))==spec['binaries_before'] and
+                 sorted(set(map(str,(*binaries,*produced))))==spec['binaries_after'],'recorder fixed stage selection')
+            policy=spec['completion_policy']
+            need((phase is not None)==(name in ('direct-tests-build','direct-tests-run')),'fixed phase window missing')
         need(name in self.required and name not in self.stages, 'unexpected/duplicate stage')
         folder = self.root / 'stages' / name; folder.mkdir(parents=True)
         self.stages.append(name)
         before={}
-        result = dict(schema='qbrain-n49d-stage-v1',name=name,identity=self.identity,
+        result = dict(schema='qbrain-n49d-stage-v2',name=name,identity=self.identity,
+                      completion_policy=policy,phase_window=None if phase is None else dict(phase['window']),
                       argv=[str(a) for a in argv],cwd=str(self.cwd),timeout_seconds=timeout,
                       stream_limit=self.stream_cap,exit=None,classification='incomplete',
                       requested_reports=[Path(p).relative_to(self.root).as_posix() for p in reports],
@@ -1081,19 +1427,21 @@ class Recorder:
             result['available_reports']={**result.get('reports',{}),**result.get('available_reports',{})}
             self.failed_result=result
         try:
+            if prepare:prepare(deadline)
             for p in binaries:before[str(p)]=descriptor(p)
             for p,value in before.items():
                 need(self.binary_pins.setdefault(p,value)==value,'binary mutation before stage')
             need(time.monotonic()<deadline,'timeout during stage setup')
-            child=OwnedChild(result['argv'],self.cwd,self.environment,subprocess.DEVNULL,*streams,deadline-time.monotonic(),self.stream_cap)
-            child.deadline=deadline;child.scan_deadline=deadline
-            terminal=child.wait()
+            child=OwnedChild(result['argv'],self.cwd,self.environment,subprocess.DEVNULL,*streams,deadline-time.monotonic(),self.stream_cap,
+                             completion_policy=policy,deadline=deadline)
+            terminal=child.complete_build() if policy=='trusted-build-v1' else child.wait()
             result['exit']=terminal['exit'];result['ownership']=terminal
             after=result['binaries_after']
             for p in list(binaries)+list(produced):after[str(p)]=descriptor(p)
             need(all(after[p] == value for p,value in before.items()), 'binary mutation during stage')
             for p,value in after.items():
                 need(self.binary_pins.setdefault(p,value) == value, 'binary identity swapped')
+            if finalize:finalize(deadline)
             result['reports']={}
             for p in reports:result['reports'][Path(p).relative_to(self.root).as_posix()]=descriptor(p)
             if check: check()
@@ -1112,12 +1460,19 @@ class Recorder:
         if failure is not None:retain_failed()
         try:
             dump(folder/'result.json',result)
-            if failure is None and time.monotonic()>=deadline:
+            sealed=None
+            if failure is None:
+                raw=(folder/'result.json').read_bytes()
+                need(json_unique(raw)==result,'sealed result changed')
+                sealed=dict(size=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+            ended=time.monotonic()
+            if failure is None and ended>=deadline:
                 fail(ValueError('timeout during result write'));retain_failed();dump(folder/'result.json',result)
         except Exception as error:
             fail(error);retain_failed();result['evidence_error']='result-write-unavailable'
             raise ValueError(f'{name}: {failure}; result evidence unavailable') from error
         need(result['classification']=='passed',f'{name}: {failure}')
+        self.sealed[name]=dict(result=sealed,ended=ended)
         return result
 
     def finish(self, source_before, source_after):
@@ -1125,7 +1480,7 @@ class Recorder:
         need(source_before == source_after, 'source mutation after capture')
         for p,value in self.binary_pins.items():
             need(descriptor(p) == value, 'binary mutation after capture')
-        result = dict(schema='qbrain-n49d-qualification-v1',passed=True,identity=self.identity,
+        result = dict(schema='qbrain-n49d-qualification-v2',passed=True,identity=self.identity,reports=self.qualification_reports,
                       required=self.required,stages=self.stages,binaries=self.binary_pins,locations=getattr(self,'locations',None),
                       source_before=source_before,source_after=source_after,
                       native_http='required-and-executed' if self.identity['job_key'].startswith('windows') else 'not-applicable-non-Windows-stub',
@@ -1135,12 +1490,133 @@ class Recorder:
         return result
 
 
+def phase_seed(role,identity):
+    value=dict.fromkeys(PHASE_KEYS[role].split())
+    value.update(schema=PHASE_REPORTS[role][1],state='prepared',identity=identity)
+    if role=='objects':value.update(produced=[],consumed=[])
+    elif role=='build-context':value.update(mode='build-only',architecture='x64',cwd_role='build/cl')
+    elif role=='run-context':value.update(mode='run-only')
+    elif role=='configure':value.update(checks=dict.fromkeys(CONFIGURE_CHECKS),files={})
+    else:value.update(pair_budget_us=1800000000,build_budget_us=1200000000,run_budget_us=600000000)
+    return phase_report(role,value,identity)
+
+
+class DirectTestPair:
+    """One fixed build/run clock; only qualification may bind the final report."""
+    def __init__(self,recorder):
+        self.recorder=recorder;self.started=time.monotonic();self.deadline=self.started+1800
+        self.path=recorder.root/PHASE_REPORTS['pair'][0]
+        self.value=phase_seed('pair',recorder.identity);self.windows={};self.result=None;self.failure=None
+        write_phase(self.path,'pair',self.value,recorder.identity,self.deadline)
+
+    def phase(self,name):
+        need(self.result is None and self.failure is None,'pair already terminal')
+        need(name in ('direct-tests-build','direct-tests-run') and name not in self.windows,'pair phase order')
+        if name=='direct-tests-build':
+            need(not self.windows,'pair phase order');start=self.started;seconds=1200
+        else:
+            need(self.value['build'] is not None and list(self.windows)==['direct-tests-build'],'pair build not sealed')
+            start=time.monotonic();seconds=600
+        need(time.monotonic()<self.deadline,'pair handoff deadline')
+        offset=int((start-self.started)*1000000)
+        effective=min(offset+seconds*1000000,1800000000)
+        phase=dict(start=start,deadline=min(start+seconds,self.deadline),
+            window=dict(phase=name,start_us=offset,effective_deadline_us=effective,pair_budget_us=1800000000))
+        self.windows[name]=phase
+        return phase
+
+    def sealed(self,name):
+        phase=self.windows[name];sealed=self.recorder.sealed[name]
+        need(sealed['ended']<phase['deadline'] and time.monotonic()<self.deadline,'pair phase sealing deadline')
+        self.value['build' if name=='direct-tests-build' else 'run']=dict(
+            stage=name,start_us=phase['window']['start_us'],end_us=int((sealed['ended']-self.started)*1000000),
+            effective_deadline_us=phase['window']['effective_deadline_us'],result=sealed['result'])
+
+    def fail(self,reason):
+        if self.failure is None and self.result is None:self.failure=reason
+        return self.failure
+
+    def finish(self):
+        if self.failure is not None:raise ValueError(self.failure)
+        if self.result is not None:return self.result
+        try:
+            need(time.monotonic()<self.deadline,'pair-finalization-timeout')
+            self.value.update(state='complete',finalize_begin_us=int((time.monotonic()-self.started)*1000000))
+            phase_report('pair',self.value,self.recorder.identity,True)
+            desc=write_phase(self.path,'pair',self.value,self.recorder.identity)
+            ended=time.monotonic();need(ended<self.deadline,'pair-finalization-timeout')
+            self.result=dict(**desc,finalized_us=int((ended-self.started)*1000000))
+            self.recorder.qualification_reports[PHASE_REPORTS['pair'][0]]=self.result
+            return self.result
+        except BaseException as error:
+            self.fail('pair-finalization-timeout' if time.monotonic()>=self.deadline or str(error)=='pair-finalization-timeout' else 'pair-report-unavailable')
+            raise ValueError(self.failure) from error
+
+    def diagnostic(self):
+        return dict(acceptance=self.result is not None and self.failure is None,
+                    failure=self.failure,report=self.result)
+
+
+def _read_phase_file(recorder,role,ready=False):
+    path=recorder.root/PHASE_REPORTS[role][0]
+    with path.open('rb') as stream:raw=stream.read(PHASE_REPORTS[role][2]+1)
+    return read_phase_bytes(raw,role,recorder.identity,ready)
+
+
+def prepare_phase(recorder,role,deadline):
+    write_phase(recorder.root/PHASE_REPORTS[role][0],role,phase_seed(role,recorder.identity),recorder.identity,deadline)
+
+
+def finalize_production(recorder,deadline):
+    value=object_report(recorder.cwd,recorder.identity)
+    write_phase(recorder.root/PHASE_REPORTS['objects'][0],'objects',value,recorder.identity,deadline)
+
+
+def prepare_test_build(recorder,deadline):
+    value=_read_phase_file(recorder,'objects',True)
+    object_report(recorder.cwd,recorder.identity,value)
+    prepare_phase(recorder,'build-context',deadline)
+
+
+def finalize_test_build(recorder,deadline):
+    objects=_read_phase_file(recorder,'objects',True)
+    object_report(recorder.cwd,recorder.identity,objects)
+    value=_read_phase_file(recorder,'build-context')
+    need(value['state']=='prepared' and value['canonical_binary'] is not None,'copied binary observation missing')
+    need(value['production_objects']==descriptor(recorder.root/PHASE_REPORTS['objects'][0]) and
+         value['production_executable']==objects['production_executable'],'build input observation mismatch')
+    actual=fixed_file(recorder.cwd/'build/cl','qbrain_tests.exe')
+    need(value['canonical_binary']==actual,'copied binary observation mismatch')
+    value.update(state='ready',failure=None)
+    write_phase(recorder.root/PHASE_REPORTS['build-context'][0],'build-context',value,recorder.identity,deadline)
+
+
+def finalize_test_run(recorder,deadline):
+    build=_read_phase_file(recorder,'build-context',True);run=_read_phase_file(recorder,'run-context',True)
+    need(run['build_context']==descriptor(recorder.root/PHASE_REPORTS['build-context'][0]) and
+         run['canonical_binary']==build['canonical_binary']==fixed_file(recorder.cwd/'build/cl','qbrain_tests.exe'),'run context/binary binding mismatch')
+    need(time.monotonic()<deadline,'timeout during run context finalization')
+
+
+def finalize_configure(recorder,deadline):
+    value=configure_report(recorder.locations,recorder.identity)
+    write_phase(recorder.root/PHASE_REPORTS['configure'][0],'configure',value,recorder.identity,deadline)
+
+
+def prepare_cmake_build(recorder,deadline):
+    value=_read_phase_file(recorder,'configure',True)
+    need(value['files']=={n:fixed_file(recorder.locations['build'],n,MIB) for n in CONFIGURE_FILES},'configure handoff changed')
+    need(time.monotonic()<deadline,'timeout during configure handoff')
+
+
 def validate_semantics(read, expected, result):
     job=expected['job_key']
     for mode in ('normal','optimized'):
         checks=json.loads(read('stages/selftest-'+mode+'/stdout.bin'))
         need(checks.get('passed') is True and checks.get('python_optimized')==(mode=='optimized') and
              checks.get('controls') and all(c.get('passed') is True for c in checks['controls']), 'source controls semantic failure')
+        if job.startswith('windows'):
+            need(WINDOWS_PHASE_CONTROL_NAMES<={c.get('name') for c in checks['controls']},'native Windows phase controls required')
         if job.startswith('linux'):
             need(checks.get('linux_reader_backend')=='native-children','native Linux children-interface controls required')
     if job=='linux-sanitizers':
@@ -1154,7 +1630,7 @@ def validate_semantics(read, expected, result):
         names=ctest_values(json.loads(read('stages/ctest-inventory/stdout.bin')),read('reports/ctest.xml'))
         need(json.loads(read('stages/ctest-completeness/stdout.bin'))==names,'CTest completeness semantic mismatch')
     if job.startswith('windows'):
-        name='direct-tests' if job=='windows-msvc' else 'canonical-run'
+        name='direct-tests-run' if job=='windows-msvc' else 'canonical-run'
         groups=native_groups((ROOT/'tests/test_main.cpp').read_text(encoding='utf-8'),read('stages/'+name+'/stdout.bin').decode('utf-8',errors='replace'))
         need(json.loads(read('stages/canonical-groups/stdout.bin'))==groups,'canonical group semantic mismatch')
     for mode in ('normal','optimized'):
@@ -1188,11 +1664,56 @@ def changed_source_members(paths):
     return expected
 
 
+STAGE_SUCCESS_KEYS = ('schema name identity completion_policy phase_window argv cwd timeout_seconds stream_limit exit classification '
+    'requested_reports binaries_before binaries_after runtime_options ownership reports available_reports stdout stderr elapsed_seconds').split()
+QUALIFICATION_KEYS = ('schema passed identity reports required stages binaries locations source_before source_after native_http acceptance retained_binaries').split()
+OWNER_SUCCESS_KEYS = ('classification exit process_backend root_pid owned_tree_empty cleanup_ok cleanup_error stable readers_done elapsed_seconds stdout stderr').split()
+
+
+def validate_phase_evidence(read,result,stages):
+    identity=result['identity'];job=identity['job_key'];locations=result['locations']
+    exact_keys(result['reports'],[PHASE_REPORTS['pair'][0]] if job=='windows-msvc' else [],'qualification report inventory')
+    def report(role):
+        return read_phase_bytes(read(PHASE_REPORTS[role][0]),role,identity,True)
+    if job=='windows-cmake':
+        import ntpath
+        value=report('configure')
+        for key,text in (('source_location',locations['source']),('build_location',locations['build']),
+                         ('overlay_location',ntpath.join(locations['source'],'.ci','mcp_directory_search_targets.cmake'))):
+            need(value[key]==path_identity(text),'configure location identity mismatch')
+    if job!='windows-msvc':return
+    obj=report('objects');build=report('build-context');run=report('run-context');pair=report('pair')
+    def described(path):
+        raw=read(path);return dict(size=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+    need(build['production_objects']==described(PHASE_REPORTS['objects'][0]) and
+         build['production_executable']==obj['production_executable'],'phase production binding mismatch')
+    need(run['build_context']==described(PHASE_REPORTS['build-context'][0]) and
+         run['canonical_binary']==build['canonical_binary'],'phase canonical binding mismatch')
+    import ntpath
+    production=ntpath.join(locations['source'],'build','cl','qbrain.exe')
+    canonical=ntpath.join(locations['source'],'build','cl','qbrain_tests.exe')
+    need(stages['direct-production']['binaries_after'][production]==obj['production_executable'] and
+         stages['direct-tests-build']['binaries_before'][production]==obj['production_executable'] and
+         stages['direct-tests-build']['binaries_after'][canonical]==build['canonical_binary'] and
+         stages['direct-tests-run']['binaries_before'][canonical]==build['canonical_binary'],'phase artifact identity mismatch')
+    binding=result['reports'][PHASE_REPORTS['pair'][0]];exact_keys(binding,'size sha256 finalized_us')
+    report_descriptor({k:binding[k] for k in ('size','sha256')});uint(binding['finalized_us'])
+    need({k:binding[k] for k in ('size','sha256')}==described(PHASE_REPORTS['pair'][0]) and
+         pair['finalize_begin_us']<=binding['finalized_us']<1800000000,'pair publication binding/deadline')
+    for key in ('build','run'):
+        entry=pair[key];name=entry['stage'];stage=stages[name]
+        need(entry['result']==described('stages/'+name+'/result.json'),'pair sealed stage binding mismatch')
+        need(stage['phase_window']==dict(phase=name,start_us=entry['start_us'],
+            effective_deadline_us=entry['effective_deadline_us'],pair_budget_us=1800000000),'pair phase window mismatch')
+
+
 def validate_recordings(read, expected, required=None, *, files=None):
     """Same fail-closed recorder contract is checked before packaging and after download."""
-    result = json.loads(read('qualification.json'))
+    result = json_unique(read('qualification.json'))
     same_identity(result['identity'],expected)
     full_contract = required is None
+    exact_keys(result,QUALIFICATION_KEYS if full_contract else set(QUALIFICATION_KEYS)-({'retained_binaries'} if 'retained_binaries' not in result else set()),'qualification key inventory')
+    need(result['schema']=='qbrain-n49d-qualification-v2','qualification schema mismatch')
     required = required if required is not None else required_stages(expected['job_key'])
     need(result.get('passed') is True and result['required'] == required and result['stages'] == required,
          'missing/duplicate required stage')
@@ -1200,9 +1721,12 @@ def validate_recordings(read, expected, required=None, *, files=None):
     need(result['source_before'] == result['source_after'], 'source identity mutated')
     binary_pins = result['binaries']
     contracts=stage_contract(expected,result['locations']) if full_contract else None
+    stage_records={}
     for name in required:
         folder = 'stages/'+name+'/'
-        stage = json.loads(read(folder+'result.json'))
+        stage = json_unique(read(folder+'result.json'));stage_records[name]=stage
+        exact_keys(stage,STAGE_SUCCESS_KEYS,'stage success key inventory')
+        need(stage['schema']=='qbrain-n49d-stage-v2','stage schema mismatch')
         same_identity(stage['identity'], expected)
         need(stage['name'] == name and stage['classification'] == 'passed' and stage['exit'] == 0,
              'failed/incomplete stage')
@@ -1213,12 +1737,28 @@ def validate_recordings(read, expected, required=None, *, files=None):
         if contracts is not None:
             spec=contracts[name]
             ownership=stage.get('ownership',{})
-            need(ownership.get('classification')=='passed' and ownership.get('cleanup_ok') is True and
-                 ownership.get('stable') is True and ownership.get('readers_done') is True and ownership.get('exit')==0, 'stage ownership proof missing')
+            exact_keys(ownership,OWNER_SUCCESS_KEYS+(['build_completion'] if spec['completion_policy']=='trusted-build-v1' else []),'stage owner key inventory')
+            need(stage['completion_policy']==spec['completion_policy'],'fixed stage completion policy mismatch')
+            if spec['completion_policy']=='trusted-build-v1':
+                proof=validate_build_proof(ownership)
+                need(proof['success_deadline_us']<=spec['timeout_seconds']*1000000,'build success deadline extended')
+            else:
+                need(ownership.get('classification')=='passed' and ownership.get('cleanup_ok') is True and
+                     ownership.get('stable') is True and ownership.get('readers_done') is True and
+                     ownership.get('owned_tree_empty') is True and type(ownership.get('exit')) is int and ownership['exit']==0 and
+                     ownership.get('cleanup_error') is None,'stage ownership proof missing')
+            window=stage['phase_window']
+            if name in ('direct-tests-build','direct-tests-run'):
+                exact_keys(window,'phase start_us effective_deadline_us pair_budget_us')
+                need(window['phase']==name and type(window['pair_budget_us']) is int and window['pair_budget_us']==1800000000,'stage pair window')
+                uint(window['start_us']);uint(window['effective_deadline_us'])
+            else:need(window is None,'unexpected stage phase window')
             need(ownership.get('stdout')==stage['stdout'] and ownership.get('stderr')==stage['stderr'], 'stage finalized stream binding mismatch')
             need(stage['argv']==spec['argv'] and stage['timeout_seconds']==spec['timeout_seconds'] and
                  stage['cwd']==result['locations']['source'], 'fixed stage command mismatch')
-            need(requested==spec['reports'], 'fixed required report inventory mismatch')
+            need(requested==spec['reports'] and stage['available_reports']==stage['reports'], 'fixed required report inventory mismatch')
+            need(type(stage['timeout_seconds']) is int and type(stage['stream_limit']) is int and stage['stream_limit']==8*MIB,'stage limits mismatch')
+            need(type(stage['elapsed_seconds']) in (int,float) and 0<=stage['elapsed_seconds']<spec['timeout_seconds'],'stage elapsed deadline')
             need(sorted(stage['binaries_before'])==spec['binaries_before'] and sorted(stage['binaries_after'])==spec['binaries_after'], 'fixed binary inventory mismatch')
         for stream in ('stdout','stderr'):
             data = read(folder+stream+'.bin')
@@ -1231,6 +1771,7 @@ def validate_recordings(read, expected, required=None, *, files=None):
         for p,value in stage['binaries_after'].items():
             need(binary_pins.get(p) == value, 'swapped binary identity')
     if full_contract:
+        validate_phase_evidence(read,result,stage_records)
         validate_semantics(read,expected,result)
         if expected['job_key']!='linux-sanitizers':
             for mode in ('normal','optimized'):
@@ -1322,6 +1863,7 @@ def validate_recordings(read, expected, required=None, *, files=None):
         for path in approved:
             row=changed[path]
             data=read('source/changed/'+path)
+            if path in source_guard.WRAPPERS:need(source_guard.blob(data)==source_guard.WRAPPERS[path],'source wrapper pin mismatch')
             need(row['mode']=='100644' and hashlib.sha256(data).hexdigest()==row['sha256'] and source_guard.blob(data)==row['blob'] and
                  tree.get(path)==(row['mode'],row['blob']), 'changed source bytes mismatch')
         retained=result['retained_binaries']
@@ -1426,12 +1968,13 @@ def review_selection(result, files):
     """
     specs=stage_contract(result['identity'],result['locations'])
     names={'qualification.json','source/tree-inventory.bin','source/dependencies.json'}
+    names.update(result['reports'])
     names.update(changed_source_members(r['path'] for r in files))
     for name,spec in specs.items():
         names.add('stages/'+name+'/result.json')
         names.update(p for p in spec['reports'] if p!='reports/source-after.json')
         if (name.startswith(('selftest-','sanitize-','hooks-','memory_cycle-')) or
-                name in ('ctest-run','canonical-run','canonical-groups','direct-tests')):
+                name in ('ctest-run','canonical-run','canonical-groups','direct-tests-build','direct-tests-run')):
             names.update('stages/'+name+'/'+stream+'.bin' for stream in ('stdout','stderr'))
     by_name={r['path']:r for r in files}
     need(names<=set(by_name),'required review selection missing')
@@ -1594,9 +2137,21 @@ def run_job(args):
         selected=[]; production=None
         if args.job=='windows-msvc':
             production=source/'build/cl/qbrain.exe'; canonical=source/'build/cl/qbrain_tests.exe'
-            stage('direct-production',['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/build-cl.ps1'],1800,produced=[production])
-            stage('direct-tests',['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/build-tests-cl.ps1','-SkipProductionBuild'],1800,binaries=[production],produced=[canonical])
-            stage('canonical-groups',python+[str(__file__),'verify-native','--registry',str(source/'tests/test_main.cpp'),'--log',str(output/'stages/direct-tests/stdout.bin')],120,binaries=[production,canonical])
+            stage('direct-production',contracts['direct-production']['argv'],1800,produced=[production],
+                  reports=[output/PHASE_REPORTS['objects'][0]],prepare=lambda d:prepare_phase(recorder,'objects',d),
+                  finalize=lambda d:finalize_production(recorder,d))
+            pair=DirectTestPair(recorder);recorder.pair=pair
+            phase=pair.phase('direct-tests-build')
+            stage('direct-tests-build',contracts['direct-tests-build']['argv'],1200,binaries=[production],produced=[canonical],
+                  reports=[output/PHASE_REPORTS['build-context'][0]],prepare=lambda d:prepare_test_build(recorder,d),
+                  finalize=lambda d:finalize_test_build(recorder,d),phase=phase)
+            pair.sealed('direct-tests-build')
+            phase=pair.phase('direct-tests-run')
+            stage('direct-tests-run',contracts['direct-tests-run']['argv'],600,binaries=[production,canonical],
+                  reports=[output/PHASE_REPORTS['run-context'][0]],prepare=lambda d:prepare_phase(recorder,'run-context',d),
+                  finalize=lambda d:finalize_test_run(recorder,d),phase=phase)
+            pair.sealed('direct-tests-run');pair.finish()
+            stage('canonical-groups',contracts['canonical-groups']['argv'],120,binaries=[production,canonical])
         else:
             configure=['cmake','-S',str(source),'-B',str(build),'-DQBRAIN_WITH_PG=OFF',
                        '-DCMAKE_PROJECT_qbrain_INCLUDE='+str(source/'.ci/mcp_directory_search_targets.cmake'),'-DCMAKE_BUILD_TYPE=Debug']
@@ -1610,10 +2165,12 @@ def run_job(args):
                 targets=list(TARGETS[:2])
             elif args.job=='linux-cmake':
                 configure += ['-DCMAKE_CXX_FLAGS_DEBUG=-O0 -g0','-DCMAKE_C_FLAGS_DEBUG=-O0 -g0']
-            stage('configure',configure,180)
+            stage('configure',configure,180,**(dict(reports=[output/PHASE_REPORTS['configure'][0]],
+                  prepare=lambda d:prepare_phase(recorder,'configure',d),finalize=lambda d:finalize_configure(recorder,d)) if args.job=='windows-cmake' else {}))
             exe=lambda target:build/('Debug' if os.name=='nt' else '')/(target+('.exe' if os.name=='nt' else ''))
             selected=[exe(target) for target in targets]
-            stage('build',['cmake','--build',str(build),'--config','Debug','--target',*targets,'--parallel','2'],1800,produced=selected)
+            stage('build',['cmake','--build',str(build),'--config','Debug','--target',*targets,'--parallel','2'],1800,produced=selected,
+                  **(dict(prepare=lambda d:prepare_cmake_build(recorder,d)) if args.job=='windows-cmake' else {}))
             if args.job=='linux-sanitizers':
                 effective=output/'reports/sanitizer-effective.json'
                 stage('sanitizer-flags',python+[str(__file__),'verify-sanitizer','--build',str(build),'--report',str(effective)],120,binaries=selected,reports=[effective])
@@ -1663,41 +2220,100 @@ def run_job(args):
         print(json.dumps(package_result,sort_keys=True))
         return 0
     except Exception as e:
-        dump(output/'failure.json',dict(passed=False,identity=identity,error=str(e),stages=recorder.stages))
-        diagnostics=args.package.parent/'n49d-diagnostics'; diagnostics.mkdir(parents=True,exist_ok=True)
-        failure_diagnostics(output,diagnostics/'failure.json',identity,recorder.stages,recorder.required,e)
-        print(str(e),file=sys.stderr)
+        primary=str(e);print(primary,file=sys.stderr)
+        pair=getattr(recorder,'pair',None)
+        if pair is not None and pair.result is None:
+            if pair.failure is None:
+                pair.fail('build-failed' if pair.value['build'] is None else 'run-failed' if pair.value['run'] is None else 'handoff-failed')
+            if pair.value['state']!='complete':
+                pair.value.update(state='failed',failure=pair.failure,finalize_begin_us=None)
+                try:write_phase(pair.path,'pair',pair.value,identity)
+                except Exception:pass
+        try:dump(output/'failure.json',dict(passed=False,identity=identity,error=primary,stages=recorder.stages))
+        except Exception as error:print('incomplete-primary-record: '+str(error),file=sys.stderr)
+        try:
+            diagnostics=args.package.parent/'n49d-diagnostics'
+            failure_diagnostics(output,diagnostics/'failure.json',identity,recorder.stages,recorder.required,primary,locations=recorder.locations,pair=None if pair is None else pair.diagnostic())
+        except Exception as error:print('incomplete-diagnostics: '+str(error),file=sys.stderr)
         return 1
 
 
-def failure_diagnostics(root, destination, identity, stages, required, error):
-    """Retain exact bounded bytes, identifying every truncation as partial failure."""
-    root=Path(root); files={}
+def diagnostic_roles(identity,name,locations=None,pair=None):
+    """One fixed prior result; no prior raw log or caller-supplied report list."""
+    job=identity['job_key'];prior=None;reports=[]
+    if name not in required_stages(job):return prior,reports
+    if locations is None:
+        windows=job.startswith('windows')
+        locations=dict(source='C:\\source' if windows else '/source',build='C:\\build' if windows else '/build',
+                       output='C:\\output' if windows else '/output',python='C:\\python.exe' if windows else '/python')
+    current=stage_contract(identity,locations)[name]['reports'][:2]
+    tails=[(p,8*1024,False) for p in current]
+    whole=lambda role:(PHASE_REPORTS[role][0],PHASE_REPORTS[role][2],True)
+    if job=='windows-msvc':
+        if pair is not None and pair.get('failure') in ('pair-finalization-timeout','pair-report-unavailable'):
+            prior='direct-tests-build';reports=[whole(r) for r in ('objects','build-context','run-context','pair')]
+        elif name=='direct-production':reports=[whole('objects')]
+        elif name=='direct-tests-build':prior='direct-production';reports=[whole(r) for r in ('objects','build-context','pair')]
+        elif name=='direct-tests-run':prior='direct-tests-build';reports=[whole(r) for r in ('objects','build-context','run-context','pair')]
+        elif name=='canonical-groups':prior='direct-tests-run';reports=[whole('pair')]
+        elif name=='source-after' or any(name==d+'-'+m for d in DRIVERS for m in ('normal','optimized')):
+            prior='direct-tests-build';reports=tails
+        else:reports=tails
+    elif job=='windows-cmake':
+        if name=='configure':reports=[whole('configure')]
+        elif name=='build':prior='configure';reports=[whole('configure')]
+        elif name=='canonical-build':prior='build';reports=[whole('configure')]
+        elif name in ('ctest-inventory','ctest-run','ctest-completeness'):prior='build';reports=tails
+        elif name in ('canonical-run','canonical-groups','source-after') or name.startswith('winhttp-') or any(name==d+'-'+m for d in DRIVERS for m in ('normal','optimized')):
+            prior='canonical-build';reports=tails
+        else:reports=tails
+    else:reports=tails
+    return prior,reports
+
+
+def failure_diagnostics(root,destination,identity,stages,required,error,*,locations=None,pair=None):
+    """Bounded partial evidence; missing critical reports remain explicit."""
+    root=Path(root);files={};selected=[]
     if stages:
-        last=root/'stages'/stages[-1]
-        for name,cap in (('stdout.bin',64*1024),('stderr.bin',64*1024),('result.json',16*1024)):
-            path=last/name
-            if not path.is_file():continue
+        name=stages[-1];folder='stages/'+name+'/'
+        selected=[(folder+'stdout.bin',64*1024,False),(folder+'stderr.bin',64*1024,False),(folder+'result.json',16*1024,False)]
+        prior,reports=diagnostic_roles(identity,name,locations,pair)
+        if prior is not None:selected.append(('stages/'+prior+'/result.json',16*1024,False))
+        selected+=reports
+    stable=None
+    if stages:
+        try:stable=json_unique((root/'stages'/stages[-1]/'result.json').read_bytes()).get('ownership',{}).get('stable')
+        except Exception:pass
+    for name,cap,whole in selected:
+        path=root/name
+        if not path.is_file():
+            files[name]=dict(status='missing',complete=False);continue
+        try:
             full=descriptor(path)
+            if whole and full['size']>cap:
+                files[name]=dict(**full,status='oversized',complete=False);continue
             with path.open('rb') as stream:
-                offset=max(0,full['size']-cap); stream.seek(offset); raw=stream.read(cap)
-            files[path.relative_to(root).as_posix()]=dict(**full,retained_offset=offset,retained_bytes=len(raw),
-                truncated=offset!=0,encoding='base64',data=base64.b64encode(raw).decode('ascii'))
-        report_path=last/'result.json'
-        if report_path.is_file():
-            report=json.loads(report_path.read_text(encoding='utf-8'))
-            for name in report.get('requested_reports',[])[:2]:
-                path=root/name
-                if not path.is_file():continue
-                full=descriptor(path)
-                with path.open('rb') as stream:
-                    offset=max(0,full['size']-8*1024);stream.seek(offset);raw=stream.read(8*1024)
-                files[name]=dict(**full,retained_offset=offset,retained_bytes=len(raw),truncated=offset!=0,
-                    encoding='base64',data=base64.b64encode(raw).decode('ascii'))
-    payload=dict(passed=False,status='failed-partial-diagnostics',identity=identity,error=str(error),
-                 stages=stages,required=required,files=files)
+                offset=0 if whole else max(0,full['size']-cap);stream.seek(offset);raw=stream.read(cap)
+            after=descriptor(path)
+            unchanged=full==after and len(raw)==min(cap,full['size'])
+            status='available' if unchanged and stable is True else 'unstable' if not unchanged or stable is False else 'stability-unknown'
+            files[name]=dict(**full,status=status,complete=whole and unchanged and stable is True,
+                retained_offset=offset,retained_bytes=len(raw),truncated=offset!=0,
+                encoding='base64',data=base64.b64encode(raw).decode('ascii'))
+        except Exception:
+            files[name]=dict(status='unreadable',complete=False)
+    message=str(error);message_raw=message.encode('utf-8')
+    payload=dict(passed=False,status='failed-partial-diagnostics',identity=identity,error=message[:1024],
+        error_size=len(message_raw),error_sha256=hashlib.sha256(message_raw).hexdigest(),error_truncated=len(message)>1024,
+        stages=stages,required=required,files=files)
+    if pair is not None:payload['pair']=pair
     raw=json.dumps(payload,sort_keys=True,indent=2).encode('utf-8')
+    encoded=sum(len(row.get('data','')) for row in files.values())
+    need(len(raw)-encoded<=12*1024,'diagnostics metadata cap')
     need(len(raw)<=256*1024,'diagnostics cap')
+    crlf_size=len(raw)+raw.count(b'\n')
+    need(crlf_size-encoded<=12*1024,'diagnostics CRLF metadata cap')
+    need(crlf_size<=256*1024,'diagnostics CRLF cap')
     Path(destination).parent.mkdir(parents=True,exist_ok=True);Path(destination).write_bytes(raw)
     return payload
 

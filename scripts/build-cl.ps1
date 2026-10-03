@@ -157,16 +157,23 @@ $bat = @"
 @echo off
 call "$vcvars" x64
 if errorlevel 1 exit /b 1
+if not errorlevel 0 exit /b 1
 cd /d "$ObjDir"
+if errorlevel 1 exit /b 1
+if not errorlevel 0 exit /b 1
 cl /nologo /std:c++20 /EHsc /O2 /utf-8 /I"$inc" /I"$third" /I"$sqlite" /DUNICODE /D_UNICODE /DNOMINMAX /DWIN32_LEAN_AND_MEAN /DSQLITE_ENABLE_FTS5 /DSQLITE_THREADSAFE=1 /DSQLITE_OMIT_LOAD_EXTENSION /c "$sqliteC"
 if errorlevel 1 exit /b 1
+if not errorlevel 0 exit /b 1
 cl /nologo /std:c++20 /EHsc /O2 /utf-8 /I"$inc" /I"$third" /I"$sqlite" $pgDefine /DUNICODE /D_UNICODE /DNOMINMAX /DWIN32_LEAN_AND_MEAN /DSQLITE_ENABLE_FTS5 /c $srcList
 if errorlevel 1 exit /b 1
+if not errorlevel 0 exit /b 1
 rem Link exactly the object set produced by this invocation.
 link /nologo /OUT:qbrain.exe /MANIFEST:NO $prodObjList sqlite3.obj winhttp.lib bcrypt.lib shell32.lib ole32.lib advapi32.lib ws2_32.lib $pgLink
 if errorlevel 1 exit /b 1
+if not errorlevel 0 exit /b 1
 copy /y qbrain.exe "$Out\qbrain.exe" >nul
 if errorlevel 1 exit /b 1
+if not errorlevel 0 exit /b 1
 echo BUILD_OK
 "@
 
