@@ -318,22 +318,187 @@ def _bounded_failure_detail(value, fallback, cap, ownership=False):
     except BaseException:return dict(fallback)
 
 
-def _linux_detail_unavailable():
-    return dict(schema='qbrain-n49d-linux-identity-comparison-v1',site='observe-post-pidfd',complete=False,reason='detail-unavailable')
+# Private fixed metadata states, never process identities or exported attributes.
+_LINUX_DETAIL_MISSING=object()
+_LINUX_DETAIL_UNLATCHED=object()
+_LINUX_INITIAL_SITE='observe-initial-parent'
+_LINUX_LATER_SITE='observe-post-pidfd'
 
 
-def _copy_linux_failure_detail(value):
-    fallback=_linux_detail_unavailable()
-    try:
+def _linux_detail_unavailable(origin=_LINUX_LATER_SITE):
+    if origin==_LINUX_INITIAL_SITE:
+        return dict(schema='qbrain-n49d-linux-initial-parent-comparison-v1',site=origin,complete=False,reason='detail-unavailable')
+    if origin==_LINUX_LATER_SITE:
+        return dict(schema='qbrain-n49d-linux-identity-comparison-v1',site=origin,complete=False,reason='detail-unavailable')
+    return dict(schema='qbrain-n49d-linux-unknown-origin-v1',site='unknown',complete=False,reason='detail-unavailable')
+
+
+def _validate_linux_failure_detail(value,origin):
+    """Validation returns no fallback: legacy admission requires actual validity."""
+    need(type(origin) is str and origin in (_LINUX_INITIAL_SITE,_LINUX_LATER_SITE),'detail origin')
+    fallback=_linux_detail_unavailable(origin)
+    need(type(value) is dict,'detail mapping type')
+    need(all(type(value.get(key)) is str and value[key]==fallback[key] for key in ('schema','site')),'detail schema/site')
+    if value.get('complete') is False:
+        need(set(value)==set(fallback) and type(value.get('reason')) is str and value['reason']=='detail-unavailable','detail incomplete fields')
+        return
+    need(value.get('complete') is True,'detail complete type')
+    if origin==_LINUX_INITIAL_SITE:
+        fields={'before_parent_matches_expected','before_parent_matches_controller','expected_parent_is_controller',
+            'parent_pin_present','parent_pin_is_current_known','candidate_was_already_known','candidate_pin_recorded',
+            'candidate_start_matches_before','final_parent_check_returned_true','new_pidfd_acquired_in_observe'}
+        need(set(value)==set(fallback)|fields and type(value['reason']) is str and value['reason']=='parent-mismatch' and
+             all(type(value[key]) is bool for key in fields-{'candidate_start_matches_before'}),'initial detail fixed fields')
+        known=value['candidate_was_already_known']
+        need((known and value['candidate_pin_recorded'] is True and type(value['candidate_start_matches_before']) is bool) or
+             (not known and value['candidate_pin_recorded'] is False and value['candidate_start_matches_before'] is None),
+             'initial detail known/null relationship')
+        need(value['before_parent_matches_expected'] is False and value['final_parent_check_returned_true'] is True and
+             value['new_pidfd_acquired_in_observe'] is False and
+             (value['parent_pin_present'] or not value['parent_pin_is_current_known']),'initial detail boundary fields')
+    else:
         fields={'same_start','before_parent_matches_expected','after_parent_matches_expected','after_parent_matches_controller',
             'before_after_parent_equal','expected_parent_is_controller','parent_pin_present','candidate_was_already_known','final_parent_check_returned_true'}
-        need(type(value) is dict,'detail mapping type')
-        if value==fallback:return fallback
-        need(set(value)==set(fallback)|fields and value['complete'] is True and
-             value['schema']==fallback['schema'] and value['site']==fallback['site'] and
+        need(set(value)==set(fallback)|fields and type(value['reason']) is str and
              value['reason'] in ('start-mismatch','parent-mismatch','start-and-parent-mismatch') and
              all(type(value[key]) is bool for key in fields),'detail fixed fields')
+
+
+def _copy_linux_failure_detail(value,origin=_LINUX_DETAIL_MISSING):
+    fallback=_linux_detail_unavailable('unknown')
+    try:
+        if origin is _LINUX_DETAIL_MISSING:
+            _validate_linux_failure_detail(value,_LINUX_LATER_SITE)
+            origin=_LINUX_LATER_SITE
+        need(type(origin) is str and origin in (_LINUX_INITIAL_SITE,_LINUX_LATER_SITE),'detail origin')
+        fallback=_linux_detail_unavailable(origin)
+        _validate_linux_failure_detail(value,origin)
         return _bounded_failure_detail(value,fallback,1024,ownership=True)
+    except BaseException:return fallback
+
+
+def _new_linux_failure_cell(tree):
+    return [(tree,_LINUX_DETAIL_UNLATCHED)]
+
+
+def _linux_failure_cell(tree):
+    """Only the exact owner-bound built-in cell is eligible for consumption."""
+    cell=getattr(tree,'_failure_capture_cell',_LINUX_DETAIL_MISSING)
+    if cell is _LINUX_DETAIL_MISSING:return 'absent',None
+    need(type(cell) is list and len(cell)<=1,'invalid diagnostic cell')
+    if not cell:return 'consumed',cell
+    token=cell[0]
+    need(type(token) is tuple and len(token)==2 and token[0] is tree and token[1] is _LINUX_DETAIL_UNLATCHED,
+         'foreign diagnostic token')
+    return 'fresh',cell
+
+
+def _poison_linux_failure_detail(tree):
+    # A surviving unknown marker disables recovery without recreating the cell.
+    try:tree._failure_origin='unknown'
+    except BaseException:pass
+    try:tree.failure_detail=_linux_detail_unavailable('unknown')
+    except BaseException:pass
+
+
+def _initialize_linux_failure_detail(tree):
+    """Initialize once; failed creation/installation stays constructor-neutral."""
+    try:
+        if (getattr(tree,'_failure_capture_cell',_LINUX_DETAIL_MISSING) is not _LINUX_DETAIL_MISSING or
+            getattr(tree,'_failure_origin',_LINUX_DETAIL_MISSING) is not _LINUX_DETAIL_MISSING or
+            getattr(tree,'failure_detail',_LINUX_DETAIL_MISSING) is not _LINUX_DETAIL_MISSING):return
+        cell=_new_linux_failure_cell(tree)
+        need(type(cell) is list and len(cell)==1 and type(cell[0]) is tuple and
+             len(cell[0])==2 and cell[0][0] is tree and cell[0][1] is _LINUX_DETAIL_UNLATCHED,'invalid initial diagnostic cell')
+        tree._failure_capture_cell=cell
+        tree._failure_origin=_LINUX_DETAIL_UNLATCHED
+    except BaseException:
+        try:
+            state,cell=_linux_failure_cell(tree)
+            if state=='fresh':cell.pop()
+        except BaseException:pass
+        _poison_linux_failure_detail(tree)
+
+
+def _consume_linux_failure_cell(tree):
+    state,cell=_linux_failure_cell(tree)
+    if state=='consumed':return False
+    need(state=='fresh','diagnostic cell unavailable')
+    cell.pop()
+    return True
+
+
+def _capture_linux_failure_detail(tree,origin,builder):
+    """Consume the preallocated cell before every optional metadata operation."""
+    try:
+        if not _consume_linux_failure_cell(tree):return
+        if getattr(tree,'_failure_origin',_LINUX_DETAIL_MISSING) is not _LINUX_DETAIL_UNLATCHED:
+            _poison_linux_failure_detail(tree);return
+        if getattr(tree,'failure_detail',None) is not None:
+            _poison_linux_failure_detail(tree);return
+        try:tree._failure_origin=origin
+        except BaseException:
+            _poison_linux_failure_detail(tree);return
+        try:tree.failure_detail=_linux_detail_unavailable(origin)
+        except BaseException:pass
+        try:tree.failure_detail=builder()
+        except BaseException:pass
+    except BaseException:
+        _poison_linux_failure_detail(tree)
+
+
+def _retain_linux_failure_detail(target,tree):
+    """Bind optional payload to retained origin and authoritative cell state."""
+    fallback=_linux_detail_unavailable('unknown')
+    try:
+        state,cell=_linux_failure_cell(tree)
+        marker=getattr(tree,'_failure_origin',_LINUX_DETAIL_MISSING)
+        if state=='consumed' and type(marker) is str and marker in (_LINUX_INITIAL_SITE,_LINUX_LATER_SITE):
+            fallback=_linux_detail_unavailable(marker)
+            target['failure_detail']=fallback
+            value=getattr(tree,'failure_detail',None)
+        elif (state=='absent' and marker is _LINUX_DETAIL_MISSING and
+              getattr(tree,'_failure_capture_consumed',_LINUX_DETAIL_MISSING) is _LINUX_DETAIL_MISSING):
+            value=getattr(tree,'failure_detail',_LINUX_DETAIL_MISSING)
+            if value is _LINUX_DETAIL_MISSING:return
+            target['failure_detail']=fallback
+            _validate_linux_failure_detail(value,_LINUX_LATER_SITE)
+            marker=_LINUX_LATER_SITE
+            fallback=_linux_detail_unavailable(marker)
+            target['failure_detail']=fallback
+        elif state=='fresh' and marker is _LINUX_DETAIL_UNLATCHED:
+            value=getattr(tree,'failure_detail',_LINUX_DETAIL_MISSING)
+            if value is _LINUX_DETAIL_MISSING:return
+            target['failure_detail']=fallback
+            return
+        else:
+            target['failure_detail']=fallback
+            return
+        target['failure_detail']=_copy_linux_failure_detail(value,marker)
+    except BaseException:
+        try:target['failure_detail']=fallback
+        except BaseException:pass
+
+
+def _linux_initial_parent_detail(before,pid,parent,controller,parent_pin,known):
+    fallback=_linux_detail_unavailable(_LINUX_INITIAL_SITE)
+    try:
+        need(type(before) is dict and type(known) is dict and
+             all(type(v) is int for v in (before['start'],before['ppid'],pid,parent,controller)),'initial detail input types')
+        def valid_pin(pin):
+            need(type(pin) is dict and type(pin['fd']) is int and pin['fd']>=0 and type(pin['start']) is int,'initial detail pin types')
+        if parent_pin is not None:valid_pin(parent_pin)
+        if parent in known:valid_pin(known[parent])
+        present=pid in known
+        if present:valid_pin(known[pid])
+        value=dict(schema=fallback['schema'],site=fallback['site'],complete=True,reason='parent-mismatch',
+            before_parent_matches_expected=before['ppid']==parent,before_parent_matches_controller=before['ppid']==controller,
+            expected_parent_is_controller=parent==controller,parent_pin_present=parent_pin is not None,
+            parent_pin_is_current_known=parent_pin is not None and known.get(parent) is parent_pin,
+            candidate_was_already_known=present,candidate_pin_recorded=present,
+            candidate_start_matches_before=known[pid]['start']==before['start'] if present else None,
+            final_parent_check_returned_true=True,new_pidfd_acquired_in_observe=False)
+        return _copy_linux_failure_detail(value,_LINUX_INITIAL_SITE)
     except BaseException:return fallback
 
 
@@ -348,7 +513,7 @@ def _linux_identity_detail(before,after,parent,controller,parent_pin):
             after_parent_matches_expected=linked,after_parent_matches_controller=after['ppid']==controller,
             before_after_parent_equal=before['ppid']==after['ppid'],expected_parent_is_controller=parent==controller,
             parent_pin_present=parent_pin is not None,candidate_was_already_known=False,final_parent_check_returned_true=True)
-        return _copy_linux_failure_detail(value)
+        return _copy_linux_failure_detail(value,_LINUX_LATER_SITE)
     except BaseException:return fallback
 
 
@@ -364,6 +529,8 @@ class _LinuxTree:
         need(self.libc.prctl(37,ctypes.byref(self.previous),0,0,0)==0,'cannot read subreaper state')
         need(self.libc.prctl(36,1,0,0,0)==0,'cannot enable runner-local subreaper')
         self.known={};self.proc=None;self.restored=False
+        try:_initialize_linux_failure_detail(self)
+        except BaseException:pass
 
     def attach(self,proc):
         self.proc=proc;self.observe(proc.pid,os.getpid())
@@ -387,7 +554,14 @@ class _LinuxTree:
             if pid in self.known:need(_pidfd_exited(self.known[pid]['fd']),'live pidfd lost identity record')
             return None
         if not self.parent_current(parent,parent_pin):return None
-        need(before['ppid']==parent,'ambiguous descendant ancestry')
+        try:
+            need(before['ppid']==parent,'ambiguous descendant ancestry')
+        except ValueError as error:
+            if str(error)=='ambiguous descendant ancestry':
+                try:_capture_linux_failure_detail(self,_LINUX_INITIAL_SITE,lambda:_linux_initial_parent_detail(
+                    before,pid,parent,self.controller_pid,parent_pin,self.known))
+                except BaseException:pass
+            raise
         if pid in self.known:
             need(self.known[pid]['start']==before['start'],'owned PID identity changed');return self.known[pid]
         try:fd=os.pidfd_open(pid,0)
@@ -399,9 +573,9 @@ class _LinuxTree:
             try:
                 need(before['start']==after['start'] and after['ppid']==parent,'pidfd identity/ancestry mismatch')
             except ValueError as error:
-                if str(error)=='pidfd identity/ancestry mismatch' and getattr(self,'failure_detail',None) is None:
-                    self.failure_detail=_linux_detail_unavailable()
-                    try:self.failure_detail=_linux_identity_detail(before,after,parent,self.controller_pid,parent_pin)
+                if str(error)=='pidfd identity/ancestry mismatch':
+                    try:_capture_linux_failure_detail(self,_LINUX_LATER_SITE,lambda:_linux_identity_detail(
+                        before,after,parent,self.controller_pid,parent_pin))
                     except BaseException:pass
                 raise
             self.known[pid]=dict(fd=fd,start=after['start'])
@@ -827,11 +1001,10 @@ class OwnedChild:
         if capture_error is not None:value['capture_error']=capture_error
         if self.job_diagnostic is not None:value['job_diagnostic']=self.job_diagnostic
         if failure and isinstance(self.tree,_LinuxTree):
-            try:
-                if getattr(self.tree,'failure_detail',None) is not None:
-                    value['failure_detail']=_linux_detail_unavailable()
-                    value['failure_detail']=_copy_linux_failure_detail(self.tree.failure_detail)
-            except BaseException:value['failure_detail']=_linux_detail_unavailable()
+            try:_retain_linux_failure_detail(value,self.tree)
+            except BaseException:
+                try:value['failure_detail']=_linux_detail_unavailable('unknown')
+                except BaseException:pass
         if time.monotonic()>=cleanup_deadline:
             failure=failure or 'timeout';self.stable=False;cleanup_ok=False
             value.update(classification=failure,owned_tree_empty=False,cleanup_ok=False,stable=False)

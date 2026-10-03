@@ -164,7 +164,9 @@ def ancestry_controls():
     replies={('rev-parse','HEAD'):head,('rev-parse','HEAD^{tree}'):tree,
              ('rev-parse',guard.BASE+'^{tree}'):guard.BASE_TREE,
              ('rev-parse',guard.CORRECTION_PARENT+'^{tree}'):guard.CORRECTION_PARENT_TREE,
-             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.INTERMEDIATE_PARENT,
+             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.PRIOR_CORRECTION_PARENT,
+             ('rev-parse',guard.PRIOR_CORRECTION_PARENT+'^{tree}'):guard.PRIOR_CORRECTION_PARENT_TREE,
+             ('show','-s','--format=%P',guard.PRIOR_CORRECTION_PARENT):guard.INTERMEDIATE_PARENT,
              ('rev-parse',guard.INTERMEDIATE_PARENT+'^{tree}'):guard.INTERMEDIATE_PARENT_TREE,
              ('show','-s','--format=%P',guard.INTERMEDIATE_PARENT):guard.PREVIOUS_PARENT,
              ('rev-parse',guard.PREVIOUS_PARENT+'^{tree}'):guard.PREVIOUS_PARENT_TREE,
@@ -182,11 +184,11 @@ def ancestry_controls():
             if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
             return (values[args]+'\n').encode()
         with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
-        check(len(calls)==(13 if precommit else 14),'unexpected ancestry query count')
+        check(len(calls)==(15 if precommit else 16),'unexpected ancestry query count')
         return result
     control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
     pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
-    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.INTERMEDIATE_PARENT,guard.INTERMEDIATE_PARENT_TREE),'precommit actual parent fields'))
+    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.PRIOR_CORRECTION_PARENT,guard.PRIOR_CORRECTION_PARENT_TREE),'precommit actual parent fields'))
     def no_lazy_fetch():
         with patch.object(guard.subprocess,'check_output',return_value=b'fixture') as execute:
             check(guard.git(Path('.'),'rev-parse','HEAD')==b'fixture','git helper return')
@@ -204,6 +206,10 @@ def ancestry_controls():
            ('wrong-anchor-tree',('rev-parse',guard.CORRECTION_PARENT+'^{tree}'),'3'*40,'correction parent tree'),
            ('wrong-anchor-parent',('show','-s','--format=%P',guard.CORRECTION_PARENT),'3'*40,'correction parent ancestry'),
            ('multiple-anchor-parents',('show','-s','--format=%P',guard.CORRECTION_PARENT),guard.BASE+' '+'3'*40,'correction parent ancestry'),
+           ('wrong-prior-correction-tree',('rev-parse',guard.PRIOR_CORRECTION_PARENT+'^{tree}'),'3'*40,'prior correction parent tree'),
+           ('wrong-prior-correction-parent',('show','-s','--format=%P',guard.PRIOR_CORRECTION_PARENT),'3'*40,'prior correction parent ancestry'),
+           ('multiple-prior-correction-parents',('show','-s','--format=%P',guard.PRIOR_CORRECTION_PARENT),guard.BASE+' '+'3'*40,'prior correction parent ancestry'),
+           ('sibling-candidate-parent',('show','-s','--format=%P',head),'45a2e25cfebfa96c6f6aa6ae6d57877ef8baee5d','candidate parent'),
            ('wrong-intermediate-tree',('rev-parse',guard.INTERMEDIATE_PARENT+'^{tree}'),'3'*40,'intermediate parent tree'),
            ('wrong-intermediate-parent',('show','-s','--format=%P',guard.INTERMEDIATE_PARENT),'3'*40,'intermediate parent ancestry'),
            ('multiple-intermediate-parents',('show','-s','--format=%P',guard.INTERMEDIATE_PARENT),guard.BASE+' '+'3'*40,'intermediate parent ancestry'),
@@ -220,14 +226,14 @@ def ancestry_controls():
     for label,key,value,boundary in cases:
         expect_failure('ancestry-'+label,lambda key=key,value=value:run({key:value}),boundary)
     for label,changes in [('old-base',{('rev-parse','HEAD'):guard.BASE,('rev-parse','HEAD^{tree}'):guard.BASE_TREE}),
-                          ('wrong-tree',{('rev-parse','HEAD^{tree}'):'3'*40}),('other-tip',{('rev-parse','HEAD'):'3'*40})]:
+                          ('same-tree-sibling',{('rev-parse','HEAD'):'45a2e25cfebfa96c6f6aa6ae6d57877ef8baee5d'}),('wrong-tree',{('rev-parse','HEAD^{tree}'):'3'*40}),('other-tip',{('rev-parse','HEAD'):'3'*40})]:
         expect_failure('ancestry-precommit-'+label,lambda changes=changes:run(pre|changes,True),'precommit requires exact correction parent/tree')
     expect_failure('ancestry-anchor-is-not-candidate',lambda:run(pre,commit=guard.CORRECTION_PARENT,expected_tree=guard.CORRECTION_PARENT_TREE),'candidate pin mismatch')
-    for label,anchor,anchor_tree in [('intermediate',guard.INTERMEDIATE_PARENT,guard.INTERMEDIATE_PARENT_TREE),('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('earlier',guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),('original',guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
+    for label,anchor,anchor_tree in [('prior-correction',guard.PRIOR_CORRECTION_PARENT,guard.PRIOR_CORRECTION_PARENT_TREE),('intermediate',guard.INTERMEDIATE_PARENT,guard.INTERMEDIATE_PARENT_TREE),('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('earlier',guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),('original',guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
         tip={('rev-parse','HEAD'):anchor,('rev-parse','HEAD^{tree}'):anchor_tree}
         expect_failure('ancestry-'+label+'-is-not-candidate',lambda tip=tip,anchor=anchor,anchor_tree=anchor_tree:run(tip,commit=anchor,expected_tree=anchor_tree),'candidate pin mismatch')
         expect_failure('ancestry-precommit-reject-'+label,lambda tip=tip:run(tip,True),'precommit requires exact correction parent/tree')
-    for label,key in [('missing-intermediate-object',('rev-parse',guard.INTERMEDIATE_PARENT+'^{tree}')),('missing-intermediate-parent',('show','-s','--format=%P',guard.INTERMEDIATE_PARENT)),('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT)),('missing-earlier-object',('rev-parse',guard.EARLIER_PARENT+'^{tree}')),('missing-earlier-parent-metadata',('show','-s','--format=%P',guard.EARLIER_PARENT)),('missing-original-object',('rev-parse',guard.ORIGINAL_PARENT+'^{tree}')),('missing-original-parent-metadata',('show','-s','--format=%P',guard.ORIGINAL_PARENT))]:
+    for label,key in [('missing-prior-correction-object',('rev-parse',guard.PRIOR_CORRECTION_PARENT+'^{tree}')),('missing-prior-correction-parent',('show','-s','--format=%P',guard.PRIOR_CORRECTION_PARENT)),('missing-intermediate-object',('rev-parse',guard.INTERMEDIATE_PARENT+'^{tree}')),('missing-intermediate-parent',('show','-s','--format=%P',guard.INTERMEDIATE_PARENT)),('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT)),('missing-earlier-object',('rev-parse',guard.EARLIER_PARENT+'^{tree}')),('missing-earlier-parent-metadata',('show','-s','--format=%P',guard.EARLIER_PARENT)),('missing-original-object',('rev-parse',guard.ORIGINAL_PARENT+'^{tree}')),('missing-original-parent-metadata',('show','-s','--format=%P',guard.ORIGINAL_PARENT))]:
         try:run({key:None})
         except subprocess.CalledProcessError as error:
             check(error.returncode==128 and error.cmd==['git',*key],'missing object boundary');RESULTS.append(dict(name='ancestry-'+label,passed=True))
@@ -246,14 +252,14 @@ def ancestry_controls():
         expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
     workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
     def workflow_contract(raw,windows=False):
-        canonical=guard.checkout_bytes(raw,'c6e90f6e3bcb1bf11846670982c9145e654e7a74',windows)
-        check(canonical.count(b'          fetch-depth: 7\n')==1 and
-              guard.sha(canonical.replace(b'          fetch-depth: 7\n',b'          fetch-depth: 6\n'))=='d6bd2e75cfaaff91fbf48ea0d3aa33ea38b15eedbcdacfb1b66beb6a62cda1de','exact depth-seven workflow contract')
+        canonical=guard.checkout_bytes(raw,'361cc5d7996baeb4144f3354c1d746ebf4b2c5af',windows)
+        check(canonical.count(b'          fetch-depth: 8\n')==1 and
+              guard.sha(canonical.replace(b'          fetch-depth: 8\n',b'          fetch-depth: 7\n'))=='35cb2019ce0132c5091921fb3e39ef938ee3d5129dbc746152f74abcfb86d3ef','exact depth-eight workflow contract')
         return canonical
-    control('workflow-only-depth-seven-change',lambda:workflow_contract(workflow,os.name=='nt'))
+    control('workflow-only-depth-eight-change',lambda:workflow_contract(workflow,os.name=='nt'))
     canonical=workflow_contract(workflow,os.name=='nt')
-    for label,old,new in [('old-depth',b'fetch-depth: 7',b'fetch-depth: 6'),('broad-depth',b'fetch-depth: 7',b'fetch-depth: 0'),
-                          ('malformed-depth',b'fetch-depth: 7',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+    for label,old,new in [('old-depth',b'fetch-depth: 8',b'fetch-depth: 7'),('broad-depth',b'fetch-depth: 8',b'fetch-depth: 0'),
+                          ('malformed-depth',b'fetch-depth: 8',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
                           ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
         changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
         expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
@@ -333,7 +339,7 @@ def failure_detail_controls(root):
         for expected,pin in [(controller,None),(parent,dict(fd=313,start=123))]:
             for label,start,after_parent in [('matching',1,expected),('start',2,expected),('parent',1,controller+3),
                     ('both',2,controller+3),('controller-parent',1,controller)]:
-                tree=object.__new__(q._LinuxTree);tree.known={};tree.controller_pid=controller;calls=[]
+                tree=object.__new__(q._LinuxTree);q._initialize_linux_failure_detail(tree);tree.known={};tree.controller_pid=controller;calls=[]
                 def parent_current(p,v):calls.append(('parent',p,v is pin));return True
                 def read(p):calls.append(('stat',p));return dict(start=1 if sum(c[0]=='stat' for c in calls)==1 else start,ppid=expected if sum(c[0]=='stat' for c in calls)==1 else after_parent)
                 def opened(p,flags):calls.append(('open',p,flags));return 999
@@ -356,16 +362,16 @@ def failure_detail_controls(root):
                         expect_failure('failure-detail-linux-first-immutable-'+str(pin is not None)+'-'+label,lambda:tree.observe(child,expected,pin),'pidfd identity/ancestry mismatch')
                         check(tree.failure_detail is first,'Linux detail overwritten')
         for label,before,after in [('before-link',dict(start=1,ppid=parent),dict(start=2,ppid=parent)),('missing-after',dict(start=1,ppid=controller),dict(ppid=controller))]:
-            tree=object.__new__(q._LinuxTree);tree.known={};tree.controller_pid=controller
+            tree=object.__new__(q._LinuxTree);q._initialize_linux_failure_detail(tree);tree.known={};tree.controller_pid=controller
             with patch.object(tree,'parent_current',return_value=True),patch.object(q,'_linux_stat',side_effect=[before,after]),patch.object(q.os,'pidfd_open',return_value=999,create=True),patch.object(q.os,'close'):
                 expect_failure('failure-detail-linux-early-'+label,lambda:tree.observe(child,controller),'ambiguous descendant ancestry' if label=='before-link' else 'start')
-                check(getattr(tree,'failure_detail',None) is None,'early Linux error manufactured detail')
-        tree=object.__new__(q._LinuxTree);tree.known={};tree.controller_pid=controller
+                check((tree.failure_detail['site']==q._LINUX_INITIAL_SITE and tree.failure_detail['complete']) if label=='before-link' else getattr(tree,'failure_detail',None) is None,'early Linux error detail boundary')
+        tree=object.__new__(q._LinuxTree);q._initialize_linux_failure_detail(tree);tree.known={};tree.controller_pid=controller
         with patch.object(tree,'parent_current',return_value=True),patch.object(q,'_linux_stat',side_effect=[dict(start=1,ppid=controller),dict(start=2,ppid=controller)]),patch.object(q.os,'pidfd_open',return_value=999,create=True),patch.object(q.os,'close') as close,patch.object(q,'_linux_identity_detail',side_effect=RuntimeError('private-detail-error')):
             expect_failure('failure-detail-linux-builder-error-permanent',lambda:tree.observe(child,controller),'pidfd identity/ancestry mismatch')
             check(tree.failure_detail['complete'] is False and not tree.known and close.call_count==1,'Linux detail error changed cleanup')
         for label,value in [('list',[]),('extra',dict(q._linux_detail_unavailable(),raw='private-sentinel')),('bad-complete',dict(q._linux_detail_unavailable(),complete=1))]:
-            check(q._copy_linux_failure_detail(value)==q._linux_detail_unavailable(),'malformed transferred detail accepted')
+            check(q._copy_linux_failure_detail(value)==q._linux_detail_unavailable('unknown'),'malformed transferred detail accepted')
             RESULTS.append(dict(name='failure-detail-linux-transfer-'+label,passed=True))
         # Genuine owned command/cleanup; a one-shot post-read comparison fault
         # is scoped to that exact owned root. All cleanup reads remain real.
@@ -384,9 +390,9 @@ def failure_detail_controls(root):
                     if broken_detail is True:raise ValueError('private-detail-error')
                     if broken_detail=='malformed':return {'private-sentinel':17}
                     return original_detail(*args)
-                def copy_detail(value):
+                def copy_detail(value,*origin):
                     if broken_detail=='copy':raise ValueError('private-copy-error')
-                    return original_copy(value)
+                    return original_copy(value,*origin)
                 with patch.object(q,'_linux_stat',fault),patch.object(q,'_linux_identity_detail',detail),patch.object(q,'_copy_linux_failure_detail',copy_detail):
                     expect_failure('failure-detail-real-recorder-mismatch-'+str(broken_detail),lambda:recorder.run('tiny',[sys.executable,'-c','import time;time.sleep(10)'],3),'pidfd identity/ancestry mismatch')
                 row=json.loads((recorder.root/'stages/tiny/result.json').read_bytes());owned=row['ownership']
@@ -395,6 +401,395 @@ def failure_detail_controls(root):
                       all(owned[key] is True for key in ('cleanup_ok','owned_tree_empty','readers_done','stable')) and
                       q._ACTIVE_OWNER is None and not q._OWNER_LOCK.locked() and 'private-' not in json.dumps(owned),'failed comparison detail changed owned cleanup/outcome')
     finally:FAILURE_DETAIL=saved
+
+
+def initial_parent_controls(root):
+    """Exact observe/transfer models and genuine owner-bound injected failures."""
+    from types import SimpleNamespace
+    import test_mcp_directory_search as driver
+    root.mkdir();controller=1<<34;parent=controller+1;child=controller+2
+    initial=q._LINUX_INITIAL_SITE;later=q._LINUX_LATER_SITE
+    unknown=q._linux_detail_unavailable('unknown')
+    class Tree(q._LinuxTree):
+        def __getattribute__(self,key):
+            try:blocked=object.__getattribute__(self,'read_faults')
+            except AttributeError:blocked=set()
+            if key in blocked:raise RuntimeError('private-read-fault')
+            return object.__getattribute__(self,key)
+        def __setattr__(self,key,value):
+            try:blocked=object.__getattribute__(self,'write_faults')
+            except AttributeError:blocked=set()
+            all_diagnostic=object.__getattribute__(self,'__dict__').get('block_all_diagnostic',False)
+            if key in blocked or (all_diagnostic and (key.startswith('_failure_') or key=='failure_detail')):
+                raise RuntimeError('private-store-fault')
+            object.__setattr__(self,key,value)
+        def active(self):self.cleanup_calls.append('active');return []
+        def terminate(self):self.cleanup_calls.append('terminate')
+        def close(self):
+            self.cleanup_calls.append('close')
+            if getattr(self,'close_fault',False):raise ValueError('fixture-close-failure')
+    def make(known=None):
+        tree=object.__new__(Tree);tree.known={} if known is None else known;tree.controller_pid=controller
+        tree.read_faults=set();tree.write_faults=set();tree.cleanup_calls=[]
+        q._initialize_linux_failure_detail(tree);return tree
+    def observe(tree,site=initial,expected=controller,pin=None,before_parent=None):
+        calls=[];reads=[dict(start=7,ppid=expected if site==later else (parent if before_parent is None else before_parent))]
+        if site==later:reads.append(dict(start=8,ppid=expected))
+        def parent_current(p,v):calls.append('parent');return True
+        def stat(p):check(p==child,'foreign model target');calls.append('stat');return reads.pop(0)
+        def opened(p,flags):check(p==child and flags==0,'foreign model pin');calls.append('open');return 999
+        saved=copy.deepcopy(tree.known);error='ambiguous descendant ancestry' if site==initial else 'pidfd identity/ancestry mismatch'
+        with patch.object(tree,'parent_current',parent_current),patch.object(q,'_linux_stat',stat),patch.object(q.os,'pidfd_open',opened,create=True),patch.object(q.os,'close') as closed,patch.object(q.os,'getpid',side_effect=AssertionError('extra process query')):
+            try:tree.observe(child,expected,pin)
+            except ValueError as caught:check(str(caught)==error,'original comparison error replaced')
+            else:raise ValueError('initial relation unexpectedly admitted')
+        check(calls==(['parent','stat','parent'] if site==initial else ['parent','stat','parent','open','stat','parent']) and
+              closed.call_count==int(site==later) and tree.known==saved,'original observe process order/map changed')
+        return tree
+    def transfer(tree):
+        target={};q._retain_linux_failure_detail(target,tree);return target.get('failure_detail')
+    cases=[]
+    for label,known,pin,expected,ppid in [
+        ('new',{},None,controller,parent),
+        ('known-equal',{child:dict(fd=0,start=7)},None,controller,parent),
+        ('known-other',{child:dict(fd=313,start=8)},None,controller,parent),
+        ('pinned-controller',{},dict(fd=314,start=9),parent,controller),
+        ('pinned-other',{},dict(fd=314,start=9),parent,parent+9)]:
+        if pin is not None:known[parent]=pin
+        tree=observe(make(known),expected=expected,pin=pin,before_parent=ppid);value=transfer(tree)
+        check(value['complete'] is True and value['candidate_was_already_known']==(child in known) and
+              value['candidate_pin_recorded']==(child in known) and
+              value['candidate_start_matches_before']==(known[child]['start']==7 if child in known else None) and
+              value['parent_pin_present']==(pin is not None) and value['parent_pin_is_current_known']==(pin is not None) and
+              value['before_parent_matches_controller']==(ppid==controller) and value['expected_parent_is_controller']==(expected==controller),
+              'initial relation value')
+        check(str(controller) not in json.dumps(value) and str(child) not in json.dumps(value),'initial raw identity leak')
+        cases.append((label,value));RESULTS.append(dict(name='initial-relations-'+label,passed=True))
+    initial_value=cases[0][1]
+    old_tree=observe(make(),later);later_value=transfer(old_tree)
+    check(later_value==q._linux_identity_detail(dict(start=7,ppid=controller),dict(start=8,ppid=controller),controller,controller,None),'legacy output changed')
+    for label,record in [('none',None),('list',[]),('fd-missing',dict(start=7)),('start-missing',dict(fd=1)),('fd-bool',dict(fd=True,start=7)),
+                         ('fd-negative',dict(fd=-1,start=7)),('start-bool',dict(fd=0,start=True)),('start-text',dict(fd=0,start='private-start'))]:
+        tree=observe(make({child:record}))
+        check(transfer(tree)==q._linux_detail_unavailable(initial),'malformed known became new/complete')
+        RESULTS.append(dict(name='initial-known-invalid-'+label,passed=True))
+    for label,changes in [('known-null',dict(candidate_was_already_known=True,candidate_pin_recorded=True)),
+                          ('new-start',dict(candidate_start_matches_before=False)),('known-unpinned',dict(candidate_was_already_known=True,candidate_start_matches_before=True)),
+                          ('new-pinned',dict(candidate_pin_recorded=True)),('parent-without-pin',dict(parent_pin_is_current_known=True)),
+                          ('before-true',dict(before_parent_matches_expected=True)),('check-false',dict(final_parent_check_returned_true=False)),
+                          ('new-pin-true',dict(new_pidfd_acquired_in_observe=True)),('bool-int',dict(candidate_pin_recorded=0)),
+                          ('extra',dict(private='private-value')),('complete-int',dict(complete=1)),('wrong-reason',dict(reason='private-value'))]:
+        changed=dict(initial_value,**changes)
+        check(q._copy_linux_failure_detail(changed,initial)==q._linux_detail_unavailable(initial),'invalid nullable/fixed shape copied')
+        RESULTS.append(dict(name='initial-copy-invalid-'+label,passed=True))
+    # Every optional read and pin type is still after the original rejection.
+    for label,known,pin in [('parent-record',{parent:None},None),('pin-type',{},[]),('pin-fd',{},dict(fd=True,start=1))]:
+        tree=observe(make(known),expected=parent,pin=pin,before_parent=controller)
+        check(transfer(tree)==q._linux_detail_unavailable(initial),'malformed parent metadata passed')
+        RESULTS.append(dict(name='initial-parent-invalid-'+label,passed=True))
+    pin=dict(fd=1,start=7);tree=observe(make({parent:dict(pin)}),pin=pin)
+    check(transfer(tree)['parent_pin_present'] and not transfer(tree)['parent_pin_is_current_known'],'parent pin equality mistaken for identity')
+    RESULTS.append(dict(name='initial-parent-pin-identity',passed=True))
+
+    for site in (initial,later):
+        tree=observe(make(),site);first=tree.failure_detail;frozen=copy.deepcopy(first)
+        for next_site in (initial,later):
+            observe(tree,next_site)
+            check(tree.failure_detail is first and transfer(tree)==frozen,'complete first observation overwritten')
+        RESULTS.append(dict(name='initial-complete-immutable-'+site,passed=True))
+        for label,payload in [('null',None),('malformed',[]),('oversized',dict(private='x'*2048))]:
+            tree=observe(make(),site);tree.failure_detail=payload
+            check(transfer(tree)==q._linux_detail_unavailable(site),'invalid matching-origin payload changed origin')
+            RESULTS.append(dict(name='initial-payload-'+site+'-'+label,passed=True))
+        tree=observe(make(),site);tree.read_faults={'failure_detail'}
+        check(transfer(tree)==q._linux_detail_unavailable(site),'payload access lost trusted origin')
+        RESULTS.append(dict(name='initial-payload-read-'+site,passed=True))
+        tree=observe(make(),site);tree.read_faults={'_failure_origin'}
+        observe(tree,initial);observe(tree,later)
+        check(transfer(tree)==unknown,'origin read failure manufactured later data')
+        RESULTS.append(dict(name='initial-read-fault-repeat-'+site,passed=True))
+    for label,payload in cases[:2]:
+        exact=len((json.dumps({'ownership':{'failure_detail':payload}},sort_keys=True,indent=2)+'\n').replace('\n','\r\n').encode())
+        fallback=q._linux_detail_unavailable(initial)
+        for delta in (-1,0,1):
+            result=q._bounded_failure_detail(payload,fallback,exact+delta,ownership=True)
+            check(result==(fallback if delta<0 else payload),'initial formatted byte boundary')
+        RESULTS.append(dict(name='initial-exact-wrapper-cap-'+label,passed=True))
+    for label,field in [('before-start','start'),('before-parent','ppid')]:
+        tree=make()
+        with patch.object(tree,'parent_current',return_value=True),patch.object(q,'_linux_stat',return_value=dict(start=True if field=='start' else 7,ppid=True if field=='ppid' else parent)),patch.object(q.os,'pidfd_open',side_effect=AssertionError('new query'),create=True):
+            expect_failure('initial-invalid-'+label,lambda:tree.observe(child,controller),'ambiguous descendant ancestry',record=False)
+        check(transfer(tree)==q._linux_detail_unavailable(initial),'before bool metadata became complete')
+        RESULTS.append(dict(name='initial-invalid-'+label,passed=True))
+
+    # Actual capture, followed by opposite-site payload substitution and transfer.
+    for site,value in [(initial,later_value),(later,initial_value)]:
+        tree=observe(make(),site);tree.failure_detail=value
+        check(transfer(tree)==q._linux_detail_unavailable(site),'cross-site payload changed origin')
+        RESULTS.append(dict(name='initial-cross-origin-'+site,passed=True))
+    for label,value,expected in [('complete',later_value,later_value),('unavailable',q._linux_detail_unavailable(),q._linux_detail_unavailable()),
+            ('initial-complete',initial_value,unknown),('initial-unavailable',q._linux_detail_unavailable(initial),unknown),
+            ('invalid',{'private':17},unknown),('null',None,unknown)]:
+        tree=make();del tree._failure_origin;del tree._failure_capture_cell;tree.failure_detail=value
+        check(transfer(tree)==expected,'missing-marker legacy validation')
+        RESULTS.append(dict(name='initial-marker-absent-'+label,passed=True))
+    tree=make();check(transfer(tree) is None,'untouched metadata manufactured detail')
+    RESULTS.append(dict(name='initial-untouched-field-free',passed=True))
+    for label,marker in [('none',None),('unknown','unknown'),('malformed',{'private':17}),('boolean',False)]:
+        tree=observe(make());tree._failure_origin=marker;tree.failure_detail=later_value
+        check(transfer(tree)==unknown,'explicit bad marker accepted legacy')
+        RESULTS.append(dict(name='initial-marker-'+label,passed=True))
+    tree=observe(make());tree.read_faults={'_failure_origin'}
+    check(transfer(tree)==unknown,'read failure inferred site')
+    RESULTS.append(dict(name='initial-marker-read-failure',passed=True))
+    tree=observe(make());tree.read_faults={'_failure_capture_consumed'}
+    check(transfer(tree)==initial_value,'trusted origin unnecessarily read consumed state')
+    RESULTS.append(dict(name='initial-origin-alone-authoritative',passed=True))
+
+    for site in (initial,later):
+        for fault in ('builder','payload','both'):
+            tree=make()
+            if fault in ('payload','both'):tree.write_faults={'failure_detail'}
+            builder='_linux_initial_parent_detail' if site==initial else '_linux_identity_detail'
+            with patch.object(q,builder,side_effect=ValueError('private-builder')) if fault in ('builder','both') else patch.object(q,builder,getattr(q,builder)):
+                observe(tree,site)
+            expected=q._linux_detail_unavailable(site);check(transfer(tree)==expected,'latched origin lost after payload fault')
+            tree.write_faults=set()
+            for next_site in (initial,later):observe(tree,next_site);check(transfer(tree)==expected,'payload recovered by later capture')
+            RESULTS.append(dict(name='initial-latch-'+site+'-'+fault,passed=True))
+    for fault in ('marker','marker-payload','consumed','all'):
+        tree=make();tree.write_faults={'_failure_origin'}
+        if fault in ('marker-payload','all'):tree.write_faults.add('failure_detail')
+        if fault in ('consumed','all'):tree.write_faults.add('_failure_capture_consumed')
+        observe(tree)
+        observed=transfer(tree)
+        if fault=='all':
+            check(observed in (None,unknown),'total storage fault invented durable origin')
+            observe(tree,later);check(transfer(tree) in (None,unknown),'persistent total fault invented observation')
+        else:
+            check(observed==unknown,'assignment failure lost unknown origin')
+            tree.write_faults=set()
+            for next_site in (initial,later):observe(tree,next_site);check(transfer(tree)==unknown,'recovered stores relabelled first event')
+        RESULTS.append(dict(name='initial-latch-storage-'+fault,passed=True))
+    tree=make();tree.read_faults={'failure_detail'};observe(tree)
+    tree.read_faults=set()
+    check(transfer(tree)==unknown,'existence-check failure reopened capture')
+    observe(tree,later);check(transfer(tree)==unknown,'existence-check recovery relabelled first failure')
+    RESULTS.append(dict(name='initial-latch-existence-failure',passed=True))
+    for name in ('_failure_origin','_failure_capture_cell'):
+        tree=object.__new__(Tree);tree.write_faults={name};q._initialize_linux_failure_detail(tree)
+        check(transfer(tree)==unknown,'metadata init failure not unavailable')
+        RESULTS.append(dict(name='initial-init-store-'+name,passed=True))
+    class Refusing(dict):
+        def __setitem__(self,key,value):raise OSError('private-target-write')
+    q._retain_linux_failure_detail(Refusing(),observe(make()))
+    RESULTS.append(dict(name='initial-fallback-write-contained',passed=True))
+
+    # The original setter fault stays active through the one-way in-place step.
+    metadata={'_failure_capture_consumed','_failure_origin','failure_detail'}
+    for first_site,next_site in [(initial,initial),(initial,later),(later,initial),(later,later)]:
+        for all_setters in (False,True):
+            tree=make();cell=tree._failure_capture_cell;token=cell[0]
+            check(type(cell) is list and len(cell)==1 and token[0] is tree,'cell not preallocated/owner-bound')
+            tree.write_faults=set(metadata);tree.block_all_diagnostic=all_setters
+            writes=[];builders=[];setter=Tree.__setattr__
+            def tracked(self,key,value):
+                if self is tree and (key.startswith('_failure_') or key=='failure_detail'):writes.append(key)
+                return setter(self,key,value)
+            def prohibited_builder(*args):builders.append(True);raise AssertionError('second builder')
+            with patch.object(Tree,'__setattr__',tracked),patch.object(q,'_new_linux_failure_cell',side_effect=AssertionError('cell recreated')),patch.object(q,'_linux_initial_parent_detail',prohibited_builder),patch.object(q,'_linux_identity_detail',prohibited_builder):
+                observe(tree,first_site)
+                check(tree._failure_capture_cell is cell and cell==[],'setter faults prevented one-way consumption')
+                first=transfer(tree);check(first==unknown,'failed optional stores invented first origin')
+                count=len(writes);tree.write_faults=set();tree.block_all_diagnostic=False
+                observe(tree,next_site)
+                check(tree._failure_capture_cell is cell and cell==[] and not builders and len(writes)==count and
+                      transfer(tree)==first and transfer(tree)==first,'recovered attribute stores relatch/refill/refresh')
+                q._initialize_linux_failure_detail(tree)
+                check(tree._failure_capture_cell is cell and cell==[] and len(writes)==count,'initializer reset consumed cell')
+            RESULTS.append(dict(name='cell-store-recovery-'+str(all_setters)+'-'+first_site+'-'+next_site,passed=True))
+
+    # Selected metadata getters must execute only after successful consumption.
+    for site,key in [(initial,'controller_pid'),(initial,'known'),(later,'controller_pid'),(initial,'_failure_origin'),(initial,'failure_detail')]:
+        tree=make();cell=tree._failure_capture_cell;getter=Tree.__getattribute__;seen=[];entered=[]
+        original_consume=q._consume_linux_failure_cell
+        def consume(value):
+            result=original_consume(value)
+            if value is tree:entered.append(result)
+            return result
+        def get(self,name):
+            if self is tree and name==key and entered and not seen:
+                seen.append((name,len(cell)))
+                raise RuntimeError('private-cached-getter')
+            return getter(self,name)
+        with patch.object(Tree,'__getattribute__',get),patch.object(q,'_consume_linux_failure_cell',consume):
+            observe(tree,site)
+        expected=q._linux_detail_unavailable(site) if key in ('controller_pid','known') else unknown
+        check(seen==[(key,0)] and entered==[True] and cell==[] and transfer(tree)==expected,'optional read preceded latch')
+        observe(tree,later if site==initial else initial)
+        check(tree._failure_capture_cell is cell and cell==[] and transfer(tree)==expected,'cached getter recovery relabelled origin')
+        RESULTS.append(dict(name='cell-deferred-'+site+'-'+key,passed=True))
+
+    def blank():
+        tree=object.__new__(Tree);tree.known={};tree.controller_pid=controller
+        tree.read_faults=set();tree.write_faults=set();tree.cleanup_calls=[];tree.block_all_diagnostic=False
+        return tree
+    for label,value in [('absent',q._LINUX_DETAIL_MISSING),('none',None),('tuple',()),('oversized',[None,None]),
+                        ('foreign',[(object(),q._LINUX_DETAIL_UNLATCHED)]),('bad-token',[(None,None)])]:
+        tree=make()
+        if value is q._LINUX_DETAIL_MISSING:del tree._failure_capture_cell
+        else:tree._failure_capture_cell=value
+        with patch.object(q,'_new_linux_failure_cell',side_effect=AssertionError('lazy cell initialization')):
+            observe(tree);first=transfer(tree);observe(tree,later);q._initialize_linux_failure_detail(tree)
+        check(first==unknown and transfer(tree)==unknown and
+              getattr(tree,'_failure_capture_cell',q._LINUX_DETAIL_MISSING) is value,'invalid cell reset or admitted capture')
+        RESULTS.append(dict(name='cell-disabled-'+label,passed=True))
+    class ListSubclass(list):pass
+    tree=make();tree._failure_capture_cell=ListSubclass([(tree,q._LINUX_DETAIL_UNLATCHED)])
+    observe(tree);check(transfer(tree)==unknown,'list subclass treated as trusted cell')
+    RESULTS.append(dict(name='cell-disabled-subclass',passed=True))
+    for label in ('allocate','install','origin-install'):
+        tree=blank()
+        if label=='install':tree.write_faults={'_failure_capture_cell'}
+        if label=='origin-install':tree.write_faults={'_failure_origin'}
+        with patch.object(q,'_new_linux_failure_cell',side_effect=MemoryError('private-allocation')) if label=='allocate' else patch.object(q,'_new_linux_failure_cell',q._new_linux_failure_cell):
+            q._initialize_linux_failure_detail(tree)
+        cell=getattr(tree,'_failure_capture_cell',q._LINUX_DETAIL_MISSING);tree.write_faults=set()
+        with patch.object(q,'_new_linux_failure_cell',side_effect=AssertionError('initialization retried')):
+            observe(tree);first=transfer(tree);observe(tree,later);q._initialize_linux_failure_detail(tree)
+        check(first==unknown and transfer(tree)==unknown and getattr(tree,'_failure_capture_cell',q._LINUX_DETAIL_MISSING) is cell,'initialization fault recovered to fresh')
+        RESULTS.append(dict(name='cell-initialization-'+label,passed=True))
+    for label in ('access','consume-before','consume-after'):
+        tree=make();cell=tree._failure_capture_cell;consume=q._consume_linux_failure_cell
+        if label=='access':tree.read_faults={'_failure_capture_cell'}
+        def broken(value):
+            if label=='consume-after':consume(value)
+            raise RuntimeError('private-consumption')
+        with patch.object(q,'_consume_linux_failure_cell',broken) if label!='access' else patch.object(q,'_consume_linux_failure_cell',consume):
+            observe(tree)
+        tree.read_faults=set();first=transfer(tree)
+        with patch.object(q,'_linux_initial_parent_detail',side_effect=AssertionError('disabled builder')),patch.object(q,'_linux_identity_detail',side_effect=AssertionError('disabled builder')):
+            observe(tree,later)
+        check(first==unknown and transfer(tree)==unknown and tree._failure_capture_cell is cell and cell==[],
+              'surviving disabled state reopened capture')
+        RESULTS.append(dict(name='cell-fault-recovery-'+label,passed=True))
+    tree=make();tree.read_faults={'_failure_capture_cell'};tree.write_faults=set(metadata)|{'_failure_capture_cell'};tree.block_all_diagnostic=True
+    observe(tree);check(transfer(tree)==unknown,'persistent all-state fault invented comparison')
+    observe(tree,later);check(transfer(tree)==unknown,'persistent all-state fault replaced failure')
+    RESULTS.append(dict(name='cell-total-unavailable-only-no-durability-claim',passed=True))
+
+
+    # These use actual _end, Recorder and unchanged driver; OS ownership is modeled.
+    def owner_model(label,tree,close_fault=False,copy_fault=False,serializer_fault=False):
+        folder=root/('owner-'+label);folder.mkdir();paths=[folder/'stdout.bin',folder/'stderr.bin']
+        for p in paths:p.write_bytes(b'fixture\n')
+        owner=object.__new__(q.OwnedChild);owner.started=time.monotonic();owner.deadline=owner.started+3;owner.scan_deadline=owner.deadline
+        owner.paths=paths;owner.proc=SimpleNamespace(pid=17,poll=lambda:0,stdout=None,stderr=None);owner.tree=tree;tree.proc=owner.proc
+        tree.close_fault=close_fault;owner.result=None;owner.stable=False;owner.locked=True;owner.readers=[];owner.errors=[]
+        owner.overflow=q.threading.Event();owner.job_diagnostic=None;released=[]
+        original_copy=q._copy_linux_failure_detail;original_dumps=q.json.dumps
+        def copied(*args):
+            if copy_fault:raise ValueError('private-copy-fault')
+            return original_copy(*args)
+        def dumps(*args,**kwargs):
+            if serializer_fault:raise ValueError('private-json-fault')
+            return original_dumps(*args,**kwargs)
+        with patch.object(q,'_copy_linux_failure_detail',copied),patch.object(q.json,'dumps',dumps),patch.object(q,'_ACTIVE_OWNER',owner),patch.object(q,'_OWNER_LOCK',SimpleNamespace(release=lambda:released.append(True))):
+            result=owner._end('ambiguous descendant ancestry')
+            frozen=copy.deepcopy(result)
+            check(owner._end('replacement',True) is result and result==frozen,'owner cached failure changed')
+        check(result['classification']=='ambiguous descendant ancestry' and result['exit']==0 and
+              result['stable'] is (not close_fault) and owner.locked is close_fault and len(released)==int(not close_fault),'metadata changed lifecycle/release')
+        check('private-' not in json.dumps(result),'metadata error leaked')
+        return owner
+    payloads=[('initial-new',initial,initial_value),('initial-known',initial,cases[1][1]),('later',later,later_value),
+              ('initial-unavailable',initial,q._linux_detail_unavailable(initial)),('later-unavailable',later,q._linux_detail_unavailable()),
+              ('unknown','unknown',unknown)]
+    for label,site,payload in payloads:
+        tree=observe(make(),initial if site=='unknown' else site);tree._failure_origin=site;tree.failure_detail=payload
+        owner=owner_model(label,tree)
+        check(owner.result['failure_detail']==payload,'actual owner transfer lost fields')
+        record=q.Recorder(root/('record-'+label),identity(),['tiny'],dict(os.environ),root,stream_cap=2048)
+        def cached_owner(argv,cwd,env,stdin,stdout,stderr,timeout,cap):
+            Path(stdout).write_bytes(b'fixture\n');Path(stderr).write_bytes(b'fixture\n');return owner
+        with patch.object(q,'OwnedChild',cached_owner):
+            expect_failure('initial-recorder-'+label,lambda:record.run('tiny',['fixture'],3),'ambiguous descendant ancestry',record=False)
+        row=json.loads((record.root/'stages/tiny/result.json').read_bytes())
+        check(row['ownership']==owner.result and row['stdout']==owner.result['stdout'] and row['stderr']==owner.result['stderr'],'Recorder cached detail/streams changed')
+        ev=driver.Evidence(root/('adapter-'+label));adapter=object.__new__(driver.OwnedProcess)
+        adapter.owner=owner;adapter.proc=owner.proc;adapter.ev=ev;adapter.closed=False;adapter.record={'status':'running'};adapter.started=time.monotonic()
+        adapter.stdout_path=ev.path('stdout.bin');adapter.stderr_path=ev.path('stderr.bin')
+        for path in (adapter.stdout_path,adapter.stderr_path):path.write_bytes(b'fixture\n')
+        expect_failure('initial-driver-'+label,lambda:adapter.wait(),'ambiguous descendant ancestry',record=False)
+        before=copy.deepcopy(adapter.record);same=adapter.record
+        expect_failure('initial-driver-repeat-'+label,lambda:adapter.wait(),'ambiguous descendant ancestry',record=False)
+        check(adapter.record is same and adapter.record==before and adapter.record['ownership'] is owner.result,'adapter repeated failure changed evidence')
+        for newline in ('\n','\r\n'):
+            wrapper=(json.dumps({'ownership':{'failure_detail':payload}},sort_keys=True,indent=2)+'\n').replace('\n',newline).encode()
+            stage=(json.dumps(row,sort_keys=True,indent=2)+'\n').replace('\n',newline).encode()
+            check(len(wrapper)<=1024 and len(stage)<=16384,'actual initial wrapper/result cap')
+            (record.root/'stages/tiny/result.json').write_bytes(stage)
+            packet=q.failure_diagnostics(record.root,record.root/'failure.json',identity(),['tiny'],['tiny'],'ambiguous descendant ancestry')
+            retained=packet['files']['stages/tiny/result.json']
+            check(not retained['truncated'] and retained['retained_offset']==0 and retained['size']==len(stage) and
+                  retained['sha256']==hashlib.sha256(stage).hexdigest() and base64.b64decode(retained['data'])==stage and
+                  json.loads(base64.b64decode(retained['data']))['ownership']['failure_detail']==payload and
+                  (record.root/'failure.json').stat().st_size<=262144,'actual initial retention changed/truncated')
+        RESULTS.append(dict(name='initial-actual-caller-retention-'+label,passed=True))
+    for site in (initial,later,'unknown'):
+        for fault in ('copy','serialize','close'):
+            tree=observe(make(),initial if site=='unknown' else site)
+            if site=='unknown':tree._failure_origin='unknown'
+            owner=owner_model(site+'-'+fault,tree,close_fault=fault=='close',copy_fault=fault=='copy',serializer_fault=fault=='serialize')
+            expected=q._linux_detail_unavailable(site) if fault!='close' else transfer(tree)
+            check(owner.result['failure_detail']==expected,'error transfer fallback origin')
+            RESULTS.append(dict(name='initial-owner-fault-'+site+'-'+fault,passed=True))
+    # Tiny real Linux roots: initial stat result only, not a natural race reproduction.
+    if os.name!='nt':
+        for kind in ('recorder','driver'):
+            for fault in ('complete','copy','unknown'):
+                folder=root/('real-'+kind+'-'+fault);injected=[];owners=[];read=q._linux_stat;copier=q._copy_linux_failure_detail
+                def first_stat(pid,deadline=None):
+                    value=read(pid,deadline);owner=q._ACTIVE_OWNER
+                    if not injected and owner is not None and owner.proc is not None and pid==owner.proc.pid:
+                        injected.append(pid);owners.append(owner)
+                        return dict(value,ppid=value['ppid']+1)
+                    return value
+                real_capture=q._capture_linux_failure_detail
+                def capture(tree,*args):
+                    real_capture(tree,*args)
+                    if fault=='unknown':tree._failure_origin='unknown'
+                def copied(*args):
+                    if fault=='copy':raise ValueError('private-injected-copy')
+                    return copier(*args)
+                row=None
+                with patch.object(q,'_linux_stat',first_stat),patch.object(q,'_capture_linux_failure_detail',capture),patch.object(q,'_copy_linux_failure_detail',copied):
+                    if kind=='recorder':
+                        recorder=q.Recorder(folder,identity(),['tiny'],dict(os.environ),root,stream_cap=2048)
+                        expect_failure('initial-real-'+kind+'-'+fault,lambda:recorder.run('tiny',[sys.executable,'-c','import time;time.sleep(10)'],3),'ambiguous descendant ancestry',record=False)
+                        row=json.loads((folder/'stages/tiny/result.json').read_bytes())
+                    else:
+                        ev=driver.Evidence(folder)
+                        expect_failure('initial-real-'+kind+'-'+fault,lambda:driver.OwnedProcess(ev,[sys.executable,'-c','import time;time.sleep(10)'],root,dict(os.environ),timeout=3),'ambiguous descendant ancestry',record=False)
+                        row=ev.commands[-1]
+                owned=row['ownership'];detail=owned['failure_detail'];owner=owners[0]
+                check(len(injected)==1 and injected[0]==owned['root_pid'] and owned['classification']=='ambiguous descendant ancestry' and
+                      owned['exit'] is not None and all(owned[k] is True for k in ('cleanup_ok','owned_tree_empty','readers_done','stable')) and
+                      detail['complete'] is (fault=='complete') and detail['site']==('unknown' if fault=='unknown' else initial) and
+                      not q._OWNER_LOCK.locked() and q._ACTIVE_OWNER is None,'genuine injected initial failure/cleanup')
+                for key,path in zip(('stdout','stderr'),owner.paths):check(q.descriptor(path)==owned[key],'real initial stable stream hash')
+                frozen=copy.deepcopy(owned);expect_failure('initial-real-repeat',lambda:owner.wait(),'ambiguous descendant ancestry',record=False)
+                check(owner.result==frozen and 'private-' not in json.dumps(row),'real initial failure changed')
+                RESULTS.append(dict(name='initial-real-'+kind+'-'+fault,passed=True))
+
+        recorder=q.Recorder(root/'cell-init-neutral',identity(),['tiny'],dict(os.environ),root,stream_cap=2048)
+        with patch.object(q,'_new_linux_failure_cell',side_effect=MemoryError('private-allocation')) as allocation:
+            recorder.run('tiny',[sys.executable,'-c','print("cell init neutral")'],3)
+        row=json.loads((recorder.root/'stages/tiny/result.json').read_bytes())
+        check(allocation.call_count==1 and row['classification']=='passed' and row['ownership']['stable'] and
+              'failure_detail' not in row['ownership'] and q._ACTIVE_OWNER is None and not q._OWNER_LOCK.locked(),
+              'optional cell allocation changed successful ownership')
+        RESULTS.append(dict(name='cell-real-constructor-neutral',passed=True))
 
 
 def failure_detail_retention_controls(root):
@@ -2013,6 +2408,10 @@ def package_consumer_controls(root):
                 else:binding[field]=[] if field=='correction_changed' else '0'*40
             packet=source_packet(mutate);label=field+'-'+mode;ancestry_packets.append((label,packet))
             expect_failure('producer-rehashed-'+label,lambda packet=packet:q.validate_recordings(packet.__getitem__,ident,files=packet),'source/candidate binding mismatch')
+    def previous_anchor(binding,packet):
+        binding['parent']=guard.PRIOR_CORRECTION_PARENT;binding['parent_tree']=guard.PRIOR_CORRECTION_PARENT_TREE
+    packet=source_packet(previous_anchor);ancestry_packets.append(('prior-correction-pair',packet))
+    expect_failure('producer-rehashed-prior-correction-pair',lambda:q.validate_recordings(packet.__getitem__,ident,files=packet),'source/candidate binding mismatch')
     omitted_source=source_packet(lambda binding,packet:(binding['changed_files'].pop(source_path),packet.pop(source_leaf)))
     expect_failure('full-source-omitted-leaf-and-map-rehashed',lambda:q.validate_recordings(omitted_source.__getitem__,ident,files=omitted_source),'fixed changed source map mismatch')
     cases=[
@@ -2134,7 +2533,7 @@ def package_consumer_controls(root):
 
 def main():
     with tempfile.TemporaryDirectory(prefix='n49d-tiny-controls-') as tmp:
-        root=Path(tmp);source_controls();ancestry_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();image_model=windows_diagnostic_controls(root/'diagnostics');windows_image_controls(root/'images',image_model);failure_detail_controls(root/'failure-detail');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');root_terminal_controls(root/'root-terminal');root_terminal_native_controls(root/'root-native');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned');failure_detail_retention_controls(root/'failure-detail-retention')
+        root=Path(tmp);source_controls();ancestry_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();image_model=windows_diagnostic_controls(root/'diagnostics');windows_image_controls(root/'images',image_model);failure_detail_controls(root/'failure-detail');initial_parent_controls(root/'initial-parent');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');root_terminal_controls(root/'root-terminal');root_terminal_native_controls(root/'root-native');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned');failure_detail_retention_controls(root/'failure-detail-retention')
     print(json.dumps(dict(passed=True,python_optimized=sys.flags.optimize>0,controls=RESULTS,
         linux_reader_backend=('stat-adapter' if q._PROC_STAT_CHILD_ADAPTER else 'native-children') if os.name!='nt' else 'not_applicable',
         n49d_package_wrapper_executed=True,generic_package_fixture_seam=True,inherited_packager_executed=False,inherited_packager_reason='unchanged 1152 MiB reserve; native CI only'),sort_keys=True))
