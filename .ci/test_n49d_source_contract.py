@@ -213,7 +213,9 @@ def ancestry_controls():
     replies={('rev-parse','HEAD'):head,('rev-parse','HEAD^{tree}'):tree,
              ('rev-parse',guard.BASE+'^{tree}'):guard.BASE_TREE,
              ('rev-parse',guard.CORRECTION_PARENT+'^{tree}'):guard.CORRECTION_PARENT_TREE,
-             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.EVIDENCE_PARENT,
+             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.MARKER_PARENT,
+             ('rev-parse',guard.MARKER_PARENT+'^{tree}'):guard.MARKER_PARENT_TREE,
+             ('show','-s','--format=%P',guard.MARKER_PARENT):guard.EVIDENCE_PARENT,
              ('rev-parse',guard.EVIDENCE_PARENT+'^{tree}'):guard.EVIDENCE_PARENT_TREE,
              ('show','-s','--format=%P',guard.EVIDENCE_PARENT):guard.FIXTURE_PARENT,
              ('rev-parse',guard.FIXTURE_PARENT+'^{tree}'):guard.FIXTURE_PARENT_TREE,
@@ -243,10 +245,11 @@ def ancestry_controls():
             if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
             return (values[args]+'\n').encode()
         with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
-        check(len(calls)==(25 if precommit else 26),'unexpected ancestry query count')
+        check(len(calls)==(27 if precommit else 28),'unexpected ancestry query count')
         return result
     def fixed_pins():
         actual=[(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),
+                (guard.MARKER_PARENT,guard.MARKER_PARENT_TREE),
                 (guard.EVIDENCE_PARENT,guard.EVIDENCE_PARENT_TREE),
                 (guard.FIXTURE_PARENT,guard.FIXTURE_PARENT_TREE),
                 (guard.PHASE_PARENT,guard.PHASE_PARENT_TREE),
@@ -257,7 +260,8 @@ def ancestry_controls():
                 (guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),
                 (guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),
                 (guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),(guard.BASE,guard.BASE_TREE)]
-        expected=[('ce0766d32ddab2d47beb5dfc75c32c38e4ce43ea','e8e82d07e41585e34c0493b63baa8e8fe838d251'),
+        expected=[('1a28a144c977c40eee92866d2387a2d98adf3cfa','dc9ee5c2a6752d03e442bd11b4fac618417d1488'),
+                  ('ce0766d32ddab2d47beb5dfc75c32c38e4ce43ea','e8e82d07e41585e34c0493b63baa8e8fe838d251'),
                   ('610bf498d4b2b5cd45921d5f53d71bfacb5b3f4d','181ef0d4e867b669c8a9429f7f9f56ad5a6fdc72'),
                   ('7d6aa8dbb62b7d44af9629b5bdbd7ffcd54d6185','d8c451ae5421abcf709f5f709c243f3f97934a05'),
                   ('652849684fbb0758b861812dd13e68a0df819578','417b0f186646d6dd7906ed75a5d331cb64937333'),
@@ -269,11 +273,11 @@ def ancestry_controls():
                   ('ff61dde8150f30eec699a4e5c01554175ff37f98','d8895a9792cab41cc15d71f7c248fef794829787'),
                   ('0c99f74436682500caeaf0bf68a7bc42310d6a50','d91c1f258a704eed9fe899c1193df8d080ff2f56'),
                   ('cfe1ef58e244b51092c2248804b663b6c28913d7','75b69ad389630e51528ddb5536a27255203470df')]
-        check(actual==expected and len({commit for commit,_ in actual})==12,'fixed thirteen-commit lineage pins')
-    control('ancestry-fixed-thirteen-commit-pins',fixed_pins)
+        check(actual==expected and len({commit for commit,_ in actual})==13,'fixed fourteen-commit lineage pins')
+    control('ancestry-fixed-fourteen-commit-pins',fixed_pins)
     control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
     pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
-    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.EVIDENCE_PARENT,guard.EVIDENCE_PARENT_TREE),'precommit actual parent fields'))
+    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.MARKER_PARENT,guard.MARKER_PARENT_TREE),'precommit actual parent fields'))
     def no_lazy_fetch():
         with patch.object(guard.subprocess,'check_output',return_value=b'fixture') as execute:
             check(guard.git(Path('.'),'rev-parse','HEAD')==b'fixture','git helper return')
@@ -360,6 +364,27 @@ def ancestry_controls():
             evidence_row['trace'].append(label+'=reject')
         else:raise ValueError('missing retained evidence metadata passed')
     evidence_row['passed']=True
+    marker_row=dict(name='ancestry-retained-marker-edge',passed=False,trace=[]);RESULTS.append(marker_row)
+    for label,key,value,boundary in [
+        ('tree',('rev-parse',guard.MARKER_PARENT+'^{tree}'),'3'*40,'marker parent tree'),
+        ('parent',('show','-s','--format=%P',guard.MARKER_PARENT),'3'*40,'marker parent ancestry'),
+        ('multi',('show','-s','--format=%P',guard.MARKER_PARENT),guard.BASE+' '+'3'*40,'marker parent ancestry'),
+        ('empty',('show','-s','--format=%P',guard.MARKER_PARENT),'','marker parent ancestry')]:
+        expect_failure('retained-'+label,lambda key=key,value=value:run({key:value}),boundary,record=False)
+        marker_row['trace'].append(label+'=reject')
+    tip={('rev-parse','HEAD'):guard.MARKER_PARENT,('rev-parse','HEAD^{tree}'):guard.MARKER_PARENT_TREE}
+    for label,call,boundary in [
+        ('candidate',lambda:run(tip,commit=guard.MARKER_PARENT,expected_tree=guard.MARKER_PARENT_TREE),'candidate pin mismatch'),
+        ('precommit',lambda:run(tip,True),'precommit requires exact correction parent/tree')]:
+        expect_failure('retained-'+label,call,boundary,record=False);marker_row['trace'].append(label+'=reject')
+    for label,key in [('missing-tree',('rev-parse',guard.MARKER_PARENT+'^{tree}')),
+                      ('missing-parent',('show','-s','--format=%P',guard.MARKER_PARENT))]:
+        try:run({key:None})
+        except subprocess.CalledProcessError as error:
+            check(error.returncode==128 and error.cmd==['git',*key],'retained marker missing object boundary')
+            marker_row['trace'].append(label+'=reject')
+        else:raise ValueError('missing retained marker metadata passed')
+    marker_row['passed']=True
     parent={p:('100644',guard.blob(('parent '+p).encode())) for p in guard.ALLOW};candidate=dict(parent)
     for path in guard.CORRECTION_PATHS:candidate[path]=('100644',guard.blob(('correction '+path).encode()))
     control('correction-exact-three-paths',lambda:check(guard.validate_correction(parent,candidate)==sorted(guard.CORRECTION_PATHS),'correction inventory'))
@@ -377,26 +402,33 @@ def ancestry_controls():
         expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
     workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
     def workflow_contract(raw,windows=False):
-        canonical=guard.checkout_bytes(raw,'1c1b590dffbdcdb1fc06896788872a828b3b0291',windows)
-        check(canonical.count(b'          fetch-depth: 13\n')==1 and
-              guard.sha(canonical.replace(b'          fetch-depth: 13\n',b'          fetch-depth: 12\n'))=='9e8f255ee3534cd468b770eaaacf07dae17f804019dca1dc8babb57bd2ef948a','exact depth-thirteen workflow contract')
+        canonical=guard.checkout_bytes(raw,'103ea3d99c6f1977564008474e91e22c1c289f03',windows)
+        check(canonical.count(b'          fetch-depth: 14\n')==1 and
+              guard.sha(canonical.replace(b'          fetch-depth: 14\n',b'          fetch-depth: 13\n'))=='9f1d0514132a60435af03e84e904402f90c7ce732311720e50f38f9960013e3a','exact depth-fourteen workflow contract')
         return canonical
-    control('workflow-only-depth-thirteen-change',lambda:workflow_contract(workflow,os.name=='nt'))
+    control('workflow-only-depth-fourteen-change',lambda:workflow_contract(workflow,os.name=='nt'))
     canonical=workflow_contract(workflow,os.name=='nt')
+    def retained_depth_thirteen_contract():
+        previous=canonical.replace(b'          fetch-depth: 14\n',b'          fetch-depth: 13\n')
+        check(guard.blob(previous)=='1c1b590dffbdcdb1fc06896788872a828b3b0291' and
+              previous.count(b'          fetch-depth: 13\n')==1 and
+              guard.sha(previous.replace(b'          fetch-depth: 13\n',b'          fetch-depth: 12\n'))=='9e8f255ee3534cd468b770eaaacf07dae17f804019dca1dc8babb57bd2ef948a','exact retained depth-thirteen workflow contract')
+    control('workflow-only-depth-thirteen-change',retained_depth_thirteen_contract)
     def retained_depth_twelve_contract():
-        previous=canonical.replace(b'          fetch-depth: 13\n',b'          fetch-depth: 12\n')
+        previous=canonical.replace(b'          fetch-depth: 14\n',b'          fetch-depth: 12\n')
         check(guard.blob(previous)=='f1aa24556a0c2cb9b9b2a176cbdd09ac947224a1' and
               previous.count(b'          fetch-depth: 12\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 12\n',b'          fetch-depth: 11\n'))=='401d38d79f89fedf309305af54f778bb000cef09f255215b4db34d268cd1497d','exact retained depth-twelve workflow contract')
     control('workflow-only-depth-twelve-change',retained_depth_twelve_contract)
     def retained_depth_eleven_contract():
-        previous=canonical.replace(b'          fetch-depth: 13\n',b'          fetch-depth: 11\n')
+        previous=canonical.replace(b'          fetch-depth: 14\n',b'          fetch-depth: 11\n')
         check(guard.blob(previous)=='5d5ad4346f87a24531a2f327b116d18e9d39c557' and
               previous.count(b'          fetch-depth: 11\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 11\n',b'          fetch-depth: 10\n'))=='9cf5265dd2f90c275bff5ce2e4d8249bdd031ab342ba92ab74ad95eeef2e92f2','exact retained depth-eleven workflow contract')
     control('workflow-only-depth-eleven-change',retained_depth_eleven_contract)
-    for label,old,new in [('old-depth',b'fetch-depth: 13',b'fetch-depth: 10'),('previous-depth',b'fetch-depth: 13',b'fetch-depth: 12'),('broad-depth',b'fetch-depth: 13',b'fetch-depth: 0'),
-                          ('malformed-depth',b'fetch-depth: 13',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+    for label,old,new in [('old-depth',b'fetch-depth: 14',b'fetch-depth: 10'),('previous-depth',b'fetch-depth: 14',b'fetch-depth: 12'),('broad-depth',b'fetch-depth: 14',b'fetch-depth: 0'),
+                          ('retained-depth',b'fetch-depth: 14',b'fetch-depth: 13'),
+                          ('malformed-depth',b'fetch-depth: 14',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
                           ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
         changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
         expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
@@ -3166,9 +3198,15 @@ def _wrapper_parse_markers(raw):
     return _wrapper_marker_events(accepted,status)
 
 
-def _wrapper_file_identity(value):
-    return (value.st_dev,value.st_ino,value.st_mode,value.st_size,value.st_mtime_ns,value.st_ctime_ns,
+def _wrapper_file_identity(value,cross_source=False):
+    fields=(value.st_dev,value.st_ino,value.st_mode,value.st_size,value.st_mtime_ns,value.st_ctime_ns,
             getattr(value,'st_file_attributes',0))
+    if not WRAPPER_FILE_WINDOWS:return fields
+    birth=getattr(value,'st_birthtime_ns',None)
+    check(type(birth) is int,'wrapper file birthtime unavailable')
+    # CPython 3.12 path ctime is creation time; descriptor ctime is change time.
+    # Use creation time across sources, retaining raw ctime within each source.
+    return fields[:5]+(birth,)+fields[6:] if cross_source else fields+(birth,)
 
 
 def _wrapper_regular(value):
@@ -3188,12 +3226,12 @@ def _wrapper_marker_file(root,descriptor):
         fd=os.open(path,flags)
         try:
             opened=os.fstat(fd)
-            if not _wrapper_regular(opened) or _wrapper_file_identity(opened)!=_wrapper_file_identity(before):
+            if not _wrapper_regular(opened) or _wrapper_file_identity(opened,True)!=_wrapper_file_identity(before,True):
                 return _wrapper_markers('stream-mismatch')
             with os.fdopen(fd,'rb',buffering=0,closefd=False) as stream:raw=stream.read(65537)
             after=os.fstat(fd);path_after=path.lstat()
             if (len(raw)>65536 or len(raw)!=descriptor['size'] or hashlib.sha256(raw).hexdigest()!=descriptor['sha256'] or
-                _wrapper_file_identity(after)!=_wrapper_file_identity(before) or
+                _wrapper_file_identity(after)!=_wrapper_file_identity(opened if WRAPPER_FILE_WINDOWS else before) or
                 _wrapper_file_identity(path_after)!=_wrapper_file_identity(before) or not _wrapper_regular(path_after)):
                 return _wrapper_markers('stream-mismatch')
         finally:os.close(fd)
@@ -3320,25 +3358,37 @@ def wrapper_instrumentation_controls():
 
 
 WRAPPER_FILE_FIELDS=('st_dev','st_ino','st_mode','st_size','st_mtime_ns','st_ctime_ns','st_file_attributes')
+WRAPPER_FILE_FIELDS_V2=WRAPPER_FILE_FIELDS+('st_birthtime_ns',)
 WRAPPER_FILE_SAMPLES=('before','opened','after','path_after')
+WRAPPER_FILE_WINDOWS=os.name=='nt'
+WRAPPER_FILE_BASES=('posix-ctime','windows-birthtime+ctime')
 
 
-def _wrapper_file_boundary_fallback():
+def _wrapper_file_boundary_fallback_v1():
     return dict(schema='qbrain-n49d-wrapper-file-boundary-v1',status='unavailable',
         samples=[dict(fields='UUUUUUU',regular=[None,None,None]) for _ in WRAPPER_FILE_SAMPLES],equal=['???????']*3)
+
+
+def _wrapper_file_boundary_fallback(basis=None):
+    return dict(schema='qbrain-n49d-wrapper-file-boundary-v2',status='unavailable',
+        basis=WRAPPER_FILE_BASES[int(WRAPPER_FILE_WINDOWS)] if basis is None else basis,
+        samples=[dict(fields='UUUUUUUU',regular=[None,None,None]) for _ in WRAPPER_FILE_SAMPLES],equal=['????????']*3)
 
 
 def _wrapper_file_boundary_facts(samples):
     """Cached stat values only. Field states V=exact int, A=absent, M=malformed,
     U=unavailable. Regular bits: regular file, symbolic link, reparse flag.
-    Equal masks compare before with opened/after/path_after in field order;
-    1=equal, 0=unequal, ?=unknown. Absent file attributes use runtime default 0.
+    V2 adds birthtime at index 7 without relabeling raw ctime at index 5.
+    Windows pairs are opened/before, after/opened, path_after/before; the first
+    pair uses birthtime, and later pairs use raw ctime AND birthtime.
+    POSIX pairs are opened/before, after/before, path_after/before; birthtime
+    is observational only. 1=equal, 0=unequal, ?=unknown; absent attrs use 0.
     Captured means construction succeeded; A/M/U/?/null can still be present.
     """
     detail=_wrapper_file_boundary_fallback();detail['status']='captured';vectors=[]
     for index,name in enumerate(WRAPPER_FILE_SAMPLES):
         source=samples.get(name);states=[];values=[]
-        for field in WRAPPER_FILE_FIELDS:
+        for field in WRAPPER_FILE_FIELDS_V2:
             state='U';value=None
             if source is not None:
                 try:
@@ -3353,12 +3403,13 @@ def _wrapper_file_boundary_facts(samples):
             None if mode is None else stat.S_ISREG(mode),None if mode is None else stat.S_ISLNK(mode),
             None if attributes is None else bool(attributes&getattr(stat,'FILE_ATTRIBUTE_REPARSE_POINT',1024))])
         vectors.append(values)
+    pairs=((1,0),(2,1 if WRAPPER_FILE_WINDOWS else 0),(3,0))
     detail['equal']=[''.join('?' if a is None or b is None else '1' if a==b else '0'
-        for a,b in zip(vectors[0],values)) for values in vectors[1:]]
+        for a,b in zip(vectors[left],vectors[right])) for left,right in pairs]
     return detail
 
 
-def _validate_wrapper_file_boundary(detail):
+def _validate_wrapper_file_boundary_v1(detail):
     check(type(detail) is dict and set(detail)=={'schema','status','samples','equal'} and
         type(detail['schema']) is str and detail['schema']=='qbrain-n49d-wrapper-file-boundary-v1' and
         type(detail['status']) is str and detail['status'] in ('captured','unavailable'),'file boundary schema')
@@ -3371,7 +3422,28 @@ def _validate_wrapper_file_boundary(detail):
             'file boundary sample facts')
     check(all(type(mask) is str and q.re.fullmatch('[01?]{7}',mask) is not None for mask in detail['equal']),
           'file boundary equality masks')
-    if detail['status']=='unavailable':check(failure_equal(detail,_wrapper_file_boundary_fallback()),'file boundary unavailable facts')
+    if detail['status']=='unavailable':check(failure_equal(detail,_wrapper_file_boundary_fallback_v1()),'file boundary unavailable facts')
+
+
+def _validate_wrapper_file_boundary(detail):
+    check(type(detail) is dict and type(detail.get('schema')) is str,'file boundary schema')
+    if detail['schema']=='qbrain-n49d-wrapper-file-boundary-v1':
+        return _validate_wrapper_file_boundary_v1(detail)
+    check(set(detail)=={'schema','status','basis','samples','equal'} and
+        detail['schema']=='qbrain-n49d-wrapper-file-boundary-v2' and
+        type(detail['basis']) is str and detail['basis'] in WRAPPER_FILE_BASES and
+        type(detail['status']) is str and detail['status'] in ('captured','unavailable'),'file boundary schema')
+    check(type(detail['samples']) is list and len(detail['samples'])==4 and
+        type(detail['equal']) is list and len(detail['equal'])==3,'file boundary dimensions')
+    for sample in detail['samples']:
+        check(type(sample) is dict and set(sample)=={'fields','regular'} and type(sample['fields']) is str and
+            q.re.fullmatch('[VAMU]{8}',sample['fields']) is not None and type(sample['regular']) is list and
+            len(sample['regular'])==3 and all(value is None or type(value) is bool for value in sample['regular']),
+            'file boundary sample facts')
+    check(all(type(mask) is str and q.re.fullmatch('[01?]{8}',mask) is not None for mask in detail['equal']),
+          'file boundary equality masks')
+    if detail['status']=='unavailable':
+        check(failure_equal(detail,_wrapper_file_boundary_fallback(detail['basis'])),'file boundary unavailable facts')
 
 
 def _capture_wrapper_file_boundary(row,samples,checks=''):
@@ -3389,8 +3461,129 @@ def _capture_wrapper_file_boundary(row,samples,checks=''):
 
 def _wrapper_file_boundary_maximum():
     from types import SimpleNamespace
-    value=SimpleNamespace(**{field:0 for field in WRAPPER_FILE_FIELDS})
-    return _wrapper_file_boundary_facts({name:value for name in WRAPPER_FILE_SAMPLES})
+    value=SimpleNamespace(**{field:0 for field in WRAPPER_FILE_FIELDS_V2})
+    with patch(__name__+'.WRAPPER_FILE_WINDOWS',True):
+        return _wrapper_file_boundary_facts({name:value for name in WRAPPER_FILE_SAMPLES})
+
+
+def wrapper_stat_compat_controls():
+    """Memory-only actual-reader models. W=stable Windows path/fd ctime split,
+    F/P=isolated fd/path ctime drift; BOAP identify the four stat samples;
+    0,1,2,3,4,6 are unchanged identity fields; b/m/t/f/s/n/i mean changed,
+    missing, bool, float, string, None or int-subclass birthtime. p is POSIX
+    with no birthtime; pBOAP mutate each POSIX ctime. Every trace token means
+    all expected result, read bound, I/O order and close checks passed.
+    """
+    from contextlib import ExitStack
+    from types import SimpleNamespace
+    row=dict(name='wrapper-stat-compat',passed=False,trace=[]);RESULTS.append(row)
+    line=b'N49D_WRAPPER_V1:00:B\n';root=Path('/fixture');leaf=root/'stderr.bin'
+    descriptor=dict(size=len(line),sha256=hashlib.sha256(line).hexdigest())
+    fields=dict(zip(WRAPPER_FILE_FIELDS_V2,(1,2,stat.S_IFREG|0o600,len(line),3,100,0,300)))
+    class Integer(int):pass
+    def blocked(*args,**kwargs):raise AssertionError('stat model performed native operation')
+    def run(label,windows=True,slot=None,field=None,value=None,missing=False):
+        samples=[SimpleNamespace(**fields) for _ in WRAPPER_FILE_SAMPLES]
+        if windows:
+            for index in (1,2):samples[index].st_ctime_ns=200
+        else:
+            for sample in samples:del sample.st_birthtime_ns
+        if slot is not None:
+            if missing:delattr(samples[slot],field)
+            else:setattr(samples[slot],field,value)
+        calls=[];reads=[];lstats=iter((samples[0],samples[3]));fstats=iter((samples[1],samples[2]))
+        def lstat(path):
+            check(path==leaf,'stat model path');calls.append('L');return next(lstats)
+        def opened(path,flags):
+            check(path==leaf and flags&getattr(os,'O_NOFOLLOW',0)==getattr(os,'O_NOFOLLOW',0) and
+                flags&getattr(os,'O_NONBLOCK',0)==getattr(os,'O_NONBLOCK',0),'stat model open flags')
+            calls.append('O');return 17
+        def fstat(fd):check(fd==17,'stat model descriptor');calls.append('F');return next(fstats)
+        class Reader:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def read(self,size):calls.append('R');reads.append(size);return line
+        def fdopen(fd,*args,**kwargs):
+            check(fd==17 and args==('rb',) and kwargs==dict(buffering=0,closefd=False),'stat model fdopen')
+            return Reader()
+        def close(fd):check(fd==17,'stat model close');calls.append('C')
+        with ExitStack() as stack:
+            stack.enter_context(patch(__name__+'.WRAPPER_FILE_WINDOWS',windows))
+            for module,names in [(Path,('stat','open','read_bytes','write_bytes')),
+                (os,('kill','waitpid','waitid','pidfd_open')),
+                (q.subprocess,('Popen','run','check_output','call'))]:
+                for name in names:
+                    if hasattr(module,name):stack.enter_context(patch.object(module,name,side_effect=blocked))
+            for module,name,fn in [(Path,'lstat',lstat),(os,'open',opened),(os,'fstat',fstat),
+                                  (os,'fdopen',fdopen),(os,'close',close)]:
+                stack.enter_context(patch.object(module,name,fn))
+            actual=_wrapper_marker_file(root,descriptor)
+            if label=='W':
+                facts=_wrapper_file_boundary_facts(dict(zip(WRAPPER_FILE_SAMPLES,samples)))
+                _validate_wrapper_file_boundary(facts)
+                check(facts['basis']==WRAPPER_FILE_BASES[1] and
+                    facts['equal']==['11111011','11111111','11111111'],'Windows raw diagnostic pair semantics')
+            if label=='p':
+                check(_wrapper_file_identity(samples[0])==tuple(fields[k] for k in WRAPPER_FILE_FIELDS),
+                      'POSIX seven-field identity changed')
+        malformed=windows and field=='st_birthtime_ns' and (missing or type(value) is not int)
+        expected='valid-prefix' if slot is None else 'stream-unavailable' if malformed else 'stream-mismatch'
+        early=slot in (0,1);trace='LOFC' if early else 'LOFRFLC'
+        check(actual['status']==expected and ''.join(calls)==trace and reads==([] if early else [65537]) and
+            calls.count('C')==1 and actual['events']==(['00:B'] if slot is None else []),
+            'stat compatibility model: '+label)
+        row['trace'].append(label)
+    run('W')
+    run('F',slot=2,field='st_ctime_ns',value=201)
+    run('P',slot=3,field='st_ctime_ns',value=101)
+    for slot,code in enumerate('BOAP'):
+        for index in (0,1,2,3,4,6):
+            field=WRAPPER_FILE_FIELDS[index]
+            run(code+str(index),slot=slot,field=field,value=fields[field]+1)
+        for code2,value,missing in [('b',301,False),('m',None,True),('t',True,False),('f',300.0,False),
+                                   ('s','private',False),('n',None,False),('i',Integer(300),False)]:
+            run(code+code2,slot=slot,field='st_birthtime_ns',value=value,missing=missing)
+    run('p',False)
+    for slot,code in enumerate('BOAP'):run('p'+code,False,slot,'st_ctime_ns',101)
+    row['passed']=True
+
+
+def wrapper_file_version_controls():
+    """Legacy v1 facts remain seven raw fields/all pairs based on before.
+    m/u=maximum/unavailable and L/C=LF/CRLF; k/r/d/e/b reject extra key,
+    relabel, missing basis, wrong dimension or wrong basis. Tokens include
+    the originating schema version; each recorded token retains a whole case.
+    """
+    row=dict(name='wrapper-file-versions',passed=False,trace=[]);RESULTS.append(row)
+    maximum=_wrapper_file_boundary_fallback_v1();maximum['status']='captured'
+    maximum['samples']=[dict(fields='VVVVVVV',regular=[False]*3) for _ in WRAPPER_FILE_SAMPLES]
+    maximum['equal']=['1111111']*3
+    for label,detail in [('m',maximum),('u',_wrapper_file_boundary_fallback_v1())]:
+        _validate_wrapper_file_boundary_v1(detail);_validate_wrapper_file_boundary(detail)
+        for suffix,ending in [('L','\n'),('C','\r\n')]:
+            value=dict(passed=False,error='legacy boundary',controls=[
+                dict(name='wrapper-bounded-file',passed=False,boundary=copy.deepcopy(detail),checks='boOBABPBp')])
+            saved=copy.deepcopy(value);raw=(render_selftest_failure(value)+ending).encode()
+            check(failure_equal(expand_failure_v2(raw),saved) and failure_equal(value,saved),
+                  'legacy current renderer/inverse changed typed facts')
+            row['trace'].append('1'+label+suffix)
+    v2=_wrapper_file_boundary_maximum()
+    cases=[('1k',dict(maximum,basis=WRAPPER_FILE_BASES[1])),
+           ('1r',dict(maximum,schema=v2['schema'])),
+           ('2r',dict(v2,schema=maximum['schema'])),
+           ('2d',{k:v for k,v in v2.items() if k!='basis'}),
+           ('2b',dict(v2,basis='ctime-fallback'))]
+    for label,base,width in [('1e',maximum,8),('2e',v2,7)]:
+        changed=copy.deepcopy(base);changed['samples'][0]['fields']='V'*width;cases.append((label,changed))
+    for label,detail in cases:
+        expect_failure('boundary-version-'+label,lambda detail=detail:_validate_wrapper_file_boundary(detail),record=False)
+        value=dict(passed=False,error='version primary',controls=[
+            dict(name='boundary',passed=False,boundary=detail)])
+        out=json.loads(render_selftest_failure(value))
+        check(out['schema']==FAILURE_UNAVAILABLE and out['error']=='version primary' and out['controls_available'] is False,
+              'renderer accepted cross-version boundary')
+        row['trace'].append(label)
+    row['passed']=True
 
 
 def wrapper_file_boundary_controls():
@@ -3398,27 +3591,28 @@ def wrapper_file_boundary_controls():
     from contextlib import ExitStack
     from types import SimpleNamespace
     row=dict(name='wrapper-file-facts',passed=False,trace=[]);RESULTS.append(row)
-    values=dict(zip(WRAPPER_FILE_FIELDS,(1,2,stat.S_IFREG|0o600,21,3,4,0)))
+    values=dict(zip(WRAPPER_FILE_FIELDS_V2,(1,2,stat.S_IFREG|0o600,21,3,4,0,5)))
     base=SimpleNamespace(**values);samples={name:base for name in WRAPPER_FILE_SAMPLES}
     def add(label):row['trace'].append(label+'=ok')
     def blocked(*args,**kwargs):raise AssertionError('file diagnostic performed I/O or process operation')
     with ExitStack() as stack:
+        stack.enter_context(patch(__name__+'.WRAPPER_FILE_WINDOWS',False))
         for module,names in [(Path,('lstat','stat','open','read_bytes','write_bytes')),
             (os,('open','fstat','fdopen','close','kill','waitpid','waitid','pidfd_open')),
             (q.subprocess,('Popen','run','check_output','call'))]:
             for name in names:
                 if hasattr(module,name):stack.enter_context(patch.object(module,name,side_effect=blocked))
         actual=_wrapper_file_boundary_facts(samples)
-        check(actual['equal']==['1111111']*3 and all(item['fields']=='VVVVVVV' and
+        check(actual['equal']==['11111111']*3 and all(item['fields']=='VVVVVVVV' and
             item['regular']==[True,False,False] for item in actual['samples']),'file diagnostic valid sample')
         add('equal')
         for slot,name in enumerate(WRAPPER_FILE_SAMPLES[1:]):
-            for index,field in enumerate(WRAPPER_FILE_FIELDS):
+            for index,field in enumerate(WRAPPER_FILE_FIELDS_V2):
                 changed=SimpleNamespace(**(values|{field:values[field]+1}));packet=dict(samples);packet[name]=changed
-                facts=_wrapper_file_boundary_facts(packet);expected=['1111111']*3
-                expected[slot]='1'*index+'0'+'1'*(6-index)
+                facts=_wrapper_file_boundary_facts(packet);expected=['11111111']*3
+                expected[slot]='1'*index+'0'+'1'*(7-index)
                 check(facts['equal']==expected,'file diagnostic identity field comparison')
-                if slot==0:
+                if slot==0 and field!='st_birthtime_ns':
                     with patch.object(Path,'lstat',return_value=base),patch.object(os,'open',return_value=17),\
                          patch.object(os,'fstat',return_value=changed),patch.object(os,'close') as closed:
                         result=_wrapper_marker_file(Path('/fixture'),dict(size=21,sha256='0'*64))
@@ -3438,16 +3632,16 @@ def wrapper_file_boundary_controls():
         for label,changes,state in [('missing',{},'A'),('bool',{'st_ino':True},'M'),('text',{'st_ino':'private'},'M')]:
             changed=dict(values);changed.pop('st_ino');changed.update(changes)
             facts=_wrapper_file_boundary_facts(dict(samples,opened=SimpleNamespace(**changed)))
-            check(facts['samples'][1]['fields']=='V'+state+'VVVVV' and facts['equal'][0]=='1?11111',
+            check(facts['samples'][1]['fields']=='V'+state+'VVVVVV' and facts['equal'][0]=='1?111111',
                   'file absent/malformed field distinction');add(label)
         changed=dict(values);changed.pop('st_file_attributes')
         facts=_wrapper_file_boundary_facts(dict(samples,opened=SimpleNamespace(**changed)))
-        check(facts['samples'][1]['fields']=='VVVVVVA' and facts['equal'][0]=='1111111' and
+        check(facts['samples'][1]['fields']=='VVVVVVAV' and facts['equal'][0]=='11111111' and
               facts['samples'][1]['regular']==[True,False,False],'file absent attributes default');add('attrs')
         class Unavailable:
             def __getattr__(self,name):raise RuntimeError('private-metadata')
         facts=_wrapper_file_boundary_facts(dict(samples,opened=Unavailable()))
-        check(facts['samples'][1]==dict(fields='UUUUUUU',regular=[None]*3) and facts['equal'][0]=='???????',
+        check(facts['samples'][1]==dict(fields='UUUUUUUU',regular=[None]*3) and facts['equal'][0]=='????????',
               'file unavailable metadata distinction');add('unavailable')
         empty=_wrapper_file_boundary_facts({})
         check(empty==dict(_wrapper_file_boundary_fallback(),status='captured'),'file unreached samples');add('unreached')
@@ -3525,14 +3719,14 @@ def wrapper_retention_controls(root,final_controls):
     fixtures=_wrapper_retention_fixtures()
     cases=[(label,detail,None) for label,detail in fixtures.items()]
     cases += [('file-maximum',fixtures['wrapper-maximum'],_wrapper_file_boundary_maximum()),
-              ('file-unavailable',fixtures['wrapper-maximum'],_wrapper_file_boundary_fallback())]
+              ('file-unavailable',fixtures['wrapper-maximum'],_wrapper_file_boundary_fallback(WRAPPER_FILE_BASES[1]))]
     for label,detail,boundary in cases:
         for newline,ending in [('LF','\n'),('CRLF','\r\n')]:
             failure=dict(passed=False,error='timeout',controls=copy.deepcopy(final_controls),failure_detail=copy.deepcopy(detail))
             if boundary is not None:
                 matches=[row for row in failure['controls'] if row['name']=='wrapper-bounded-file']
                 check(len(matches)==1,'file boundary retention row inventory')
-                matches[0].update(boundary=copy.deepcopy(boundary),checks='boOBABPBp',passed=False)
+                matches[0].update(boundary=copy.deepcopy(boundary),checks='boOBAOPBp',passed=False)
                 failure['error']='wrapper file boundary: reparse-before'
             before=copy.deepcopy(failure);raw=(render_selftest_failure(failure)+ending).encode()
             check(failure_equal(expand_failure_v2(raw),before) and failure_equal(failure,before),'wrapper failure renderer facts')
@@ -3923,6 +4117,7 @@ def wrapper_evidence_controls(root):
             else:raise ValueError('wrapper parser input cap/type accepted')
         finish(row)
 
+        wrapper_stat_compat_controls();wrapper_file_version_controls()
         file_facts=wrapper_file_boundary_controls()
         row=group('bounded-file')
         original_sha256=hashlib.sha256;original_identity=_wrapper_file_identity;original_regular=_wrapper_regular
@@ -3935,8 +4130,10 @@ def wrapper_evidence_controls(root):
             def __init__(self,value,change=None):
                 for name in ('st_dev','st_ino','st_mode','st_size','st_mtime_ns','st_ctime_ns','st_file_attributes'):
                     setattr(self,name,getattr(value,name,0))
+                if hasattr(value,'st_birthtime_ns'):self.st_birthtime_ns=value.st_birthtime_ns
                 if change is not None:setattr(self,change[0],change[1])
         def file_case(label,descriptor,status,trace,digests,gates,read_length,fault=None):
+            if WRAPPER_FILE_WINDOWS:gates=gates.replace('AB','AO')
             calls=[];counts={'lstat':0,'fstat':0};reads=[];hits=[];hashes=[];samples={};checks=[];read_lengths=[]
             def inject():hits.append(fault)
             def remember(name,value):samples[name]=value;return value
@@ -3944,7 +4141,7 @@ def wrapper_evidence_controls(root):
                 hashes.append(True);return original_sha256(*args,**kwargs)
             def tag(value):
                 return next((code for name,code in zip(WRAPPER_FILE_SAMPLES,'BOAP') if samples.get(name) is value),'?')
-            def identity(value):checks.append(tag(value));return original_identity(value)
+            def identity(value,*args):checks.append(tag(value));return original_identity(value,*args)
             def regular(value):checks.append(tag(value).lower());return original_regular(value)
             def lstat(path,*args,**kwargs):
                 check(path==leaf,'wrapper accessed arbitrary stream path');calls.append('L');counts['lstat']+=1
@@ -4362,6 +4559,7 @@ def validate_failure_facts(value):
         check(type(row) is dict and {'name','passed'}<=set(row),'failure control row')
         check(type(row['name']) is str and bool(row['name']) and type(row['passed']) is bool,'failure control fields')
         check(row['name'] not in names,'duplicate failure control');names.add(row['name'])
+        if 'boundary' in row:_validate_wrapper_file_boundary(row['boundary'])
 
 
 def pack_failure_rows(rows):
