@@ -213,7 +213,9 @@ def ancestry_controls():
     replies={('rev-parse','HEAD'):head,('rev-parse','HEAD^{tree}'):tree,
              ('rev-parse',guard.BASE+'^{tree}'):guard.BASE_TREE,
              ('rev-parse',guard.CORRECTION_PARENT+'^{tree}'):guard.CORRECTION_PARENT_TREE,
-             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.STAT_PARENT,
+             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.ARGUMENT_PARENT,
+             ('rev-parse',guard.ARGUMENT_PARENT+'^{tree}'):guard.ARGUMENT_PARENT_TREE,
+             ('show','-s','--format=%P',guard.ARGUMENT_PARENT):guard.STAT_PARENT,
              ('rev-parse',guard.STAT_PARENT+'^{tree}'):guard.STAT_PARENT_TREE,
              ('show','-s','--format=%P',guard.STAT_PARENT):guard.MARKER_PARENT,
              ('rev-parse',guard.MARKER_PARENT+'^{tree}'):guard.MARKER_PARENT_TREE,
@@ -247,10 +249,11 @@ def ancestry_controls():
             if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
             return (values[args]+'\n').encode()
         with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
-        check(len(calls)==(29 if precommit else 30),'unexpected ancestry query count')
+        check(len(calls)==(31 if precommit else 32),'unexpected ancestry query count')
         return result
     def fixed_pins():
         actual=[(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),
+                (guard.ARGUMENT_PARENT,guard.ARGUMENT_PARENT_TREE),
                 (guard.STAT_PARENT,guard.STAT_PARENT_TREE),
                 (guard.MARKER_PARENT,guard.MARKER_PARENT_TREE),
                 (guard.EVIDENCE_PARENT,guard.EVIDENCE_PARENT_TREE),
@@ -263,7 +266,8 @@ def ancestry_controls():
                 (guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),
                 (guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),
                 (guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),(guard.BASE,guard.BASE_TREE)]
-        expected=[('4a433a903975123585b501cc2a6d3a0a58af9a00','788470dc3aeb96ea9afb065815dec6aa31e9b73f'),
+        expected=[('5f5538d5df89159af3e23429a14a311593af7a4c','c16a2de69289f525288c196afc54c7e465801b07'),
+                  ('4a433a903975123585b501cc2a6d3a0a58af9a00','788470dc3aeb96ea9afb065815dec6aa31e9b73f'),
                   ('1a28a144c977c40eee92866d2387a2d98adf3cfa','dc9ee5c2a6752d03e442bd11b4fac618417d1488'),
                   ('ce0766d32ddab2d47beb5dfc75c32c38e4ce43ea','e8e82d07e41585e34c0493b63baa8e8fe838d251'),
                   ('610bf498d4b2b5cd45921d5f53d71bfacb5b3f4d','181ef0d4e867b669c8a9429f7f9f56ad5a6fdc72'),
@@ -277,7 +281,7 @@ def ancestry_controls():
                   ('ff61dde8150f30eec699a4e5c01554175ff37f98','d8895a9792cab41cc15d71f7c248fef794829787'),
                   ('0c99f74436682500caeaf0bf68a7bc42310d6a50','d91c1f258a704eed9fe899c1193df8d080ff2f56'),
                   ('cfe1ef58e244b51092c2248804b663b6c28913d7','75b69ad389630e51528ddb5536a27255203470df')]
-        check(actual==expected and len({commit for commit,_ in actual})==14,'fixed fifteen-commit lineage pins')
+        check(actual==expected and len({commit for commit,_ in actual})==15,'fixed sixteen-commit lineage pins')
         for label,key,value,boundary in [
             ('tree',('rev-parse',guard.STAT_PARENT+'^{tree}'),'3'*40,'stat parent tree'),
             ('parent',('show','-s','--format=%P',guard.STAT_PARENT),'3'*40,'stat parent ancestry'),
@@ -292,10 +296,24 @@ def ancestry_controls():
             except subprocess.CalledProcessError as error:
                 check(error.returncode==128 and error.cmd==['git',*key],'retained stat missing object boundary')
             else:raise ValueError('missing retained stat metadata passed')
-    control('ancestry-fixed-fifteen-commit-pins',fixed_pins)
+        for label,key,value,boundary in [
+            ('tree',('rev-parse',guard.ARGUMENT_PARENT+'^{tree}'),'3'*40,'argument parent tree'),
+            ('parent',('show','-s','--format=%P',guard.ARGUMENT_PARENT),'3'*40,'argument parent ancestry'),
+            ('multi',('show','-s','--format=%P',guard.ARGUMENT_PARENT),guard.BASE+' '+'3'*40,'argument parent ancestry'),
+            ('empty',('show','-s','--format=%P',guard.ARGUMENT_PARENT),'','argument parent ancestry')]:
+            expect_failure('retained-argument-'+label,lambda key=key,value=value:run({key:value}),boundary,record=False)
+        tip={('rev-parse','HEAD'):guard.ARGUMENT_PARENT,('rev-parse','HEAD^{tree}'):guard.ARGUMENT_PARENT_TREE}
+        expect_failure('retained-argument-candidate',lambda:run(tip,commit=guard.ARGUMENT_PARENT,expected_tree=guard.ARGUMENT_PARENT_TREE),'candidate pin mismatch',record=False)
+        expect_failure('retained-argument-precommit',lambda:run(tip,True),'precommit requires exact correction parent/tree',record=False)
+        for key in [('rev-parse',guard.ARGUMENT_PARENT+'^{tree}'),('show','-s','--format=%P',guard.ARGUMENT_PARENT)]:
+            try:run({key:None})
+            except subprocess.CalledProcessError as error:
+                check(error.returncode==128 and error.cmd==['git',*key],'retained argument missing object boundary')
+            else:raise ValueError('missing retained argument metadata passed')
+    control('ancestry-fixed-sixteen-commit-pins',fixed_pins)
     control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
     pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
-    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.STAT_PARENT,guard.STAT_PARENT_TREE),'precommit actual parent fields'))
+    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.ARGUMENT_PARENT,guard.ARGUMENT_PARENT_TREE),'precommit actual parent fields'))
     def no_lazy_fetch():
         with patch.object(guard.subprocess,'check_output',return_value=b'fixture') as execute:
             check(guard.git(Path('.'),'rev-parse','HEAD')==b'fixture','git helper return')
@@ -420,38 +438,43 @@ def ancestry_controls():
         expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
     workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
     def workflow_contract(raw,windows=False):
-        canonical=guard.checkout_bytes(raw,'ab210bde14b8943cf3d2c90442c76f5c3774bfa5',windows)
-        check(canonical.count(b'          fetch-depth: 15\n')==1 and
-              guard.sha(canonical.replace(b'          fetch-depth: 15\n',b'          fetch-depth: 14\n'))=='132c502e899399b2a085555a0d5758030b439532ed898309434fe1d8d5a4beb4','exact depth-fifteen workflow contract')
-        previous=canonical.replace(b'          fetch-depth: 15\n',b'          fetch-depth: 14\n')
+        canonical=guard.checkout_bytes(raw,'570f57685ff0ca4d4961b4e6256c006076b7e133',windows)
+        check(canonical.count(b'          fetch-depth: 16\n')==1 and
+              guard.sha(canonical.replace(b'          fetch-depth: 16\n',b'          fetch-depth: 15\n'))=='7569e7a65178209597ee79dc4a4a07b90cf9e672a1dc51eb707ebbdb830d85d1','exact depth-sixteen workflow contract')
+        previous=canonical.replace(b'          fetch-depth: 16\n',b'          fetch-depth: 15\n')
+        check(guard.blob(previous)=='ab210bde14b8943cf3d2c90442c76f5c3774bfa5' and
+              previous.count(b'          fetch-depth: 15\n')==1 and
+              guard.sha(previous.replace(b'          fetch-depth: 15\n',b'          fetch-depth: 14\n'))=='132c502e899399b2a085555a0d5758030b439532ed898309434fe1d8d5a4beb4','exact retained depth-fifteen workflow contract')
+        previous=canonical.replace(b'          fetch-depth: 16\n',b'          fetch-depth: 14\n')
         check(guard.blob(previous)=='103ea3d99c6f1977564008474e91e22c1c289f03' and
               previous.count(b'          fetch-depth: 14\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 14\n',b'          fetch-depth: 13\n'))=='9f1d0514132a60435af03e84e904402f90c7ce732311720e50f38f9960013e3a','exact retained depth-fourteen workflow contract')
         return canonical
-    control('workflow-only-depth-fifteen-change',lambda:workflow_contract(workflow,os.name=='nt'))
+    control('workflow-only-depth-sixteen-change',lambda:workflow_contract(workflow,os.name=='nt'))
     canonical=workflow_contract(workflow,os.name=='nt')
-    expect_failure('workflow-retained-depth-fourteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 15\n',b'          fetch-depth: 14\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-fifteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 16\n',b'          fetch-depth: 15\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-fourteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 16\n',b'          fetch-depth: 14\n')),'checkout blob mismatch',record=False)
     def retained_depth_thirteen_contract():
-        previous=canonical.replace(b'          fetch-depth: 15\n',b'          fetch-depth: 13\n')
+        previous=canonical.replace(b'          fetch-depth: 16\n',b'          fetch-depth: 13\n')
         check(guard.blob(previous)=='1c1b590dffbdcdb1fc06896788872a828b3b0291' and
               previous.count(b'          fetch-depth: 13\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 13\n',b'          fetch-depth: 12\n'))=='9e8f255ee3534cd468b770eaaacf07dae17f804019dca1dc8babb57bd2ef948a','exact retained depth-thirteen workflow contract')
     control('workflow-only-depth-thirteen-change',retained_depth_thirteen_contract)
     def retained_depth_twelve_contract():
-        previous=canonical.replace(b'          fetch-depth: 15\n',b'          fetch-depth: 12\n')
+        previous=canonical.replace(b'          fetch-depth: 16\n',b'          fetch-depth: 12\n')
         check(guard.blob(previous)=='f1aa24556a0c2cb9b9b2a176cbdd09ac947224a1' and
               previous.count(b'          fetch-depth: 12\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 12\n',b'          fetch-depth: 11\n'))=='401d38d79f89fedf309305af54f778bb000cef09f255215b4db34d268cd1497d','exact retained depth-twelve workflow contract')
     control('workflow-only-depth-twelve-change',retained_depth_twelve_contract)
     def retained_depth_eleven_contract():
-        previous=canonical.replace(b'          fetch-depth: 15\n',b'          fetch-depth: 11\n')
+        previous=canonical.replace(b'          fetch-depth: 16\n',b'          fetch-depth: 11\n')
         check(guard.blob(previous)=='5d5ad4346f87a24531a2f327b116d18e9d39c557' and
               previous.count(b'          fetch-depth: 11\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 11\n',b'          fetch-depth: 10\n'))=='9cf5265dd2f90c275bff5ce2e4d8249bdd031ab342ba92ab74ad95eeef2e92f2','exact retained depth-eleven workflow contract')
     control('workflow-only-depth-eleven-change',retained_depth_eleven_contract)
-    for label,old,new in [('old-depth',b'fetch-depth: 15',b'fetch-depth: 10'),('previous-depth',b'fetch-depth: 15',b'fetch-depth: 12'),('broad-depth',b'fetch-depth: 15',b'fetch-depth: 0'),
-                          ('retained-depth',b'fetch-depth: 15',b'fetch-depth: 13'),
-                          ('malformed-depth',b'fetch-depth: 15',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+    for label,old,new in [('old-depth',b'fetch-depth: 16',b'fetch-depth: 10'),('previous-depth',b'fetch-depth: 16',b'fetch-depth: 12'),('broad-depth',b'fetch-depth: 16',b'fetch-depth: 0'),
+                          ('retained-depth',b'fetch-depth: 16',b'fetch-depth: 13'),
+                          ('malformed-depth',b'fetch-depth: 16',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
                           ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
         changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
         expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
@@ -3372,8 +3395,8 @@ def wrapper_instrumentation_controls():
     body=ast.literal_eval(next(node.value for node in function.body if isinstance(node,ast.Assign) and
         any(isinstance(target,ast.Name) and target.id=='body' for target in node.targets)))
     stripped=''.join(line for line in body.splitlines(keepends=True) if not line.endswith(' # N49D_WRAPPER_INSTRUMENTATION\n'))
-    check(len(stripped.encode())==10841 and hashlib.sha256(stripped.encode()).hexdigest()==
-        '03b380636c3d842867fe73d79c9f9dd3f21a67b2f69e7cddc024af5407fbf07e','wrapper underlying body changed')
+    check(len(stripped.encode())==11610 and hashlib.sha256(stripped.encode()).hexdigest()==
+        'e7514afa40d2915ced36ba83117546289344b8f0e8f8867dc6afc2ab01e4885e','wrapper underlying body changed')
     tokens=['N49D_WRAPPER_V1:%02d:%s'%(phase,edge) for phase in range(20) for edge in ('B','E')]
     check(len(tokens)==40 and sum(len(('\n'+token+'\r\n').encode('ascii')) for token in tokens)==920 and
         all(body.count("'"+token+"'")==1 for token in tokens),'wrapper fixed marker inventory/budget')
@@ -4372,7 +4395,17 @@ Write-N49DWrapperMarker 8 # N49D_WRAPPER_INSTRUMENTATION
  [string[]]$produced=@($inputs.Produced|ForEach-Object{$_+'.obj'});[string[]]$consumed=@($inputs.Consumed|ForEach-Object{$_+'.obj'})
  [Array]::Sort($produced,[StringComparer]::Ordinal);[Array]::Sort($consumed,[StringComparer]::Ordinal)
  $entries=@(foreach($n in $produced){$d=Get-QbrainFileDescriptor (Join-Path $obj $n);[pscustomobject]@{name=$n;size=$d.size;sha256=$d.sha256}})
- $manifest=[pscustomobject]@{schema='qbrain-n49d-build-objects-v1';state='ready';identity=$id;produced=[object[]]$entries;consumed=[object[]]$consumed;production_executable=(Get-QbrainFileDescriptor (Join-Path $out 'qbrain.exe'));failure=$null}
+ $manifest=[pscustomobject]@{schema='qbrain-n49d-build-objects-v1';state='ready';identity=$id;produced=[object[]]$entries;consumed=(@() + $consumed);production_executable=(Get-QbrainFileDescriptor (Join-Path $out 'qbrain.exe'));failure=$null}
+ Need ($manifest.produced.GetType() -eq [object[]] -and $manifest.consumed.GetType() -eq [object[]]) 'Manifest object array types'
+ Need ($manifest.produced.Count -eq 53 -and $manifest.consumed.Count -eq 51) 'Manifest inventory counts'
+ for($i=0;$i -lt $consumed.Count;$i++){Need ($manifest.consumed[$i] -is [string] -and [StringComparer]::Ordinal.Equals($manifest.consumed[$i],$consumed[$i])) 'Manifest consumed order'}
+ $correctConsumed=$manifest.consumed
+ try{
+  $manifest.consumed=$consumed
+  Need ($manifest.consumed.GetType() -eq [string[]] -and $manifest.consumed.Count -eq 51) 'Typed consumed negative shape'
+  Reject {Assert-QbrainPhaseReport $manifest objects}
+  Reject {$null=ConvertTo-QbrainCanonical $manifest}
+ }finally{$manifest.consumed=$correctConsumed}
  $mp=Join-Path $reports 'direct-production-objects.json';$bp=Join-Path $reports 'direct-tests-build-context.json';$rp=Join-Path $reports 'direct-tests-run-context.json'
  Write-QbrainPhaseReport $mp $manifest objects
  $bo=@{BuildOnly=$true;SkipProductionBuild=$true;ProductionManifest=$mp;PhaseContext=$bp}
