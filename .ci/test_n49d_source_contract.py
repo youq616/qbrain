@@ -213,7 +213,9 @@ def ancestry_controls():
     replies={('rev-parse','HEAD'):head,('rev-parse','HEAD^{tree}'):tree,
              ('rev-parse',guard.BASE+'^{tree}'):guard.BASE_TREE,
              ('rev-parse',guard.CORRECTION_PARENT+'^{tree}'):guard.CORRECTION_PARENT_TREE,
-             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.FIXTURE_PARENT,
+             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.EVIDENCE_PARENT,
+             ('rev-parse',guard.EVIDENCE_PARENT+'^{tree}'):guard.EVIDENCE_PARENT_TREE,
+             ('show','-s','--format=%P',guard.EVIDENCE_PARENT):guard.FIXTURE_PARENT,
              ('rev-parse',guard.FIXTURE_PARENT+'^{tree}'):guard.FIXTURE_PARENT_TREE,
              ('show','-s','--format=%P',guard.FIXTURE_PARENT):guard.PHASE_PARENT,
              ('rev-parse',guard.PHASE_PARENT+'^{tree}'):guard.PHASE_PARENT_TREE,
@@ -241,10 +243,11 @@ def ancestry_controls():
             if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
             return (values[args]+'\n').encode()
         with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
-        check(len(calls)==(23 if precommit else 24),'unexpected ancestry query count')
+        check(len(calls)==(25 if precommit else 26),'unexpected ancestry query count')
         return result
     def fixed_pins():
         actual=[(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),
+                (guard.EVIDENCE_PARENT,guard.EVIDENCE_PARENT_TREE),
                 (guard.FIXTURE_PARENT,guard.FIXTURE_PARENT_TREE),
                 (guard.PHASE_PARENT,guard.PHASE_PARENT_TREE),
                 (guard.PRE_PHASE_PARENT,guard.PRE_PHASE_PARENT_TREE),
@@ -254,7 +257,8 @@ def ancestry_controls():
                 (guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),
                 (guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),
                 (guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),(guard.BASE,guard.BASE_TREE)]
-        expected=[('610bf498d4b2b5cd45921d5f53d71bfacb5b3f4d','181ef0d4e867b669c8a9429f7f9f56ad5a6fdc72'),
+        expected=[('ce0766d32ddab2d47beb5dfc75c32c38e4ce43ea','e8e82d07e41585e34c0493b63baa8e8fe838d251'),
+                  ('610bf498d4b2b5cd45921d5f53d71bfacb5b3f4d','181ef0d4e867b669c8a9429f7f9f56ad5a6fdc72'),
                   ('7d6aa8dbb62b7d44af9629b5bdbd7ffcd54d6185','d8c451ae5421abcf709f5f709c243f3f97934a05'),
                   ('652849684fbb0758b861812dd13e68a0df819578','417b0f186646d6dd7906ed75a5d331cb64937333'),
                   ('a6c01c581eb77887ae33090b543a98bbd67477af','fe1250f174afa4eeb8241f4262d855487e1a6045'),
@@ -265,11 +269,11 @@ def ancestry_controls():
                   ('ff61dde8150f30eec699a4e5c01554175ff37f98','d8895a9792cab41cc15d71f7c248fef794829787'),
                   ('0c99f74436682500caeaf0bf68a7bc42310d6a50','d91c1f258a704eed9fe899c1193df8d080ff2f56'),
                   ('cfe1ef58e244b51092c2248804b663b6c28913d7','75b69ad389630e51528ddb5536a27255203470df')]
-        check(actual==expected and len({commit for commit,_ in actual})==11,'fixed twelve-commit lineage pins')
-    control('ancestry-fixed-twelve-commit-pins',fixed_pins)
+        check(actual==expected and len({commit for commit,_ in actual})==12,'fixed thirteen-commit lineage pins')
+    control('ancestry-fixed-thirteen-commit-pins',fixed_pins)
     control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
     pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
-    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.FIXTURE_PARENT,guard.FIXTURE_PARENT_TREE),'precommit actual parent fields'))
+    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.EVIDENCE_PARENT,guard.EVIDENCE_PARENT_TREE),'precommit actual parent fields'))
     def no_lazy_fetch():
         with patch.object(guard.subprocess,'check_output',return_value=b'fixture') as execute:
             check(guard.git(Path('.'),'rev-parse','HEAD')==b'fixture','git helper return')
@@ -335,6 +339,27 @@ def ancestry_controls():
         except subprocess.CalledProcessError as error:
             check(error.returncode==128 and error.cmd==['git',*key],'missing object boundary');RESULTS.append(dict(name='ancestry-'+label,passed=True))
         else:raise ValueError('missing ancestry object passed')
+    evidence_row=dict(name='ancestry-retained-evidence-edge',passed=False,trace=[]);RESULTS.append(evidence_row)
+    for label,key,value,boundary in [
+        ('tree',('rev-parse',guard.EVIDENCE_PARENT+'^{tree}'),'3'*40,'evidence parent tree'),
+        ('parent',('show','-s','--format=%P',guard.EVIDENCE_PARENT),'3'*40,'evidence parent ancestry'),
+        ('multi',('show','-s','--format=%P',guard.EVIDENCE_PARENT),guard.BASE+' '+'3'*40,'evidence parent ancestry'),
+        ('empty',('show','-s','--format=%P',guard.EVIDENCE_PARENT),'','evidence parent ancestry')]:
+        expect_failure('retained-'+label,lambda key=key,value=value:run({key:value}),boundary,record=False)
+        evidence_row['trace'].append(label+'=reject')
+    tip={('rev-parse','HEAD'):guard.EVIDENCE_PARENT,('rev-parse','HEAD^{tree}'):guard.EVIDENCE_PARENT_TREE}
+    for label,call,boundary in [
+        ('candidate',lambda:run(tip,commit=guard.EVIDENCE_PARENT,expected_tree=guard.EVIDENCE_PARENT_TREE),'candidate pin mismatch'),
+        ('precommit',lambda:run(tip,True),'precommit requires exact correction parent/tree')]:
+        expect_failure('retained-'+label,call,boundary,record=False);evidence_row['trace'].append(label+'=reject')
+    for label,key in [('missing-tree',('rev-parse',guard.EVIDENCE_PARENT+'^{tree}')),
+                      ('missing-parent',('show','-s','--format=%P',guard.EVIDENCE_PARENT))]:
+        try:run({key:None})
+        except subprocess.CalledProcessError as error:
+            check(error.returncode==128 and error.cmd==['git',*key],'retained evidence missing object boundary')
+            evidence_row['trace'].append(label+'=reject')
+        else:raise ValueError('missing retained evidence metadata passed')
+    evidence_row['passed']=True
     parent={p:('100644',guard.blob(('parent '+p).encode())) for p in guard.ALLOW};candidate=dict(parent)
     for path in guard.CORRECTION_PATHS:candidate[path]=('100644',guard.blob(('correction '+path).encode()))
     control('correction-exact-three-paths',lambda:check(guard.validate_correction(parent,candidate)==sorted(guard.CORRECTION_PATHS),'correction inventory'))
@@ -352,20 +377,26 @@ def ancestry_controls():
         expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
     workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
     def workflow_contract(raw,windows=False):
-        canonical=guard.checkout_bytes(raw,'f1aa24556a0c2cb9b9b2a176cbdd09ac947224a1',windows)
-        check(canonical.count(b'          fetch-depth: 12\n')==1 and
-              guard.sha(canonical.replace(b'          fetch-depth: 12\n',b'          fetch-depth: 11\n'))=='401d38d79f89fedf309305af54f778bb000cef09f255215b4db34d268cd1497d','exact depth-twelve workflow contract')
+        canonical=guard.checkout_bytes(raw,'1c1b590dffbdcdb1fc06896788872a828b3b0291',windows)
+        check(canonical.count(b'          fetch-depth: 13\n')==1 and
+              guard.sha(canonical.replace(b'          fetch-depth: 13\n',b'          fetch-depth: 12\n'))=='9e8f255ee3534cd468b770eaaacf07dae17f804019dca1dc8babb57bd2ef948a','exact depth-thirteen workflow contract')
         return canonical
-    control('workflow-only-depth-twelve-change',lambda:workflow_contract(workflow,os.name=='nt'))
+    control('workflow-only-depth-thirteen-change',lambda:workflow_contract(workflow,os.name=='nt'))
     canonical=workflow_contract(workflow,os.name=='nt')
+    def retained_depth_twelve_contract():
+        previous=canonical.replace(b'          fetch-depth: 13\n',b'          fetch-depth: 12\n')
+        check(guard.blob(previous)=='f1aa24556a0c2cb9b9b2a176cbdd09ac947224a1' and
+              previous.count(b'          fetch-depth: 12\n')==1 and
+              guard.sha(previous.replace(b'          fetch-depth: 12\n',b'          fetch-depth: 11\n'))=='401d38d79f89fedf309305af54f778bb000cef09f255215b4db34d268cd1497d','exact retained depth-twelve workflow contract')
+    control('workflow-only-depth-twelve-change',retained_depth_twelve_contract)
     def retained_depth_eleven_contract():
-        previous=canonical.replace(b'          fetch-depth: 12\n',b'          fetch-depth: 11\n')
+        previous=canonical.replace(b'          fetch-depth: 13\n',b'          fetch-depth: 11\n')
         check(guard.blob(previous)=='5d5ad4346f87a24531a2f327b116d18e9d39c557' and
               previous.count(b'          fetch-depth: 11\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 11\n',b'          fetch-depth: 10\n'))=='9cf5265dd2f90c275bff5ce2e4d8249bdd031ab342ba92ab74ad95eeef2e92f2','exact retained depth-eleven workflow contract')
     control('workflow-only-depth-eleven-change',retained_depth_eleven_contract)
-    for label,old,new in [('old-depth',b'fetch-depth: 12',b'fetch-depth: 10'),('previous-depth',b'fetch-depth: 12',b'fetch-depth: 11'),('broad-depth',b'fetch-depth: 12',b'fetch-depth: 0'),
-                          ('malformed-depth',b'fetch-depth: 12',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+    for label,old,new in [('old-depth',b'fetch-depth: 13',b'fetch-depth: 10'),('previous-depth',b'fetch-depth: 13',b'fetch-depth: 12'),('broad-depth',b'fetch-depth: 13',b'fetch-depth: 0'),
+                          ('malformed-depth',b'fetch-depth: 13',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
                           ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
         changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
         expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
@@ -963,7 +994,7 @@ def failure_detail_retention_controls(root):
         linux=q._linux_identity_detail(dict(start=1,ppid=23),dict(start=2,ppid=24),23,22,{})
         names=['failure-detail-final-retention-'+platform+'-'+newline for platform in ('windows','linux') for newline in ('LF','CRLF')]
         names += ['failure-detail-final-retention-'+platform+'-'+newline for platform in
-                  ('wrapper-maximum','wrapper-prefix','wrapper-fallback') for newline in ('LF','CRLF')]
+                  ('wrapper-maximum','wrapper-prefix','wrapper-fallback','file-maximum','file-unavailable') for newline in ('LF','CRLF')]
         final_controls=RESULTS+[dict(name=name,passed=True) for name in names]
         for platform,detail in [('windows',windows),('linux',linux)]:
             for newline in ('LF','CRLF'):
@@ -3288,6 +3319,181 @@ def wrapper_instrumentation_controls():
     RESULTS.append(dict(name='wrapper-fixed-markers-body',passed=True))
 
 
+WRAPPER_FILE_FIELDS=('st_dev','st_ino','st_mode','st_size','st_mtime_ns','st_ctime_ns','st_file_attributes')
+WRAPPER_FILE_SAMPLES=('before','opened','after','path_after')
+
+
+def _wrapper_file_boundary_fallback():
+    return dict(schema='qbrain-n49d-wrapper-file-boundary-v1',status='unavailable',
+        samples=[dict(fields='UUUUUUU',regular=[None,None,None]) for _ in WRAPPER_FILE_SAMPLES],equal=['???????']*3)
+
+
+def _wrapper_file_boundary_facts(samples):
+    """Cached stat values only. Field states V=exact int, A=absent, M=malformed,
+    U=unavailable. Regular bits: regular file, symbolic link, reparse flag.
+    Equal masks compare before with opened/after/path_after in field order;
+    1=equal, 0=unequal, ?=unknown. Absent file attributes use runtime default 0.
+    Captured means construction succeeded; A/M/U/?/null can still be present.
+    """
+    detail=_wrapper_file_boundary_fallback();detail['status']='captured';vectors=[]
+    for index,name in enumerate(WRAPPER_FILE_SAMPLES):
+        source=samples.get(name);states=[];values=[]
+        for field in WRAPPER_FILE_FIELDS:
+            state='U';value=None
+            if source is not None:
+                try:
+                    value=getattr(source,field);state='V' if type(value) is int else 'M'
+                    if state!='V':value=None
+                except AttributeError:
+                    state='A';value=0 if field=='st_file_attributes' else None
+                except BaseException:pass
+            states.append(state);values.append(value)
+        mode,attributes=values[2],values[6]
+        detail['samples'][index]=dict(fields=''.join(states),regular=[
+            None if mode is None else stat.S_ISREG(mode),None if mode is None else stat.S_ISLNK(mode),
+            None if attributes is None else bool(attributes&getattr(stat,'FILE_ATTRIBUTE_REPARSE_POINT',1024))])
+        vectors.append(values)
+    detail['equal']=[''.join('?' if a is None or b is None else '1' if a==b else '0'
+        for a,b in zip(vectors[0],values)) for values in vectors[1:]]
+    return detail
+
+
+def _validate_wrapper_file_boundary(detail):
+    check(type(detail) is dict and set(detail)=={'schema','status','samples','equal'} and
+        type(detail['schema']) is str and detail['schema']=='qbrain-n49d-wrapper-file-boundary-v1' and
+        type(detail['status']) is str and detail['status'] in ('captured','unavailable'),'file boundary schema')
+    check(type(detail['samples']) is list and len(detail['samples'])==4 and
+        type(detail['equal']) is list and len(detail['equal'])==3,'file boundary dimensions')
+    for sample in detail['samples']:
+        check(type(sample) is dict and set(sample)=={'fields','regular'} and type(sample['fields']) is str and
+            q.re.fullmatch('[VAMU]{7}',sample['fields']) is not None and type(sample['regular']) is list and
+            len(sample['regular'])==3 and all(value is None or type(value) is bool for value in sample['regular']),
+            'file boundary sample facts')
+    check(all(type(mask) is str and q.re.fullmatch('[01?]{7}',mask) is not None for mask in detail['equal']),
+          'file boundary equality masks')
+    if detail['status']=='unavailable':check(failure_equal(detail,_wrapper_file_boundary_fallback()),'file boundary unavailable facts')
+
+
+def _capture_wrapper_file_boundary(row,samples,checks=''):
+    try:
+        if 'boundary' in row:return
+        row['checks']=checks if type(checks) is str and len(checks)<=9 and all(c in 'boBpOAP?' for c in checks) else 'unavailable'
+        row['boundary']=_wrapper_file_boundary_fallback()
+        detail=_wrapper_file_boundary_facts(samples);_validate_wrapper_file_boundary(detail)
+        for ending in ('\n','\r\n'):
+            raw=(json.dumps({'boundary':detail,'checks':row['checks']},sort_keys=True,indent=2,allow_nan=False)+'\n').replace('\n',ending).encode()
+            check(len(raw)<=1024,'wrapper file boundary detail cap')
+        row['boundary']=detail
+    except BaseException:pass
+
+
+def _wrapper_file_boundary_maximum():
+    from types import SimpleNamespace
+    value=SimpleNamespace(**{field:0 for field in WRAPPER_FILE_FIELDS})
+    return _wrapper_file_boundary_facts({name:value for name in WRAPPER_FILE_SAMPLES})
+
+
+def wrapper_file_boundary_controls():
+    """Finite memory-only controls; never execute a native file/process operation."""
+    from contextlib import ExitStack
+    from types import SimpleNamespace
+    row=dict(name='wrapper-file-facts',passed=False,trace=[]);RESULTS.append(row)
+    values=dict(zip(WRAPPER_FILE_FIELDS,(1,2,stat.S_IFREG|0o600,21,3,4,0)))
+    base=SimpleNamespace(**values);samples={name:base for name in WRAPPER_FILE_SAMPLES}
+    def add(label):row['trace'].append(label+'=ok')
+    def blocked(*args,**kwargs):raise AssertionError('file diagnostic performed I/O or process operation')
+    with ExitStack() as stack:
+        for module,names in [(Path,('lstat','stat','open','read_bytes','write_bytes')),
+            (os,('open','fstat','fdopen','close','kill','waitpid','waitid','pidfd_open')),
+            (q.subprocess,('Popen','run','check_output','call'))]:
+            for name in names:
+                if hasattr(module,name):stack.enter_context(patch.object(module,name,side_effect=blocked))
+        actual=_wrapper_file_boundary_facts(samples)
+        check(actual['equal']==['1111111']*3 and all(item['fields']=='VVVVVVV' and
+            item['regular']==[True,False,False] for item in actual['samples']),'file diagnostic valid sample')
+        add('equal')
+        for slot,name in enumerate(WRAPPER_FILE_SAMPLES[1:]):
+            for index,field in enumerate(WRAPPER_FILE_FIELDS):
+                changed=SimpleNamespace(**(values|{field:values[field]+1}));packet=dict(samples);packet[name]=changed
+                facts=_wrapper_file_boundary_facts(packet);expected=['1111111']*3
+                expected[slot]='1'*index+'0'+'1'*(6-index)
+                check(facts['equal']==expected,'file diagnostic identity field comparison')
+                if slot==0:
+                    with patch.object(Path,'lstat',return_value=base),patch.object(os,'open',return_value=17),\
+                         patch.object(os,'fstat',return_value=changed),patch.object(os,'close') as closed:
+                        result=_wrapper_marker_file(Path('/fixture'),dict(size=21,sha256='0'*64))
+                    check(result['status']=='stream-mismatch' and closed.call_args.args==(17,),
+                          'file reader accepted changed identity field')
+                row['trace'].append(str(slot)+str(index)+'='+expected[slot])
+        for label,changes,bits in [('directory',{'st_mode':stat.S_IFDIR|0o700},[False,False,False]),
+            ('link',{'st_mode':stat.S_IFLNK|0o700},[False,True,False]),
+            ('reparse',{'st_file_attributes':1024},[True,False,True])]:
+            changed=SimpleNamespace(**(values|changes));facts=_wrapper_file_boundary_facts(dict(samples,opened=changed))
+            check(facts['samples'][1]['regular']==bits and not _wrapper_regular(changed),'file regular/reparse distinction')
+            with patch.object(Path,'lstat',return_value=base),patch.object(os,'open',return_value=17),\
+                 patch.object(os,'fstat',return_value=changed),patch.object(os,'close') as closed:
+                result=_wrapper_marker_file(Path('/fixture'),dict(size=21,sha256='0'*64))
+            check(result['status']=='stream-mismatch' and closed.call_count==1,'file reader regularity guard')
+            add(label)
+        for label,changes,state in [('missing',{},'A'),('bool',{'st_ino':True},'M'),('text',{'st_ino':'private'},'M')]:
+            changed=dict(values);changed.pop('st_ino');changed.update(changes)
+            facts=_wrapper_file_boundary_facts(dict(samples,opened=SimpleNamespace(**changed)))
+            check(facts['samples'][1]['fields']=='V'+state+'VVVVV' and facts['equal'][0]=='1?11111',
+                  'file absent/malformed field distinction');add(label)
+        changed=dict(values);changed.pop('st_file_attributes')
+        facts=_wrapper_file_boundary_facts(dict(samples,opened=SimpleNamespace(**changed)))
+        check(facts['samples'][1]['fields']=='VVVVVVA' and facts['equal'][0]=='1111111' and
+              facts['samples'][1]['regular']==[True,False,False],'file absent attributes default');add('attrs')
+        class Unavailable:
+            def __getattr__(self,name):raise RuntimeError('private-metadata')
+        facts=_wrapper_file_boundary_facts(dict(samples,opened=Unavailable()))
+        check(facts['samples'][1]==dict(fields='UUUUUUU',regular=[None]*3) and facts['equal'][0]=='???????',
+              'file unavailable metadata distinction');add('unavailable')
+        empty=_wrapper_file_boundary_facts({})
+        check(empty==dict(_wrapper_file_boundary_fallback(),status='captured'),'file unreached samples');add('unreached')
+        target={};_capture_wrapper_file_boundary(target,samples);first=target['boundary'];saved=copy.deepcopy(first)
+        with patch(__name__+'._wrapper_file_boundary_facts',side_effect=blocked):_capture_wrapper_file_boundary(target,{})
+        check(target['boundary'] is first and failure_equal(first,saved),'file first boundary overwritten');add('first')
+        for label,change in [('shape',lambda v:v.update(raw='private')),('mask',lambda v:v['equal'].__setitem__(0,'private')),
+            ('bool',lambda v:v['samples'][0]['regular'].__setitem__(0,1)),('state',lambda v:v.update(status='other'))]:
+            malformed=copy.deepcopy(saved);change(malformed);target={}
+            with patch(__name__+'._wrapper_file_boundary_facts',return_value=malformed):_capture_wrapper_file_boundary(target,samples)
+            check(target['boundary']==_wrapper_file_boundary_fallback(),'file malformed capture not unavailable');add('capture-'+label)
+        target={}
+        with patch.object(json,'dumps',side_effect=RuntimeError('private-serialize')):_capture_wrapper_file_boundary(target,samples)
+        check(target['boundary']==_wrapper_file_boundary_fallback(),'file serializer capture not unavailable');add('serialize')
+        primary=ValueError('wrapper file boundary: hash');target={}
+        def unavailable(_):
+            check(target.get('boundary')==_wrapper_file_boundary_fallback(),'file fallback installed too late')
+            raise RuntimeError('private-capture')
+        try:
+            try:raise primary
+            except ValueError:
+                with patch(__name__+'._wrapper_file_boundary_facts',side_effect=unavailable):
+                    _capture_wrapper_file_boundary(target,samples)
+                raise
+        except ValueError as error:check(error is primary,'file capture replaced primary error')
+        check(target['boundary']==_wrapper_file_boundary_fallback(),'file capture unavailable fallback');add('fallback')
+        for label,detail in [('maximum',_wrapper_file_boundary_maximum()),('fallback',_wrapper_file_boundary_fallback())]:
+            for ending in ('\n','\r\n'):
+                raw=(json.dumps({'boundary':detail},sort_keys=True,indent=2)+'\n').replace('\n',ending).encode()
+                check(len(raw)<=1024 and b'private' not in raw,'file boundary byte/privacy cap')
+            add(label+'-cap')
+        primary=ValueError('wrapper file boundary: capture-initialization');target={}
+        try:
+            try:raise primary
+            except ValueError:
+                with patch(__name__+'._wrapper_file_boundary_fallback',side_effect=RuntimeError('private-fallback')):
+                    _capture_wrapper_file_boundary(target,samples)
+                raise
+        except ValueError as error:
+            check(error is primary and failure_equal(target,dict(checks='')) and 'private' not in json.dumps(target),
+                  'file initial capture replaced primary or invented facts')
+        add('initial-fallback')
+    row['passed']=True
+    return row
+
+
 def _wrapper_retention_fixtures():
     from types import SimpleNamespace
     cached=dict(_detail_fixture()['ownership'],classification='capture-not-finalized',exit=-(2**63),
@@ -3316,9 +3522,18 @@ def wrapper_retention_controls(root,final_controls):
     stage=root/'stages/tiny';stage.mkdir(parents=True)
     terminal=_detail_fixture()['ownership'];terminal['classification']='nonzero child exit'
     rows_before=copy.deepcopy(final_controls);outcomes=[]
-    for label,detail in _wrapper_retention_fixtures().items():
+    fixtures=_wrapper_retention_fixtures()
+    cases=[(label,detail,None) for label,detail in fixtures.items()]
+    cases += [('file-maximum',fixtures['wrapper-maximum'],_wrapper_file_boundary_maximum()),
+              ('file-unavailable',fixtures['wrapper-maximum'],_wrapper_file_boundary_fallback())]
+    for label,detail,boundary in cases:
         for newline,ending in [('LF','\n'),('CRLF','\r\n')]:
             failure=dict(passed=False,error='timeout',controls=copy.deepcopy(final_controls),failure_detail=copy.deepcopy(detail))
+            if boundary is not None:
+                matches=[row for row in failure['controls'] if row['name']=='wrapper-bounded-file']
+                check(len(matches)==1,'file boundary retention row inventory')
+                matches[0].update(boundary=copy.deepcopy(boundary),checks='boOBABPBp',passed=False)
+                failure['error']='wrapper file boundary: reparse-before'
             before=copy.deepcopy(failure);raw=(render_selftest_failure(failure)+ending).encode()
             check(failure_equal(expand_failure_v2(raw),before) and failure_equal(failure,before),'wrapper failure renderer facts')
             (stage/'stderr.bin').write_bytes(raw);(stage/'stdout.bin').write_bytes(b'')
@@ -3353,6 +3568,8 @@ def wrapper_evidence_controls(root):
     X=stream-mismatch, I=owner-invalid, N=owner-unavailable, E=owner-ineligible,
     C=captured, F=detail-unavailable. Caller letters: C=construct,W=wait,G=result.
     File call letters: L=lstat,O=open,F=fstat,R=read,C=close.
+    Failure-only checks: b/o/p=regular before/opened/path_after; B/O/A/P=
+    identity before/opened/after/path_after. They observe existing pure calls.
     String-field prefixes: c=classification,u=cleanup_error,a=capture_error.
     """
     from contextlib import ExitStack
@@ -3706,7 +3923,9 @@ def wrapper_evidence_controls(root):
             else:raise ValueError('wrapper parser input cap/type accepted')
         finish(row)
 
+        file_facts=wrapper_file_boundary_controls()
         row=group('bounded-file')
+        original_sha256=hashlib.sha256;original_identity=_wrapper_file_identity;original_regular=_wrapper_regular
         original_open=os.open;original_fstat=os.fstat;original_fdopen=os.fdopen;original_close=os.close;original_lstat=Path.lstat
         written=0;peak=0;symlink_bytes=0
         def write(raw):
@@ -3717,77 +3936,120 @@ def wrapper_evidence_controls(root):
                 for name in ('st_dev','st_ino','st_mode','st_size','st_mtime_ns','st_ctime_ns','st_file_attributes'):
                     setattr(self,name,getattr(value,name,0))
                 if change is not None:setattr(self,change[0],change[1])
-        def file_case(label,descriptor,status,fault=None,expected_open=None):
-            calls=[];counts={'lstat':0,'fstat':0};reads=[]
+        def file_case(label,descriptor,status,trace,digests,gates,read_length,fault=None):
+            calls=[];counts={'lstat':0,'fstat':0};reads=[];hits=[];hashes=[];samples={};checks=[];read_lengths=[]
+            def inject():hits.append(fault)
+            def remember(name,value):samples[name]=value;return value
+            def sha256(*args,**kwargs):
+                hashes.append(True);return original_sha256(*args,**kwargs)
+            def tag(value):
+                return next((code for name,code in zip(WRAPPER_FILE_SAMPLES,'BOAP') if samples.get(name) is value),'?')
+            def identity(value):checks.append(tag(value));return original_identity(value)
+            def regular(value):checks.append(tag(value).lower());return original_regular(value)
             def lstat(path,*args,**kwargs):
                 check(path==leaf,'wrapper accessed arbitrary stream path');calls.append('L');counts['lstat']+=1
-                if fault=='lstat'+str(counts['lstat']):raise OSError('private-lstat')
+                if fault=='lstat'+str(counts['lstat']):inject();raise OSError('private-lstat')
                 value=original_lstat(path,*args,**kwargs)
-                if fault=='reparse-before' and counts['lstat']==1:return Meta(value,('st_file_attributes',1024))
-                if fault=='path-after' and counts['lstat']==2:return Meta(value,('st_ino',value.st_ino+1))
-                if fault=='reparse-after' and counts['lstat']==2:return Meta(value,('st_file_attributes',1024))
-                return value
+                if fault=='reparse-before' and counts['lstat']==1:inject();value=Meta(value,('st_file_attributes',1024))
+                if fault=='path-after' and counts['lstat']==2:inject();value=Meta(value,('st_ino',value.st_ino+1))
+                if fault=='reparse-after' and counts['lstat']==2:inject();value=Meta(value,('st_file_attributes',1024))
+                return remember('before' if counts['lstat']==1 else 'path_after',value)
             def opened(path,flags,*args,**kwargs):
                 calls.append('O');check(path==leaf and flags&getattr(os,'O_NOFOLLOW',0)==getattr(os,'O_NOFOLLOW',0) and
                     flags&getattr(os,'O_NONBLOCK',0)==getattr(os,'O_NONBLOCK',0),'wrapper open flags/path')
-                if fault=='open':raise OSError('private-open')
+                if fault=='open':inject();raise OSError('private-open')
                 return original_open(path,flags,*args,**kwargs)
             def fstat(fd):
                 calls.append('F');counts['fstat']+=1
-                if fault=='fstat'+str(counts['fstat']):raise OSError('private-fstat')
+                if fault=='fstat'+str(counts['fstat']):inject();raise OSError('private-fstat')
                 value=original_fstat(fd)
-                if fault=='fd-before' and counts['fstat']==1:return Meta(value,('st_ino',value.st_ino+1))
-                if fault=='fd-after' and counts['fstat']==2:return Meta(value,('st_mtime_ns',value.st_mtime_ns+1))
-                if fault=='fd-nonregular' and counts['fstat']==1:return Meta(value,('st_mode',stat.S_IFDIR|0o700))
-                if fault=='fd-reparse' and counts['fstat']==1:return Meta(value,('st_file_attributes',1024))
-                return value
+                if fault=='fd-before' and counts['fstat']==1:inject();value=Meta(value,('st_ino',value.st_ino+1))
+                if fault=='fd-after' and counts['fstat']==2:inject();value=Meta(value,('st_mtime_ns',value.st_mtime_ns+1))
+                if fault=='fd-nonregular' and counts['fstat']==1:inject();value=Meta(value,('st_mode',stat.S_IFDIR|0o700))
+                if fault=='fd-reparse' and counts['fstat']==1:inject();value=Meta(value,('st_file_attributes',1024))
+                return remember('opened' if counts['fstat']==1 else 'after',value)
             class Reader:
                 def __init__(self,stream):self.stream=stream
                 def __enter__(self):self.stream.__enter__();return self
                 def __exit__(self,*args):return self.stream.__exit__(*args)
                 def read(self,size):
                     calls.append('R');reads.append(size);check(size==65537,'wrapper unbounded/repeated read')
-                    if fault=='read':raise OSError('private-read')
-                    return self.stream.read(size)
+                    if fault=='read':inject();raise OSError('private-read')
+                    raw=self.stream.read(size);read_lengths.append(len(raw));return raw
             def fdopen(fd,*args,**kwargs):
                 check(args==('rb',) and kwargs==dict(buffering=0,closefd=False),'wrapper unbuffered descriptor mode')
-                if fault=='fdopen':raise OSError('private-fdopen')
+                if fault=='fdopen':inject();raise OSError('private-fdopen')
                 return Reader(original_fdopen(fd,*args,**kwargs))
             def close(fd):calls.append('C');return original_close(fd)
-            with patch.object(Path,'lstat',lstat),patch.object(os,'open',opened),patch.object(os,'fstat',fstat),\
-                 patch.object(os,'fdopen',fdopen),patch.object(os,'close',close):actual=_wrapper_marker_file(root,descriptor)
-            record(row,label,codes[actual['status']]+':'+''.join(calls))
-            check(actual['status']==status,'wrapper file boundary: '+label)
-            check(len(reads)<=1 and (expected_open is None or calls.count('O')==expected_open),'wrapper file repeated/unexpected open')
-            check(calls.count('C')==(calls.count('O')-(1 if fault=='open' else 0)),'wrapper file descriptor leak')
-            if status!='valid-prefix':check(actual['events']==[],'wrapper failed stream trusted marker prefix')
-            else:check(actual==_wrapper_marker_events(['00:B']),'wrapper bounded file marker outcome')
+            recorded=False
+            try:
+                with patch.object(Path,'lstat',lstat),patch.object(os,'open',opened),patch.object(os,'fstat',fstat),\
+                     patch.object(os,'fdopen',fdopen),patch.object(os,'close',close),patch.object(hashlib,'sha256',sha256),\
+                     patch(__name__+'._wrapper_file_identity',identity),patch(__name__+'._wrapper_regular',regular):
+                    actual=_wrapper_marker_file(root,descriptor)
+                record(row,label,codes[actual['status']]+':'+''.join(calls));recorded=True
+                check(actual['status']==status and ''.join(calls)==trace and len(hashes)==digests and
+                    hits==([fault] if fault is not None else []) and ''.join(checks)==gates and
+                    read_lengths==([] if read_length is None else [read_length]),'wrapper file boundary: '+label)
+                check(len(reads)<=1,'wrapper file repeated read')
+                check(calls.count('C')==(calls.count('O')-(1 if fault=='open' else 0)),'wrapper file descriptor leak')
+                if status!='valid-prefix':check(actual['events']==[],'wrapper failed stream trusted marker prefix')
+                else:check(actual==_wrapper_marker_events(['00:B']),'wrapper bounded file marker outcome')
+            except BaseException:
+                try:
+                    if not recorded:record(row,label,'?:'+''.join(calls))
+                    _capture_wrapper_file_boundary(row,samples,''.join(checks))
+                except BaseException:pass
+                raise
+        # Exercise this exact except path with detached facts and no native I/O.
+        file_facts['passed']=False;real_row=row
+        real_io=(original_open,original_fstat,original_fdopen,original_close,original_lstat)
+        row=dict(name='detached-primary',passed=False,trace=[])
+        primary=ValueError('wrapper file boundary: primary-model')
+        try:
+            original_open=original_fstat=original_fdopen=original_close=original_lstat=no_open
+            try:
+                with patch(__name__+'._wrapper_marker_file',side_effect=primary),\
+                     patch(__name__+'._wrapper_file_boundary_fallback',side_effect=RuntimeError('private-fallback')):
+                    file_case('primary-model',desc(line),'valid-prefix','LOFRFLC',1,'boOBABPBp',len(line))
+            except ValueError as error:
+                check(error is primary and failure_equal(row,dict(name='detached-primary',passed=False,
+                    trace=['primary-model=?:'],checks='')) and 'private' not in json.dumps(row),'file case primary replaced or secondary facts invented')
+            else:raise ValueError('file case primary did not escape')
+        finally:
+            original_open,original_fstat,original_fdopen,original_close,original_lstat=real_io
+            row=real_row
+        file_facts['trace'].append('primary-case=ok');file_facts['passed']=True
         exact=b'x'*(65536-len(line)-1)+b'\n'+line
-        write(exact);file_case('cap',desc(exact),'valid-prefix',expected_open=1)
-        write(exact+b'x');file_case('over',desc(exact),'stream-mismatch',expected_open=1)
-        write(b'');file_case('empty',desc(b''),'absent',expected_open=0)
-        file_case('empty-hash',dict(size=0,sha256='0'*64),'stream-mismatch',expected_open=0)
-        leaf.unlink();file_case('missing',desc(line),'stream-unavailable',expected_open=0)
-        leaf.mkdir();file_case('directory',desc(line),'stream-unavailable',expected_open=0);leaf.rmdir()
+        write(exact);file_case('cap',desc(exact),'valid-prefix','LOFRFLC',1,'boOBABPBp',65536)
+        write(exact+b'x');file_case('over',desc(exact),'stream-mismatch','LOFRFLC',0,'boOB',65537)
+        write(b'');file_case('empty',desc(b''),'absent','',1,'',None)
+        file_case('empty-hash',dict(size=0,sha256='0'*64),'stream-mismatch','',1,'',None)
+        leaf.unlink();file_case('missing',desc(line),'stream-unavailable','L',0,'',None)
+        leaf.mkdir();file_case('directory',desc(line),'stream-unavailable','L',0,'b',None);leaf.rmdir()
         try:leaf.symlink_to('stderr.bin')
         except (OSError,NotImplementedError) as error:record(row,'symlink-native','unavailable:'+type(error).__name__)
         else:
             symlink_bytes=10
-            try:file_case('symlink',desc(line),'stream-unavailable',expected_open=0)
+            try:file_case('symlink',desc(line),'stream-unavailable','L',0,'b',None)
             finally:leaf.unlink()
         if hasattr(os,'mkfifo'):
             os.mkfifo(leaf)
-            try:file_case('fifo',desc(line),'stream-unavailable',expected_open=0)
+            try:file_case('fifo',desc(line),'stream-unavailable','L',0,'b',None)
             finally:leaf.unlink()
         else:record(row,'fifo-native','unavailable')
         write(line)
-        file_case('hash',dict(size=len(line),sha256='0'*64),'stream-mismatch',expected_open=1)
-        file_case('size',dict(size=len(line)-1,sha256=desc(line)['sha256']),'stream-mismatch',expected_open=1)
-        for fault,status,opens in [('reparse-before','stream-unavailable',0),('open','stream-unavailable',1),
-            ('lstat1','stream-unavailable',0),('lstat2','stream-unavailable',1),('fstat1','stream-unavailable',1),('fstat2','stream-unavailable',1),
-            ('read','stream-unavailable',1),('fdopen','stream-unavailable',1),('fd-before','stream-mismatch',1),('fd-after','stream-mismatch',1),
-            ('path-after','stream-mismatch',1),('fd-nonregular','stream-mismatch',1),('fd-reparse','stream-mismatch',1),('reparse-after','stream-mismatch',1)]:
-            file_case(fault,desc(line),status,fault,opens)
+        file_case('hash',dict(size=len(line),sha256='0'*64),'stream-mismatch','LOFRFLC',1,'boOB',len(line))
+        file_case('size',dict(size=len(line)-1,sha256=desc(line)['sha256']),'stream-mismatch','LOFRFLC',0,'boOB',len(line))
+        for fault,status,trace,digests,gates,length in [
+            ('reparse-before','stream-unavailable','L',0,'b',None),('open','stream-unavailable','LO',0,'b',None),
+            ('lstat1','stream-unavailable','L',0,'',None),('lstat2','stream-unavailable','LOFRFLC',0,'boOB',len(line)),
+            ('fstat1','stream-unavailable','LOFC',0,'b',None),('fstat2','stream-unavailable','LOFRFC',0,'boOB',len(line)),
+            ('read','stream-unavailable','LOFRC',0,'boOB',None),('fdopen','stream-unavailable','LOFC',0,'boOB',None),
+            ('fd-before','stream-mismatch','LOFC',0,'boOB',None),('fd-after','stream-mismatch','LOFRFLC',1,'boOBAB',len(line)),
+            ('path-after','stream-mismatch','LOFRFLC',1,'boOBABPB',len(line)),('fd-nonregular','stream-mismatch','LOFC',0,'bo',None),
+            ('fd-reparse','stream-mismatch','LOFC',0,'bo',None),('reparse-after','stream-mismatch','LOFRFLC',1,'boOBABPB',len(line))]:
+            file_case(fault,desc(line),status,trace,digests,gates,length,fault)
         check(written==131094 and peak==65537 and written+symlink_bytes<=131104,'wrapper serial fixture write budget')
         record(row,'bytes',str(written)+'/'+str(peak)+'/'+str(symlink_bytes));finish(row)
 
