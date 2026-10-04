@@ -213,7 +213,9 @@ def ancestry_controls():
     replies={('rev-parse','HEAD'):head,('rev-parse','HEAD^{tree}'):tree,
              ('rev-parse',guard.BASE+'^{tree}'):guard.BASE_TREE,
              ('rev-parse',guard.CORRECTION_PARENT+'^{tree}'):guard.CORRECTION_PARENT_TREE,
-             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.PHASE_PARENT,
+             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.FIXTURE_PARENT,
+             ('rev-parse',guard.FIXTURE_PARENT+'^{tree}'):guard.FIXTURE_PARENT_TREE,
+             ('show','-s','--format=%P',guard.FIXTURE_PARENT):guard.PHASE_PARENT,
              ('rev-parse',guard.PHASE_PARENT+'^{tree}'):guard.PHASE_PARENT_TREE,
              ('show','-s','--format=%P',guard.PHASE_PARENT):guard.PRE_PHASE_PARENT,
              ('rev-parse',guard.PRE_PHASE_PARENT+'^{tree}'):guard.PRE_PHASE_PARENT_TREE,
@@ -239,11 +241,35 @@ def ancestry_controls():
             if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
             return (values[args]+'\n').encode()
         with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
-        check(len(calls)==(21 if precommit else 22),'unexpected ancestry query count')
+        check(len(calls)==(23 if precommit else 24),'unexpected ancestry query count')
         return result
+    def fixed_pins():
+        actual=[(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),
+                (guard.FIXTURE_PARENT,guard.FIXTURE_PARENT_TREE),
+                (guard.PHASE_PARENT,guard.PHASE_PARENT_TREE),
+                (guard.PRE_PHASE_PARENT,guard.PRE_PHASE_PARENT_TREE),
+                (guard.LAST_CORRECTION_PARENT,guard.LAST_CORRECTION_PARENT_TREE),
+                (guard.PRIOR_CORRECTION_PARENT,guard.PRIOR_CORRECTION_PARENT_TREE),
+                (guard.INTERMEDIATE_PARENT,guard.INTERMEDIATE_PARENT_TREE),
+                (guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),
+                (guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),
+                (guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),(guard.BASE,guard.BASE_TREE)]
+        expected=[('610bf498d4b2b5cd45921d5f53d71bfacb5b3f4d','181ef0d4e867b669c8a9429f7f9f56ad5a6fdc72'),
+                  ('7d6aa8dbb62b7d44af9629b5bdbd7ffcd54d6185','d8c451ae5421abcf709f5f709c243f3f97934a05'),
+                  ('652849684fbb0758b861812dd13e68a0df819578','417b0f186646d6dd7906ed75a5d331cb64937333'),
+                  ('a6c01c581eb77887ae33090b543a98bbd67477af','fe1250f174afa4eeb8241f4262d855487e1a6045'),
+                  ('a62e648744ddeb23ca20b05421c70aab5c70ea95','194cbd3f6d486e72f10472234a907e3bf5c1f97e'),
+                  ('f64b2eff3c46324f5a8d100748ec6b92ccd4981d','a37b9b96b50b876f0036ee15cebc6002a242775d'),
+                  ('e44de25cc16f3a4154822d3147f20b21b1c69136','2de51cfb37eb7199a1acc5a1a6cd31bb9563efd3'),
+                  ('adf7adfe5ef7cb2a7686161fffd8f00d1d6547c2','3f166c44c1267c64b1f890617e7062117a9790f5'),
+                  ('ff61dde8150f30eec699a4e5c01554175ff37f98','d8895a9792cab41cc15d71f7c248fef794829787'),
+                  ('0c99f74436682500caeaf0bf68a7bc42310d6a50','d91c1f258a704eed9fe899c1193df8d080ff2f56'),
+                  ('cfe1ef58e244b51092c2248804b663b6c28913d7','75b69ad389630e51528ddb5536a27255203470df')]
+        check(actual==expected and len({commit for commit,_ in actual})==11,'fixed twelve-commit lineage pins')
+    control('ancestry-fixed-twelve-commit-pins',fixed_pins)
     control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
     pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
-    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.PHASE_PARENT,guard.PHASE_PARENT_TREE),'precommit actual parent fields'))
+    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.FIXTURE_PARENT,guard.FIXTURE_PARENT_TREE),'precommit actual parent fields'))
     def no_lazy_fetch():
         with patch.object(guard.subprocess,'check_output',return_value=b'fixture') as execute:
             check(guard.git(Path('.'),'rev-parse','HEAD')==b'fixture','git helper return')
@@ -258,10 +284,15 @@ def ancestry_controls():
            ('wrong-parent',('show','-s','--format=%P',head),'3'*40,'candidate parent'),
            ('extra-parent',('show','-s','--format=%P',head),guard.CORRECTION_PARENT+' '+guard.BASE,'candidate parent'),
            ('self-parent',('show','-s','--format=%P',head),head,'candidate parent'),
+           ('previous-anchor-parent',('show','-s','--format=%P',head),guard.FIXTURE_PARENT,'candidate parent'),
            ('wrong-anchor-tree',('rev-parse',guard.CORRECTION_PARENT+'^{tree}'),'3'*40,'correction parent tree'),
            ('wrong-anchor-parent',('show','-s','--format=%P',guard.CORRECTION_PARENT),'3'*40,'correction parent ancestry'),
            ('multiple-anchor-parents',('show','-s','--format=%P',guard.CORRECTION_PARENT),guard.BASE+' '+'3'*40,'correction parent ancestry'),
            ('missing-anchor-parent',('show','-s','--format=%P',guard.CORRECTION_PARENT),'','correction parent ancestry'),
+           ('wrong-fixture-tree',('rev-parse',guard.FIXTURE_PARENT+'^{tree}'),'3'*40,'fixture parent tree'),
+           ('wrong-fixture-parent',('show','-s','--format=%P',guard.FIXTURE_PARENT),'3'*40,'fixture parent ancestry'),
+           ('multiple-fixture-parents',('show','-s','--format=%P',guard.FIXTURE_PARENT),guard.BASE+' '+'3'*40,'fixture parent ancestry'),
+           ('missing-fixture-parent',('show','-s','--format=%P',guard.FIXTURE_PARENT),'','fixture parent ancestry'),
            ('wrong-phase-tree',('rev-parse',guard.PHASE_PARENT+'^{tree}'),'3'*40,'phase parent tree'),
            ('wrong-phase-parent',('show','-s','--format=%P',guard.PHASE_PARENT),'3'*40,'phase parent ancestry'),
            ('multiple-phase-parents',('show','-s','--format=%P',guard.PHASE_PARENT),guard.BASE+' '+'3'*40,'phase parent ancestry'),
@@ -295,11 +326,11 @@ def ancestry_controls():
                           ('same-tree-sibling',{('rev-parse','HEAD'):'199f50694e8e020932c99e821d0d3c67586582c5'}),('wrong-tree',{('rev-parse','HEAD^{tree}'):'3'*40}),('other-tip',{('rev-parse','HEAD'):'3'*40})]:
         expect_failure('ancestry-precommit-'+label,lambda changes=changes:run(pre|changes,True),'precommit requires exact correction parent/tree')
     expect_failure('ancestry-anchor-is-not-candidate',lambda:run(pre,commit=guard.CORRECTION_PARENT,expected_tree=guard.CORRECTION_PARENT_TREE),'candidate pin mismatch')
-    for label,anchor,anchor_tree in [('phase',guard.PHASE_PARENT,guard.PHASE_PARENT_TREE),('pre-phase',guard.PRE_PHASE_PARENT,guard.PRE_PHASE_PARENT_TREE),('last-correction',guard.LAST_CORRECTION_PARENT,guard.LAST_CORRECTION_PARENT_TREE),('prior-correction',guard.PRIOR_CORRECTION_PARENT,guard.PRIOR_CORRECTION_PARENT_TREE),('intermediate',guard.INTERMEDIATE_PARENT,guard.INTERMEDIATE_PARENT_TREE),('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('earlier',guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),('original',guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
+    for label,anchor,anchor_tree in [('fixture',guard.FIXTURE_PARENT,guard.FIXTURE_PARENT_TREE),('phase',guard.PHASE_PARENT,guard.PHASE_PARENT_TREE),('pre-phase',guard.PRE_PHASE_PARENT,guard.PRE_PHASE_PARENT_TREE),('last-correction',guard.LAST_CORRECTION_PARENT,guard.LAST_CORRECTION_PARENT_TREE),('prior-correction',guard.PRIOR_CORRECTION_PARENT,guard.PRIOR_CORRECTION_PARENT_TREE),('intermediate',guard.INTERMEDIATE_PARENT,guard.INTERMEDIATE_PARENT_TREE),('previous',guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),('earlier',guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),('original',guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),('base',guard.BASE,guard.BASE_TREE)]:
         tip={('rev-parse','HEAD'):anchor,('rev-parse','HEAD^{tree}'):anchor_tree}
         expect_failure('ancestry-'+label+'-is-not-candidate',lambda tip=tip,anchor=anchor,anchor_tree=anchor_tree:run(tip,commit=anchor,expected_tree=anchor_tree),'candidate pin mismatch')
         expect_failure('ancestry-precommit-reject-'+label,lambda tip=tip:run(tip,True),'precommit requires exact correction parent/tree')
-    for label,key in [('missing-phase-object',('rev-parse',guard.PHASE_PARENT+'^{tree}')),('missing-phase-parent-metadata',('show','-s','--format=%P',guard.PHASE_PARENT)),('missing-pre-phase-object',('rev-parse',guard.PRE_PHASE_PARENT+'^{tree}')),('missing-pre-phase-parent',('show','-s','--format=%P',guard.PRE_PHASE_PARENT)),('missing-last-correction-object',('rev-parse',guard.LAST_CORRECTION_PARENT+'^{tree}')),('missing-last-correction-parent',('show','-s','--format=%P',guard.LAST_CORRECTION_PARENT)),('missing-prior-correction-object',('rev-parse',guard.PRIOR_CORRECTION_PARENT+'^{tree}')),('missing-prior-correction-parent',('show','-s','--format=%P',guard.PRIOR_CORRECTION_PARENT)),('missing-intermediate-object',('rev-parse',guard.INTERMEDIATE_PARENT+'^{tree}')),('missing-intermediate-parent',('show','-s','--format=%P',guard.INTERMEDIATE_PARENT)),('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT)),('missing-earlier-object',('rev-parse',guard.EARLIER_PARENT+'^{tree}')),('missing-earlier-parent-metadata',('show','-s','--format=%P',guard.EARLIER_PARENT)),('missing-original-object',('rev-parse',guard.ORIGINAL_PARENT+'^{tree}')),('missing-original-parent-metadata',('show','-s','--format=%P',guard.ORIGINAL_PARENT))]:
+    for label,key in [('missing-fixture-object',('rev-parse',guard.FIXTURE_PARENT+'^{tree}')),('missing-fixture-parent-metadata',('show','-s','--format=%P',guard.FIXTURE_PARENT)),('missing-phase-object',('rev-parse',guard.PHASE_PARENT+'^{tree}')),('missing-phase-parent-metadata',('show','-s','--format=%P',guard.PHASE_PARENT)),('missing-pre-phase-object',('rev-parse',guard.PRE_PHASE_PARENT+'^{tree}')),('missing-pre-phase-parent',('show','-s','--format=%P',guard.PRE_PHASE_PARENT)),('missing-last-correction-object',('rev-parse',guard.LAST_CORRECTION_PARENT+'^{tree}')),('missing-last-correction-parent',('show','-s','--format=%P',guard.LAST_CORRECTION_PARENT)),('missing-prior-correction-object',('rev-parse',guard.PRIOR_CORRECTION_PARENT+'^{tree}')),('missing-prior-correction-parent',('show','-s','--format=%P',guard.PRIOR_CORRECTION_PARENT)),('missing-intermediate-object',('rev-parse',guard.INTERMEDIATE_PARENT+'^{tree}')),('missing-intermediate-parent',('show','-s','--format=%P',guard.INTERMEDIATE_PARENT)),('missing-depth-base',('rev-parse',guard.BASE+'^{tree}')),('missing-anchor-object',('rev-parse',guard.CORRECTION_PARENT+'^{tree}')),('missing-anchor-parent-metadata',('show','-s','--format=%P',guard.CORRECTION_PARENT)),('missing-previous-object',('rev-parse',guard.PREVIOUS_PARENT+'^{tree}')),('missing-previous-parent-metadata',('show','-s','--format=%P',guard.PREVIOUS_PARENT)),('missing-earlier-object',('rev-parse',guard.EARLIER_PARENT+'^{tree}')),('missing-earlier-parent-metadata',('show','-s','--format=%P',guard.EARLIER_PARENT)),('missing-original-object',('rev-parse',guard.ORIGINAL_PARENT+'^{tree}')),('missing-original-parent-metadata',('show','-s','--format=%P',guard.ORIGINAL_PARENT))]:
         try:run({key:None})
         except subprocess.CalledProcessError as error:
             check(error.returncode==128 and error.cmd==['git',*key],'missing object boundary');RESULTS.append(dict(name='ancestry-'+label,passed=True))
@@ -321,14 +352,20 @@ def ancestry_controls():
         expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
     workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
     def workflow_contract(raw,windows=False):
-        canonical=guard.checkout_bytes(raw,'5d5ad4346f87a24531a2f327b116d18e9d39c557',windows)
-        check(canonical.count(b'          fetch-depth: 11\n')==1 and
-              guard.sha(canonical.replace(b'          fetch-depth: 11\n',b'          fetch-depth: 10\n'))=='9cf5265dd2f90c275bff5ce2e4d8249bdd031ab342ba92ab74ad95eeef2e92f2','exact depth-eleven workflow contract')
+        canonical=guard.checkout_bytes(raw,'f1aa24556a0c2cb9b9b2a176cbdd09ac947224a1',windows)
+        check(canonical.count(b'          fetch-depth: 12\n')==1 and
+              guard.sha(canonical.replace(b'          fetch-depth: 12\n',b'          fetch-depth: 11\n'))=='401d38d79f89fedf309305af54f778bb000cef09f255215b4db34d268cd1497d','exact depth-twelve workflow contract')
         return canonical
-    control('workflow-only-depth-eleven-change',lambda:workflow_contract(workflow,os.name=='nt'))
+    control('workflow-only-depth-twelve-change',lambda:workflow_contract(workflow,os.name=='nt'))
     canonical=workflow_contract(workflow,os.name=='nt')
-    for label,old,new in [('old-depth',b'fetch-depth: 11',b'fetch-depth: 10'),('broad-depth',b'fetch-depth: 11',b'fetch-depth: 0'),
-                          ('malformed-depth',b'fetch-depth: 11',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+    def retained_depth_eleven_contract():
+        previous=canonical.replace(b'          fetch-depth: 12\n',b'          fetch-depth: 11\n')
+        check(guard.blob(previous)=='5d5ad4346f87a24531a2f327b116d18e9d39c557' and
+              previous.count(b'          fetch-depth: 11\n')==1 and
+              guard.sha(previous.replace(b'          fetch-depth: 11\n',b'          fetch-depth: 10\n'))=='9cf5265dd2f90c275bff5ce2e4d8249bdd031ab342ba92ab74ad95eeef2e92f2','exact retained depth-eleven workflow contract')
+    control('workflow-only-depth-eleven-change',retained_depth_eleven_contract)
+    for label,old,new in [('old-depth',b'fetch-depth: 12',b'fetch-depth: 10'),('previous-depth',b'fetch-depth: 12',b'fetch-depth: 11'),('broad-depth',b'fetch-depth: 12',b'fetch-depth: 0'),
+                          ('malformed-depth',b'fetch-depth: 12',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
                           ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
         changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
         expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
@@ -534,6 +571,59 @@ def initial_parent_controls(root):
               'initial relation value')
         check(str(controller) not in json.dumps(value) and str(child) not in json.dumps(value),'initial raw identity leak')
         cases.append((label,value));RESULTS.append(dict(name='initial-relations-'+label,passed=True))
+    # Pure conjunction: matching known child, current non-controller parent pin,
+    # and a sampled PPID matching neither. These integers never reach the OS.
+    from contextlib import ExitStack
+    conjunction_child=dict(fd=313,start=7);conjunction_parent=dict(fd=314,start=9)
+    conjunction_known={child:conjunction_child,parent:conjunction_parent}
+    conjunction_saved=copy.deepcopy(conjunction_known);tree=make(conjunction_known)
+    conjunction_facts=dict(before_parent_matches_expected=False,before_parent_matches_controller=False,
+        expected_parent_is_controller=False,parent_pin_present=True,parent_pin_is_current_known=True,
+        candidate_was_already_known=True,candidate_pin_recorded=True,candidate_start_matches_before=True,
+        final_parent_check_returned_true=True,new_pidfd_acquired_in_observe=False)
+    conjunction_expected=dict(schema='qbrain-n49d-linux-initial-parent-comparison-v1',site=initial,
+        complete=True,reason='parent-mismatch',**conjunction_facts)
+    with ExitStack() as blocked:
+        # observe() installs its three scripted parent/stat/parent calls and its
+        # own open/close checks. These outer guards cover transfer and all other
+        # process operations, including optional errors swallowed by capture.
+        forbidden=[blocked.enter_context(patch.object(target,name,
+            side_effect=AssertionError('conjunction extra ownership operation'),create=True))
+            for target,name in ((q,'_pidfd_exited'),(q,'_linux_children'),(q,'_linux_no_children'),
+                (q,'_linux_stat'),(q.os,'pidfd_open'),(q.os,'close'),(q.os,'getpid'),
+                (q.os,'getppid'),(q.os,'waitpid'),(q.os,'kill'),(q.os,'killpg'),
+                (q.signal,'pidfd_send_signal'))]
+        built=blocked.enter_context(patch.object(q,'_linux_initial_parent_detail',wraps=q._linux_initial_parent_detail))
+        observe(tree,expected=parent,pin=conjunction_parent,before_parent=parent+9)
+        first=tree.failure_detail;frozen=copy.deepcopy(first);value=transfer(tree)
+        check(type(first) is dict and set(first)==set(conjunction_expected) and
+              first['complete'] is True and
+              all(type(first[key]) is str and first[key]==conjunction_expected[key] for key in ('schema','site','reason')) and
+              all(type(first[key]) is bool and first[key] is expected for key,expected in conjunction_facts.items()),
+              'known pinned conjunction ten facts')
+        check(value==conjunction_expected and value is not first and
+              all(type(value[key]) is bool and value[key] is expected for key,expected in conjunction_facts.items()),
+              'known pinned conjunction transfer facts')
+        check(built.call_count==1,'known pinned conjunction initial builder count')
+        serialized=json.dumps(value,sort_keys=True)
+        check(all(str(identity) not in serialized for identity in (controller,parent,child,parent+9,313,314)) and
+              all(type(item) is bool or type(item) is str for item in value.values()),
+              'known pinned conjunction raw model identity leak')
+        # Repeat the same conjunction, then a different initial-parent failure.
+        # Neither may rebuild or replace the complete first observation.
+        observe(tree,expected=parent,pin=conjunction_parent,before_parent=parent+9)
+        observe(tree)
+        repeated=transfer(tree)
+        check(tree.failure_detail is first and first==frozen and repeated==conjunction_expected and repeated is not first and
+              built.call_count==1 and
+              all(type(repeated[key]) is bool and repeated[key] is expected for key,expected in conjunction_facts.items()),
+              'known pinned conjunction first capture replaced')
+        check(tree.known is conjunction_known and tree.known==conjunction_saved and
+              tree.known[child] is conjunction_child and tree.known[parent] is conjunction_parent and
+              tree.cleanup_calls==[] and all(probe.call_count==0 for probe in forbidden),
+              'known pinned conjunction process action or known map mutation')
+    cases.append(('known-pinned-other',value))
+    RESULTS.append(dict(name='initial-relations-known-pinned-other',passed=True))
     initial_value=cases[0][1]
     old_tree=observe(make(),later);later_value=transfer(old_tree)
     check(later_value==q._linux_identity_detail(dict(start=7,ppid=controller),dict(start=8,ppid=controller),controller,controller,None),'legacy output changed')
@@ -872,6 +962,8 @@ def failure_detail_retention_controls(root):
         raw=json.dumps(record).encode();windows=_timeout_failure_detail(record,raw,True,17)
         linux=q._linux_identity_detail(dict(start=1,ppid=23),dict(start=2,ppid=24),23,22,{})
         names=['failure-detail-final-retention-'+platform+'-'+newline for platform in ('windows','linux') for newline in ('LF','CRLF')]
+        names += ['failure-detail-final-retention-'+platform+'-'+newline for platform in
+                  ('wrapper-maximum','wrapper-prefix','wrapper-fallback') for newline in ('LF','CRLF')]
         final_controls=RESULTS+[dict(name=name,passed=True) for name in names]
         for platform,detail in [('windows',windows),('linux',linux)]:
             for newline in ('LF','CRLF'):
@@ -902,6 +994,7 @@ def failure_detail_retention_controls(root):
                 check(observed==detail and payload['passed'] is False and payload['status']=='failed-partial-diagnostics' and
                       (case/'failure.json').stat().st_size<=256*1024,'retained failure detail/outcome changed')
                 RESULTS.append(dict(name='failure-detail-final-retention-'+platform+'-'+newline,passed=True))
+        wrapper_retention_controls(root/'wrapper',final_controls)
     finally:FAILURE_DETAIL=saved
 
 
@@ -2960,6 +3053,771 @@ def build_lifecycle_controls(root):
         check(q._ACTIVE_OWNER is None and not q._OWNER_LOCK.locked(),'unsupported policy took ownership')
 
 
+WRAPPER_SCHEMA='qbrain-n49d-windows-wrapper-failure-v1'
+WRAPPER_REASON=frozenset(('captured','owner-unavailable','owner-invalid','owner-ineligible','stream-unavailable',
+    'stream-mismatch','marker-absent','marker-partial','marker-malformed','detail-unavailable','detail-limit'))
+WRAPPER_MARKER_STATUS=frozenset(('valid-prefix','absent','owner-ineligible','stream-unavailable','stream-mismatch',
+    'partial-line','malformed','unavailable'))
+WRAPPER_CLASSIFICATIONS=frozenset(('passed','stopped','timeout','nonzero child exit','lingering-descendant',
+    'cleanup-failed','capture-not-finalized','output-limit'))
+WRAPPER_CLEANUP_CATEGORIES={'private job termination failed':'termination-failed',
+    'private job close failed':'close-failed','owned cleanup deadline exceeded':'cleanup-deadline',
+    'failed cleanup grace exceeded':'cleanup-grace'}
+WRAPPER_CAPTURE_CATEGORIES=frozenset(('capture-deadline','reader-join-failed','reader-state-unavailable',
+    'stdout-unavailable','stderr-unavailable','both-unavailable'))
+WRAPPER_OWNER_KEYS=('classification','exit','elapsed_seconds','root_pid_recorded','cleanup_ok','owned_tree_empty',
+    'readers_done','stable','cleanup_error','capture_error','stdout','stderr')
+
+
+def _wrapper_markers(status='unavailable'):
+    return dict(status=status,events=[],last_entered_phase=None,last_completed_phase=None,interrupted_phase=None)
+
+
+def _wrapper_fallback():
+    return dict(schema=WRAPPER_SCHEMA,site='windows-wrapper-controls',complete=False,reason='detail-unavailable',
+        timeout_seconds=20,stream_limit=65536,owner=dict(status='unavailable',**{k:None for k in WRAPPER_OWNER_KEYS}),
+        markers=_wrapper_markers())
+
+
+def _wrapper_string(value,categories,nullable=False):
+    if value is None and nullable:return dict(category='none',bytes=0,sha256=hashlib.sha256(b'').hexdigest())
+    if type(value) is not str:return None
+    try:raw=value.encode('utf-8')
+    except UnicodeError:return None
+    if len(raw)>65536:return None
+    category=categories.get(value,'other') if type(categories) is dict else value if value in categories else 'other'
+    return dict(category=category,bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+
+
+def _wrapper_stream(value):
+    if (type(value) is not dict or set(value)!={'size','sha256'} or type(value['size']) is not int or
+        not 0<=value['size']<=65536 or type(value['sha256']) is not str or
+        q.re.fullmatch('[0-9a-f]{64}',value['sha256']) is None):return None
+    return dict(size=value['size'],sha256=value['sha256'])
+
+
+def _wrapper_marker_events(events,status='valid-prefix'):
+    result=_wrapper_markers(status);expected=0;unfinished=None;cleanup=False
+    for event in events:
+        if type(event) is not str or q.re.fullmatch(r'(?:0[0-9]|1[0-9]):[BE]',event) is None:
+            result['status']='malformed';break
+        phase=int(event[:2]);edge=event[-1]
+        if cleanup:
+            legal=event=='19:E' and result['events'][-1]=='19:B'
+        elif event=='19:B':
+            legal=bool(result['events'])
+            if legal:cleanup=True;result['interrupted_phase']=unfinished
+        else:
+            legal=phase<19 and event==('%02d:%s'%(expected//2,'B' if expected%2==0 else 'E'))
+            if legal:expected+=1
+        if not legal:result['status']='malformed';break
+        result['events'].append(event)
+        if edge=='B':result['last_entered_phase']=phase;unfinished=phase
+        else:result['last_completed_phase']=phase;unfinished=None
+    return result
+
+
+def _wrapper_parse_markers(raw):
+    check(type(raw) is bytes and len(raw)<=65536,'wrapper marker input cap')
+    accepted=[];status='absent'
+    lines=raw.split(b'\n')
+    for index,line in enumerate(lines):
+        # Only LF and CRLF terminate a marker. Other raw bytes remain opaque.
+        if not line.startswith(b'N49D_WRAPPER_'):continue
+        if index==len(lines)-1:status='partial-line';break
+        token=line[:-1] if line.endswith(b'\r') else line
+        if q.re.fullmatch(rb'N49D_WRAPPER_V1:(?:0[0-9]|1[0-9]):[BE]',token) is None:
+            status='malformed';break
+        event=token[len(b'N49D_WRAPPER_V1:'):].decode('ascii')
+        proposed=_wrapper_marker_events(accepted+[event])
+        if proposed['status']=='malformed':status='malformed';break
+        accepted.append(event);status='valid-prefix'
+    return _wrapper_marker_events(accepted,status)
+
+
+def _wrapper_file_identity(value):
+    return (value.st_dev,value.st_ino,value.st_mode,value.st_size,value.st_mtime_ns,value.st_ctime_ns,
+            getattr(value,'st_file_attributes',0))
+
+
+def _wrapper_regular(value):
+    return stat.S_ISREG(value.st_mode) and not stat.S_ISLNK(value.st_mode) and not (
+        getattr(value,'st_file_attributes',0)&getattr(stat,'FILE_ATTRIBUTE_REPARSE_POINT',1024))
+
+
+def _wrapper_marker_file(root,descriptor):
+    """Read only the fixed cached stderr leaf; never query or act on a process."""
+    if descriptor['size']==0:
+        return _wrapper_markers('absent' if descriptor['sha256']==hashlib.sha256(b'').hexdigest() else 'stream-mismatch')
+    path=root/'stderr.bin'
+    try:
+        before=path.lstat()
+        if not _wrapper_regular(before):return _wrapper_markers('stream-unavailable')
+        flags=os.O_RDONLY|getattr(os,'O_BINARY',0)|getattr(os,'O_NOFOLLOW',0)|getattr(os,'O_NONBLOCK',0)
+        fd=os.open(path,flags)
+        try:
+            opened=os.fstat(fd)
+            if not _wrapper_regular(opened) or _wrapper_file_identity(opened)!=_wrapper_file_identity(before):
+                return _wrapper_markers('stream-mismatch')
+            with os.fdopen(fd,'rb',buffering=0,closefd=False) as stream:raw=stream.read(65537)
+            after=os.fstat(fd);path_after=path.lstat()
+            if (len(raw)>65536 or len(raw)!=descriptor['size'] or hashlib.sha256(raw).hexdigest()!=descriptor['sha256'] or
+                _wrapper_file_identity(after)!=_wrapper_file_identity(before) or
+                _wrapper_file_identity(path_after)!=_wrapper_file_identity(before) or not _wrapper_regular(path_after)):
+                return _wrapper_markers('stream-mismatch')
+        finally:os.close(fd)
+        return _wrapper_parse_markers(raw)
+    except (OSError,ValueError):return _wrapper_markers('stream-unavailable')
+
+
+def _wrapper_failure_detail(owner,root):
+    detail=_wrapper_fallback()
+    if owner is None:detail['reason']='owner-unavailable';return detail
+    cached=owner.result
+    if type(cached) is not dict:detail['reason']='owner-unavailable';return detail
+    facts=detail['owner'];facts['status']='available'
+    def retain(key,value):
+        facts[key]=value
+        if value is None:facts['status']='partial'
+    retain('classification',_wrapper_string(cached.get('classification'),WRAPPER_CLASSIFICATIONS))
+    for key in ('cleanup_ok','owned_tree_empty','readers_done','stable'):
+        retain(key,cached.get(key) if type(cached.get(key)) is bool else None)
+    exit_code=cached.get('exit')
+    if 'exit' not in cached or not (exit_code is None or type(exit_code) is int and -(2**63)<=exit_code<2**63):
+        facts['status']='partial';exit_code=None
+    facts['exit']=exit_code
+    elapsed=cached.get('elapsed_seconds')
+    retain('elapsed_seconds',elapsed if (type(elapsed) is float and math.isfinite(elapsed) and elapsed>=0) or (
+        type(elapsed) is int and 0<=elapsed<2**63) else None)
+    root_pid=cached.get('root_pid')
+    retain('root_pid_recorded',False if 'root_pid' in cached and root_pid is None else True if (
+        type(root_pid) is int and 0<root_pid<2**63) else None)
+    retain('cleanup_error',_wrapper_string(cached['cleanup_error'],WRAPPER_CLEANUP_CATEGORIES,True)
+        if 'cleanup_error' in cached else None)
+    retain('capture_error',_wrapper_string(cached.get('capture_error'),WRAPPER_CAPTURE_CATEGORIES,True))
+    for key in ('stdout','stderr'):retain(key,_wrapper_stream(cached.get(key)))
+    if facts['status']!='available':detail['reason']='owner-invalid';return detail
+    if not all(facts[key] is True for key in ('cleanup_ok','owned_tree_empty','readers_done','stable')):
+        detail['reason']='owner-ineligible';detail['markers']=_wrapper_markers('owner-ineligible');return detail
+    detail['markers']=_wrapper_marker_file(root,facts['stderr'])
+    status=detail['markers']['status'];detail['complete']=status=='valid-prefix'
+    detail['reason']={'valid-prefix':'captured','absent':'marker-absent','partial-line':'marker-partial',
+        'malformed':'marker-malformed','stream-unavailable':'stream-unavailable','stream-mismatch':'stream-mismatch'}[status]
+    return detail
+
+
+def _validate_wrapper_detail(value):
+    check(type(value) is dict and set(value)==set(_wrapper_fallback()),'wrapper detail keys')
+    check(type(value['schema']) is str and value['schema']==WRAPPER_SCHEMA and
+        type(value['site']) is str and value['site']=='windows-wrapper-controls' and
+        type(value['complete']) is bool and type(value['reason']) is str and value['reason'] in WRAPPER_REASON and
+        type(value['timeout_seconds']) is int and value['timeout_seconds']==20 and
+        type(value['stream_limit']) is int and value['stream_limit']==65536,'wrapper detail constants')
+    facts=value['owner'];markers=value['markers']
+    check(type(facts) is dict and set(facts)=={'status',*WRAPPER_OWNER_KEYS} and
+        type(facts['status']) is str and facts['status'] in ('available','partial','unavailable'),'wrapper owner keys')
+    for key,categories in [('classification',WRAPPER_CLASSIFICATIONS),('cleanup_error',frozenset(WRAPPER_CLEANUP_CATEGORIES.values())|{'none'}),
+                           ('capture_error',WRAPPER_CAPTURE_CATEGORIES|{'none'})]:
+        summary=facts[key]
+        if summary is None:continue
+        check(type(summary) is dict and set(summary)=={'category','bytes','sha256'} and
+            type(summary['category']) is str and summary['category'] in categories|{'other'} and
+            type(summary['bytes']) is int and 0<=summary['bytes']<=65536 and
+            type(summary['sha256']) is str and q.re.fullmatch('[0-9a-f]{64}',summary['sha256']) is not None,'wrapper string summary')
+        if summary['category']=='none':check(summary['bytes']==0 and summary['sha256']==hashlib.sha256(b'').hexdigest(),'wrapper null summary')
+    check(facts['exit'] is None or type(facts['exit']) is int and -(2**63)<=facts['exit']<2**63,'wrapper exit')
+    elapsed=facts['elapsed_seconds']
+    check(elapsed is None or type(elapsed) is float and math.isfinite(elapsed) and elapsed>=0 or
+        type(elapsed) is int and 0<=elapsed<2**63,'wrapper elapsed')
+    for key in ('root_pid_recorded','cleanup_ok','owned_tree_empty','readers_done','stable'):
+        check(facts[key] is None or type(facts[key]) is bool,'wrapper boolean')
+    for key in ('stdout','stderr'):check(facts[key] is None or _wrapper_stream(facts[key]) is not None,'wrapper descriptor')
+    check(type(markers) is dict and set(markers)==set(_wrapper_markers()) and type(markers['status']) is str and
+        markers['status'] in WRAPPER_MARKER_STATUS and type(markers['events']) is list and len(markers['events'])<=40,'wrapper markers')
+    rebuilt=_wrapper_marker_events(markers['events'],markers['status'])
+    check(rebuilt==markers and (markers['status']!='valid-prefix' or bool(markers['events'])),'wrapper marker facts')
+    for key in ('last_entered_phase','last_completed_phase','interrupted_phase'):
+        check(markers[key] is None or type(markers[key]) is int and 0<=markers[key]<=(18 if key=='interrupted_phase' else 19),'wrapper marker phase type')
+    if facts['status']=='available':
+        check(all(facts[k] is not None for k in WRAPPER_OWNER_KEYS if k!='exit'),'wrapper available fields')
+    if facts['status']=='unavailable':check(all(facts[k] is None for k in WRAPPER_OWNER_KEYS),'wrapper unavailable fields')
+    eligible=facts['status']=='available' and all(facts[k] is True for k in ('cleanup_ok','owned_tree_empty','readers_done','stable'))
+    check(value['complete'] is (eligible and markers['status']=='valid-prefix'),'wrapper evidence completeness')
+    check((value['reason']=='captured') is value['complete'],'wrapper captured reason')
+    return value
+
+
+def _capture_wrapper_failure(error,root):
+    global FAILURE_DETAIL
+    if FAILURE_DETAIL is not None:return
+    FAILURE_DETAIL=_wrapper_fallback()
+    try:
+        candidate=_wrapper_failure_detail(error.owner,root)
+        _validate_wrapper_detail(candidate)
+        detached=q._bounded_failure_detail(candidate,FAILURE_DETAIL,4096)
+        _validate_wrapper_detail(detached)
+        check(failure_equal(detached,candidate),'wrapper detached detail changed')
+        for ending in ('\n','\r\n'):
+            raw=(json.dumps({'failure_detail':detached},sort_keys=True,indent=2,allow_nan=False)+'\n').replace('\n',ending).encode('utf-8')
+            check(len(raw)<=4096,'wrapper enclosing detail cap')
+        FAILURE_DETAIL=detached
+    except BaseException:pass
+
+
+def _run_windows_wrapper(root,script,wrapper):
+    try:
+        owner=q.OwnedChild(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(script),'-Wrapper',str(wrapper),'-Python',sys.executable],root,dict(os.environ),subprocess.DEVNULL,root/'stdout.bin',root/'stderr.bin',20,65536)
+        owner.wait()
+    except q.OwnedChildError as error:
+        _capture_wrapper_failure(error,root)
+        raise
+    check((root/'stdout.bin').read_text().strip().endswith('WRAPPER_CONTROLS_OK'),'actual wrapper API controls incomplete')
+
+def wrapper_instrumentation_controls():
+    import ast
+    source=Path(__file__).read_text(encoding='utf-8')
+    function=next(node for node in ast.parse(source).body if isinstance(node,ast.FunctionDef) and node.name=='windows_wrapper_controls')
+    body=ast.literal_eval(next(node.value for node in function.body if isinstance(node,ast.Assign) and
+        any(isinstance(target,ast.Name) and target.id=='body' for target in node.targets)))
+    stripped=''.join(line for line in body.splitlines(keepends=True) if not line.endswith(' # N49D_WRAPPER_INSTRUMENTATION\n'))
+    check(len(stripped.encode())==10269 and hashlib.sha256(stripped.encode()).hexdigest()==
+        'b45712940ee82b1f5a0549fa2c6d1105317f9829157ddd336cdbfeaaceec8421','wrapper underlying body changed')
+    tokens=['N49D_WRAPPER_V1:%02d:%s'%(phase,edge) for phase in range(20) for edge in ('B','E')]
+    check(len(tokens)==40 and sum(len(('\n'+token+'\r\n').encode('ascii')) for token in tokens)==920 and
+        all(body.count("'"+token+"'")==1 for token in tokens),'wrapper fixed marker inventory/budget')
+    RESULTS.append(dict(name='wrapper-fixed-markers-body',passed=True))
+
+
+def _wrapper_retention_fixtures():
+    from types import SimpleNamespace
+    cached=dict(_detail_fixture()['ownership'],classification='capture-not-finalized',exit=-(2**63),
+        elapsed_seconds=sys.float_info.max,root_pid=None,cleanup_error='private job termination failed',
+        capture_error='reader-state-unavailable',stdout=dict(size=65536,sha256='f'*64),stderr=dict(size=65536,sha256='e'*64))
+    events=['%02d:%s'%(phase,edge) for phase in range(20) for edge in ('B','E')]
+    with patch(__name__+'._wrapper_marker_file',return_value=_wrapper_marker_events(events)):
+        maximum=_wrapper_failure_detail(SimpleNamespace(result=cached),Path('/fixture'))
+    prefix=_wrapper_marker_events(['00:B','00:E','01:B','19:B','19:E'])
+    with patch(__name__+'._wrapper_marker_file',return_value=prefix):
+        interrupted=_wrapper_failure_detail(SimpleNamespace(result=_detail_fixture()['ownership']),Path('/fixture'))
+    fixtures={'wrapper-maximum':maximum,'wrapper-prefix':interrupted,'wrapper-fallback':_wrapper_fallback()}
+    for name,value in fixtures.items():
+        _validate_wrapper_detail(value)
+        check(value['complete'] is (name!='wrapper-fallback'),'wrapper fixture completeness')
+        detached=q._bounded_failure_detail(value,_wrapper_fallback(),4096)
+        check(failure_equal(detached,value),'required wrapper fixture replaced by fallback')
+        for ending in ('\n','\r\n'):
+            raw=(json.dumps({'failure_detail':value},sort_keys=True,indent=2,allow_nan=False)+'\n').replace('\n',ending).encode()
+            check(len(raw)<=4096,'maximum wrapper enclosing detail cap')
+    return fixtures
+
+
+def wrapper_retention_controls(root,final_controls):
+    """Serial fixtures exercise the real renderer, inverse and unchanged collector."""
+    stage=root/'stages/tiny';stage.mkdir(parents=True)
+    terminal=_detail_fixture()['ownership'];terminal['classification']='nonzero child exit'
+    rows_before=copy.deepcopy(final_controls);outcomes=[]
+    for label,detail in _wrapper_retention_fixtures().items():
+        for newline,ending in [('LF','\n'),('CRLF','\r\n')]:
+            failure=dict(passed=False,error='timeout',controls=copy.deepcopy(final_controls),failure_detail=copy.deepcopy(detail))
+            before=copy.deepcopy(failure);raw=(render_selftest_failure(failure)+ending).encode()
+            check(failure_equal(expand_failure_v2(raw),before) and failure_equal(failure,before),'wrapper failure renderer facts')
+            (stage/'stderr.bin').write_bytes(raw);(stage/'stdout.bin').write_bytes(b'')
+            row=dict(schema='qbrain-n49d-stage-v1',name='tiny',identity=identity(),ownership=terminal,
+                classification='nonzero child exit',argv=['python','selftest'],cwd='/fixture',timeout_seconds=120,
+                stream_limit=65536,exit=1,elapsed_seconds=20.0,requested_reports=[],available_reports={},
+                binaries_before={},binaries_after={},runtime_options={},stdout=q.descriptor(stage/'stdout.bin'),stderr=q.descriptor(stage/'stderr.bin'))
+            record=(json.dumps(row,sort_keys=True,indent=2)+'\n').replace('\n',ending).encode()
+            check(len(raw)<=65536 and len(record)<=16384,'wrapper retained stream/record cap')
+            (stage/'result.json').write_bytes(record)
+            packet=q.failure_diagnostics(root,root/'failure.json',identity(),['tiny'],['tiny'],'timeout')
+            for leaf,expected in [('stderr.bin',raw),('stdout.bin',b''),('result.json',record)]:
+                retained=packet['files']['stages/tiny/'+leaf]
+                check(retained['truncated'] is False and retained['retained_offset']==0 and retained['size']==len(expected) and
+                    retained['sha256']==hashlib.sha256(expected).hexdigest() and base64.b64decode(retained['data'])==expected,'wrapper collector retained bytes')
+            retained=base64.b64decode(packet['files']['stages/tiny/stderr.bin']['data'])
+            check(failure_equal(expand_failure_v2(retained),before) and packet['passed'] is False and packet['error']=='timeout' and
+                packet['status']=='failed-partial-diagnostics','wrapper collector changed original failure')
+            encoded=(root/'failure.json').read_bytes();payload=sum(len(v.get('data','')) for v in packet['files'].values())
+            check(len(encoded)<=262144 and len(encoded)+encoded.count(b'\n')<=262144 and
+                len(encoded)-payload<=12288 and len(encoded)+encoded.count(b'\n')-payload<=12288,'wrapper collector dual-newline admission')
+            outcomes.append(dict(name='failure-detail-final-retention-'+label+'-'+newline,passed=True))
+    check(failure_equal(final_controls,rows_before),'wrapper final control roster mutated')
+    RESULTS.extend(outcomes)
+
+
+def wrapper_evidence_controls(root):
+    """Finite cached-owner/marker models; one serial file, no process operations.
+
+    Trace tokens retain every named case and its actual result. Fixed result codes
+    are V=valid-prefix, A=absent, P=partial-line, M=malformed, U=stream-unavailable,
+    X=stream-mismatch, I=owner-invalid, N=owner-unavailable, E=owner-ineligible,
+    C=captured, F=detail-unavailable. Caller letters: C=construct,W=wait,G=result.
+    File call letters: L=lstat,O=open,F=fstat,R=read,C=close.
+    String-field prefixes: c=classification,u=cleanup_error,a=capture_error.
+    """
+    from contextlib import ExitStack
+    global FAILURE_DETAIL
+    saved=FAILURE_DETAIL;root.mkdir();leaf=root/'stderr.bin'
+    codes={'valid-prefix':'V','absent':'A','partial-line':'P','malformed':'M',
+        'stream-unavailable':'U','stream-mismatch':'X','owner-invalid':'I',
+        'owner-unavailable':'N','owner-ineligible':'E','captured':'C','detail-unavailable':'F'}
+    empty=hashlib.sha256(b'').hexdigest();line=b'N49D_WRAPPER_V1:00:B\n'
+    phases=['%02d:%s'%(n,e) for n in range(20) for e in ('B','E')]
+    def desc(raw):return dict(size=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+    def base():
+        return dict(classification='timeout',exit=259,elapsed_seconds=20.0,root_pid=482731965,
+            cleanup_ok=True,owned_tree_empty=True,readers_done=True,stable=True,
+            cleanup_error=None,capture_error=None,stdout=desc(b''),stderr=desc(line))
+    def group(name):
+        row=dict(name='wrapper-'+name,passed=False,trace=[]);RESULTS.append(row);return row
+    def record(row,label,outcome):row['trace'].append(label+'='+str(outcome))
+    def finish(row):row['passed']=True
+    class Owner:
+        def __init__(self,value,trace=None,fault=None):self.value=value;self.trace=[] if trace is None else trace;self.fault=fault
+        @property
+        def result(self):
+            self.trace.append('G')
+            if self.fault is not None:
+                check(failure_equal(FAILURE_DETAIL,_wrapper_fallback()),'wrapper fallback installed after cached-result getter')
+                raise self.fault
+            return self.value
+        def wait(self):
+            self.trace.append('W')
+            if getattr(self,'failure',None) is not None:raise self.failure
+        def __getattr__(self,key):
+            if key in ('proc','tree','poll','active','terminate','close','kill','_end'):
+                self.trace.append('!'+key);raise AssertionError('unexpected owner operation')
+            raise AttributeError(key)
+    class Text(str):pass
+    class Integer(int):pass
+    class Float(float):pass
+    class Mapping(dict):pass
+    class Sequence(list):pass
+    missing=object()
+    def marker_stub(path,item):
+        check(path==root and item==desc(line),'wrapper model fixed stream path/descriptor')
+        return _wrapper_marker_events(['00:B'])
+    def no_open(*args,**kwargs):raise AssertionError('ineligible wrapper opened a stream')
+    def build(value):
+        owner=Owner(value)
+        with patch(__name__+'._wrapper_marker_file',side_effect=marker_stub) as marker,patch.object(os,'open',side_effect=no_open):
+            result=_wrapper_failure_detail(owner,root)
+        check(owner.trace==['G'],'wrapper builder queried owner operations')
+        _validate_wrapper_detail(result)
+        return result,marker.call_count
+    def put(value,key,item):
+        if item is missing:value.pop(key,None)
+        else:value[key]=item
+    def assert_invalid(row,label,key,item):
+        value=base();put(value,key,item);before=dict(value)
+        result,opens=build(value);record(row,label,codes[result['reason']])
+        check(result['reason']=='owner-invalid' and result['owner']['status']=='partial' and not result['complete'] and opens==0,
+            'wrapper malformed owner accepted: '+label)
+        check(result['owner'].get('root_pid_recorded' if key=='root_pid' else key) is None,
+            'wrapper malformed field not null: '+label)
+        check(set(value)==set(before) and all(value[k] is before[k] for k in value),'wrapper input mapping changed: '+label)
+    def assert_detail_rejected(row,label,mutate):
+        value=_wrapper_fallback();mutate(value)
+        try:_validate_wrapper_detail(value)
+        except (ValueError,TypeError,KeyError):record(row,label,'reject')
+        else:raise ValueError('wrapper detail type accepted: '+label)
+    try:
+        # Actual caller: every ownership operation is modeled and counted.
+        row=group('caller')
+        for label,where,classification in [('timeout','wait','timeout'),('nonzero','wait','nonzero child exit'),
+                                          ('constructor','constructor','cleanup-failed'),('ordinary','ordinary','timeout'),('success','success','passed')]:
+            FAILURE_DETAIL=None;trace=[];value=base();value['classification']=classification
+            owner=Owner(value,trace);primary=q.OwnedChildError('wrapper primary '+label,owner)
+            if where=='ordinary':primary=RuntimeError('ordinary constructor primary')
+            if where=='wait':owner.failure=primary
+            def constructor(*args,**kwargs):
+                trace.append('C')
+                expected=['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(root/'fixture.ps1'),
+                    '-Wrapper',str(root/'wrapper.ps1'),'-Python',sys.executable]
+                check(args[0]==expected and args[1]==root and args[2]==dict(os.environ) and args[3] is subprocess.DEVNULL and
+                    args[4:]==(root/'stdout.bin',leaf,20,65536) and not kwargs,'wrapper caller contract changed')
+                if where in ('constructor','ordinary'):raise primary
+                return owner
+            with patch.object(q,'OwnedChild',side_effect=constructor),patch(__name__+'._wrapper_marker_file',side_effect=marker_stub),\
+                 patch.object(Path,'read_text',return_value='unchanged\nWRAPPER_CONTROLS_OK\n') as output:
+                try:_run_windows_wrapper(root,root/'fixture.ps1',root/'wrapper.ps1')
+                except BaseException as caught:check(where!='success' and caught is primary,'wrapper replaced original caller exception')
+                else:check(where=='success','wrapper converted failure to success')
+                expected_trace={'wait':['C','W','G'],'constructor':['C','G'],'ordinary':['C'],'success':['C','W']}[where]
+                check(trace==expected_trace,'wrapper caller repeated operations')
+                check(output.call_count==(1 if where=='success' else 0),'wrapper stdout success semantics changed')
+                if where in ('success','ordinary'):check(FAILURE_DETAIL is None,'wrapper fabricated constructor/success evidence')
+                else:
+                    check(FAILURE_DETAIL['complete'] is True and FAILURE_DETAIL['owner']['classification']['category']==classification,
+                        'wrapper caller lost error.owner')
+                    first=FAILURE_DETAIL;_capture_wrapper_failure(primary,root)
+                    check(FAILURE_DETAIL is first and trace==expected_trace,'wrapper caller retried first capture')
+            record(row,label,''.join(trace))
+        # Failed suffix remains the same selected ordinary positive-check failure.
+        FAILURE_DETAIL=None;owner=Owner(base());trace=owner.trace
+        with patch.object(q,'OwnedChild',return_value=owner),patch.object(Path,'read_text',return_value='wrong suffix'):
+            try:_run_windows_wrapper(root,root/'fixture.ps1',root/'wrapper.ps1')
+            except ValueError as error:check(str(error)=='actual wrapper API controls incomplete','wrapper success suffix primary changed')
+            else:raise ValueError('wrapper suffix negative passed')
+        check(trace==['W'] and FAILURE_DETAIL is None,'wrapper suffix failure invoked diagnostic capture')
+        record(row,'suffix','W');finish(row)
+
+        row=group('latch')
+        original_builder=_wrapper_failure_detail;original_validate=_validate_wrapper_detail
+        complete,_=build(base());incomplete,_=build(None)
+        for label,first_candidate in [('complete',complete),('incomplete',incomplete)]:
+            FAILURE_DETAIL=None;candidate=copy.deepcopy(first_candidate);before=copy.deepcopy(candidate);owner=Owner(base())
+            error=q.OwnedChildError('first primary',owner)
+            with patch(__name__+'._wrapper_failure_detail',return_value=candidate) as builder:
+                _capture_wrapper_failure(error,root);first=FAILURE_DETAIL
+                check(failure_equal(first,candidate) and first is not candidate and first['owner'] is not candidate['owner'] and
+                    first['markers']['events'] is not candidate['markers']['events'],'wrapper detail not detached')
+                candidate['markers']['events'].append('private-copy-mutation')
+                _capture_wrapper_failure(error,root)
+                check(FAILURE_DETAIL is first and failure_equal(first,before) and builder.call_count==1 and owner.trace==[],
+                    'wrapper first capture changed or retried')
+            record(row,label,codes[first['reason']])
+        class GetterError(q.OwnedChildError):
+            def __init__(self,trace):ValueError.__init__(self,'first primary');self.trace=trace
+            @property
+            def owner(self):
+                self.trace.append('owner')
+                check(failure_equal(FAILURE_DETAIL,_wrapper_fallback()),'wrapper fallback installed after first getter')
+                raise RuntimeError('private-owner-getter')
+        for label in ('owner-getter','result-getter','builder','validation','copy','detachment','detached-change','detached-validation','serialization','encoding','limit'):
+            FAILURE_DETAIL=None;calls=[];owner=Owner(base(),fault=RuntimeError('private-result-getter') if label=='result-getter' else None)
+            error=GetterError(calls) if label=='owner-getter' else q.OwnedChildError('first primary',owner)
+            candidate=copy.deepcopy(complete)
+            with ExitStack() as stack:
+                if label=='builder':builder=stack.enter_context(patch(__name__+'._wrapper_failure_detail',side_effect=RuntimeError('private-builder')))
+                elif label not in ('owner-getter','result-getter'):
+                    builder=stack.enter_context(patch(__name__+'._wrapper_failure_detail',return_value=candidate))
+                else:builder=stack.enter_context(patch(__name__+'._wrapper_failure_detail',wraps=original_builder))
+                if label=='validation':stack.enter_context(patch(__name__+'._validate_wrapper_detail',side_effect=ValueError('private-validator')))
+                if label=='copy':stack.enter_context(patch.object(json,'loads',side_effect=ValueError('private-copy')))
+                if label=='detachment':stack.enter_context(patch.object(q,'_bounded_failure_detail',side_effect=RuntimeError('private-detachment')))
+                if label=='detached-change':
+                    changed=copy.deepcopy(candidate);changed['owner']['exit']=0
+                    stack.enter_context(patch.object(q,'_bounded_failure_detail',return_value=changed))
+                if label=='detached-validation':
+                    def validate_twice(value):
+                        calls.append('validate')
+                        if len(calls)==2:raise ValueError('private-detached-validator')
+                        return original_validate(value)
+                    stack.enter_context(patch(__name__+'._validate_wrapper_detail',side_effect=validate_twice))
+                if label in ('serialization','encoding','limit'):
+                    stack.enter_context(patch.object(q,'_bounded_failure_detail',side_effect=lambda *a,**k:copy.deepcopy(candidate)))
+                    if label=='serialization':stack.enter_context(patch.object(json,'dumps',side_effect=ValueError('private-serializer')))
+                    elif label=='limit':stack.enter_context(patch.object(json,'dumps',return_value='x'*4096))
+                    else:
+                        class BadEncoding(str):
+                            def replace(self,*args,**kwargs):return self
+                            def __add__(self,other):return self
+                            def encode(self,*args,**kwargs):raise UnicodeError('private-encoding')
+                        stack.enter_context(patch.object(json,'dumps',return_value=BadEncoding('private-encoding')))
+                owner.failure=error
+                caller=patch.object(q,'OwnedChild',return_value=owner) if label=='builder' else patch.object(q,'OwnedChild',side_effect=error)
+                with caller:
+                    try:_run_windows_wrapper(root,root/'fixture.ps1',root/'wrapper.ps1')
+                    except BaseException as caught:check(caught is error,'wrapper optional fault replaced primary')
+                    else:raise ValueError('wrapper optional fault converted failure to success')
+                first=FAILURE_DETAIL;count=builder.call_count;prior=list(owner.trace);prior_calls=list(calls)
+                check(failure_equal(first,_wrapper_fallback()),'wrapper optional fault lost fixed fallback: '+label)
+                _capture_wrapper_failure(error,root)
+                check(FAILURE_DETAIL is first and builder.call_count==count and owner.trace==prior and calls==prior_calls,
+                    'wrapper optional fault retried: '+label)
+            # Optional dependency recovery still cannot replace the first fallback.
+            with patch(__name__+'._wrapper_failure_detail',return_value=complete) as recovered:
+                _capture_wrapper_failure(q.OwnedChildError('later primary',Owner(base())),root)
+                check(FAILURE_DETAIL is first and recovered.call_count==0,'wrapper recovered dependency relatched')
+            check('!' not in ''.join(owner.trace),'wrapper optional fault queried owner')
+            if label=='builder':check(owner.trace==['W'],'wrapper diagnostic failure repeated wait')
+            record(row,label,'F'+str(count)+('W' if label=='builder' else ''))
+        for label,existing in [('foreign',{'already':'selected'}),('complete',complete),('fallback',_wrapper_fallback())]:
+            FAILURE_DETAIL=existing;calls=[];error=GetterError(calls)
+            with patch(__name__+'._wrapper_failure_detail',side_effect=AssertionError('builder reached')) as builder:
+                _capture_wrapper_failure(error,root)
+            check(FAILURE_DETAIL is existing and calls==[] and not builder.called,'wrapper replaced existing context')
+            record(row,'prior-'+label,'0')
+        finish(row)
+
+        row=group('owner-scalars')
+        for label,value in [('none',None),('list',[]),('text','private-result'),('map-sub',Mapping(base()))]:
+            result,opens=build(value);record(row,'result.'+label,codes[result['reason']])
+            check(result['reason']=='owner-unavailable' and opens==0,'wrapper invalid cached result available')
+        unavailable=_wrapper_failure_detail(None,root);_validate_wrapper_detail(unavailable)
+        check(unavailable['reason']=='owner-unavailable','wrapper missing owner available');record(row,'owner.none','N')
+        for label,value in [('none',None),('zero',0),('seven',7),('259',259),('negative',-1),('min',-(2**63)),('max',2**63-1)]:
+            cached=base();cached['exit']=value;result,opens=build(cached)
+            check(result['owner']['exit'] is value and result['complete'] and opens==1,'wrapper exit reclassified')
+            record(row,'exit.'+label,'C')
+        for label,value in [('miss',missing),('true',True),('false',False),('float',1.0),('text','1'),('sub',Integer(1)),('low',-(2**63)-1),('high',2**63)]:
+            assert_invalid(row,'exit.'+label,'exit',value)
+        for label,value in [('none',None),('one',1),('max',2**63-1)]:
+            cached=base();cached['root_pid']=value;result,opens=build(cached)
+            check(result['owner']['root_pid_recorded'] is (value is not None) and result['complete'] and opens==1,'wrapper root recorded mapping')
+            record(row,'root.'+label,str(int(result['owner']['root_pid_recorded'])))
+        for label,value in [('miss',missing),('true',True),('false',False),('zero',0),('neg',-1),('high',2**63),('float',1.0),('text','1'),('sub',Integer(1))]:
+            assert_invalid(row,'root.'+label,'root_pid',value)
+        for label,value in [('zero',0),('float',0.0),('minuszero',-0.0),('fraction',1.25),('max',2**63-1)]:
+            cached=base();cached['elapsed_seconds']=value;result,opens=build(cached)
+            check(failure_equal(result['owner']['elapsed_seconds'],value) and result['complete'] and opens==1,'wrapper elapsed changed')
+            record(row,'time.'+label,'C')
+        for label,value in [('miss',missing),('none',None),('bool',True),('neg',-1),('nan',float('nan')),('inf',float('inf')),('ninf',-float('inf')),
+                            ('text','1'),('intsub',Integer(1)),('fltsub',Float(1)),('high',2**63)]:
+            assert_invalid(row,'time.'+label,'elapsed_seconds',value)
+        finish(row)
+        for key in ('cleanup_ok','owned_tree_empty','readers_done','stable'):
+            row=group('flag-'+key)
+            for label,value in [('true',True),('false',False)]:
+                cached=base();cached[key]=value;result,opens=build(cached);record(row,label,codes[result['reason']])
+                check(result['owner'][key] is value and result['complete'] is value and opens==int(value),
+                    'wrapper false cleanup fact became true')
+            for label,value in [('miss',missing),('none',None),('zero',0),('one',1),('text','true')]:assert_invalid(row,label,key,value)
+            finish(row)
+
+        aliases={'classification':'c','cleanup_error':'u','capture_error':'a'}
+        row=group('strings-privacy')
+        sentinel='private-wrapper-path/C:/secret/argv=hidden ENV=secret process=482731965 \u79d8\u5bc6'
+        for field,known in [('classification',{v:v for v in WRAPPER_CLASSIFICATIONS}),('cleanup_error',WRAPPER_CLEANUP_CATEGORIES),
+                            ('capture_error',{v:v for v in WRAPPER_CAPTURE_CATEGORIES})]:
+            for index,(text,category) in enumerate(sorted(known.items())):
+                cached=base();cached[field]=text;result,opens=build(cached);summary=result['owner'][field]
+                check(summary==dict(category=category,bytes=len(text.encode()),sha256=hashlib.sha256(text.encode()).hexdigest()) and result['complete'],
+                    'wrapper known string summary changed')
+                record(row,aliases[field]+str(index),'C')
+            for label,text in [('private',sentinel),('empty',''),('exact','\u00e9'*32768)]:
+                cached=base();cached[field]=text;cached.update(argv=sentinel,path=sentinel,environment=sentinel,members=[sentinel])
+                before=copy.deepcopy(cached);result,opens=build(cached);summary=result['owner'][field]
+                check(summary==dict(category='other',bytes=len(text.encode()),sha256=hashlib.sha256(text.encode()).hexdigest()) and result['complete'],
+                    'wrapper unknown string not fully hashed')
+                raw=json.dumps(result,sort_keys=True)
+                check(sentinel not in raw and '482731965' not in raw and 'argv' not in raw and 'environment' not in raw and
+                    failure_equal(cached,before),'wrapper private text leaked or input changed')
+                record(row,aliases[field]+'.'+label,'C')
+            for label,value in [('bool',True),('int',1),('map',{}),('sub',Text('timeout')),('unicode','\ud800'),('over','\u00e9'*32768+'x')]:
+                assert_invalid(row,aliases[field]+'.'+label,field,value)
+            if field=='classification':
+                for label,value in [('miss',missing),('none',None)]:assert_invalid(row,'c.'+label,field,value)
+            else:
+                cached=base();cached[field]=None;result,opens=build(cached)
+                check(result['owner'][field]==dict(category='none',bytes=0,sha256=empty) and result['complete'],'wrapper null error category')
+                record(row,aliases[field]+'.none','C')
+                if field=='cleanup_error':assert_invalid(row,'cleanup.miss',field,missing)
+                else:
+                    cached.pop(field);result,opens=build(cached)
+                    check(result['owner'][field]==dict(category='none',bytes=0,sha256=empty) and result['complete'],'wrapper optional capture error missing')
+                    record(row,'capture.miss','C')
+        finish(row)
+        for field in ('stdout','stderr'):
+            row=group('descriptor-'+field)
+            variants=[('miss',missing),('none',None),('sub',Mapping(desc(line))),('extra',dict(desc(line),path='private')),
+                ('nosize',{'sha256':empty}),('nohash',{'size':0}),('bool',dict(size=True,sha256=empty)),('neg',dict(size=-1,sha256=empty)),
+                ('over',dict(size=65537,sha256=empty)),('float',dict(size=0.0,sha256=empty)),('intsub',dict(size=Integer(0),sha256=empty)),
+                ('upper',dict(size=0,sha256='A'*64)),('short',dict(size=0,sha256='0'*63)),('badhex',dict(size=0,sha256='g'*64)),
+                ('hashsub',dict(size=0,sha256=Text(empty))),('hashnone',dict(size=0,sha256=None))]
+            for label,value in variants:assert_invalid(row,label,field,value)
+            for label,size in [('zero',0),('cap',65536)]:
+                value=dict(size=size,sha256=empty);retained=_wrapper_stream(value)
+                check(retained==value and retained is not value,'wrapper exact descriptor boundary')
+                record(row,label,'valid')
+            finish(row)
+
+        row=group('detail-validation')
+        mutations=[('top-sub',lambda v:None),('schema-sub',lambda v:v.update(schema=Text(WRAPPER_SCHEMA))),
+            ('site-sub',lambda v:v.update(site=Text('windows-wrapper-controls'))),('schema',lambda v:v.update(schema='wrong')),
+            ('site',lambda v:v.update(site='wrong')),('extra',lambda v:v.update(private='hidden')),('missing',lambda v:v.pop('owner')),
+            ('complete',lambda v:v.update(complete=0)),('reason-sub',lambda v:v.update(reason=Text('detail-unavailable'))),
+            ('reason',lambda v:v.update(reason='private')),('timeout',lambda v:v.update(timeout_seconds=20.0)),
+            ('cap',lambda v:v.update(stream_limit=Integer(65536))),('owner-sub',lambda v:v.update(owner=Mapping(v['owner']))),
+            ('status',lambda v:v['owner'].update(status=Text('unavailable'))),('owner-extra',lambda v:v['owner'].update(pid=123)),
+            ('owner-miss',lambda v:v['owner'].pop('exit')),('unavailable-fact',lambda v:v['owner'].update(stable=True)),
+            ('exit-bool',lambda v:v['owner'].update(exit=True,status='partial')),('elapsed-inf',lambda v:v['owner'].update(elapsed_seconds=float('inf'),status='partial')),
+            ('bool-int',lambda v:v['owner'].update(cleanup_ok=1,status='partial')),('markers-sub',lambda v:v.update(markers=Mapping(v['markers']))),
+            ('marker-status',lambda v:v['markers'].update(status=Text('unavailable'))),('events-sub',lambda v:v['markers'].update(events=Sequence())),
+            ('event-sub',lambda v:v['markers'].update(events=[Text('00:B')])),('marker-extra',lambda v:v['markers'].update(raw='private')),
+            ('marker-miss',lambda v:v['markers'].pop('status')),('phase-bool',lambda v:v.update(markers=dict(_wrapper_marker_events(['00:B','00:E','01:B'],'malformed'),last_entered_phase=True))),
+            ('valid-empty',lambda v:v['markers'].update(status='valid-prefix')),('false-captured',lambda v:v.update(reason='captured'))]
+        for label,mutate in mutations:
+            if label=='top-sub':
+                try:_validate_wrapper_detail(Mapping(_wrapper_fallback()))
+                except ValueError:record(row,label,'reject')
+                else:raise ValueError('wrapper detail mapping subclass accepted')
+            else:assert_detail_rejected(row,label,mutate)
+        for field in ('classification','cleanup_error','capture_error'):
+            for label,summary in [('sub',Mapping(category='other',bytes=1,sha256=empty)),('keys',dict(category='other',bytes=1,sha256=empty,raw='private')),
+                                  ('category',dict(category=Text('other'),bytes=1,sha256=empty)),('bytes',dict(category='other',bytes=True,sha256=empty)),
+                                  ('hash',dict(category='other',bytes=1,sha256='A'*64)),('none',dict(category='none',bytes=1,sha256=empty))]:
+                assert_detail_rejected(row,aliases[field]+'.'+label,lambda v,field=field,summary=summary:v['owner'].update({field:summary},status='partial'))
+        finish(row)
+
+        row=group('marker-prefixes')
+        for ending in (b'\n',b'\r\n'):
+            for count in range(1,41):
+                events=phases[:count];raw=b''.join(b'N49D_WRAPPER_V1:'+event.encode()+ending for event in events)
+                actual=_wrapper_parse_markers(raw);expected=_wrapper_marker_events(events)
+                entered=(count-1)//2;completed=(count-2)//2 if count>=2 else None
+                check(actual==expected and actual['status']=='valid-prefix' and actual['events']==events and
+                    actual['last_entered_phase']==entered and actual['last_completed_phase']==completed and actual['interrupted_phase'] is None,
+                    'wrapper valid marker prefix boundary')
+                record(row,('L' if ending==b'\n' else 'C')+str(count),codes[actual['status']])
+        check(sum(len(b'N49D_WRAPPER_V1:'+event.encode()+b'\r\n\r\n') for event in phases)<=2048,'wrapper emission byte bound')
+        finish(row)
+        row=group('marker-cleanup')
+        for phase in range(19):
+            for closed in (False,True):
+                events=phases[:phase*2+1]+['19:B']+(['19:E'] if closed else [])
+                raw=b''.join(b'N49D_WRAPPER_V1:'+event.encode()+b'\n' for event in events)
+                actual=_wrapper_parse_markers(raw)
+                check(actual['status']=='valid-prefix' and actual['events']==events and actual['interrupted_phase']==phase and
+                    actual['last_entered_phase']==19 and actual['last_completed_phase']==(19 if closed else phase-1 if phase else None),
+                    'wrapper unfinished phase cleanup transition')
+                record(row,'%02d%s'%(phase,'E' if closed else 'B'),codes[actual['status']])
+        # Cleanup may also follow each completed nonempty prefix.
+        for phase in range(19):
+            events=phases[:phase*2+2]+['19:B','19:E'];actual=_wrapper_parse_markers(b''.join(b'N49D_WRAPPER_V1:'+e.encode()+b'\n' for e in events))
+            check(actual['status']=='valid-prefix' and actual['events']==events and actual['interrupted_phase'] is None and
+                actual['last_entered_phase']==19 and actual['last_completed_phase']==19,'wrapper completed phase cleanup transition')
+            record(row,'%02dC'%phase,codes[actual['status']])
+        finish(row)
+        row=group('marker-negatives')
+        tagged=lambda events:b''.join(b'N49D_WRAPPER_V1:'+e+b'\n' for e in events)
+        cases=[('empty',b'','absent',[]),('private',b'private-path\xff\x00 secret argv environment\n','absent',[]),
+            ('unrelated-separators',b'private\rN49D_WRAPPER_V1:00:B\n','absent',[]),
+            ('leading-space',b' N49D_WRAPPER_V1:00:B\n','absent',[]),('partial',line[:-1],'partial-line',[]),
+            ('prefix-partial',line+b'N49D_WRAPPER_V1:00:E','partial-line',['00:B']),
+            ('cr-only',line[:-1]+b'\r','partial-line',[]),('foreign',b'N49D_WRAPPER_V2:00:B\n','malformed',[]),
+            ('family',b'N49D_WRAPPER_BAD\n','malformed',[]),('range',tagged([b'20:B']),'malformed',[]),
+            ('edge',tagged([b'00:X']),'malformed',[]),('digits',tagged([b'0:B']),'malformed',[]),
+            ('suffix',line[:-1]+b'x\n','malformed',[]),('duplicate',tagged([b'00:B',b'00:B']),'malformed',['00:B']),
+            ('reverse',tagged([b'00:E']),'malformed',[]),('skip',tagged([b'00:B',b'01:B']),'malformed',['00:B']),
+            ('cleanup-first',tagged([b'19:B']),'malformed',[]),('cleanup-end-first',tagged([b'00:B',b'19:E']),'malformed',['00:B']),
+            ('after-cleanup',tagged([b'00:B',b'19:B',b'19:E',b'00:E']),'malformed',['00:B','19:B','19:E']),
+            ('cleanup-repeat',tagged([b'00:B',b'19:B',b'19:B']),'malformed',['00:B','19:B']),
+            ('no-recovery',line+b'N49D_WRAPPER_V2:00:E\n'+tagged([b'00:E',b'01:B']),'malformed',['00:B']),
+            ('opaque-interleave',b'private\xff\n'+line+b'private\r\x0b\x0c\n'+tagged([b'00:E']),'valid-prefix',['00:B','00:E'])]
+        for label,raw,status,events in cases:
+            actual=_wrapper_parse_markers(raw);record(row,label,codes[actual['status']])
+            check(actual==_wrapper_marker_events(events,status),'wrapper malformed marker recovery: '+label)
+            check('private' not in json.dumps(actual),'wrapper marker private text leaked')
+        for label,raw in [('sub',type('Bytes',(bytes,),{})(line)),('text',line.decode()),('over',b'x'*65537)]:
+            try:_wrapper_parse_markers(raw)
+            except ValueError:record(row,label,'reject')
+            else:raise ValueError('wrapper parser input cap/type accepted')
+        finish(row)
+
+        row=group('bounded-file')
+        original_open=os.open;original_fstat=os.fstat;original_fdopen=os.fdopen;original_close=os.close;original_lstat=Path.lstat
+        written=0;peak=0;symlink_bytes=0
+        def write(raw):
+            nonlocal written,peak
+            leaf.write_bytes(raw);written+=len(raw);peak=max(peak,len(raw))
+        class Meta:
+            def __init__(self,value,change=None):
+                for name in ('st_dev','st_ino','st_mode','st_size','st_mtime_ns','st_ctime_ns','st_file_attributes'):
+                    setattr(self,name,getattr(value,name,0))
+                if change is not None:setattr(self,change[0],change[1])
+        def file_case(label,descriptor,status,fault=None,expected_open=None):
+            calls=[];counts={'lstat':0,'fstat':0};reads=[]
+            def lstat(path,*args,**kwargs):
+                check(path==leaf,'wrapper accessed arbitrary stream path');calls.append('L');counts['lstat']+=1
+                if fault=='lstat'+str(counts['lstat']):raise OSError('private-lstat')
+                value=original_lstat(path,*args,**kwargs)
+                if fault=='reparse-before' and counts['lstat']==1:return Meta(value,('st_file_attributes',1024))
+                if fault=='path-after' and counts['lstat']==2:return Meta(value,('st_ino',value.st_ino+1))
+                if fault=='reparse-after' and counts['lstat']==2:return Meta(value,('st_file_attributes',1024))
+                return value
+            def opened(path,flags,*args,**kwargs):
+                calls.append('O');check(path==leaf and flags&getattr(os,'O_NOFOLLOW',0)==getattr(os,'O_NOFOLLOW',0) and
+                    flags&getattr(os,'O_NONBLOCK',0)==getattr(os,'O_NONBLOCK',0),'wrapper open flags/path')
+                if fault=='open':raise OSError('private-open')
+                return original_open(path,flags,*args,**kwargs)
+            def fstat(fd):
+                calls.append('F');counts['fstat']+=1
+                if fault=='fstat'+str(counts['fstat']):raise OSError('private-fstat')
+                value=original_fstat(fd)
+                if fault=='fd-before' and counts['fstat']==1:return Meta(value,('st_ino',value.st_ino+1))
+                if fault=='fd-after' and counts['fstat']==2:return Meta(value,('st_mtime_ns',value.st_mtime_ns+1))
+                if fault=='fd-nonregular' and counts['fstat']==1:return Meta(value,('st_mode',stat.S_IFDIR|0o700))
+                if fault=='fd-reparse' and counts['fstat']==1:return Meta(value,('st_file_attributes',1024))
+                return value
+            class Reader:
+                def __init__(self,stream):self.stream=stream
+                def __enter__(self):self.stream.__enter__();return self
+                def __exit__(self,*args):return self.stream.__exit__(*args)
+                def read(self,size):
+                    calls.append('R');reads.append(size);check(size==65537,'wrapper unbounded/repeated read')
+                    if fault=='read':raise OSError('private-read')
+                    return self.stream.read(size)
+            def fdopen(fd,*args,**kwargs):
+                check(args==('rb',) and kwargs==dict(buffering=0,closefd=False),'wrapper unbuffered descriptor mode')
+                if fault=='fdopen':raise OSError('private-fdopen')
+                return Reader(original_fdopen(fd,*args,**kwargs))
+            def close(fd):calls.append('C');return original_close(fd)
+            with patch.object(Path,'lstat',lstat),patch.object(os,'open',opened),patch.object(os,'fstat',fstat),\
+                 patch.object(os,'fdopen',fdopen),patch.object(os,'close',close):actual=_wrapper_marker_file(root,descriptor)
+            record(row,label,codes[actual['status']]+':'+''.join(calls))
+            check(actual['status']==status,'wrapper file boundary: '+label)
+            check(len(reads)<=1 and (expected_open is None or calls.count('O')==expected_open),'wrapper file repeated/unexpected open')
+            check(calls.count('C')==(calls.count('O')-(1 if fault=='open' else 0)),'wrapper file descriptor leak')
+            if status!='valid-prefix':check(actual['events']==[],'wrapper failed stream trusted marker prefix')
+            else:check(actual==_wrapper_marker_events(['00:B']),'wrapper bounded file marker outcome')
+        exact=b'x'*(65536-len(line)-1)+b'\n'+line
+        write(exact);file_case('cap',desc(exact),'valid-prefix',expected_open=1)
+        write(exact+b'x');file_case('over',desc(exact),'stream-mismatch',expected_open=1)
+        write(b'');file_case('empty',desc(b''),'absent',expected_open=0)
+        file_case('empty-hash',dict(size=0,sha256='0'*64),'stream-mismatch',expected_open=0)
+        leaf.unlink();file_case('missing',desc(line),'stream-unavailable',expected_open=0)
+        leaf.mkdir();file_case('directory',desc(line),'stream-unavailable',expected_open=0);leaf.rmdir()
+        try:leaf.symlink_to('stderr.bin')
+        except (OSError,NotImplementedError) as error:record(row,'symlink-native','unavailable:'+type(error).__name__)
+        else:
+            symlink_bytes=10
+            try:file_case('symlink',desc(line),'stream-unavailable',expected_open=0)
+            finally:leaf.unlink()
+        if hasattr(os,'mkfifo'):
+            os.mkfifo(leaf)
+            try:file_case('fifo',desc(line),'stream-unavailable',expected_open=0)
+            finally:leaf.unlink()
+        else:record(row,'fifo-native','unavailable')
+        write(line)
+        file_case('hash',dict(size=len(line),sha256='0'*64),'stream-mismatch',expected_open=1)
+        file_case('size',dict(size=len(line)-1,sha256=desc(line)['sha256']),'stream-mismatch',expected_open=1)
+        for fault,status,opens in [('reparse-before','stream-unavailable',0),('open','stream-unavailable',1),
+            ('lstat1','stream-unavailable',0),('lstat2','stream-unavailable',1),('fstat1','stream-unavailable',1),('fstat2','stream-unavailable',1),
+            ('read','stream-unavailable',1),('fdopen','stream-unavailable',1),('fd-before','stream-mismatch',1),('fd-after','stream-mismatch',1),
+            ('path-after','stream-mismatch',1),('fd-nonregular','stream-mismatch',1),('fd-reparse','stream-mismatch',1),('reparse-after','stream-mismatch',1)]:
+            file_case(fault,desc(line),status,fault,opens)
+        check(written==131094 and peak==65537 and written+symlink_bytes<=131104,'wrapper serial fixture write budget')
+        record(row,'bytes',str(written)+'/'+str(peak)+'/'+str(symlink_bytes));finish(row)
+
+        row=group('no-process-operations')
+        value=base();value['stderr']=desc(line);owner=Owner(value);before=copy.deepcopy(value)
+        with ExitStack() as stack:
+            for module,names in [(q.subprocess,('Popen','run','check_output','call')),
+                                 (os,('kill','waitpid','waitid','pidfd_open'))]:
+                for name in names:
+                    if hasattr(module,name):stack.enter_context(patch.object(module,name,side_effect=AssertionError('wrapper process operation '+name)))
+            result=_wrapper_failure_detail(owner,root)
+        check(result['complete'] and owner.trace==['G'] and failure_equal(value,before),'wrapper capture queried or mutated owner')
+        record(row,'real-read','G')
+        for key in ('cleanup_ok','owned_tree_empty','readers_done','stable'):
+            value=base();value[key]=False;owner=Owner(value)
+            with patch.object(os,'open',side_effect=no_open),patch.object(Path,'lstat',side_effect=AssertionError('ineligible stat')):
+                result=_wrapper_failure_detail(owner,root)
+            check(result['reason']=='owner-ineligible' and owner.trace==['G'],'wrapper ineligible capture queried stream/process')
+            record(row,key,'G0')
+        for label,mutate in [('missing-descriptor',lambda v:v.pop('stderr')),('invalid-descriptor',lambda v:v.update(stderr=dict(size=True,sha256=empty))),
+                            ('invalid-root',lambda v:v.update(root_pid=True)),('missing-result',lambda v:None)]:
+            value=base();mutate(value);owner=Owner(None if label=='missing-result' else value)
+            with patch.object(os,'open',side_effect=no_open),patch.object(Path,'lstat',side_effect=AssertionError('invalid stat')):
+                result=_wrapper_failure_detail(owner,root)
+            check(result['reason'] in ('owner-invalid','owner-unavailable') and owner.trace==['G'],'wrapper invalid capture queried stream/process')
+            record(row,label,'G0')
+        finish(row)
+    finally:FAILURE_DETAIL=saved
+
+
 def windows_wrapper_controls(root):
     if os.name!='nt':return
     root.mkdir();wrapper=q.ROOT/'scripts/build-tests-cl.ps1'
@@ -2969,10 +3827,14 @@ $ErrorActionPreference='Stop'
 function Need($c,$m){if(-not $c){throw $m}}
 function Reject([scriptblock]$f){$bad=$false;try{& $f}catch{$bad=$true};Need $bad 'Expected rejection'}
 function Bytes($s){return ,[Text.Encoding]::UTF8.GetBytes($s)}
+function Write-N49DWrapperMarker([int]$Id){try{$lines=@('N49D_WRAPPER_V1:00:B','N49D_WRAPPER_V1:00:E','N49D_WRAPPER_V1:01:B','N49D_WRAPPER_V1:01:E','N49D_WRAPPER_V1:02:B','N49D_WRAPPER_V1:02:E','N49D_WRAPPER_V1:03:B','N49D_WRAPPER_V1:03:E','N49D_WRAPPER_V1:04:B','N49D_WRAPPER_V1:04:E','N49D_WRAPPER_V1:05:B','N49D_WRAPPER_V1:05:E','N49D_WRAPPER_V1:06:B','N49D_WRAPPER_V1:06:E','N49D_WRAPPER_V1:07:B','N49D_WRAPPER_V1:07:E','N49D_WRAPPER_V1:08:B','N49D_WRAPPER_V1:08:E','N49D_WRAPPER_V1:09:B','N49D_WRAPPER_V1:09:E','N49D_WRAPPER_V1:10:B','N49D_WRAPPER_V1:10:E','N49D_WRAPPER_V1:11:B','N49D_WRAPPER_V1:11:E','N49D_WRAPPER_V1:12:B','N49D_WRAPPER_V1:12:E','N49D_WRAPPER_V1:13:B','N49D_WRAPPER_V1:13:E','N49D_WRAPPER_V1:14:B','N49D_WRAPPER_V1:14:E','N49D_WRAPPER_V1:15:B','N49D_WRAPPER_V1:15:E','N49D_WRAPPER_V1:16:B','N49D_WRAPPER_V1:16:E','N49D_WRAPPER_V1:17:B','N49D_WRAPPER_V1:17:E','N49D_WRAPPER_V1:18:B','N49D_WRAPPER_V1:18:E','N49D_WRAPPER_V1:19:B','N49D_WRAPPER_V1:19:E');if($Id -ge 0 -and $Id -lt 40){[Console]::Error.WriteLine("`n"+$lines[$Id]);[Console]::Error.Flush()}}catch{}} # N49D_WRAPPER_INSTRUMENTATION
+Write-N49DWrapperMarker 0 # N49D_WRAPPER_INSTRUMENTATION
 $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($Wrapper,[ref]$t,[ref]$e)
 Need (-not $e.Count) 'Wrapper syntax'
 $functions=@($ast.EndBlock.Statements|Where-Object{$_ -is [Management.Automation.Language.FunctionDefinitionAst]})
 foreach($f in $functions){. ([scriptblock]::Create($f.Extent.Text))}
+Write-N49DWrapperMarker 1 # N49D_WRAPPER_INSTRUMENTATION
+Write-N49DWrapperMarker 2 # N49D_WRAPPER_INSTRUMENTATION
 $root=Join-Path ([IO.Path]::GetTempPath()) ('qbrain-phase-'+[guid]::NewGuid().ToString('N'))
 $out=Join-Path $root 'build\cl';$obj=Join-Path $out 'obj';$reports=Join-Path $root 'reports'
 $oldTemp=$env:TEMP;$oldTmp=$env:TMP;$oldShadow=$env:ERRORLEVEL
@@ -2990,6 +3852,8 @@ try{
  function Dispatch($o,[scriptblock]$exec=$adapter,[object[]]$extra=@()){
   $r=[pscustomobject]@{ExitCode=0};Invoke-QbrainTestsDispatcher $o $extra $resolver $exec $production $r 2>$null;return $r.ExitCode
  }
+Write-N49DWrapperMarker 3 # N49D_WRAPPER_INSTRUMENTATION
+Write-N49DWrapperMarker 4 # N49D_WRAPPER_INSTRUMENTATION
  $invalid=@(@{BuildOnly=$true;RunOnly=$true},@{RunOnly=$true},@{RunOnly=$true;PhaseContext='x';RunReport='y';SkipProductionBuild=$true},
   @{RunOnly=$true;PhaseContext='x';RunReport='y';TestSources=@('z')},@{RunOnly=$true;PhaseContext='x';RunReport='y';ProductionManifest='z'},
   @{BuildOnly=$true},@{BuildOnly=$true;SkipProductionBuild=$true;ProductionManifest='x';PhaseContext='y';TestSources=@('z')},
@@ -3001,6 +3865,8 @@ try{
  Reject {& $Wrapper -BuildOnly -RunOnly}
  Reject {& $Wrapper -RunOnly -SkipProductionBuild -PhaseContext x -RunReport y}
  Reject {& $Wrapper '-UnexpectedFixtureArgument'}
+Write-N49DWrapperMarker 5 # N49D_WRAPPER_INSTRUMENTATION
+Write-N49DWrapperMarker 6 # N49D_WRAPPER_INSTRUMENTATION
  Need ((Dispatch @{TestSources=@('tests\extra.cpp')}) -eq 0) 'Combined'
  Need ($script:rebuilt -eq 1) 'Production rebuild';Need ($script:batch.Contains('tests\extra.cpp')) 'Source forwarding'
  foreach($s in $inputs.TestSources){Need ($script:batch.Contains((Join-Path $root $s))) 'Canonical closure'}
@@ -3012,6 +3878,8 @@ try{
  Need ($guard -ceq "if errorlevel 1 exit /b 1`nif not errorlevel 0 exit /b 1") 'Exact zero guards'
  foreach($line in $b.Split("`n")){if($line -match '^(call |cd /d |cl |link |copy )'){Need ($b.Contains($line+"`n"+$guard)) 'Immediate guards'}}
  Need ((Dispatch @{SkipProductionBuild=$true}) -eq 0 -and $script:rebuilt -eq 1) 'Combined skip'
+Write-N49DWrapperMarker 7 # N49D_WRAPPER_INSTRUMENTATION
+Write-N49DWrapperMarker 8 # N49D_WRAPPER_INSTRUMENTATION
  $id=[pscustomobject]@{commit=('c'*40);tree=('d'*40);run_id='1';run_attempt='1';job_key='windows-msvc';job_label='windows-msvc'}
  [string[]]$produced=@($inputs.Produced|ForEach-Object{$_+'.obj'});[string[]]$consumed=@($inputs.Consumed|ForEach-Object{$_+'.obj'})
  [Array]::Sort($produced,[StringComparer]::Ordinal);[Array]::Sort($consumed,[StringComparer]::Ordinal)
@@ -3043,6 +3911,8 @@ try{
  Need ((Dispatch $bo) -ne 0 -and $script:executed -eq $before) 'Object mismatch compiled'
  [IO.File]::WriteAllBytes($op,[byte[]](111));Write-QbrainPhaseReport $bp $build build
  Need ((Dispatch $ro) -eq 0) 'Restored run'
+Write-N49DWrapperMarker 9 # N49D_WRAPPER_INSTRUMENTATION
+Write-N49DWrapperMarker 10 # N49D_WRAPPER_INSTRUMENTATION
  $value=Read-QbrainPhaseReport $rp run;$lf=(ConvertTo-QbrainCanonical $value)+"`n"
  foreach($text in @($lf,$lf.Replace("`n","`r`n"))){$null=ConvertFrom-QbrainPhaseBytes (Bytes $text) run}
  $bad=@($lf.Replace('"mode":"run-only"','"mode":"run-only","mode":"run-only"'),
@@ -3061,21 +3931,29 @@ try{
  $empty=[pscustomobject]@{schema=$manifest.schema;state='prepared';identity=$id;produced=[object[]]@();consumed=[object[]]@();production_executable=$null;failure=$null}
  $null=ConvertFrom-QbrainPhaseBytes (Bytes ((ConvertTo-QbrainCanonical $empty)+"`n")) objects
  $empty.consumed=[object[]]@('x.obj');Reject {Assert-QbrainPhaseReport $empty objects}
+Write-N49DWrapperMarker 11 # N49D_WRAPPER_INSTRUMENTATION
  $env:ERRORLEVEL='0';$marker=Join-Path $root 'later'
  foreach($status in @(0,7,259,-2147483648,-1)){
+switch($status){0{Write-N49DWrapperMarker 12}7{Write-N49DWrapperMarker 16}259{Write-N49DWrapperMarker 20}-2147483648{Write-N49DWrapperMarker 24}-1{Write-N49DWrapperMarker 28}} # N49D_WRAPPER_INSTRUMENTATION
   $command='"'+$Python+'" -c "import os;os._exit('+[string]$status+')"';$result=[pscustomobject]@{ExitCode=0}
   Invoke-QbrainNativeBatch ("@echo off`r`n"+$command+"`r`nexit /b") $result
   Need (([long]$result.ExitCode -band 4294967295L) -eq ([long]$status -band 4294967295L)) 'Actual 32bit exit'
+switch($status){0{Write-N49DWrapperMarker 13}7{Write-N49DWrapperMarker 17}259{Write-N49DWrapperMarker 21}-2147483648{Write-N49DWrapperMarker 25}-1{Write-N49DWrapperMarker 29}} # N49D_WRAPPER_INSTRUMENTATION
+switch($status){0{Write-N49DWrapperMarker 14}7{Write-N49DWrapperMarker 18}259{Write-N49DWrapperMarker 22}-2147483648{Write-N49DWrapperMarker 26}-1{Write-N49DWrapperMarker 30}} # N49D_WRAPPER_INSTRUMENTATION
   Remove-Item $marker -ErrorAction SilentlyContinue;$result.ExitCode=0
   Invoke-QbrainNativeBatch ("@echo off`r`n"+$command+"`r`n"+$guard.Replace("`n","`r`n")+"`r`necho later>`"$marker`"`r`nexit /b") $result
   Need (($status -eq 0 -and $result.ExitCode -eq 0 -and (Test-Path $marker)) -or
    ($status -ne 0 -and $result.ExitCode -eq 1 -and -not (Test-Path $marker))) 'Later operation after rejection'
+switch($status){0{Write-N49DWrapperMarker 15}7{Write-N49DWrapperMarker 19}259{Write-N49DWrapperMarker 23}-2147483648{Write-N49DWrapperMarker 27}-1{Write-N49DWrapperMarker 31}} # N49D_WRAPPER_INSTRUMENTATION
  }
+Write-N49DWrapperMarker 32 # N49D_WRAPPER_INSTRUMENTATION
  $check="import os,sys;sys.exit(0 if os.getcwd()==sys.argv[1] and os.environ['PATH'].startswith(sys.argv[2]+';') and os.environ['QBRAIN_PHASE_FIXTURE']=='kept' else 91)"
  $result=[pscustomobject]@{ExitCode=0}
  Invoke-QbrainNativeBatch ("@echo off`r`ncd /d `"$out`"`r`n"+$guard+"`r`nset PATH=$root\bin;%PATH%`r`nset QBRAIN_PHASE_FIXTURE=kept`r`n`"$Python`" -c `"$check`" `"$out`" `"$root\bin`"`r`nexit /b") $result
  Need ($result.ExitCode -eq 0) 'Actual cwd/environment'
+Write-N49DWrapperMarker 33 # N49D_WRAPPER_INSTRUMENTATION
  foreach($status in @(37,0)){
+switch($status){37{Write-N49DWrapperMarker 34}0{Write-N49DWrapperMarker 36}} # N49D_WRAPPER_INSTRUMENTATION
   if(Test-Path $rp){Remove-Item $rp -Recurse -Force}
   $publishFailure={param($batch,$result)
    Invoke-QbrainNativeBatch ("@echo off`r`n`"$Python`" -c `"import os;os._exit($status)`"`r`nexit /b") $result
@@ -3083,16 +3961,18 @@ try{
   }
   $observed=Dispatch $ro $publishFailure
   Need (($status -eq 37 -and $observed -eq 37) -or ($status -eq 0 -and $observed -ne 0)) 'Publication changed exit'
+switch($status){37{Write-N49DWrapperMarker 35}0{Write-N49DWrapperMarker 37}} # N49D_WRAPPER_INSTRUMENTATION
  }
  'WRAPPER_CONTROLS_OK'
 }finally{
+Write-N49DWrapperMarker 38 # N49D_WRAPPER_INSTRUMENTATION
  $env:ERRORLEVEL=$oldShadow;$env:TEMP=$oldTemp;$env:TMP=$oldTmp
  if(Test-Path $root){Remove-Item -LiteralPath $root -Recurse -Force}
+Write-N49DWrapperMarker 39 # N49D_WRAPPER_INSTRUMENTATION
 }
 '''
     script=root/'wrapper-controls.ps1';script.write_bytes(body.encode('utf-8-sig'))
-    owner=q.OwnedChild(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(script),'-Wrapper',str(wrapper),'-Python',sys.executable],root,dict(os.environ),subprocess.DEVNULL,root/'stdout.bin',root/'stderr.bin',20,65536)
-    owner.wait();check((root/'stdout.bin').read_text().strip().endswith('WRAPPER_CONTROLS_OK'),'actual wrapper API controls incomplete')
+    _run_windows_wrapper(root,script,wrapper)
     RESULTS.append(dict(name='windows-actual-wrapper-dispatch-parser-exit',passed=True))
 
 
@@ -3556,7 +4436,7 @@ def fixture_root_controls(root):
 
 def main():
     with tempfile.TemporaryDirectory(prefix='n49d-tiny-controls-') as tmp:
-        root=Path(tmp).resolve(strict=True);fixture_root_controls(root);source_controls();ancestry_controls();privacy_assertion_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();image_model=windows_diagnostic_controls(root/'diagnostics');windows_image_controls(root/'images',image_model);failure_detail_controls(root/'failure-detail');initial_parent_controls(root/'initial-parent');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');root_terminal_controls(root/'root-terminal');root_terminal_native_controls(root/'root-native');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned');phase_report_controls(root/'phase-reports');phase_pair_controls(root/'phase-pair');build_lifecycle_controls(root/'build-model');build_native_controls(root/'build-native');windows_wrapper_controls(root/'wrapper-native');phase_packet_controls(root/'phase-packets');phase_retention_controls(root/'phase-retention');failed_envelope_controls();failure_detail_retention_controls(root/'failure-detail-retention')
+        root=Path(tmp).resolve(strict=True);fixture_root_controls(root);source_controls();ancestry_controls();privacy_assertion_controls();audit_launch_controls();proc_reader_controls();absence_oracle_controls();disappearance_controls();image_model=windows_diagnostic_controls(root/'diagnostics');windows_image_controls(root/'images',image_model);failure_detail_controls(root/'failure-detail');initial_parent_controls(root/'initial-parent');(root/'recorder').mkdir();(root/'package').mkdir();recorder_controls(root/'recorder');package_consumer_controls(root/'package');root_terminal_controls(root/'root-terminal');root_terminal_native_controls(root/'root-native');lifecycle_controls(root/'lifecycle');windows_pinned_member_controls(root/'pinned');phase_report_controls(root/'phase-reports');phase_pair_controls(root/'phase-pair');build_lifecycle_controls(root/'build-model');build_native_controls(root/'build-native');wrapper_instrumentation_controls();wrapper_evidence_controls(root/'wrapper-model');windows_wrapper_controls(root/'wrapper-native');phase_packet_controls(root/'phase-packets');phase_retention_controls(root/'phase-retention');failed_envelope_controls();failure_detail_retention_controls(root/'failure-detail-retention')
     print(json.dumps(dict(passed=True,python_optimized=sys.flags.optimize>0,controls=RESULTS,
         linux_reader_backend=('stat-adapter' if q._PROC_STAT_CHILD_ADAPTER else 'native-children') if os.name!='nt' else 'not_applicable',
         n49d_package_wrapper_executed=True,generic_package_fixture_seam=True,inherited_packager_executed=False,inherited_packager_reason='unchanged 1152 MiB reserve; native CI only'),sort_keys=True))
