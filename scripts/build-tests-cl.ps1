@@ -313,7 +313,7 @@ function Write-QbrainPhaseReport {
   $stream = [IO.File]::Open($temporary,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
   try { $stream.Write($bytes,0,$bytes.Length); $stream.Flush() } finally { $stream.Dispose() }
   try {
-    if ([IO.File]::Exists($Path)) { [IO.File]::Replace($temporary,$Path,$null) } else { [IO.File]::Move($temporary,$Path) }
+    if ([IO.File]::Exists($Path)) { [IO.File]::Replace($temporary,$Path,[System.Management.Automation.Language.NullString]::Value) } else { [IO.File]::Move($temporary,$Path) }
     $observed = Read-QbrainPhaseReport $Path $Role
     if ((ConvertTo-QbrainCanonical $observed) -cne (ConvertTo-QbrainCanonical $Value)) { throw "Report readback mismatch." }
   } finally { if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) } }

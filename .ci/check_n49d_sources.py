@@ -14,8 +14,10 @@ import sys
 
 BASE = 'cfe1ef58e244b51092c2248804b663b6c28913d7'
 BASE_TREE = '75b69ad389630e51528ddb5536a27255203470df'
-CORRECTION_PARENT = 'fb589a6991f57922db316be98a9aa70bdd4db182'
-CORRECTION_PARENT_TREE = '52cf8c5f5399a814f04046c081651ba21ed64764'
+CORRECTION_PARENT = 'd62321640f5074d0c4c6a735b72b4ae21d6d880b'
+CORRECTION_PARENT_TREE = 'a41a3adceca7289d0bf2999e2e291796a4043833'
+SHAPE_PARENT = 'fb589a6991f57922db316be98a9aa70bdd4db182'
+SHAPE_PARENT_TREE = '52cf8c5f5399a814f04046c081651ba21ed64764'
 PROGRESS_PARENT = '9ce038df175e64a15a7fdee5858510deb4ddac22'
 PROGRESS_PARENT_TREE = '09b6a3f38de5976ff65b8be20460efb301e071e5'
 CATCH_PARENT = 'c84209ccda96f6374894ebce602d071a41e8aec7'
@@ -50,7 +52,7 @@ EARLIER_PARENT = 'ff61dde8150f30eec699a4e5c01554175ff37f98'
 EARLIER_PARENT_TREE = 'd8895a9792cab41cc15d71f7c248fef794829787'
 ORIGINAL_PARENT = '0c99f74436682500caeaf0bf68a7bc42310d6a50'
 ORIGINAL_PARENT_TREE = 'd91c1f258a704eed9fe899c1193df8d080ff2f56'
-CORRECTION_PATHS = frozenset(['.ci/check_n49d_sources.py', '.ci/test_n49d_source_contract.py', '.github/workflows/n49d-mcp-directory-search.yml'])
+CORRECTION_PATHS = frozenset(['.ci/check_n49d_sources.py', '.ci/test_n49d_source_contract.py', '.github/workflows/n49d-mcp-directory-search.yml', 'scripts/build-tests-cl.ps1'])
 
 HANDLERS = 'src/qbrain/ops/handlers.cpp'
 SERVER = 'src/qbrain/mcp/server.cpp'
@@ -68,7 +70,7 @@ docs/nodes/N49D-HARD-AUDIT.md
 docs/integration/MCP-DIRECTORY-SEARCH.md
 docs/nodes/n49d-evidence/RESULT.json
 docs/nodes/n49d-evidence/SOURCE-MANIFEST.json'''.splitlines())
-WRAPPERS = {'scripts/build-cl.ps1': '0d70d018ccfd206aa09d6a8dd52f2f21be0ee5d1', 'scripts/build-tests-cl.ps1': 'fd674ec09cc9f3b2432290a5d66c98e6d92e4411'}
+WRAPPERS = {'scripts/build-cl.ps1': '0d70d018ccfd206aa09d6a8dd52f2f21be0ee5d1', 'scripts/build-tests-cl.ps1': 'da5fa6defe6891e1218c1b187ed56b5b56e105aa'}
 WRAPPER_BASE = {'scripts/build-cl.ps1':'bc9aae3592cefe727b78c2649802e35ee4e94b6c','scripts/build-tests-cl.ps1':'375e7f8f80524dfe94e3f0275b8350fec003436c'}
 INHERITED = {HANDLERS, SERVER, LEDGER} | set(WRAPPERS)
 ALLOW = NEW | INHERITED
@@ -214,8 +216,12 @@ def check_ancestry(root, commit=None, tree=None, precommit=False):
     need(git(root, 'rev-parse', BASE + '^{tree}').decode().strip() == BASE_TREE, 'base object mismatch')
     need(git(root, 'rev-parse', CORRECTION_PARENT + '^{tree}').decode().strip() == CORRECTION_PARENT_TREE,
          'correction parent tree mismatch')
-    need(git(root, 'show', '-s', '--format=%P', CORRECTION_PARENT).decode().strip() == PROGRESS_PARENT,
+    need(git(root, 'show', '-s', '--format=%P', CORRECTION_PARENT).decode().strip() == SHAPE_PARENT,
          'correction parent ancestry mismatch')
+    need(git(root, 'rev-parse', SHAPE_PARENT + '^{tree}').decode().strip() == SHAPE_PARENT_TREE,
+         'shape parent tree mismatch')
+    need(git(root, 'show', '-s', '--format=%P', SHAPE_PARENT).decode().strip() == PROGRESS_PARENT,
+         'shape parent ancestry mismatch')
     need(git(root, 'rev-parse', PROGRESS_PARENT + '^{tree}').decode().strip() == PROGRESS_PARENT_TREE,
          'progress parent tree mismatch')
     need(git(root, 'show', '-s', '--format=%P', PROGRESS_PARENT).decode().strip() == CATCH_PARENT,
@@ -287,8 +293,8 @@ def check_ancestry(root, commit=None, tree=None, precommit=False):
     if precommit:
         need(head == CORRECTION_PARENT and head_tree == CORRECTION_PARENT_TREE,
              'precommit requires exact correction parent/tree')
-        return head,head_tree,PROGRESS_PARENT,PROGRESS_PARENT_TREE
-    need(commit == head and tree == head_tree and head not in (BASE,ORIGINAL_PARENT,EARLIER_PARENT,PREVIOUS_PARENT,INTERMEDIATE_PARENT,PRIOR_CORRECTION_PARENT,LAST_CORRECTION_PARENT,PRE_PHASE_PARENT,PHASE_PARENT,FIXTURE_PARENT,EVIDENCE_PARENT,MARKER_PARENT,STAT_PARENT,ARGUMENT_PARENT,ARRAY_PARENT,OBSERVABILITY_PARENT,CATCH_PARENT,PROGRESS_PARENT,CORRECTION_PARENT), 'candidate pin mismatch')
+        return head,head_tree,SHAPE_PARENT,SHAPE_PARENT_TREE
+    need(commit == head and tree == head_tree and head not in (BASE,ORIGINAL_PARENT,EARLIER_PARENT,PREVIOUS_PARENT,INTERMEDIATE_PARENT,PRIOR_CORRECTION_PARENT,LAST_CORRECTION_PARENT,PRE_PHASE_PARENT,PHASE_PARENT,FIXTURE_PARENT,EVIDENCE_PARENT,MARKER_PARENT,STAT_PARENT,ARGUMENT_PARENT,ARRAY_PARENT,OBSERVABILITY_PARENT,CATCH_PARENT,PROGRESS_PARENT,SHAPE_PARENT,CORRECTION_PARENT), 'candidate pin mismatch')
     need(git(root, 'show', '-s', '--format=%P', head).decode().strip() == CORRECTION_PARENT, 'candidate parent mismatch')
     return head,head_tree,CORRECTION_PARENT,CORRECTION_PARENT_TREE
 
