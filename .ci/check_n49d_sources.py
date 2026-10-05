@@ -14,8 +14,10 @@ import sys
 
 BASE = 'cfe1ef58e244b51092c2248804b663b6c28913d7'
 BASE_TREE = '75b69ad389630e51528ddb5536a27255203470df'
-CORRECTION_PARENT = '9ce038df175e64a15a7fdee5858510deb4ddac22'
-CORRECTION_PARENT_TREE = '09b6a3f38de5976ff65b8be20460efb301e071e5'
+CORRECTION_PARENT = 'fb589a6991f57922db316be98a9aa70bdd4db182'
+CORRECTION_PARENT_TREE = '52cf8c5f5399a814f04046c081651ba21ed64764'
+PROGRESS_PARENT = '9ce038df175e64a15a7fdee5858510deb4ddac22'
+PROGRESS_PARENT_TREE = '09b6a3f38de5976ff65b8be20460efb301e071e5'
 CATCH_PARENT = 'c84209ccda96f6374894ebce602d071a41e8aec7'
 CATCH_PARENT_TREE = '0c91c6dc41ce552292e2922d31ca1edbdd6fee51'
 OBSERVABILITY_PARENT = '8da585fbb350780ead3f093b7dec1c328635e32d'
@@ -212,8 +214,12 @@ def check_ancestry(root, commit=None, tree=None, precommit=False):
     need(git(root, 'rev-parse', BASE + '^{tree}').decode().strip() == BASE_TREE, 'base object mismatch')
     need(git(root, 'rev-parse', CORRECTION_PARENT + '^{tree}').decode().strip() == CORRECTION_PARENT_TREE,
          'correction parent tree mismatch')
-    need(git(root, 'show', '-s', '--format=%P', CORRECTION_PARENT).decode().strip() == CATCH_PARENT,
+    need(git(root, 'show', '-s', '--format=%P', CORRECTION_PARENT).decode().strip() == PROGRESS_PARENT,
          'correction parent ancestry mismatch')
+    need(git(root, 'rev-parse', PROGRESS_PARENT + '^{tree}').decode().strip() == PROGRESS_PARENT_TREE,
+         'progress parent tree mismatch')
+    need(git(root, 'show', '-s', '--format=%P', PROGRESS_PARENT).decode().strip() == CATCH_PARENT,
+         'progress parent ancestry mismatch')
     need(git(root, 'rev-parse', CATCH_PARENT + '^{tree}').decode().strip() == CATCH_PARENT_TREE,
          'catch parent tree mismatch')
     need(git(root, 'show', '-s', '--format=%P', CATCH_PARENT).decode().strip() == OBSERVABILITY_PARENT,
@@ -281,8 +287,8 @@ def check_ancestry(root, commit=None, tree=None, precommit=False):
     if precommit:
         need(head == CORRECTION_PARENT and head_tree == CORRECTION_PARENT_TREE,
              'precommit requires exact correction parent/tree')
-        return head,head_tree,CATCH_PARENT,CATCH_PARENT_TREE
-    need(commit == head and tree == head_tree and head not in (BASE,ORIGINAL_PARENT,EARLIER_PARENT,PREVIOUS_PARENT,INTERMEDIATE_PARENT,PRIOR_CORRECTION_PARENT,LAST_CORRECTION_PARENT,PRE_PHASE_PARENT,PHASE_PARENT,FIXTURE_PARENT,EVIDENCE_PARENT,MARKER_PARENT,STAT_PARENT,ARGUMENT_PARENT,ARRAY_PARENT,OBSERVABILITY_PARENT,CATCH_PARENT,CORRECTION_PARENT), 'candidate pin mismatch')
+        return head,head_tree,PROGRESS_PARENT,PROGRESS_PARENT_TREE
+    need(commit == head and tree == head_tree and head not in (BASE,ORIGINAL_PARENT,EARLIER_PARENT,PREVIOUS_PARENT,INTERMEDIATE_PARENT,PRIOR_CORRECTION_PARENT,LAST_CORRECTION_PARENT,PRE_PHASE_PARENT,PHASE_PARENT,FIXTURE_PARENT,EVIDENCE_PARENT,MARKER_PARENT,STAT_PARENT,ARGUMENT_PARENT,ARRAY_PARENT,OBSERVABILITY_PARENT,CATCH_PARENT,PROGRESS_PARENT,CORRECTION_PARENT), 'candidate pin mismatch')
     need(git(root, 'show', '-s', '--format=%P', head).decode().strip() == CORRECTION_PARENT, 'candidate parent mismatch')
     return head,head_tree,CORRECTION_PARENT,CORRECTION_PARENT_TREE
 
