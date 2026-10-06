@@ -213,7 +213,9 @@ def ancestry_controls():
     replies={('rev-parse','HEAD'):head,('rev-parse','HEAD^{tree}'):tree,
              ('rev-parse',guard.BASE+'^{tree}'):guard.BASE_TREE,
              ('rev-parse',guard.CORRECTION_PARENT+'^{tree}'):guard.CORRECTION_PARENT_TREE,
-             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.SHAPE_PARENT,
+             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.RETAINED_CORRECTION_PARENT,
+             ('rev-parse',guard.RETAINED_CORRECTION_PARENT+'^{tree}'):guard.RETAINED_CORRECTION_PARENT_TREE,
+             ('show','-s','--format=%P',guard.RETAINED_CORRECTION_PARENT):guard.SHAPE_PARENT,
              ('rev-parse',guard.SHAPE_PARENT+'^{tree}'):guard.SHAPE_PARENT_TREE,
              ('show','-s','--format=%P',guard.SHAPE_PARENT):guard.PROGRESS_PARENT,
              ('rev-parse',guard.PROGRESS_PARENT+'^{tree}'):guard.PROGRESS_PARENT_TREE,
@@ -259,10 +261,11 @@ def ancestry_controls():
             if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
             return (values[args]+'\n').encode()
         with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
-        check(len(calls)==(41 if precommit else 42),'unexpected ancestry query count')
+        check(len(calls)==(43 if precommit else 44),'unexpected ancestry query count')
         return result
     def fixed_pins():
         actual=[(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),
+                (guard.RETAINED_CORRECTION_PARENT,guard.RETAINED_CORRECTION_PARENT_TREE),
                 (guard.SHAPE_PARENT,guard.SHAPE_PARENT_TREE),
                 (guard.PROGRESS_PARENT,guard.PROGRESS_PARENT_TREE),
                 (guard.CATCH_PARENT,guard.CATCH_PARENT_TREE),
@@ -281,7 +284,8 @@ def ancestry_controls():
                 (guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),
                 (guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),
                 (guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),(guard.BASE,guard.BASE_TREE)]
-        expected=[('d62321640f5074d0c4c6a735b72b4ae21d6d880b','a41a3adceca7289d0bf2999e2e291796a4043833'),
+        expected=[('7f27168b01f020e8ddc38d4d5977e3ad354ff566','9060bfa1da3ea05aac0d9ff932ed4c903877caa0'),
+                  ('d62321640f5074d0c4c6a735b72b4ae21d6d880b','a41a3adceca7289d0bf2999e2e291796a4043833'),
                   ('fb589a6991f57922db316be98a9aa70bdd4db182','52cf8c5f5399a814f04046c081651ba21ed64764'),
                   ('9ce038df175e64a15a7fdee5858510deb4ddac22','09b6a3f38de5976ff65b8be20460efb301e071e5'),
                   ('c84209ccda96f6374894ebce602d071a41e8aec7','0c91c6dc41ce552292e2922d31ca1edbdd6fee51'),
@@ -301,7 +305,7 @@ def ancestry_controls():
                   ('ff61dde8150f30eec699a4e5c01554175ff37f98','d8895a9792cab41cc15d71f7c248fef794829787'),
                   ('0c99f74436682500caeaf0bf68a7bc42310d6a50','d91c1f258a704eed9fe899c1193df8d080ff2f56'),
                   ('cfe1ef58e244b51092c2248804b663b6c28913d7','75b69ad389630e51528ddb5536a27255203470df')]
-        check(actual==expected and len({commit for commit,_ in actual})==20,'fixed twenty-one-commit lineage pins')
+        check(actual==expected and len({commit for commit,_ in actual})==21,'fixed twenty-two-commit lineage pins')
         for label,key,value,boundary in [
             ('tree',('rev-parse',guard.STAT_PARENT+'^{tree}'),'3'*40,'stat parent tree'),
             ('parent',('show','-s','--format=%P',guard.STAT_PARENT),'3'*40,'stat parent ancestry'),
@@ -400,10 +404,31 @@ def ancestry_controls():
             except subprocess.CalledProcessError as error:
                 check(error.returncode==128 and error.cmd==['git',*key],'retained shape missing object boundary')
             else:raise ValueError('missing retained shape metadata passed')
+        for label,key,value,boundary in [
+            ('tree',('rev-parse',guard.RETAINED_CORRECTION_PARENT+'^{tree}'),'3'*40,'retained correction parent tree'),
+            ('parent',('show','-s','--format=%P',guard.RETAINED_CORRECTION_PARENT),'3'*40,'retained correction parent ancestry'),
+            ('multi',('show','-s','--format=%P',guard.RETAINED_CORRECTION_PARENT),guard.BASE+' '+'3'*40,'retained correction parent ancestry'),
+            ('empty',('show','-s','--format=%P',guard.RETAINED_CORRECTION_PARENT),'','retained correction parent ancestry')]:
+            expect_failure('retained-correction-'+label,lambda key=key,value=value:run({key:value}),boundary,record=False)
+        tip={('rev-parse','HEAD'):guard.RETAINED_CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.RETAINED_CORRECTION_PARENT_TREE}
+        expect_failure('retained-correction-candidate',lambda:run(tip,commit=guard.RETAINED_CORRECTION_PARENT,expected_tree=guard.RETAINED_CORRECTION_PARENT_TREE),'candidate pin mismatch',record=False)
+        expect_failure('retained-correction-precommit',lambda:run(tip,True),'precommit requires exact correction parent/tree',record=False)
+        for key in [('rev-parse',guard.RETAINED_CORRECTION_PARENT+'^{tree}'),('show','-s','--format=%P',guard.RETAINED_CORRECTION_PARENT)]:
+            try:run({key:None})
+            except subprocess.CalledProcessError as error:
+                check(error.returncode==128 and error.cmd==['git',*key],'retained correction missing object boundary')
+            else:raise ValueError('missing retained correction metadata passed')
+        local_same_tree='77da2ff12a26fc403ba4eeabcc84166d0baebc09'
+        for label,parent in [('retained-correction',guard.RETAINED_CORRECTION_PARENT),('local-same-tree',local_same_tree)]:
+            expect_failure('candidate-reject-'+label+'-parent',lambda parent=parent:run({('show','-s','--format=%P',head):parent}),'candidate parent mismatch',record=False)
+        tip={('rev-parse','HEAD'):local_same_tree,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE,
+             ('show','-s','--format=%P',local_same_tree):guard.RETAINED_CORRECTION_PARENT}
+        expect_failure('local-same-tree-precommit',lambda:run(tip,True),'precommit requires exact correction parent/tree',record=False)
+        expect_failure('local-same-tree-candidate',lambda:run(tip,commit=local_same_tree,expected_tree=guard.CORRECTION_PARENT_TREE),'candidate parent mismatch',record=False)
     control('ancestry-fixed-twenty-one-commit-pins',fixed_pins)
     control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
     pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
-    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.SHAPE_PARENT,guard.SHAPE_PARENT_TREE),'precommit actual parent fields'))
+    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.RETAINED_CORRECTION_PARENT,guard.RETAINED_CORRECTION_PARENT_TREE),'precommit actual parent fields'))
     def no_lazy_fetch():
         with patch.object(guard.subprocess,'check_output',return_value=b'fixture') as execute:
             check(guard.git(Path('.'),'rev-parse','HEAD')==b'fixture','git helper return')
@@ -513,10 +538,18 @@ def ancestry_controls():
     marker_row['passed']=True
     parent={p:('100644',guard.blob(('parent '+p).encode())) for p in guard.ALLOW};candidate=dict(parent)
     for path in guard.CORRECTION_PATHS:candidate[path]=('100644',guard.blob(('correction '+path).encode()))
-    control('correction-exact-four-paths',lambda:check(guard.validate_correction(parent,candidate)==sorted(guard.CORRECTION_PATHS),'correction inventory'))
-    check(guard.CORRECTION_PATHS==frozenset({'.ci/check_n49d_sources.py',
-          '.ci/test_n49d_source_contract.py','.github/workflows/n49d-mcp-directory-search.yml','scripts/build-tests-cl.ps1'}) and
-          len(guard.ALLOW)==18,'four correction/full18 scope')
+    def correction_scope():
+        check(guard.validate_correction(parent,candidate)==sorted(guard.CORRECTION_PATHS),'correction inventory')
+        check(guard.CORRECTION_PATHS==frozenset({'.ci/check_n49d_sources.py',
+              '.ci/test_n49d_source_contract.py','.github/workflows/n49d-mcp-directory-search.yml'}) and
+              len(guard.ALLOW)==18,'three correction/full18 scope')
+        for path in ('scripts/build-cl.ps1','scripts/build-tests-cl.ps1','.ci/run_n49d_qualification.py'):
+            changed=dict(candidate);changed[path]=('100644','0'*40)
+            for complete in (False,True):
+                expect_failure('correction-excluded-'+path+'-'+str(complete),
+                    lambda changed=changed,complete=complete:guard.validate_correction(parent,changed,complete),
+                    'unreviewed correction path',record=False)
+    control('correction-exact-four-paths',correction_scope)
     partial=dict(parent);path=sorted(guard.CORRECTION_PATHS)[0];partial[path]=candidate[path]
     control('correction-precommit-subset',lambda:check(guard.validate_correction(parent,partial,False)==[path],'correction subset'))
     expect_failure('correction-missing-final-member',lambda:guard.validate_correction(parent,partial),'required correction path missing')
@@ -531,7 +564,11 @@ def ancestry_controls():
         expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
     workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
     def workflow_contract(raw,windows=False):
-        canonical=guard.checkout_bytes(raw,'f45777266c503418f42b37e25a6620c80b8e322f',windows)
+        current=guard.checkout_bytes(raw,'742f7385b42503387a00b8cf542947d074de8525',windows)
+        check(current.count(b'          fetch-depth: 22\n')==1 and guard.sha(current)=='1aed1027fb370a00bb37ee9ee0dd11d513a8d1dfc05ee84ad5989c38f1d887ef','exact depth-twenty-two workflow contract')
+        canonical=guard.checkout_bytes(current.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 21\n'),
+            'f45777266c503418f42b37e25a6620c80b8e322f')
+        check(guard.sha(canonical)=='1719fc10bc560440435708b11384f3c554e49515b754fc36d599517cbd53f54c','retained depth-twenty-one workflow SHA-256')
         check(canonical.count(b'          fetch-depth: 21\n')==1 and
               guard.sha(canonical.replace(b'          fetch-depth: 21\n',b'          fetch-depth: 20\n'))=='301be8339321cc73db4647197fb37a60118672e79aab4aca95c93c07ee140d99','exact depth-twenty-one workflow contract')
         retained20=canonical.replace(b'          fetch-depth: 21\n',b'          fetch-depth: 20\n')
@@ -557,37 +594,38 @@ def ancestry_controls():
         check(guard.blob(previous)=='103ea3d99c6f1977564008474e91e22c1c289f03' and
               previous.count(b'          fetch-depth: 14\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 14\n',b'          fetch-depth: 13\n'))=='9f1d0514132a60435af03e84e904402f90c7ce732311720e50f38f9960013e3a','exact retained depth-fourteen workflow contract')
-        return canonical
+        return current
     control('workflow-only-depth-twenty-one-change',lambda:workflow_contract(workflow,os.name=='nt'))
     canonical=workflow_contract(workflow,os.name=='nt')
-    expect_failure('workflow-retained-depth-twenty',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 21\n',b'          fetch-depth: 20\n')),'checkout blob mismatch',record=False)
-    expect_failure('workflow-retained-depth-nineteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 21\n',b'          fetch-depth: 19\n')),'checkout blob mismatch',record=False)
-    expect_failure('workflow-retained-depth-eighteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 21\n',b'          fetch-depth: 18\n')),'checkout blob mismatch',record=False)
-    expect_failure('workflow-retained-depth-seventeen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 21\n',b'          fetch-depth: 17\n')),'checkout blob mismatch',record=False)
-    expect_failure('workflow-retained-depth-sixteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 21\n',b'          fetch-depth: 16\n')),'checkout blob mismatch',record=False)
-    expect_failure('workflow-retained-depth-fifteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 21\n',b'          fetch-depth: 15\n')),'checkout blob mismatch',record=False)
-    expect_failure('workflow-retained-depth-fourteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 21\n',b'          fetch-depth: 14\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-twenty-one',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 21\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-twenty',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 20\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-nineteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 19\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-eighteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 18\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-seventeen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 17\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-sixteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 16\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-fifteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 15\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-fourteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 14\n')),'checkout blob mismatch',record=False)
     def retained_depth_thirteen_contract():
-        previous=canonical.replace(b'          fetch-depth: 21\n',b'          fetch-depth: 13\n')
+        previous=canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 13\n')
         check(guard.blob(previous)=='1c1b590dffbdcdb1fc06896788872a828b3b0291' and
               previous.count(b'          fetch-depth: 13\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 13\n',b'          fetch-depth: 12\n'))=='9e8f255ee3534cd468b770eaaacf07dae17f804019dca1dc8babb57bd2ef948a','exact retained depth-thirteen workflow contract')
     control('workflow-only-depth-thirteen-change',retained_depth_thirteen_contract)
     def retained_depth_twelve_contract():
-        previous=canonical.replace(b'          fetch-depth: 21\n',b'          fetch-depth: 12\n')
+        previous=canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 12\n')
         check(guard.blob(previous)=='f1aa24556a0c2cb9b9b2a176cbdd09ac947224a1' and
               previous.count(b'          fetch-depth: 12\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 12\n',b'          fetch-depth: 11\n'))=='401d38d79f89fedf309305af54f778bb000cef09f255215b4db34d268cd1497d','exact retained depth-twelve workflow contract')
     control('workflow-only-depth-twelve-change',retained_depth_twelve_contract)
     def retained_depth_eleven_contract():
-        previous=canonical.replace(b'          fetch-depth: 21\n',b'          fetch-depth: 11\n')
+        previous=canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 11\n')
         check(guard.blob(previous)=='5d5ad4346f87a24531a2f327b116d18e9d39c557' and
               previous.count(b'          fetch-depth: 11\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 11\n',b'          fetch-depth: 10\n'))=='9cf5265dd2f90c275bff5ce2e4d8249bdd031ab342ba92ab74ad95eeef2e92f2','exact retained depth-eleven workflow contract')
     control('workflow-only-depth-eleven-change',retained_depth_eleven_contract)
-    for label,old,new in [('old-depth',b'fetch-depth: 21',b'fetch-depth: 10'),('previous-depth',b'fetch-depth: 21',b'fetch-depth: 12'),('broad-depth',b'fetch-depth: 21',b'fetch-depth: 0'),
-                          ('retained-depth',b'fetch-depth: 21',b'fetch-depth: 13'),
-                          ('malformed-depth',b'fetch-depth: 21',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+    for label,old,new in [('old-depth',b'fetch-depth: 22',b'fetch-depth: 10'),('previous-depth',b'fetch-depth: 22',b'fetch-depth: 12'),('broad-depth',b'fetch-depth: 22',b'fetch-depth: 0'),
+                          ('retained-depth',b'fetch-depth: 22',b'fetch-depth: 13'),
+                          ('malformed-depth',b'fetch-depth: 22',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
                           ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
         changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
         expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
@@ -3275,7 +3313,7 @@ def build_lifecycle_controls(root):
         check(q._ACTIVE_OWNER is None and not q._OWNER_LOCK.locked(),'unsupported policy took ownership')
 
 
-WRAPPER_SCHEMA='qbrain-n49d-windows-wrapper-failure-v4'
+WRAPPER_SCHEMA='qbrain-n49d-windows-wrapper-failure-v5'
 WRAPPER_PROGRESS_PATTERN=r'[NARF][NCAFIXRS][NCALMWF]'
 WRAPPER_BUILD_REASONS=frozenset(('input-invalid','object-mismatch','compile-failed','binary-unavailable','storage','unknown'))
 WRAPPER_PHASE04_ACTIONS=frozenset('%02d'%n for n in range(1,54))
@@ -3296,7 +3334,7 @@ WRAPPER_OWNER_KEYS=('classification','exit','elapsed_seconds','root_pid_recorded
 
 
 def _wrapper_markers(status='unavailable'):
-    return dict(status=status,events=[],last_entered_phase=None,last_completed_phase=None,interrupted_phase=None,phase04_failure=None,build_phase_catch=None,build_progress=None)
+    return dict(status=status,events=[],last_entered_phase=None,last_completed_phase=None,interrupted_phase=None,phase04_failure=None,build_phase_catch=None,build_progress=None,phase04_work=None)
 
 
 def _wrapper_fallback():
@@ -3343,17 +3381,51 @@ def _wrapper_marker_events(events,status='valid-prefix'):
     return result
 
 
+def _wrapper_work_step(work,operation,edge,tick):
+    # A finite phase04 prefix. Times are sampled before publication, in floor ms.
+    start,began,done,ended,interrupted=work or [0,0,0,0,0]
+    if tick<max(began,ended):return None
+    if edge=='B':
+        cleanup=(operation==41 and 3<=start<41 or operation==46 and 42<=start<46)
+        if not (operation==start+1 and start==done or cleanup):return None
+        if start!=done and not interrupted:interrupted=start
+        return [operation,tick,done,ended,interrupted]
+    if operation!=start or start==done:return None
+    return [start,began,operation,tick,interrupted]
+
+
+def _wrapper_work_valid(work):
+    if type(work) is not list or len(work)!=5 or any(type(v) is not int for v in work):return False
+    start,began,done,ended,interrupted=work
+    if not (1<=start<=47 and 0<=done<=start and 0<=began<=20000 and 0<=ended<=20000):return False
+    if (done==0 and ended!=0) or (began>ended if start==done else ended>began):return False
+    if interrupted==0:
+        return (done in (start-1,start) or start==41 and 3<=done<41 or start==46 and 42<=done<46)
+    if 3<=interrupted<41:
+        return (start==41 and done in (interrupted-1,41) or 42<=start<=47 and
+                (done in (start-1,start) or start==46 and 41<=done<46))
+    return 42<=interrupted<46 and (start==46 and done in (interrupted-1,46) or start==47 and done in (46,47))
+
+
 def _wrapper_parse_markers(raw):
     check(type(raw) is bytes and len(raw)<=65536,'wrapper marker input cap')
-    accepted=[];status='absent';failure=None;caught=None;progress=None
+    accepted=[];status='absent';failure=None;caught=None;progress=None;work=None
     phase04=['%02d:%s'%(p,e) for p in range(4) for e in ('B','E')]+['04:B']
     lines=raw.split(b'\n')
     for index,line in enumerate(lines):
         diagnostic=line.startswith(b'N49D_PHASE04_');build=line.startswith(b'N49D_BUILD_CATCH_')
-        observed=line.startswith(b'N49D_BUILD_PROGRESS_')
-        if not diagnostic and not build and not observed and not line.startswith(b'N49D_WRAPPER_'):continue
+        observed=line.startswith(b'N49D_BUILD_PROGRESS_');working=line.startswith(b'N49D_WORK_')
+        if not diagnostic and not build and not observed and not working and not line.startswith(b'N49D_WRAPPER_'):continue
         if index==len(lines)-1:status='partial-line';break
         token=line[:-1] if line.endswith(b'\r') else line
+        if working:
+            match=q.re.fullmatch(rb'N49D_WORK_V1:(0[1-9]|[1-3][0-9]|4[0-7]):([BE]):([0-9]{5})',token)
+            if match is None or accepted!=phase04 or failure is not None or caught is not None:
+                status='malformed';break
+            operation,edge,tick=match.groups();tick=int(tick)
+            proposed=_wrapper_work_step(work,int(operation),edge.decode('ascii'),tick) if tick<=20000 else None
+            if proposed is None:status='malformed';break
+            work=proposed;continue
         if observed:
             match=q.re.fullmatch(('N49D_BUILD_PROGRESS_V1:'+WRAPPER_PROGRESS_PATTERN).encode(),token)
             if match is None or progress is not None or accepted!=phase04 or failure is None or failure['action']!='22':
@@ -3385,7 +3457,7 @@ def _wrapper_parse_markers(raw):
         if proposed['status']=='malformed':status='malformed';break
         accepted.append(event);status='valid-prefix'
     result=_wrapper_marker_events(accepted,status)
-    result['phase04_failure']=failure;result['build_phase_catch']=caught;result['build_progress']=progress
+    result['phase04_failure']=failure;result['build_phase_catch']=caught;result['build_progress']=progress;result['phase04_work']=work
     return result
 
 
@@ -3468,9 +3540,10 @@ def _wrapper_failure_detail(owner,root):
 
 def _validate_wrapper_detail(value):
     # Historical versions keep their exact keysets and meanings; observation is never inferred.
-    legacy={'qbrain-n49d-windows-wrapper-failure-v1':{'phase04_failure','build_phase_catch','build_progress'},
-            'qbrain-n49d-windows-wrapper-failure-v2':{'build_phase_catch','build_progress'},
-            'qbrain-n49d-windows-wrapper-failure-v3':{'build_progress'}}
+    legacy={'qbrain-n49d-windows-wrapper-failure-v1':{'phase04_failure','build_phase_catch','build_progress','phase04_work'},
+            'qbrain-n49d-windows-wrapper-failure-v2':{'build_phase_catch','build_progress','phase04_work'},
+            'qbrain-n49d-windows-wrapper-failure-v3':{'build_progress','phase04_work'},
+            'qbrain-n49d-windows-wrapper-failure-v4':{'phase04_work'}}
     if type(value) is dict and type(value.get('schema')) is str and value['schema'] in legacy:
         missing=legacy[value['schema']];markers=value.get('markers')
         check(type(markers) is dict and set(markers)==set(_wrapper_markers())-missing,'wrapper legacy marker keys')
@@ -3529,7 +3602,13 @@ def _validate_wrapper_detail(value):
             'wrapper build progress vocabulary')
         check(failure is not None and failure['action']=='22','wrapper build progress origin')
         rebuilt['build_progress']=progress
-    check(rebuilt==markers and (markers['status']!='valid-prefix' or bool(markers['events'])),'wrapper marker facts')
+    work=markers['phase04_work']
+    if work is not None:
+        prefix=['%02d:%s'%(p,e) for p in range(4) for e in ('B','E')]+['04:B']
+        check(_wrapper_work_valid(work) and markers['events'][:9]==prefix and
+              markers['status'] in ('valid-prefix','malformed','partial-line'),'wrapper work facts')
+        rebuilt['phase04_work']=work
+    check(rebuilt==markers and (markers['status']!='valid-prefix'  or bool(markers['events'])),'wrapper marker facts')
     for key in ('last_entered_phase','last_completed_phase','interrupted_phase'):
         check(markers[key] is None or type(markers[key]) is int and 0<=markers[key]<=(18 if key=='interrupted_phase' else 19),'wrapper marker phase type')
     if facts['status']=='available':
@@ -3663,7 +3742,7 @@ def wrapper_phase04_controls():
     with patch(__name__+'._wrapper_marker_file',return_value=prior):
         old_prefix=_wrapper_failure_detail(SimpleNamespace(result=cached),Path('/fixture'))
     legacy=copy.deepcopy(old_prefix);legacy['schema']='qbrain-n49d-windows-wrapper-failure-v1'
-    legacy['markers'].pop('phase04_failure');legacy['markers'].pop('build_phase_catch');legacy['markers'].pop('build_progress')
+    legacy['markers'].pop('phase04_failure');legacy['markers'].pop('build_phase_catch');legacy['markers'].pop('build_progress');legacy['markers'].pop('phase04_work')
     for form,schema in ((legacy,WRAPPER_SCHEMA),(old_prefix,'qbrain-n49d-windows-wrapper-failure-v1'),
                         (detail,'qbrain-n49d-windows-wrapper-failure-v1')):
         relabeled=copy.deepcopy(form);relabeled['schema']=schema
@@ -3716,7 +3795,7 @@ def wrapper_build_catch_controls(body):
     check(body.count("if(-not (Test-N49DFunctionAst $n49dBuildCatchAfter.ScriptBlock.Ast $n49dBuildCatchParsed[0] 'Invoke-QbrainBuildPhase')){throw 'Catch installed body'}")==1,'shared actual AST guard site')
     shape_controls=body.split("  & { # N49D_WRAPPER_INSTRUMENTATION\n   $n49dShapeSites=",1)[1].split('  $n49dPairs=@{} # N49D_WRAPPER_INSTRUMENTATION\n',1)[0]
     check(hashlib.sha256(('  & { # N49D_WRAPPER_INSTRUMENTATION\n   $n49dShapeSites='+shape_controls).encode()).hexdigest()==
-        'be06a3a8f045b9e767cf797695e4d5a2f8b66743636b5dfd4cd83ebd72f05862','actual AST shape guard controls')
+        '17cc57785ca0e262d76bb9444bfe59fe828bc8324fbebb3ced13e2d1b2963338','actual AST shape guard controls')
     prefix=['%02d:%s'%(p,e) for p in range(4) for e in ('B','E')]+['04:B']
     phase=lambda events,e:b''.join(b'N49D_WRAPPER_V1:'+v.encode()+e for v in events)
     def expected(events,status='valid-prefix',caught=None,failure=None):
@@ -3819,14 +3898,15 @@ def wrapper_build_catch_controls(body):
     # Genuine v1 and v2 shapes, with all old fields preserved; no relabeling inference.
     old=copy.deepcopy(detail);old['markers']['build_phase_catch']=None
     old['markers']['phase04_failure']=dict(action='53',category='OT')
-    v2=copy.deepcopy(old);v2['schema']='qbrain-n49d-windows-wrapper-failure-v2';v2['markers'].pop('build_phase_catch');v2['markers'].pop('build_progress')
+    v2=copy.deepcopy(old);v2['schema']='qbrain-n49d-windows-wrapper-failure-v2';v2['markers'].pop('build_phase_catch');v2['markers'].pop('build_progress');v2['markers'].pop('phase04_work')
     v2null=copy.deepcopy(v2);v2null['markers']['phase04_failure']=None
     v1=copy.deepcopy(v2null);v1['schema']='qbrain-n49d-windows-wrapper-failure-v1';v1['markers'].pop('phase04_failure')
-    v3=copy.deepcopy(detail);v3['schema']='qbrain-n49d-windows-wrapper-failure-v3';v3['markers'].pop('build_progress')
-    forms=(v1,v2null,v2,v3,old,detail)
+    v3=copy.deepcopy(detail);v3['schema']='qbrain-n49d-windows-wrapper-failure-v3';v3['markers'].pop('build_progress');v3['markers'].pop('phase04_work')
+    v4=copy.deepcopy(detail);v4['schema']='qbrain-n49d-windows-wrapper-failure-v4';v4['markers'].pop('phase04_work')
+    forms=(v1,v2null,v2,v3,v4,old,detail)
     for form in forms:
         before=copy.deepcopy(form);check(_validate_wrapper_detail(form) is form,'build catch validator identity')
-        for schema in ('qbrain-n49d-windows-wrapper-failure-v1','qbrain-n49d-windows-wrapper-failure-v2','qbrain-n49d-windows-wrapper-failure-v3',WRAPPER_SCHEMA):
+        for schema in ('qbrain-n49d-windows-wrapper-failure-v1','qbrain-n49d-windows-wrapper-failure-v2','qbrain-n49d-windows-wrapper-failure-v3','qbrain-n49d-windows-wrapper-failure-v4',WRAPPER_SCHEMA):
             if schema==form['schema']:continue
             bad=copy.deepcopy(form);bad['schema']=schema
             expect_failure('build-catch-schema-relabel',lambda bad=bad:_validate_wrapper_detail(bad),record=False)
@@ -3905,8 +3985,8 @@ def wrapper_build_progress_controls(body):
         bad=copy.deepcopy(detail);mutation(bad)
         expect_failure('build-progress-detail',lambda bad=bad:_validate_wrapper_detail(bad),record=False)
     forms=[detail]
-    for version,missing in [('v3',('build_progress',)),('v2',('build_progress','build_phase_catch')),
-                            ('v1',('build_progress','build_phase_catch','phase04_failure'))]:
+    for version,missing in [('v4',('phase04_work',)),('v3',('build_progress','phase04_work')),('v2',('build_progress','build_phase_catch','phase04_work')),
+                            ('v1',('build_progress','build_phase_catch','phase04_failure','phase04_work'))]:
         old=copy.deepcopy(detail);old['schema']='qbrain-n49d-windows-wrapper-failure-'+version
         for key in missing:old['markers'].pop(key)
         forms.append(old)
@@ -3917,7 +3997,7 @@ def wrapper_build_progress_controls(body):
             value=dict(passed=False,error='progress primary',controls=[],failure_detail=form)
             check(failure_equal(expand_failure_v2((render_selftest_failure(value)+ending).encode()),value) and
                   failure_equal(form,saved),'progress legacy/current typed inverse')
-        for version in ('v1','v2','v3','v4'):
+        for version in ('v1','v2','v3','v4','v5'):
             schema='qbrain-n49d-windows-wrapper-failure-'+version
             if schema==form['schema']:continue
             bad=copy.deepcopy(form);bad['schema']=schema
@@ -3937,6 +4017,107 @@ def wrapper_build_progress_controls(body):
                 check(read.call_count==1 and FAILURE_DETAIL is first and first['markers']==model,'progress cached capture retried')
     finally:FAILURE_DETAIL=saved
     check(len(b'\nN49D_BUILD_PROGRESS_V1:RIF\r\n')==29,'progress token bound')
+
+
+def wrapper_work_controls(body):
+    """O/F/T/C/V: exact order, isolated faults, bounded time, cached capture, versions.
+    No row is added. These are actual parser/capture controls; PowerShell emitter
+    controls stay in the same unchanged twenty-second owner.
+    """
+    from types import SimpleNamespace
+    global FAILURE_DETAIL
+    prefix=['%02d:%s'%(p,e) for p in range(4) for e in ('B','E')]+['04:B']
+    def phases(events,ending):return b''.join(b'N49D_WRAPPER_V1:'+e.encode()+ending for e in events)
+    def token(operation,edge,tick,ending):return ('N49D_WORK_V1:%02d:%s:%05d'%(operation,edge,tick)).encode()+ending
+    def facts(work,status='valid-prefix',events=prefix):
+        value=_wrapper_marker_events(events,status);value['phase04_work']=work;return value
+    for ending in (b'\n',b'\r\n'):
+        head=phases(prefix,ending);raw=head;expected=None
+        # Every actual source operation, each begin and observed-success end.
+        for operation in range(1,48):
+            for edge in ('B','E'):
+                tick=min(20000,operation*499+(edge=='E'))
+                raw+=token(operation,edge,tick,ending)
+                expected=([operation,tick,operation-1,0 if operation==1 else min(20000,(operation-1)*499+1),0]
+                          if edge=='B' else [operation,min(20000,operation*499),operation,tick,0])
+                check(_wrapper_parse_markers(raw)==facts(expected) and _wrapper_work_valid(expected),'work valid timeout-like prefix')
+        complete=prefix+['04:E']
+        check(_wrapper_parse_markers(raw+phases(['04:E'],ending))==facts(expected,events=complete),'work completed phase retention')
+        for interrupted,cleanup in [(n,41) for n in range(3,41)]+[(n,46) for n in range(42,46)]:
+            before=head+b''.join(token(n,e,1,ending) for n in range(1,interrupted) for e in ('B','E'))+token(interrupted,'B',2,ending)
+            for edge in ('B','E'):
+                suffix=token(cleanup,'B',3,ending)+(token(cleanup,'E',4,ending) if edge=='E' else b'')
+                want=[cleanup,3,cleanup if edge=='E' else interrupted-1,4 if edge=='E' else 1,interrupted]
+                check(_wrapper_parse_markers(before+suffix)==facts(want) and _wrapper_work_valid(want),'work cleanup observed prefix')
+        first=token(1,'B',123,ending);want=[1,123,0,0,0]
+        malformed=[first,token(1,'E',122,ending),token(2,'B',124,ending),token(48,'B',123,ending),
+                   token(1,'E',20001,ending),b'N49D_WORK_V2:01:E:00123'+ending,
+                   b'N49D_WORK_V1:01:e:00123'+ending,b'N49D_WORK_V1:01:E:000123'+ending,
+                   b'N49D_WORK_V1:01:E:00123 private'+ending,b'N49D_WORK_PRIVATE'+ending,
+                   b'N49D_WORK_V1:'+b'x'*1000+ending]
+        for suffix in malformed:
+            check(_wrapper_parse_markers(head+first+suffix)==facts(want,'malformed'),'work malformed first-prefix retention')
+        check(_wrapper_parse_markers(head+first+token(1,'E',124,ending)[:-len(ending)])==facts(want,'partial-line'),'work partial retention')
+        check(_wrapper_parse_markers(head+first+b'private\x00\xff'+ending)==facts(want),'work private unrelated bytes')
+        for before in (b'',phases(prefix[:-1],ending),head+phases(['04:E'],ending)):
+            observed=_wrapper_parse_markers(before+first)
+            check(observed['status']=='malformed' and observed['phase04_work'] is None,'work outside phase accepted')
+        check(_wrapper_parse_markers(head+first+b'N49D_PHASE04_V1:22:IO'+ending+token(1,'E',124,ending))['status']=='malformed','work after failure accepted')
+        expect_failure('work-oversize',lambda:_wrapper_parse_markers(b'x'*65537),record=False)
+    cached=dict(_detail_fixture()['ownership'],classification='timeout')
+    model=facts([16,12000,15,11999,0])
+    with patch(__name__+'._wrapper_marker_file',return_value=model):
+        detail=_wrapper_failure_detail(SimpleNamespace(result=cached),Path('/fixture'))
+    _validate_wrapper_detail(detail)
+    for bad in (True,[],[1,0,0,0],[True,0,0,0,0],[48,0,47,0,0],[1,-1,0,0,0],[1,20001,0,0,0],
+                [2,1,0,0,0],[1,0,0,1,0],[1,2,1,1,0],[2,1,1,2,0],[47,0,47,0,47],[3,0,2,0,1]):
+        changed=copy.deepcopy(detail);changed['markers']['phase04_work']=bad
+        expect_failure('work-invalid-detail',lambda changed=changed:_validate_wrapper_detail(changed),record=False)
+    for version,missing in [('v1',('phase04_failure','build_phase_catch','build_progress','phase04_work')),
+                            ('v2',('build_phase_catch','build_progress','phase04_work')),
+                            ('v3',('build_progress','phase04_work')),('v4',('phase04_work',)),('v5',())]:
+        value=copy.deepcopy(detail);value['schema']='qbrain-n49d-windows-wrapper-failure-'+version
+        for key in missing:value['markers'].pop(key)
+        before=copy.deepcopy(value)
+        check(_validate_wrapper_detail(value) is value,'work version identity')
+        for ending in ('\n','\r\n'):
+            failure=dict(passed=False,error='timeout',controls=[],failure_detail=value)
+            check(failure_equal(expand_failure_v2((render_selftest_failure(failure)+ending).encode()),failure) and
+                  failure_equal(value,before),'work historical/current typed inverse')
+    saved=FAILURE_DETAIL
+    try:
+        with tempfile.TemporaryDirectory(prefix='qbrain-work-') as temporary:
+            root=Path(temporary);raw=phases(prefix,b'\n')+b''.join(token(n,e,11999,b'\n') for n in range(1,16) for e in ('B','E'))+token(16,'B',12000,b'\n')
+            (root/'stderr.bin').write_bytes(raw);cached['stderr']=dict(size=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+            for constructor_failure in (False,True):
+                owner=SimpleNamespace(result=cached);primary=q.OwnedChildError('timeout',owner);FAILURE_DETAIL=None
+                owner.wait=lambda:(_ for _ in ()).throw(primary)
+                with patch.object(q,'OwnedChild',side_effect=primary if constructor_failure else lambda *a,**k:owner),patch(__name__+'._wrapper_marker_file',wraps=_wrapper_marker_file) as read:
+                    try:_run_windows_wrapper(root,root/'script.ps1',root/'wrapper.ps1')
+                    except q.OwnedChildError as caught:check(caught is primary,'work primary replaced')
+                    else:raise ValueError('work failing owner passed')
+                    first=FAILURE_DETAIL;_capture_wrapper_failure(primary,root)
+                    check(read.call_count==1 and first is FAILURE_DETAIL and first['markers']==model,'work cached owner capture changed')
+    finally:FAILURE_DETAIL=saved
+    # Pin each literal mapping, source operation count and cached-writer path.
+    check(body.count('function Write-N49DWork(')==1 and body.count('function New-N49DWorkState(')==1,'work helper inventory')
+    helper=body.split('function Write-N49DWork(',1)[1].split('Write-N49DWrapperMarker 0',1)[0]
+    check(all(word not in helper for word in ('Get-Command','Get-Process','Start-Process','ReadAll','WriteAll','[Console]::Error')),'work helper performs query or ignores cached writer')
+    check('$State.Writer.WriteLine(' in helper and '$State.Writer.Flush()' in helper and "[Math]::Min([long]20000,$tick)" in helper,'work fixed emitter cap')
+    direct=q.re.findall(r"Write-N49DWork \$n49dWork '([0-9]{2})' '([BE])'",body)
+    check(direct==[('%02d'%n,e) for n in (1,2,3,40,41,42,43,44,45,46,47) for e in ('B','E')],'work fixed operation calls')
+    pair_line=next(line for line in body.splitlines() if '$n49dWorkPair=switch ' in line)
+    pairs=q.re.findall(r"'([^']+)'\{@\('([0-9]{2})','([0-9]{2})'\)\}",pair_line)
+    cases=('success','native-throw','native-nonzero','early','arguments-escape','resolver-escape')
+    check(pairs==[(case,'%02d'%(4+2*i),'%02d'%(5+2*i)) for i,case in enumerate(cases)],'work exact paired case mapping')
+    fault_line=next(line for line in body.splitlines() if '$n49dWorkId=switch ' in line)
+    faults=q.re.findall(r"'([^']+)'\{'([0-9]{2})'\}",fault_line)
+    names=('getter','writer','flush','latch-read','latch-write','observer-constructor','invocation','stream-output',
+           'initialization','constructor','activation-before','activation-after','gate-action','gate-redefinition',
+           'gate-command','gate-block','progress-S','progress-G','progress-E','progress-S-setup','progress-G-action',
+           'progress-G-command','progress-G-block','progress-unavailable')
+    check(faults==[(name,'%02d'%(16+i)) for i,name in enumerate(names)] and len(direct)+4*len(pairs)+2*len(faults)==94,'work exact fault case mapping')
+    check(len(b'\nN49D_WORK_V1:47:E:20000\r\n')==26 and 94*26==2444,'work emitter maximum bytes')
 
 
 def wrapper_instrumentation_controls():
@@ -3965,12 +4146,15 @@ def wrapper_instrumentation_controls():
     check(writer_raw.count(writer_new)==1 and guard.blob(writer_raw.replace(writer_new,writer_old))=='fd674ec09cc9f3b2432290a5d66c98e6d92e4411','exact writer null-backup correction')
     expect_failure('writer-former-null-argument',lambda:guard.checkout_bytes(writer_raw.replace(writer_new,writer_old),guard.WRAPPERS['scripts/build-tests-cl.ps1']),'checkout blob mismatch',record=False)
     writer_controls=body.split(" & { # N49D_WRAPPER_INSTRUMENTATION\n  $n49dWriterDir=",1)[1].split("}catch{$n49dPhase04Action=$null;throw} # N49D_WRAPPER_INSTRUMENTATION\n",1)[0]
+    writer_controls=''.join(line for line in writer_controls.splitlines(keepends=True) if 'Write-N49DWork $n49dWork' not in line)
+    writer_controls=writer_controls.replace('  }finally{ # N49D_WRAPPER_INSTRUMENTATION\n   Remove-Item -LiteralPath $n49dWriterDir -Recurse -Force # N49D_WRAPPER_INSTRUMENTATION\n  } # N49D_WRAPPER_INSTRUMENTATION\n','  }finally{Remove-Item -LiteralPath $n49dWriterDir -Recurse -Force} # N49D_WRAPPER_INSTRUMENTATION\n')
     check(hashlib.sha256((' & { # N49D_WRAPPER_INSTRUMENTATION\n  $n49dWriterDir='+writer_controls).encode()).hexdigest()=='49e512b859a9beb737a086e8ea81d78648eee69a9871a4b5bf334ef23e046fd2','actual report writer controls')
     check(body.index("Need ((Dispatch $bo) -eq 0) 'BuildOnly'")<body.index('$n49dWriterDir='),'live BuildOnly precedes writer controls')
     wrapper_phase04_controls()
     wrapper_build_catch_controls(body)
     wrapper_build_progress_controls(body)
-    RESULTS.append(dict(name='wrapper-fixed-markers-body',passed=True,phase04='SPNCV',catch='IPNCV',progress='SGEPCV'))
+    wrapper_work_controls(body)
+    RESULTS.append(dict(name='wrapper-fixed-markers-body',passed=True,phase04='SPNCV',catch='IPNCV',progress='SGEPCV',work='OFTCV'))
 
 
 WRAPPER_FILE_FIELDS=('st_dev','st_ino','st_mode','st_size','st_mtime_ns','st_ctime_ns','st_file_attributes')
@@ -4312,10 +4496,12 @@ def _wrapper_retention_fixtures():
     events=['%02d:%s'%(phase,edge) for phase in range(20) for edge in ('B','E')]
     with patch(__name__+'._wrapper_marker_file',return_value=_wrapper_marker_events(events)):
         maximum=_wrapper_failure_detail(SimpleNamespace(result=cached),Path('/fixture'))
+    maximum['markers']['phase04_work']=[47,20000,47,20000,40]
     prefix=_wrapper_marker_events(['%02d:%s'%(p,e) for p in range(4) for e in ('B','E')]+['04:B','19:B','19:E'])
     prefix['phase04_failure']=dict(action='22',category='OT')
     prefix['build_phase_catch']=dict(reason='binary-unavailable',category='OT')
     prefix['build_progress']='RIF'
+    prefix['phase04_work']=[41,20000,39,20000,40]
     with patch(__name__+'._wrapper_marker_file',return_value=prefix):
         interrupted=_wrapper_failure_detail(SimpleNamespace(result=_detail_fixture()['ownership']),Path('/fixture'))
     fixtures={'wrapper-maximum':maximum,'wrapper-prefix':interrupted,'wrapper-fallback':_wrapper_fallback()}
@@ -4932,6 +5118,22 @@ function Write-N49DBuildProgress($Action,$Progress){ # N49D_WRAPPER_INSTRUMENTAT
   [Console]::Error.WriteLine("`nN49D_BUILD_PROGRESS_V1:"+$s+$g+$e);[Console]::Error.Flush() # N49D_WRAPPER_INSTRUMENTATION
  }catch{} # N49D_WRAPPER_INSTRUMENTATION
 } # N49D_WRAPPER_INSTRUMENTATION
+function New-N49DWorkState($Writer,[scriptblock]$ClockFactory){ # N49D_WRAPPER_INSTRUMENTATION
+ try{return [pscustomobject]@{Writer=$Writer;Clock=(& $ClockFactory);Started=0;Ended=0;Tick=[long]0;Disabled=$false}}catch{return $null} # N49D_WRAPPER_INSTRUMENTATION
+} # N49D_WRAPPER_INSTRUMENTATION
+function Write-N49DWork($State,$Id,$Edge){ # N49D_WRAPPER_INSTRUMENTATION
+ try{ # N49D_WRAPPER_INSTRUMENTATION
+  if($null -eq $State -or $State.Disabled){return};$State.Disabled=$true # N49D_WRAPPER_INSTRUMENTATION
+  if($Id -isnot [string] -or $Id -cnotmatch '^(0[1-9]|[1-3][0-9]|4[0-7])$' -or $Edge -cnotin @('B','E')){return} # N49D_WRAPPER_INSTRUMENTATION
+  $operation=[int]$Id;$start=$State.Started;$done=$State.Ended # N49D_WRAPPER_INSTRUMENTATION
+  if($Edge -ceq 'B'){if(-not (($operation -eq $start+1 -and $start -eq $done) -or ($operation -eq 41 -and $start -ge 3 -and $start -lt 41) -or ($operation -eq 46 -and $start -ge 42 -and $start -lt 46))){return}}elseif($operation -ne $start -or $start -eq $done){return} # N49D_WRAPPER_INSTRUMENTATION
+  $tick=$State.Clock.ElapsedMilliseconds;if($tick -isnot [long] -or $tick -lt 0){return};$tick=[Math]::Min([long]20000,$tick) # N49D_WRAPPER_INSTRUMENTATION
+  if($tick -lt $State.Tick){return};$State.Tick=$tick # N49D_WRAPPER_INSTRUMENTATION
+  if($Edge -ceq 'B'){$State.Started=$operation}else{$State.Ended=$operation} # N49D_WRAPPER_INSTRUMENTATION
+  $State.Writer.WriteLine("`nN49D_WORK_V1:"+$Id+':'+$Edge+':'+$tick.ToString('D5',[Globalization.CultureInfo]::InvariantCulture));$State.Writer.Flush() # N49D_WRAPPER_INSTRUMENTATION
+  $State.Disabled=$false # N49D_WRAPPER_INSTRUMENTATION
+ }catch{} # N49D_WRAPPER_INSTRUMENTATION
+} # N49D_WRAPPER_INSTRUMENTATION
 Write-N49DWrapperMarker 0 # N49D_WRAPPER_INSTRUMENTATION
 $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($Wrapper,[ref]$t,[ref]$e)
 Need (-not $e.Count) 'Wrapper syntax'
@@ -5104,6 +5306,8 @@ Write-N49DWrapperMarker 6 # N49D_WRAPPER_INSTRUMENTATION
  Need ((Dispatch @{SkipProductionBuild=$true}) -eq 0 -and $script:rebuilt -eq 1) 'Combined skip'
 Write-N49DWrapperMarker 7 # N49D_WRAPPER_INSTRUMENTATION
 Write-N49DWrapperMarker 8 # N49D_WRAPPER_INSTRUMENTATION
+try{$n49dWork=$null;$n49dWork=New-N49DWorkState ([Console]::Error) {[Diagnostics.Stopwatch]::StartNew()}}catch{} # N49D_WRAPPER_INSTRUMENTATION
+try{Write-N49DWork $n49dWork '01' 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
 $script:n49dPhase04Latched=$false;$n49dPhase04Action='01' # N49D_WRAPPER_INSTRUMENTATION
 try{ # N49D_WRAPPER_INSTRUMENTATION
  $n49dPhase04Action='01' # N49D_WRAPPER_INSTRUMENTATION
@@ -5153,8 +5357,12 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
  Write-QbrainPhaseReport $mp $manifest objects
  $n49dPhase04Action='21' # N49D_WRAPPER_INSTRUMENTATION
  $bo=@{BuildOnly=$true;SkipProductionBuild=$true;ProductionManifest=$mp;PhaseContext=$bp}
+ try{Write-N49DWork $n49dWork '01' 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
+ try{Write-N49DWork $n49dWork '02' 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
  $n49dPhase04Action='22' # N49D_WRAPPER_INSTRUMENTATION
  Need ((Dispatch $bo) -eq 0) 'BuildOnly'
+ try{Write-N49DWork $n49dWork '02' 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
+ try{Write-N49DWork $n49dWork '03' 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
 try{ # N49D_WRAPPER_INSTRUMENTATION
  $n49dCatchOuterConsole=[Console]::Error # N49D_WRAPPER_INSTRUMENTATION
 & { # N49D_WRAPPER_INSTRUMENTATION
@@ -5354,16 +5562,26 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
     } # N49D_WRAPPER_INSTRUMENTATION
    } # N49D_WRAPPER_INSTRUMENTATION
   } # N49D_WRAPPER_INSTRUMENTATION
+  try{Write-N49DWork $n49dWork '03' 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
   $n49dPairs=@{} # N49D_WRAPPER_INSTRUMENTATION
   foreach($n49dCase in @('success','native-throw','native-nonzero','early','arguments-escape','resolver-escape')){ # N49D_WRAPPER_INSTRUMENTATION
+   $n49dWorkPair=switch -Exact ($n49dCase){'success'{@('04','05')}'native-throw'{@('06','07')}'native-nonzero'{@('08','09')}'early'{@('10','11')}'arguments-escape'{@('12','13')}'resolver-escape'{@('14','15')}} # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork $n49dWorkPair[0] 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
    $n49dPairs[$n49dCase]=Invoke-N49DBuildCatchControl baseline $n49dCase # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork $n49dWorkPair[0] 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork $n49dWorkPair[1] 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
    $n49dInstrumented=Invoke-N49DBuildCatchControl instrumented $n49dCase # N49D_WRAPPER_INSTRUMENTATION
    Assert-N49DBuildCatchPair $n49dPairs[$n49dCase] $n49dInstrumented # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork $n49dWorkPair[1] 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
   } # N49D_WRAPPER_INSTRUMENTATION
   foreach($n49dFault in @('getter','writer','flush','latch-read','latch-write','observer-constructor','invocation','stream-output','initialization','constructor','activation-before','activation-after','gate-action','gate-redefinition','gate-command','gate-block','progress-S','progress-G','progress-E','progress-S-setup','progress-G-action','progress-G-command','progress-G-block','progress-unavailable')){ # N49D_WRAPPER_INSTRUMENTATION
+   $n49dWorkId=switch -Exact ($n49dFault){'getter'{'16'}'writer'{'17'}'flush'{'18'}'latch-read'{'19'}'latch-write'{'20'}'observer-constructor'{'21'}'invocation'{'22'}'stream-output'{'23'}'initialization'{'24'}'constructor'{'25'}'activation-before'{'26'}'activation-after'{'27'}'gate-action'{'28'}'gate-redefinition'{'29'}'gate-command'{'30'}'gate-block'{'31'}'progress-S'{'32'}'progress-G'{'33'}'progress-E'{'34'}'progress-S-setup'{'35'}'progress-G-action'{'36'}'progress-G-command'{'37'}'progress-G-block'{'38'}'progress-unavailable'{'39'}} # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork $n49dWorkId 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
    $n49dInstrumented=Invoke-N49DBuildCatchControl instrumented native-throw $n49dFault # N49D_WRAPPER_INSTRUMENTATION
    Assert-N49DBuildCatchPair $n49dPairs['native-throw'] $n49dInstrumented # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork $n49dWorkId 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
   } # N49D_WRAPPER_INSTRUMENTATION
+  try{Write-N49DWork $n49dWork '40' 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
   & { # N49D_WRAPPER_INSTRUMENTATION
    function Write-N49DBuildCatch($Record,$Reason,$State){$n49dGateState.Emitted++;Need ([object]::ReferenceEquals($Record,$n49dGateState.Primary)) 'Progress gate changed record'} # N49D_WRAPPER_INSTRUMENTATION
    $n49dGateSource='function Invoke-N49DProgressGateControl($Probe){$MyInvocation=$Probe;try{throw [IO.IOException]::new(''private-gate-primary'')}catch{$n49dGateState.Primary=$_;'+$n49dBuildCatchInsertion+"`n"+';throw}finally{$n49dGateState.Finally++}}' # N49D_WRAPPER_INSTRUMENTATION
@@ -5446,7 +5664,60 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
    } # N49D_WRAPPER_INSTRUMENTATION
   }finally{[Console]::SetError($n49dCatchSavedConsole)} # N49D_WRAPPER_INSTRUMENTATION
   Need ([object]::ReferenceEquals([Console]::Error,$n49dCatchSavedConsole)) 'Catch vocabulary console restoration' # N49D_WRAPPER_INSTRUMENTATION
+  & { # N49D_WRAPPER_INSTRUMENTATION
+   $n49dWorkProbeWriter=[N49DBuildCatchControlWriter]::new('none') # N49D_WRAPPER_INSTRUMENTATION
+   try{ # N49D_WRAPPER_INSTRUMENTATION
+    $n49dWorkProbeClock=[pscustomobject]@{ElapsedMilliseconds=[long]20001} # N49D_WRAPPER_INSTRUMENTATION
+    $n49dWorkProbe=New-N49DWorkState $n49dWorkProbeWriter {$n49dWorkProbeClock} # N49D_WRAPPER_INSTRUMENTATION
+    $n49dWorkOtherWriter=[N49DBuildCatchControlWriter]::new('writer');$n49dWorkSavedConsole=[Console]::Error;[Console]::SetError($n49dWorkOtherWriter) # N49D_WRAPPER_INSTRUMENTATION
+    $n49dWorkExpected='' # N49D_WRAPPER_INSTRUMENTATION
+    for($n49dWorkOperation=1;$n49dWorkOperation -le 47;$n49dWorkOperation++){foreach($n49dWorkEdge in @('B','E')){ # N49D_WRAPPER_INSTRUMENTATION
+     $n49dWorkToken=$n49dWorkOperation.ToString('D2',[Globalization.CultureInfo]::InvariantCulture) # N49D_WRAPPER_INSTRUMENTATION
+     Write-N49DWork $n49dWorkProbe $n49dWorkToken $n49dWorkEdge # N49D_WRAPPER_INSTRUMENTATION
+     $n49dWorkExpected+="`nN49D_WORK_V1:"+$n49dWorkToken+':'+$n49dWorkEdge+':20000'+[Environment]::NewLine # N49D_WRAPPER_INSTRUMENTATION
+    }} # N49D_WRAPPER_INSTRUMENTATION
+    Need ($n49dWorkProbeWriter.ToString() -ceq $n49dWorkExpected -and $n49dWorkProbeWriter.Writes -eq 94 -and $n49dWorkProbeWriter.Flushes -eq 94 -and $n49dWorkProbe.Started -eq 47 -and $n49dWorkProbe.Ended -eq 47) 'Work complete emitter order or saturation' # N49D_WRAPPER_INSTRUMENTATION
+    Need ($n49dWorkOtherWriter.Writes -eq 0 -and $n49dWorkOtherWriter.Flushes -eq 0) 'Work used redirected error stream' # N49D_WRAPPER_INSTRUMENTATION
+   }finally{[Console]::SetError($n49dWorkSavedConsole);$n49dWorkOtherWriter.Dispose();$n49dWorkProbeWriter.Dispose()} # N49D_WRAPPER_INSTRUMENTATION
+   foreach($n49dWorkFault in @('none','writer','flush','clock','negative','type','constructor','invocation','latch-read','latch-write','duplicate','order','backward')){ # N49D_WRAPPER_INSTRUMENTATION
+    $n49dWorkProbeWriter=[N49DBuildCatchControlWriter]::new($(if($n49dWorkFault -cin @('writer','flush')){$n49dWorkFault}else{'none'})) # N49D_WRAPPER_INSTRUMENTATION
+    try{ # N49D_WRAPPER_INSTRUMENTATION
+     $n49dWorkCounter=[pscustomobject]@{Reads=0};$n49dWorkAfter=0;$n49dWorkFinally=0;$n49dWorkPrimary=$null;$n49dWorkSeen=$null # N49D_WRAPPER_INSTRUMENTATION
+     $n49dWorkProbeClock=[pscustomobject]@{};$n49dWorkProbeClock|Add-Member -MemberType ScriptProperty -Name ElapsedMilliseconds -Value {$n49dWorkCounter.Reads++;if($n49dWorkFault -ceq 'clock'){throw 'private-clock'};if($n49dWorkFault -ceq 'negative'){return [long]-1};if($n49dWorkFault -ceq 'type'){return 'private-clock'};if($n49dWorkFault -ceq 'backward' -and $n49dWorkCounter.Reads -gt 1){return [long]0};return [long]1} # N49D_WRAPPER_INSTRUMENTATION
+     $n49dWorkProbe=New-N49DWorkState $n49dWorkProbeWriter {if($n49dWorkFault -ceq 'constructor'){throw 'private-constructor'};$n49dWorkProbeClock} # N49D_WRAPPER_INSTRUMENTATION
+     if($n49dWorkFault -ceq 'latch-read'){$n49dWorkProbe|Add-Member -Force -MemberType ScriptProperty -Name Disabled -Value {throw 'private-latch-read'}} # N49D_WRAPPER_INSTRUMENTATION
+     if($n49dWorkFault -ceq 'latch-write'){$n49dWorkProbe|Add-Member -Force -MemberType ScriptProperty -Name Disabled -Value {$false} -SecondValue {throw 'private-latch-write'}} # N49D_WRAPPER_INSTRUMENTATION
+     try{try{throw [IO.IOException]::new('private-work-primary')}catch{ # N49D_WRAPPER_INSTRUMENTATION
+      $n49dWorkPrimary=$_;try{if($n49dWorkFault -ceq 'invocation'){throw 'private-invocation'};Write-N49DWork $n49dWorkProbe '01' 'B'}catch{};$n49dWorkAfter++;throw # N49D_WRAPPER_INSTRUMENTATION
+     }}catch{$n49dWorkSeen=$_}finally{$n49dWorkFinally++} # N49D_WRAPPER_INSTRUMENTATION
+     Need ([object]::ReferenceEquals($n49dWorkPrimary,$n49dWorkSeen) -and $n49dWorkAfter -eq 1 -and $n49dWorkFinally -eq 1) 'Work observation changed primary or cleanup' # N49D_WRAPPER_INSTRUMENTATION
+     if($n49dWorkFault -ceq 'duplicate'){Write-N49DWork $n49dWorkProbe '01' 'B'} # N49D_WRAPPER_INSTRUMENTATION
+     if($n49dWorkFault -ceq 'order'){Write-N49DWork $n49dWorkProbe '02' 'B'} # N49D_WRAPPER_INSTRUMENTATION
+     if($n49dWorkFault -ceq 'backward'){Write-N49DWork $n49dWorkProbe '01' 'E'} # N49D_WRAPPER_INSTRUMENTATION
+     $n49dWorkWant=if($n49dWorkFault -cin @('none','flush','duplicate','order','backward')){"`nN49D_WORK_V1:01:B:00001"+[Environment]::NewLine}else{''} # N49D_WRAPPER_INSTRUMENTATION
+     Need ($n49dWorkProbeWriter.ToString() -ceq $n49dWorkWant) 'Work failure token retention' # N49D_WRAPPER_INSTRUMENTATION
+     $n49dWorkExpectedWrites=if($n49dWorkFault -cin @('none','writer','flush','duplicate','order','backward')){1}else{0};$n49dWorkExpectedFlushes=if($n49dWorkFault -cin @('none','flush','duplicate','order','backward')){1}else{0} # N49D_WRAPPER_INSTRUMENTATION
+     $n49dWorkExpectedReads=if($n49dWorkFault -ceq 'backward'){2}elseif($n49dWorkFault -cin @('none','writer','flush','clock','negative','type','duplicate','order')){1}else{0} # N49D_WRAPPER_INSTRUMENTATION
+     Need ($n49dWorkProbeWriter.Writes -eq $n49dWorkExpectedWrites -and $n49dWorkProbeWriter.Flushes -eq $n49dWorkExpectedFlushes -and $n49dWorkCounter.Reads -eq $n49dWorkExpectedReads) 'Work clock write flush order' # N49D_WRAPPER_INSTRUMENTATION
+     if($n49dWorkFault -cnotin @('none','invocation')){ # N49D_WRAPPER_INSTRUMENTATION
+      $n49dWorkWrites=$n49dWorkProbeWriter.Writes;$n49dWorkFlushes=$n49dWorkProbeWriter.Flushes;$n49dWorkPriorReads=$n49dWorkCounter.Reads # N49D_WRAPPER_INSTRUMENTATION
+      Write-N49DWork $n49dWorkProbe '01' 'E' # N49D_WRAPPER_INSTRUMENTATION
+      Need ($n49dWorkProbeWriter.Writes -eq $n49dWorkWrites -and $n49dWorkProbeWriter.Flushes -eq $n49dWorkFlushes -and $n49dWorkCounter.Reads -eq $n49dWorkPriorReads) 'Work failed first attempt retried' # N49D_WRAPPER_INSTRUMENTATION
+     } # N49D_WRAPPER_INSTRUMENTATION
+    }finally{$n49dWorkProbeWriter.Dispose()} # N49D_WRAPPER_INSTRUMENTATION
+   } # N49D_WRAPPER_INSTRUMENTATION
+   foreach($n49dWorkCleanup in @(@(3,41),@(42,46))){ # N49D_WRAPPER_INSTRUMENTATION
+    $n49dWorkProbeWriter=[N49DBuildCatchControlWriter]::new('none') # N49D_WRAPPER_INSTRUMENTATION
+    try{ # N49D_WRAPPER_INSTRUMENTATION
+     $n49dWorkProbe=New-N49DWorkState $n49dWorkProbeWriter {[pscustomobject]@{ElapsedMilliseconds=[long]2}};$n49dWorkProbe.Started=$n49dWorkCleanup[0];$n49dWorkProbe.Ended=$n49dWorkCleanup[0]-1 # N49D_WRAPPER_INSTRUMENTATION
+     $n49dWorkToken=$n49dWorkCleanup[1].ToString('D2',[Globalization.CultureInfo]::InvariantCulture);Write-N49DWork $n49dWorkProbe $n49dWorkToken 'B';Write-N49DWork $n49dWorkProbe $n49dWorkToken 'E' # N49D_WRAPPER_INSTRUMENTATION
+     Need ($n49dWorkProbeWriter.Writes -eq 2 -and $n49dWorkProbeWriter.Flushes -eq 2 -and $n49dWorkProbe.Started -eq $n49dWorkCleanup[1] -and $n49dWorkProbe.Ended -eq $n49dWorkCleanup[1]) 'Work cleanup transition' # N49D_WRAPPER_INSTRUMENTATION
+    }finally{$n49dWorkProbeWriter.Dispose()} # N49D_WRAPPER_INSTRUMENTATION
+   } # N49D_WRAPPER_INSTRUMENTATION
+  } # N49D_WRAPPER_INSTRUMENTATION
+  try{Write-N49DWork $n49dWork '40' 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
  }finally{ # N49D_WRAPPER_INSTRUMENTATION
+  try{Write-N49DWork $n49dWork '41' 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
   [Console]::SetError($n49dCatchSavedConsole) # N49D_WRAPPER_INSTRUMENTATION
   if($null -ne $n49dCatchCurrentWriter){$n49dCatchCurrentWriter.Dispose()} # N49D_WRAPPER_INSTRUMENTATION
   Reset-N49DBuildCatchFiles $true # N49D_WRAPPER_INSTRUMENTATION
@@ -5454,6 +5725,8 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
  } # N49D_WRAPPER_INSTRUMENTATION
 } # N49D_WRAPPER_INSTRUMENTATION
  Need ([object]::ReferenceEquals([Console]::Error,$n49dCatchOuterConsole)) 'Catch outer console restoration' # N49D_WRAPPER_INSTRUMENTATION
+ try{Write-N49DWork $n49dWork '41' 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
+ try{Write-N49DWork $n49dWork '42' 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
  & { # N49D_WRAPPER_INSTRUMENTATION
   $n49dWriterDir=Join-Path $root 'report-writer';$null=New-Item -ItemType Directory -Path $n49dWriterDir # N49D_WRAPPER_INSTRUMENTATION
   $n49dWriterPath=Join-Path $n49dWriterDir 'report.json';$n49dWriterTemp=$n49dWriterPath+'.tmp-'+$PID # N49D_WRAPPER_INSTRUMENTATION
@@ -5470,24 +5743,36 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
    $n49dWriterOutput=@(Write-QbrainPhaseReport $n49dWriterPath $n49dWriterValue build) # N49D_WRAPPER_INSTRUMENTATION
    Need ($n49dWriterOutput.Count -eq 0 -and (ConvertTo-QbrainCanonical $n49dWriterValue) -ceq $n49dWriterFirst) 'Writer create output or input mutation' # N49D_WRAPPER_INSTRUMENTATION
    Assert-N49DWriterFile $n49dWriterFirst # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork '42' 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork '43' 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
    $n49dWriterValue.state='failed';$n49dWriterValue.failure='storage';$n49dWriterSecond=ConvertTo-QbrainCanonical $n49dWriterValue # N49D_WRAPPER_INSTRUMENTATION
    Need ($n49dWriterFirst -cne $n49dWriterSecond -and [IO.File]::Exists($n49dWriterPath)) 'Writer replacement precondition' # N49D_WRAPPER_INSTRUMENTATION
    $n49dWriterOutput=@(Write-QbrainPhaseReport $n49dWriterPath $n49dWriterValue build) # N49D_WRAPPER_INSTRUMENTATION
    Need ($n49dWriterOutput.Count -eq 0 -and (ConvertTo-QbrainCanonical $n49dWriterValue) -ceq $n49dWriterSecond) 'Writer replace output or input mutation' # N49D_WRAPPER_INSTRUMENTATION
    Assert-N49DWriterFile $n49dWriterSecond # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork '43' 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork '44' 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
    $n49dWriterValue.state='prepared';$n49dWriterRejected=$null # N49D_WRAPPER_INSTRUMENTATION
    try{$null=Write-QbrainPhaseReport $n49dWriterPath $n49dWriterValue build}catch{$n49dWriterRejected=$_} # N49D_WRAPPER_INSTRUMENTATION
    Need ($null -ne $n49dWriterRejected -and $n49dWriterRejected.Exception.Message -ceq 'Unexpected failure.') 'Writer validation rejection changed' # N49D_WRAPPER_INSTRUMENTATION
    Assert-N49DWriterFile $n49dWriterSecond # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork '44' 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork '45' 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
    $n49dWriterValue.failure=$null;$n49dWriterRejected=$null # N49D_WRAPPER_INSTRUMENTATION
    $n49dWriterLock=[IO.File]::Open($n49dWriterPath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::None) # N49D_WRAPPER_INSTRUMENTATION
    try{try{$null=Write-QbrainPhaseReport $n49dWriterPath $n49dWriterValue build}catch{$n49dWriterRejected=$_}}finally{$n49dWriterLock.Dispose()} # N49D_WRAPPER_INSTRUMENTATION
    Need ($null -ne $n49dWriterRejected -and $n49dWriterRejected.Exception -is [Management.Automation.MethodInvocationException] -and $n49dWriterRejected.Exception.InnerException -is [IO.IOException]) 'Writer replacement failure changed' # N49D_WRAPPER_INSTRUMENTATION
    Need ((ConvertTo-QbrainCanonical $n49dWriterValue) -ceq $n49dWriterFirst) 'Writer failure input mutation' # N49D_WRAPPER_INSTRUMENTATION
    Assert-N49DWriterFile $n49dWriterSecond # N49D_WRAPPER_INSTRUMENTATION
-  }finally{Remove-Item -LiteralPath $n49dWriterDir -Recurse -Force} # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork '45' 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
+  }finally{ # N49D_WRAPPER_INSTRUMENTATION
+   try{Write-N49DWork $n49dWork '46' 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
+   Remove-Item -LiteralPath $n49dWriterDir -Recurse -Force # N49D_WRAPPER_INSTRUMENTATION
+  } # N49D_WRAPPER_INSTRUMENTATION
+  try{Write-N49DWork $n49dWork '46' 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
  } # N49D_WRAPPER_INSTRUMENTATION
 }catch{$n49dPhase04Action=$null;throw} # N49D_WRAPPER_INSTRUMENTATION
+ try{Write-N49DWork $n49dWork '47' 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
  $n49dPhase04Action='23' # N49D_WRAPPER_INSTRUMENTATION
  Need ($script:batch -notmatch '(?m)^(qbrain_tests\.exe|".*qbrain_tests\.exe")\r?$') 'BuildOnly ran tests'
  $n49dPhase04Action='24' # N49D_WRAPPER_INSTRUMENTATION
@@ -5550,6 +5835,7 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
  Write-QbrainPhaseReport $bp $build build
  $n49dPhase04Action='53' # N49D_WRAPPER_INSTRUMENTATION
  Need ((Dispatch $ro) -eq 0) 'Restored run'
+ try{Write-N49DWork $n49dWork '47' 'E'}catch{} # N49D_WRAPPER_INSTRUMENTATION
 }catch{try{Write-N49DPhase04Failure $_ $n49dPhase04Action}catch{};try{Write-N49DBuildProgress $n49dPhase04Action $n49dBuildCatchProgress}catch{};throw} # N49D_WRAPPER_INSTRUMENTATION
 Write-N49DWrapperMarker 9 # N49D_WRAPPER_INSTRUMENTATION
 Write-N49DWrapperMarker 10 # N49D_WRAPPER_INSTRUMENTATION
