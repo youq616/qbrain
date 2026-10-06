@@ -213,7 +213,9 @@ def ancestry_controls():
     replies={('rev-parse','HEAD'):head,('rev-parse','HEAD^{tree}'):tree,
              ('rev-parse',guard.BASE+'^{tree}'):guard.BASE_TREE,
              ('rev-parse',guard.CORRECTION_PARENT+'^{tree}'):guard.CORRECTION_PARENT_TREE,
-             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.RETAINED_CORRECTION_PARENT,
+             ('show','-s','--format=%P',guard.CORRECTION_PARENT):guard.LOCALIZATION_PARENT,
+             ('rev-parse',guard.LOCALIZATION_PARENT+'^{tree}'):guard.LOCALIZATION_PARENT_TREE,
+             ('show','-s','--format=%P',guard.LOCALIZATION_PARENT):guard.RETAINED_CORRECTION_PARENT,
              ('rev-parse',guard.RETAINED_CORRECTION_PARENT+'^{tree}'):guard.RETAINED_CORRECTION_PARENT_TREE,
              ('show','-s','--format=%P',guard.RETAINED_CORRECTION_PARENT):guard.SHAPE_PARENT,
              ('rev-parse',guard.SHAPE_PARENT+'^{tree}'):guard.SHAPE_PARENT_TREE,
@@ -261,10 +263,11 @@ def ancestry_controls():
             if values[args] is None:raise subprocess.CalledProcessError(128,['git',*args])
             return (values[args]+'\n').encode()
         with patch.object(guard,'git',git):result=guard.check_ancestry(Path('.'),commit,expected_tree,precommit)
-        check(len(calls)==(43 if precommit else 44),'unexpected ancestry query count')
+        check(len(calls)==(45 if precommit else 46),'unexpected ancestry query count')
         return result
     def fixed_pins():
         actual=[(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),
+                (guard.LOCALIZATION_PARENT,guard.LOCALIZATION_PARENT_TREE),
                 (guard.RETAINED_CORRECTION_PARENT,guard.RETAINED_CORRECTION_PARENT_TREE),
                 (guard.SHAPE_PARENT,guard.SHAPE_PARENT_TREE),
                 (guard.PROGRESS_PARENT,guard.PROGRESS_PARENT_TREE),
@@ -284,7 +287,8 @@ def ancestry_controls():
                 (guard.PREVIOUS_PARENT,guard.PREVIOUS_PARENT_TREE),
                 (guard.EARLIER_PARENT,guard.EARLIER_PARENT_TREE),
                 (guard.ORIGINAL_PARENT,guard.ORIGINAL_PARENT_TREE),(guard.BASE,guard.BASE_TREE)]
-        expected=[('7f27168b01f020e8ddc38d4d5977e3ad354ff566','9060bfa1da3ea05aac0d9ff932ed4c903877caa0'),
+        expected=[('d8c2e46f2e2d6b849904583ab4e430350e8c7fa5','dccb1da35da397a0bd8caa721f8096bc432a09fb'),
+                  ('7f27168b01f020e8ddc38d4d5977e3ad354ff566','9060bfa1da3ea05aac0d9ff932ed4c903877caa0'),
                   ('d62321640f5074d0c4c6a735b72b4ae21d6d880b','a41a3adceca7289d0bf2999e2e291796a4043833'),
                   ('fb589a6991f57922db316be98a9aa70bdd4db182','52cf8c5f5399a814f04046c081651ba21ed64764'),
                   ('9ce038df175e64a15a7fdee5858510deb4ddac22','09b6a3f38de5976ff65b8be20460efb301e071e5'),
@@ -305,7 +309,7 @@ def ancestry_controls():
                   ('ff61dde8150f30eec699a4e5c01554175ff37f98','d8895a9792cab41cc15d71f7c248fef794829787'),
                   ('0c99f74436682500caeaf0bf68a7bc42310d6a50','d91c1f258a704eed9fe899c1193df8d080ff2f56'),
                   ('cfe1ef58e244b51092c2248804b663b6c28913d7','75b69ad389630e51528ddb5536a27255203470df')]
-        check(actual==expected and len({commit for commit,_ in actual})==21,'fixed twenty-two-commit lineage pins')
+        check(actual==expected and len({commit for commit,_ in actual})==22,'fixed twenty-three-commit lineage pins')
         for label,key,value,boundary in [
             ('tree',('rev-parse',guard.STAT_PARENT+'^{tree}'),'3'*40,'stat parent tree'),
             ('parent',('show','-s','--format=%P',guard.STAT_PARENT),'3'*40,'stat parent ancestry'),
@@ -418,17 +422,38 @@ def ancestry_controls():
             except subprocess.CalledProcessError as error:
                 check(error.returncode==128 and error.cmd==['git',*key],'retained correction missing object boundary')
             else:raise ValueError('missing retained correction metadata passed')
+        for label,key,value,boundary in [
+            ('tree',('rev-parse',guard.LOCALIZATION_PARENT+'^{tree}'),'3'*40,'localization parent tree'),
+            ('parent',('show','-s','--format=%P',guard.LOCALIZATION_PARENT),'3'*40,'localization parent ancestry'),
+            ('multi',('show','-s','--format=%P',guard.LOCALIZATION_PARENT),guard.BASE+' '+'3'*40,'localization parent ancestry'),
+            ('empty',('show','-s','--format=%P',guard.LOCALIZATION_PARENT),'','localization parent ancestry')]:
+            expect_failure('retained-localization-'+label,lambda key=key,value=value:run({key:value}),boundary,record=False)
+        tip={('rev-parse','HEAD'):guard.LOCALIZATION_PARENT,('rev-parse','HEAD^{tree}'):guard.LOCALIZATION_PARENT_TREE}
+        expect_failure('retained-localization-candidate',lambda:run(tip,commit=guard.LOCALIZATION_PARENT,expected_tree=guard.LOCALIZATION_PARENT_TREE),'candidate pin mismatch',record=False)
+        expect_failure('retained-localization-precommit',lambda:run(tip,True),'precommit requires exact correction parent/tree',record=False)
+        for key in [('rev-parse',guard.LOCALIZATION_PARENT+'^{tree}'),('show','-s','--format=%P',guard.LOCALIZATION_PARENT)]:
+            try:run({key:None})
+            except subprocess.CalledProcessError as error:
+                check(error.returncode==128 and error.cmd==['git',*key],'localization missing object boundary')
+            else:raise ValueError('missing localization metadata passed')
+        local_published_tree='9a9591626169ac4d4234e22957d1ea13a58a8d5f'
+        for parent in (guard.LOCALIZATION_PARENT,local_published_tree):
+            expect_failure('prepared-text-parent',lambda parent=parent:run({('show','-s','--format=%P',head):parent}),'candidate parent mismatch',record=False)
+        tip={('rev-parse','HEAD'):local_published_tree,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE,
+             ('show','-s','--format=%P',local_published_tree):guard.LOCALIZATION_PARENT}
+        expect_failure('published-tree-precommit',lambda:run(tip,True),'precommit requires exact correction parent/tree',record=False)
+        expect_failure('published-tree-candidate',lambda:run(tip,commit=local_published_tree,expected_tree=guard.CORRECTION_PARENT_TREE),'candidate parent mismatch',record=False)
         local_same_tree='77da2ff12a26fc403ba4eeabcc84166d0baebc09'
         for label,parent in [('retained-correction',guard.RETAINED_CORRECTION_PARENT),('local-same-tree',local_same_tree)]:
             expect_failure('candidate-reject-'+label+'-parent',lambda parent=parent:run({('show','-s','--format=%P',head):parent}),'candidate parent mismatch',record=False)
-        tip={('rev-parse','HEAD'):local_same_tree,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE,
+        tip={('rev-parse','HEAD'):local_same_tree,('rev-parse','HEAD^{tree}'):guard.LOCALIZATION_PARENT_TREE,
              ('show','-s','--format=%P',local_same_tree):guard.RETAINED_CORRECTION_PARENT}
         expect_failure('local-same-tree-precommit',lambda:run(tip,True),'precommit requires exact correction parent/tree',record=False)
-        expect_failure('local-same-tree-candidate',lambda:run(tip,commit=local_same_tree,expected_tree=guard.CORRECTION_PARENT_TREE),'candidate parent mismatch',record=False)
+        expect_failure('local-same-tree-candidate',lambda:run(tip,commit=local_same_tree,expected_tree=guard.LOCALIZATION_PARENT_TREE),'candidate parent mismatch',record=False)
     control('ancestry-fixed-twenty-one-commit-pins',fixed_pins)
     control('ancestry-exact-correction-chain',lambda:check(run()==(head,tree,guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE),'committed parent fields'))
     pre={('rev-parse','HEAD'):guard.CORRECTION_PARENT,('rev-parse','HEAD^{tree}'):guard.CORRECTION_PARENT_TREE}
-    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.RETAINED_CORRECTION_PARENT,guard.RETAINED_CORRECTION_PARENT_TREE),'precommit actual parent fields'))
+    control('ancestry-precommit-exact-anchor',lambda:check(run(pre,True)==(guard.CORRECTION_PARENT,guard.CORRECTION_PARENT_TREE,guard.LOCALIZATION_PARENT,guard.LOCALIZATION_PARENT_TREE),'precommit actual parent fields'))
     def no_lazy_fetch():
         with patch.object(guard.subprocess,'check_output',return_value=b'fixture') as execute:
             check(guard.git(Path('.'),'rev-parse','HEAD')==b'fixture','git helper return')
@@ -564,7 +589,10 @@ def ancestry_controls():
         expect_failure('correction-precommit-reject-'+label,lambda changed=changed:guard.validate_correction(parent,changed,False))
     workflow=Path(q.ROOT/'.github/workflows/n49d-mcp-directory-search.yml').read_bytes()
     def workflow_contract(raw,windows=False):
-        current=guard.checkout_bytes(raw,'742f7385b42503387a00b8cf542947d074de8525',windows)
+        prepared=guard.checkout_bytes(raw,'44cef40bc3afaa4ed782596ba73ea85e2ce3c463',windows)
+        check(prepared.count(b'          fetch-depth: 23\n')==1 and guard.sha(prepared)=='5ef4fb7c35fb89b60753e0fde2b556781bc34e828ba950832bfa4610b8c37f70','exact depth-twenty-three workflow contract')
+        current=guard.checkout_bytes(prepared.replace(b'          fetch-depth: 23\n',b'          fetch-depth: 22\n'),
+            '742f7385b42503387a00b8cf542947d074de8525')
         check(current.count(b'          fetch-depth: 22\n')==1 and guard.sha(current)=='1aed1027fb370a00bb37ee9ee0dd11d513a8d1dfc05ee84ad5989c38f1d887ef','exact depth-twenty-two workflow contract')
         canonical=guard.checkout_bytes(current.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 21\n'),
             'f45777266c503418f42b37e25a6620c80b8e322f')
@@ -594,38 +622,39 @@ def ancestry_controls():
         check(guard.blob(previous)=='103ea3d99c6f1977564008474e91e22c1c289f03' and
               previous.count(b'          fetch-depth: 14\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 14\n',b'          fetch-depth: 13\n'))=='9f1d0514132a60435af03e84e904402f90c7ce732311720e50f38f9960013e3a','exact retained depth-fourteen workflow contract')
-        return current
+        return prepared
     control('workflow-only-depth-twenty-one-change',lambda:workflow_contract(workflow,os.name=='nt'))
     canonical=workflow_contract(workflow,os.name=='nt')
-    expect_failure('workflow-retained-depth-twenty-one',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 21\n')),'checkout blob mismatch',record=False)
-    expect_failure('workflow-retained-depth-twenty',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 20\n')),'checkout blob mismatch',record=False)
-    expect_failure('workflow-retained-depth-nineteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 19\n')),'checkout blob mismatch',record=False)
-    expect_failure('workflow-retained-depth-eighteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 18\n')),'checkout blob mismatch',record=False)
-    expect_failure('workflow-retained-depth-seventeen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 17\n')),'checkout blob mismatch',record=False)
-    expect_failure('workflow-retained-depth-sixteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 16\n')),'checkout blob mismatch',record=False)
-    expect_failure('workflow-retained-depth-fifteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 15\n')),'checkout blob mismatch',record=False)
-    expect_failure('workflow-retained-depth-fourteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 14\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-twenty-two',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 23\n',b'          fetch-depth: 22\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-twenty-one',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 23\n',b'          fetch-depth: 21\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-twenty',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 23\n',b'          fetch-depth: 20\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-nineteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 23\n',b'          fetch-depth: 19\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-eighteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 23\n',b'          fetch-depth: 18\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-seventeen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 23\n',b'          fetch-depth: 17\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-sixteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 23\n',b'          fetch-depth: 16\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-fifteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 23\n',b'          fetch-depth: 15\n')),'checkout blob mismatch',record=False)
+    expect_failure('workflow-retained-depth-fourteen',lambda:workflow_contract(canonical.replace(b'          fetch-depth: 23\n',b'          fetch-depth: 14\n')),'checkout blob mismatch',record=False)
     def retained_depth_thirteen_contract():
-        previous=canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 13\n')
+        previous=canonical.replace(b'          fetch-depth: 23\n',b'          fetch-depth: 13\n')
         check(guard.blob(previous)=='1c1b590dffbdcdb1fc06896788872a828b3b0291' and
               previous.count(b'          fetch-depth: 13\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 13\n',b'          fetch-depth: 12\n'))=='9e8f255ee3534cd468b770eaaacf07dae17f804019dca1dc8babb57bd2ef948a','exact retained depth-thirteen workflow contract')
     control('workflow-only-depth-thirteen-change',retained_depth_thirteen_contract)
     def retained_depth_twelve_contract():
-        previous=canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 12\n')
+        previous=canonical.replace(b'          fetch-depth: 23\n',b'          fetch-depth: 12\n')
         check(guard.blob(previous)=='f1aa24556a0c2cb9b9b2a176cbdd09ac947224a1' and
               previous.count(b'          fetch-depth: 12\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 12\n',b'          fetch-depth: 11\n'))=='401d38d79f89fedf309305af54f778bb000cef09f255215b4db34d268cd1497d','exact retained depth-twelve workflow contract')
     control('workflow-only-depth-twelve-change',retained_depth_twelve_contract)
     def retained_depth_eleven_contract():
-        previous=canonical.replace(b'          fetch-depth: 22\n',b'          fetch-depth: 11\n')
+        previous=canonical.replace(b'          fetch-depth: 23\n',b'          fetch-depth: 11\n')
         check(guard.blob(previous)=='5d5ad4346f87a24531a2f327b116d18e9d39c557' and
               previous.count(b'          fetch-depth: 11\n')==1 and
               guard.sha(previous.replace(b'          fetch-depth: 11\n',b'          fetch-depth: 10\n'))=='9cf5265dd2f90c275bff5ce2e4d8249bdd031ab342ba92ab74ad95eeef2e92f2','exact retained depth-eleven workflow contract')
     control('workflow-only-depth-eleven-change',retained_depth_eleven_contract)
-    for label,old,new in [('old-depth',b'fetch-depth: 22',b'fetch-depth: 10'),('previous-depth',b'fetch-depth: 22',b'fetch-depth: 12'),('broad-depth',b'fetch-depth: 22',b'fetch-depth: 0'),
-                          ('retained-depth',b'fetch-depth: 22',b'fetch-depth: 13'),
-                          ('malformed-depth',b'fetch-depth: 22',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
+    for label,old,new in [('old-depth',b'fetch-depth: 23',b'fetch-depth: 10'),('previous-depth',b'fetch-depth: 23',b'fetch-depth: 12'),('broad-depth',b'fetch-depth: 23',b'fetch-depth: 0'),
+                          ('retained-depth',b'fetch-depth: 23',b'fetch-depth: 13'),
+                          ('malformed-depth',b'fetch-depth: 23',b'fetch-depth: four'),('mutable-ref',b'ref: ${{ inputs.candidate || github.sha }}',b'ref: main'),
                           ('changed-trigger',b'feature/n49d-mcp-directory-search',b'main')]:
         changed=canonical.replace(old,new);check(changed!=canonical,'workflow mutation missed target')
         expect_failure('workflow-reject-'+label,lambda changed=changed:workflow_contract(changed),'checkout blob mismatch')
@@ -3786,6 +3815,18 @@ def wrapper_build_catch_controls(body):
     offset=definition.index('  } catch {')+len('  } catch {')
     instrumented=definition[:offset]+insertion+definition[offset:]
     check(instrumented[:offset]+instrumented[offset+len(insertion):]==definition,'build catch exact stripping')
+    prepared=body.split('   if(-not $n49dBuildCatchPrepared){ # N49D_WRAPPER_INSTRUMENTATION\n',1)[1].split('   } # N49D_WRAPPER_INSTRUMENTATION\n',1)[0]
+    check(hashlib.sha256(prepared.encode()).hexdigest()==
+        'fc2237bc22269beb370d8e7111822a2ace9ca1bb9c006b61bf5876e476c0c5cd','catch preparation source')
+    for original,expected in ((definition,'jpj94ob3UiKitni+6o2d/hIqOUcr5S5qHtaE5izwCX4='),(definition.replace('\n','\r\n'),'w0pJ5FJMkkZ6vB+YQMmmwrF5VDfmvpJUrZ0ISq8IZMo=')):
+        place=original.index('  } catch {')+len('  } catch {')
+        prepared_text=original[:place]+insertion+original[place:]
+        check(prepared_text[:place]+prepared_text[place+len(insertion):]==original,'catch oracle preservation')
+        check(base64.b64encode(hashlib.sha256((original+'\0'+prepared_text).encode()).digest()).decode()==expected and
+            body.count("'"+expected+"'")==1,'catch prepared byte oracle')
+    setup=body.split(' $n49dBuildCatchSetup={ # N49D_WRAPPER_INSTRUMENTATION\n',1)[1].split(' $null=. $n49dBuildCatchSetup # N49D_WRAPPER_INSTRUMENTATION\n',1)[0]
+    check(setup.index("throw 'Catch baseline body'")<setup.index('if(-not $n49dBuildCatchPrepared)')<
+        setup.index('$n49dBuildCatchPrepared=$true')<setup.index('$n49dBuildCatchConstructed='),'catch preparation guard order')
     check('}catch{$n49dPhase04Action=$null;throw} # N49D_WRAPPER_INSTRUMENTATION\n' in body,
         'new catch control failure mislabeled as original phase04 action')
     shape_helper=body.split('function Test-N49DFunctionAst(',1)[1].split("try{$n49dBuildCatchProgress=[pscustomobject]",1)[0]
@@ -5179,6 +5220,7 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
  $n49dBuildCatchFactory={param([string]$DefinitionText) [scriptblock]::Create($DefinitionText)} # N49D_WRAPPER_INSTRUMENTATION
  $n49dBuildCatchMakeState={[pscustomobject]@{Latched=$false}} # N49D_WRAPPER_INSTRUMENTATION
  $n49dBuildCatchActivate={param([scriptblock]$Definition) . $Definition} # N49D_WRAPPER_INSTRUMENTATION
+ $n49dBuildCatchPrepared=$false;$n49dBuildCatchPreparation=[pscustomobject]@{Count=0} # N49D_WRAPPER_INSTRUMENTATION
  $n49dBuildCatchSetup={ # N49D_WRAPPER_INSTRUMENTATION
   try{ # N49D_WRAPPER_INSTRUMENTATION
    try{$n49dBuildCatchProgress.S='A'}catch{} # N49D_WRAPPER_INSTRUMENTATION
@@ -5186,14 +5228,18 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
    $n49dBuildCatchBefore=Get-Command -Name Invoke-QbrainBuildPhase -CommandType Function -ErrorAction Stop # N49D_WRAPPER_INSTRUMENTATION
    $n49dBuildCatchRollback=$n49dBuildCatchBefore.ScriptBlock # N49D_WRAPPER_INSTRUMENTATION
    if(-not (Test-N49DFunctionAst $n49dBuildCatchRollback.Ast $n49dBuildCatchOriginalAst 'Invoke-QbrainBuildPhase')){throw 'Catch baseline body'} # N49D_WRAPPER_INSTRUMENTATION
-   $n49dBuildCatchOuter=@($n49dBuildCatchOriginalAst.Body.EndBlock.Statements|Where-Object{$_ -is [Management.Automation.Language.TryStatementAst]}) # N49D_WRAPPER_INSTRUMENTATION
-   if($n49dBuildCatchOuter.Count -ne 1 -or $n49dBuildCatchOuter[0].CatchClauses.Count -ne 1 -or $null -eq $n49dBuildCatchOuter[0].Finally){throw 'Catch shape'} # N49D_WRAPPER_INSTRUMENTATION
-   $n49dBuildCatchOuterBody=$n49dBuildCatchOuter[0].CatchClauses[0].Body # N49D_WRAPPER_INSTRUMENTATION
-   if($n49dBuildCatchOuterBody.Statements.Count -ne 3 -or $n49dBuildCatchOuterBody.Statements[0].Extent.Text -cne 'if ($Result.ExitCode -eq 0) { $Result.ExitCode=1 }'){throw 'Catch first statement'} # N49D_WRAPPER_INSTRUMENTATION
-   $n49dBuildCatchOffset=$n49dBuildCatchOuterBody.Extent.StartOffset-$n49dBuildCatchOriginalAst.Extent.StartOffset+1 # N49D_WRAPPER_INSTRUMENTATION
-   if($n49dBuildCatchOriginalText[$n49dBuildCatchOffset-1] -cne '{'){throw 'Catch offset'} # N49D_WRAPPER_INSTRUMENTATION
-   $n49dBuildCatchInstrumentedText=$n49dBuildCatchOriginalText.Insert($n49dBuildCatchOffset,$n49dBuildCatchInsertion) # N49D_WRAPPER_INSTRUMENTATION
-   if($n49dBuildCatchInstrumentedText.Remove($n49dBuildCatchOffset,$n49dBuildCatchInsertion.Length) -cne $n49dBuildCatchOriginalText){throw 'Catch preservation'} # N49D_WRAPPER_INSTRUMENTATION
+   if(-not $n49dBuildCatchPrepared){ # N49D_WRAPPER_INSTRUMENTATION
+    $n49dBuildCatchPreparation.Count++ # N49D_WRAPPER_INSTRUMENTATION
+    $n49dBuildCatchOuter=@($n49dBuildCatchOriginalAst.Body.EndBlock.Statements|Where-Object{$_ -is [Management.Automation.Language.TryStatementAst]}) # N49D_WRAPPER_INSTRUMENTATION
+    if($n49dBuildCatchOuter.Count -ne 1 -or $n49dBuildCatchOuter[0].CatchClauses.Count -ne 1 -or $null -eq $n49dBuildCatchOuter[0].Finally){throw 'Catch shape'} # N49D_WRAPPER_INSTRUMENTATION
+    $n49dBuildCatchOuterBody=$n49dBuildCatchOuter[0].CatchClauses[0].Body # N49D_WRAPPER_INSTRUMENTATION
+    if($n49dBuildCatchOuterBody.Statements.Count -ne 3 -or $n49dBuildCatchOuterBody.Statements[0].Extent.Text -cne 'if ($Result.ExitCode -eq 0) { $Result.ExitCode=1 }'){throw 'Catch first statement'} # N49D_WRAPPER_INSTRUMENTATION
+    $n49dBuildCatchOffset=$n49dBuildCatchOuterBody.Extent.StartOffset-$n49dBuildCatchOriginalAst.Extent.StartOffset+1 # N49D_WRAPPER_INSTRUMENTATION
+    if($n49dBuildCatchOriginalText[$n49dBuildCatchOffset-1] -cne '{'){throw 'Catch offset'} # N49D_WRAPPER_INSTRUMENTATION
+    $n49dBuildCatchInstrumentedText=$n49dBuildCatchOriginalText.Insert($n49dBuildCatchOffset,$n49dBuildCatchInsertion) # N49D_WRAPPER_INSTRUMENTATION
+    if($n49dBuildCatchInstrumentedText.Remove($n49dBuildCatchOffset,$n49dBuildCatchInsertion.Length) -cne $n49dBuildCatchOriginalText){throw 'Catch preservation'} # N49D_WRAPPER_INSTRUMENTATION
+    $n49dBuildCatchPrepared=$true # N49D_WRAPPER_INSTRUMENTATION
+   } # N49D_WRAPPER_INSTRUMENTATION
    $n49dBuildCatchConstructed=@(& $n49dBuildCatchFactory $n49dBuildCatchInstrumentedText) # N49D_WRAPPER_INSTRUMENTATION
    if($n49dBuildCatchConstructed.Count -ne 1 -or $n49dBuildCatchConstructed[0] -isnot [scriptblock]){throw 'Catch constructor result'} # N49D_WRAPPER_INSTRUMENTATION
    $n49dBuildCatchDefinition=$n49dBuildCatchConstructed[0] # N49D_WRAPPER_INSTRUMENTATION
@@ -5408,6 +5454,7 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
     'activation-after'{$n49dBuildCatchActivate={param($definition) . $definition;throw 'private-activation'}} # N49D_WRAPPER_INSTRUMENTATION
    } # N49D_WRAPPER_INSTRUMENTATION
    $null=. $n49dBuildCatchSetup # N49D_WRAPPER_INSTRUMENTATION
+   Need ($n49dBuildCatchPrepared -and $n49dBuildCatchPreparation.Count -eq 1 -and [object]::ReferenceEquals($n49dBuildCatchInstrumentedText,$n49dCatchPreparedText)) 'Catch warm preparation' # N49D_WRAPPER_INSTRUMENTATION
    if($Fault -cin $n49dCatchSetupFailures){ # N49D_WRAPPER_INSTRUMENTATION
     Need (-not $n49dBuildCatchReady -and $null -eq $n49dBuildCatchCommand -and (Test-N49DFunctionAst (Get-Command Invoke-QbrainBuildPhase -CommandType Function).ScriptBlock.Ast $n49dBuildCatchOriginalAst 'Invoke-QbrainBuildPhase')) 'Catch setup fallback changed function' # N49D_WRAPPER_INSTRUMENTATION
    }else{ # N49D_WRAPPER_INSTRUMENTATION
@@ -5517,6 +5564,38 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
  function Assert-N49DBuildCatchPair($Before,$After){foreach($n49dField in @('Count','Code','Trace','Resolved','Executed','Rebuilt','Batch','ReportBytes','ReportState','ReportFailure','BinaryBytes','RunDirectories','EscapedType','EscapedId')){Need ($Before.$n49dField -ceq $After.$n49dField) 'Catch baseline equivalence changed'}} # N49D_WRAPPER_INSTRUMENTATION
  try{ # N49D_WRAPPER_INSTRUMENTATION
   Need $n49dBuildCatchReady 'Catch optional installation unavailable for controls' # N49D_WRAPPER_INSTRUMENTATION
+  $n49dCatchPreparedText=$n49dBuildCatchInstrumentedText # N49D_WRAPPER_INSTRUMENTATION
+  Need ($n49dBuildCatchPrepared -and $n49dBuildCatchPreparation.Count -eq 1) 'Catch cold preparation' # N49D_WRAPPER_INSTRUMENTATION
+  $n49dPreparedDigest=[Security.Cryptography.SHA256]::Create() # N49D_WRAPPER_INSTRUMENTATION
+  try{ # N49D_WRAPPER_INSTRUMENTATION
+   $n49dPreparedOracle={param([string]$Original,[string]$Prepared) [Convert]::ToBase64String($n49dPreparedDigest.ComputeHash((Bytes ($Original+[char]0+$Prepared)))) -cin @('jpj94ob3UiKitni+6o2d/hIqOUcr5S5qHtaE5izwCX4=','w0pJ5FJMkkZ6vB+YQMmmwrF5VDfmvpJUrZ0ISq8IZMo=')} # N49D_WRAPPER_INSTRUMENTATION
+   Need (& $n49dPreparedOracle $n49dBuildCatchOriginalText $n49dCatchPreparedText) 'Catch prepared bytes' # N49D_WRAPPER_INSTRUMENTATION
+   & { # N49D_WRAPPER_INSTRUMENTATION
+    $n49dPreparationSites=@($n49dBuildCatchSetup.Ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Extent.Text.StartsWith('if(-not $n49dBuildCatchPrepared){')},$true)) # N49D_WRAPPER_INSTRUMENTATION
+    Need ($n49dPreparationSites.Count -eq 1) 'Catch preparation seam' # N49D_WRAPPER_INSTRUMENTATION
+    $n49dPreparationControl=[scriptblock]::Create($n49dPreparationSites[0].Extent.Text) # N49D_WRAPPER_INSTRUMENTATION
+    $n49dPreparationLF=$n49dBuildCatchOriginalText.Replace("`r`n","`n") # N49D_WRAPPER_INSTRUMENTATION
+    foreach($n49dPreparationOriginal in @($n49dPreparationLF,$n49dPreparationLF.Replace("`n","`r`n"))){ # N49D_WRAPPER_INSTRUMENTATION
+     $n49dBuildCatchOriginalText=$n49dPreparationOriginal;$n49dBuildCatchOriginalAst=([scriptblock]::Create($n49dPreparationOriginal)).Ast.EndBlock.Statements[0] # N49D_WRAPPER_INSTRUMENTATION
+     $n49dBuildCatchPrepared=$false;$n49dBuildCatchPreparation=[pscustomobject]@{Count=0} # N49D_WRAPPER_INSTRUMENTATION
+     $null=. $n49dPreparationControl # N49D_WRAPPER_INSTRUMENTATION
+     Need ($n49dBuildCatchPrepared -and $n49dBuildCatchPreparation.Count -eq 1 -and (& $n49dPreparedOracle $n49dPreparationOriginal $n49dBuildCatchInstrumentedText)) 'Catch prepared form' # N49D_WRAPPER_INSTRUMENTATION
+     $n49dPreparationSaved=$n49dBuildCatchInstrumentedText;$null=. $n49dPreparationControl # N49D_WRAPPER_INSTRUMENTATION
+     Need ($n49dBuildCatchPreparation.Count -eq 1 -and [object]::ReferenceEquals($n49dPreparationSaved,$n49dBuildCatchInstrumentedText)) 'Catch prepared form warm' # N49D_WRAPPER_INSTRUMENTATION
+     Need (-not (& $n49dPreparedOracle ($n49dPreparationOriginal+' ') $n49dPreparationSaved) -and -not (& $n49dPreparedOracle $n49dPreparationOriginal ($n49dPreparationSaved+' '))) 'Catch prepared form mutation' # N49D_WRAPPER_INSTRUMENTATION
+    } # N49D_WRAPPER_INSTRUMENTATION
+   } # N49D_WRAPPER_INSTRUMENTATION
+  }finally{$n49dPreparedDigest.Dispose()} # N49D_WRAPPER_INSTRUMENTATION
+  & { # N49D_WRAPPER_INSTRUMENTATION
+   $null=. ([scriptblock]::Create($n49dBuildCatchOriginalText)) # N49D_WRAPPER_INSTRUMENTATION
+   $n49dBuildCatchPrepared=$false;$n49dBuildCatchPreparation=[pscustomobject]@{Count=0} # N49D_WRAPPER_INSTRUMENTATION
+   $n49dBuildCatchOriginalText='';$n49dBuildCatchInstrumentedText=$null;$n49dPrepareProbe=[pscustomobject]@{Factory=0} # N49D_WRAPPER_INSTRUMENTATION
+   $n49dBuildCatchProgress=[pscustomobject]@{S='N';G='N';E='N'} # N49D_WRAPPER_INSTRUMENTATION
+   $n49dBuildCatchFactory={param($text) $n49dPrepareProbe.Factory++;throw 'private-preparation-factory'} # N49D_WRAPPER_INSTRUMENTATION
+   $null=. $n49dBuildCatchSetup # N49D_WRAPPER_INSTRUMENTATION
+   Need (-not $n49dBuildCatchPrepared -and -not $n49dBuildCatchReady -and $null -eq $n49dBuildCatchInstrumentedText -and $n49dBuildCatchPreparation.Count -eq 1 -and $n49dPrepareProbe.Factory -eq 0 -and $n49dBuildCatchProgress.S -ceq 'F' -and (Test-N49DFunctionAst (Get-Command Invoke-QbrainBuildPhase -CommandType Function).ScriptBlock.Ast $n49dBuildCatchOriginalAst 'Invoke-QbrainBuildPhase')) 'Catch failed preparation' # N49D_WRAPPER_INSTRUMENTATION
+  } # N49D_WRAPPER_INSTRUMENTATION
+  Need ($n49dBuildCatchPrepared -and $n49dBuildCatchPreparation.Count -eq 1 -and [object]::ReferenceEquals($n49dBuildCatchInstrumentedText,$n49dCatchPreparedText) -and [object]::ReferenceEquals((Get-Command Invoke-QbrainBuildPhase -CommandType Function),$n49dBuildCatchCommand)) 'Catch preparation scope' # N49D_WRAPPER_INSTRUMENTATION
   Need $n49dCatchHadReport 'Catch controls live report absent' # N49D_WRAPPER_INSTRUMENTATION
   & { # N49D_WRAPPER_INSTRUMENTATION
    $n49dShapeSites=@($n49dBuildCatchSetup.Ast.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst] -and $node.Extent.Text.StartsWith('if(-not (Test-N49DFunctionAst ')},$true)) # N49D_WRAPPER_INSTRUMENTATION
