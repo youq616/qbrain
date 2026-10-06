@@ -1,0 +1,68 @@
+name: N49D wrapper calibration NONQUALIFYING
+on:
+  push:
+    branches:
+      - diagnostics/n49d-wrapper-budget-5a387bda
+permissions:
+  contents: read
+concurrency:
+  group: n49d-wrapper-calibration-${{ github.sha }}-${{ github.run_id }}
+  cancel-in-progress: false
+jobs:
+  calibrate:
+    name: '${{ matrix.job }}: Diagnostic only; no qualification'
+    strategy:
+      fail-fast: false
+      matrix:
+        job: [windows-msvc, windows-cmake]
+    runs-on: windows-2022
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONIOENCODING: utf-8
+      N49D_JOB: ${{ matrix.job }}
+    steps:
+      - name: Check out the externally reviewed diagnostic commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.ci/calibrate_n49d_windows_wrapper.py
+            /.github/workflows/n49d-windows-wrapper-calibration.yml
+            /.ci/test_n49d_source_contract.py
+            /.ci/run_n49d_qualification.py
+            /.ci/check_n49d_sources.py
+            /scripts/build-tests-cl.ps1
+            /scripts/build-cl.ps1
+            /.github/workflows/n49d-mcp-directory-search.yml
+      - name: Select Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Record two bounded diagnostic samples without qualification
+        shell: python
+        run: |
+          import hashlib, os, pathlib, runpy, sys
+          path = pathlib.Path(os.environ['GITHUB_WORKSPACE']) / '.ci/calibrate_n49d_windows_wrapper.py'
+          expected = '4bf94321c83fdc97284e930247ad9f1bd1b5b2adddeb4e999158cba0649bb04d'
+          raw = path.read_bytes()
+          if hashlib.sha256(raw).hexdigest() != expected:
+              canonical = raw.replace(b'\r\n', b'\n')
+              if (b'\0' in raw or b'\r' in canonical or raw != canonical.replace(b'\n', b'\r\n')
+                      or hashlib.sha256(canonical).hexdigest() != expected):
+                  raise SystemExit('Diagnostic helper identity mismatch')
+          sys.argv = [str(path), '--job', os.environ['N49D_JOB'],
+              '--diagnostic-commit', os.environ['GITHUB_SHA'], '--helper-sha256', expected]
+          runpy.run_path(str(path), run_name='__main__')
+      - name: Upload NONQUALIFYING allowlisted payload only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: n49d-wrapper-calibration-NONQUALIFYING-${{ matrix.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/n49d-wrapper-calibration/${{ matrix.job }}/payload.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
