@@ -5690,7 +5690,7 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
   } # N49D_WRAPPER_INSTRUMENTATION
   try{Write-N49DWork $n49dWork '40' 'B'}catch{} # N49D_WRAPPER_INSTRUMENTATION
   & { # N49D_WRAPPER_INSTRUMENTATION
-   function Write-N49DBuildCatch($Record,$Reason,$State){$n49dGateState.Emitted++;Need ([object]::ReferenceEquals($Record,$n49dGateState.Primary)) 'Progress gate changed record'} # N49D_WRAPPER_INSTRUMENTATION
+   function Write-N49DBuildCatch($Record,$Reason,$State){Need ([object]::ReferenceEquals($Record,$n49dGateState.Primary)) 'Progress gate changed record';$n49dGateState.Emitted++} # N49D_WRAPPER_INSTRUMENTATION
    $n49dGateSource='function Invoke-N49DProgressGateControl($Probe){$MyInvocation=$Probe;try{throw [IO.IOException]::new(''private-gate-primary'')}catch{$n49dGateState.Primary=$_;'+$n49dBuildCatchInsertion+"`n"+';throw}finally{$n49dGateState.Finally++}}' # N49D_WRAPPER_INSTRUMENTATION
    $null=. ([scriptblock]::Create($n49dGateSource)) # N49D_WRAPPER_INSTRUMENTATION
    foreach($n49dGateFault in @('action','function-false','block-false','command-throw','block-throw','match')){ # N49D_WRAPPER_INSTRUMENTATION
@@ -5704,7 +5704,7 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
     if($n49dGateFault -ceq 'function-false'){$n49dBuildCatchCommand=$null} # N49D_WRAPPER_INSTRUMENTATION
     if($n49dGateFault -ceq 'block-false'){$n49dBuildCatchBlock=$null} # N49D_WRAPPER_INSTRUMENTATION
     $n49dGateSeen=$null;try{Invoke-N49DProgressGateControl $n49dGateInvocation}catch{$n49dGateSeen=$_} # N49D_WRAPPER_INSTRUMENTATION
-    Need ([object]::ReferenceEquals($n49dGateState.Primary,$n49dGateSeen) -and $n49dGateState.Finally -eq 1) 'Progress gate changed primary or finally' # N49D_WRAPPER_INSTRUMENTATION
+    Need ($null -ne $n49dGateState.Primary -and $n49dGateState.Primary -is [Management.Automation.ErrorRecord] -and $null -ne $n49dGateSeen -and $n49dGateSeen -is [Management.Automation.ErrorRecord] -and $null -ne $n49dGateState.Primary.Exception -and $n49dGateState.Primary.Exception -is [IO.IOException] -and $null -ne $n49dGateSeen.Exception -and $n49dGateSeen.Exception -is [IO.IOException] -and [object]::ReferenceEquals($n49dGateState.Primary.Exception,$n49dGateSeen.Exception) -and $n49dGateState.Primary.FullyQualifiedErrorId -ceq $n49dGateSeen.FullyQualifiedErrorId -and $n49dGateState.Finally -eq 1) 'Progress gate changed primary or finally' # N49D_WRAPPER_INSTRUMENTATION
     # PowerShell property-getter errors yield null; the original reference gates reject it. # N49D_WRAPPER_INSTRUMENTATION
     $n49dGateExpected=switch -Exact ($n49dGateFault){'action'{@('X','',0)}'function-false'{@('R','M',0)}'block-false'{@('S','MMB',0)}'command-throw'{@('R','M',0)}'block-throw'{@('S','MMB',0)}'match'{@('I','MMB',1)}} # N49D_WRAPPER_INSTRUMENTATION
     Need ($n49dBuildCatchProgress.G -ceq $n49dGateExpected[0] -and ($n49dGateState.Trace -join '') -ceq $n49dGateExpected[1] -and $n49dGateState.Emitted -eq $n49dGateExpected[2]) 'Progress reference short circuit or masked getter changed' # N49D_WRAPPER_INSTRUMENTATION
@@ -5734,7 +5734,7 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
       throw # N49D_WRAPPER_INSTRUMENTATION
      } # N49D_WRAPPER_INSTRUMENTATION
     }catch{$n49dStatusSeen=$_}finally{$n49dStatusFinally++} # N49D_WRAPPER_INSTRUMENTATION
-    Need ([object]::ReferenceEquals($n49dStatusPrimary,$n49dStatusSeen) -and $n49dStatusFinally -eq 1) 'Progress changed primary rethrow or cleanup' # N49D_WRAPPER_INSTRUMENTATION
+    Need ($null -ne $n49dStatusPrimary -and $n49dStatusPrimary -is [Management.Automation.ErrorRecord] -and $null -ne $n49dStatusSeen -and $n49dStatusSeen -is [Management.Automation.ErrorRecord] -and $null -ne $n49dStatusPrimary.Exception -and $n49dStatusPrimary.Exception -is [IO.IOException] -and $null -ne $n49dStatusSeen.Exception -and $n49dStatusSeen.Exception -is [IO.IOException] -and [object]::ReferenceEquals($n49dStatusPrimary.Exception,$n49dStatusSeen.Exception) -and $n49dStatusPrimary.FullyQualifiedErrorId -ceq $n49dStatusSeen.FullyQualifiedErrorId -and $n49dStatusFinally -eq 1) 'Progress changed primary rethrow or cleanup' # N49D_WRAPPER_INSTRUMENTATION
     $n49dStatusExpected="`nN49D_PHASE04_V1:22:IO"+[Environment]::NewLine # N49D_WRAPPER_INSTRUMENTATION
     if($n49dProgressFault -cin @('none','flush')){$n49dStatusExpected+="`nN49D_BUILD_PROGRESS_V1:RIF"+[Environment]::NewLine} # N49D_WRAPPER_INSTRUMENTATION
     Need ($n49dStatusWriter.ToString() -ceq $n49dStatusExpected) 'Progress failure suppressed original marker or leaked' # N49D_WRAPPER_INSTRUMENTATION
@@ -5799,7 +5799,7 @@ try{ # N49D_WRAPPER_INSTRUMENTATION
      try{try{throw [IO.IOException]::new('private-work-primary')}catch{ # N49D_WRAPPER_INSTRUMENTATION
       $n49dWorkPrimary=$_;try{if($n49dWorkFault -ceq 'invocation'){throw 'private-invocation'};Write-N49DWork $n49dWorkProbe '01' 'B'}catch{};$n49dWorkAfter++;throw # N49D_WRAPPER_INSTRUMENTATION
      }}catch{$n49dWorkSeen=$_}finally{$n49dWorkFinally++} # N49D_WRAPPER_INSTRUMENTATION
-     Need ([object]::ReferenceEquals($n49dWorkPrimary,$n49dWorkSeen) -and $n49dWorkAfter -eq 1 -and $n49dWorkFinally -eq 1) 'Work observation changed primary or cleanup' # N49D_WRAPPER_INSTRUMENTATION
+     Need ($null -ne $n49dWorkPrimary -and $n49dWorkPrimary -is [Management.Automation.ErrorRecord] -and $null -ne $n49dWorkSeen -and $n49dWorkSeen -is [Management.Automation.ErrorRecord] -and $null -ne $n49dWorkPrimary.Exception -and $n49dWorkPrimary.Exception -is [IO.IOException] -and $null -ne $n49dWorkSeen.Exception -and $n49dWorkSeen.Exception -is [IO.IOException] -and [object]::ReferenceEquals($n49dWorkPrimary.Exception,$n49dWorkSeen.Exception) -and $n49dWorkPrimary.FullyQualifiedErrorId -ceq $n49dWorkSeen.FullyQualifiedErrorId -and $n49dWorkAfter -eq 1 -and $n49dWorkFinally -eq 1) 'Work observation changed primary or cleanup' # N49D_WRAPPER_INSTRUMENTATION
      if($n49dWorkFault -ceq 'duplicate'){Write-N49DWork $n49dWorkProbe '01' 'B'} # N49D_WRAPPER_INSTRUMENTATION
      if($n49dWorkFault -ceq 'order'){Write-N49DWork $n49dWorkProbe '02' 'B'} # N49D_WRAPPER_INSTRUMENTATION
      if($n49dWorkFault -ceq 'backward'){Write-N49DWork $n49dWorkProbe '01' 'E'} # N49D_WRAPPER_INSTRUMENTATION
