@@ -3396,7 +3396,7 @@ def _wrapper_markers(status='unavailable'):
 
 def _wrapper_fallback():
     return dict(schema=WRAPPER_SCHEMA,site='windows-wrapper-controls',complete=False,reason='detail-unavailable',
-        timeout_seconds=20,stream_limit=65536,owner=dict(status='unavailable',**{k:None for k in WRAPPER_OWNER_KEYS}),
+        timeout_seconds=60,stream_limit=65536,owner=dict(status='unavailable',**{k:None for k in WRAPPER_OWNER_KEYS}),
         markers=_wrapper_markers())
 
 
@@ -3610,7 +3610,7 @@ def _validate_wrapper_detail(value):
     check(type(value['schema']) is str and value['schema']==WRAPPER_SCHEMA and
         type(value['site']) is str and value['site']=='windows-wrapper-controls' and
         type(value['complete']) is bool and type(value['reason']) is str and value['reason'] in WRAPPER_REASON and
-        type(value['timeout_seconds']) is int and value['timeout_seconds']==20 and
+        type(value['timeout_seconds']) is int and value['timeout_seconds']==60 and
         type(value['stream_limit']) is int and value['stream_limit']==65536,'wrapper detail constants')
     facts=value['owner'];markers=value['markers']
     check(type(facts) is dict and set(facts)=={'status',*WRAPPER_OWNER_KEYS} and
@@ -3696,7 +3696,7 @@ def _capture_wrapper_failure(error,root):
 
 def _run_windows_wrapper(root,script,wrapper):
     try:
-        owner=q.OwnedChild(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(script),'-Wrapper',str(wrapper),'-Python',sys.executable],root,dict(os.environ),subprocess.DEVNULL,root/'stdout.bin',root/'stderr.bin',20,65536)
+        owner=q.OwnedChild(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(script),'-Wrapper',str(wrapper),'-Python',sys.executable],root,dict(os.environ),subprocess.DEVNULL,root/'stdout.bin',root/'stderr.bin',60,65536)
         owner.wait()
     except q.OwnedChildError as error:
         try:_capture_wrapper_failure(error,root)
@@ -3933,7 +3933,7 @@ def wrapper_build_catch_controls(body):
                 FAILURE_DETAIL=None;reads.clear();calls=[]
                 def construct(*args,**kwargs):
                     calls.append('construct')
-                    check(args[-2:]==(20,65536),'build catch owner limits changed')
+                    check(args[-2:]==(60,65536),'build catch owner limits changed')
                     if constructor_failure:raise primary
                     return owner
                 with patch.object(q,'OwnedChild',side_effect=construct),patch(__name__+'._wrapper_marker_file',side_effect=read):
@@ -4720,7 +4720,7 @@ def wrapper_evidence_controls(root):
                 expected=['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(root/'fixture.ps1'),
                     '-Wrapper',str(root/'wrapper.ps1'),'-Python',sys.executable]
                 check(args[0]==expected and args[1]==root and args[2]==dict(os.environ) and args[3] is subprocess.DEVNULL and
-                    args[4:]==(root/'stdout.bin',leaf,20,65536) and not kwargs,'wrapper caller contract changed')
+                    args[4:]==(root/'stdout.bin',leaf,60,65536) and not kwargs,'wrapper caller contract changed')
                 if where in ('constructor','ordinary'):raise primary
                 return owner
             with patch.object(q,'OwnedChild',side_effect=constructor),patch(__name__+'._wrapper_marker_file',side_effect=marker_stub),\
