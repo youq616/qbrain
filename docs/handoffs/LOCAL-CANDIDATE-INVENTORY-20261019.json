@@ -1,0 +1,486 @@
+{
+  "schema": "qbrain-local-candidate-inventory-v1",
+  "verified_at_utc": "2026-10-19T09:04:00Z",
+  "candidate_commit": "0900b19bb31f5c204771c6dd69decbf1337f4c98",
+  "coverage": "Only three accessible cloud source copies; not an inventory of the user computer. This file contains source identities, not raw local diagnostics.",
+  "local_checkout_head": "282d2c7f02611e61b84430e24b7d324ebf975b65",
+  "local_checkout_tree": "84ed60130049e872d489b7bb920a76dc3cd7bb96",
+  "published_v2_commit": "ea3259a98b46c3e127742fc1aa1c50d8acd7b1b0",
+  "published_v2_tree": "84ed60130049e872d489b7bb920a76dc3cd7bb96",
+  "copies": [
+    {
+      "accessible_copy": "qbrain-n49d-ancestry-candidate-local-20261007",
+      "files": [
+        {
+          "path": ".ci/check_n49c_sources.py",
+          "local_git_blob": "45a9c078a261270f595642f2d4c0092ad3c74243",
+          "candidate_git_blob": "45a9c078a261270f595642f2d4c0092ad3c74243",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/check_n49d_sources.py",
+          "local_git_blob": "acfb04cf966a7a61d6386835918867a40e7c0e57",
+          "candidate_git_blob": "acfb04cf966a7a61d6386835918867a40e7c0e57",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/check_source_archive.py",
+          "local_git_blob": "8a573bf1e8673b767b8a6f7ebafa5685f241a86d",
+          "candidate_git_blob": "8a573bf1e8673b767b8a6f7ebafa5685f241a86d",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/mcp_directory_search_targets.cmake",
+          "local_git_blob": "dd2bbb231af8533e9ce456b27e30056072c2029e",
+          "candidate_git_blob": "dd2bbb231af8533e9ce456b27e30056072c2029e",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/run_n49d_qualification.py",
+          "local_git_blob": "17ea375d5d5ed447e30d47300f0bf50e8b340985",
+          "candidate_git_blob": "17ea375d5d5ed447e30d47300f0bf50e8b340985",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/test_mcp_directory_search.py",
+          "local_git_blob": "daeac64350e23e4ebc448058ef5fdfcad019b7be",
+          "candidate_git_blob": "daeac64350e23e4ebc448058ef5fdfcad019b7be",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/test_n49d_source_contract.py",
+          "local_git_blob": "217b35687ec8c1ce62823196dca3797cb7a2aa9e",
+          "candidate_git_blob": "9527a0bfaf837aabdd492872024869f87e2317be",
+          "disposition": "historical_file_superseded_by_frozen_candidate"
+        },
+        {
+          "path": ".ci/validate_native_log.py",
+          "local_git_blob": "352de0d8df857e2fb5b2e8a5783d49874d585447",
+          "candidate_git_blob": "352de0d8df857e2fb5b2e8a5783d49874d585447",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".github/workflows/n49d-mcp-directory-search.yml",
+          "local_git_blob": "6350634c7973c23d5c013a8710108d69779573db",
+          "candidate_git_blob": "6350634c7973c23d5c013a8710108d69779573db",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".gitignore",
+          "local_git_blob": "5feb6ff25ade3afa00219529d0351063ad2c3519",
+          "candidate_git_blob": "5feb6ff25ade3afa00219529d0351063ad2c3519",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "AGENTS.md",
+          "local_git_blob": "0caff7be7b598ee48ad5e8ef9ac14f054b9f660c",
+          "candidate_git_blob": "0caff7be7b598ee48ad5e8ef9ac14f054b9f660c",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/COMPLETION-ROADMAP.md",
+          "local_git_blob": "4bba829aab22d3741b80019f50cc29b8a5cb53fb",
+          "candidate_git_blob": "4bba829aab22d3741b80019f50cc29b8a5cb53fb",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/OPS-PARITY-LEDGER.md",
+          "local_git_blob": "96e871e102341832ff69ba4df4bbc0ca42fffce3",
+          "candidate_git_blob": "96e871e102341832ff69ba4df4bbc0ca42fffce3",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/integration/MCP-DIRECTORY-SEARCH.md",
+          "local_git_blob": "43abde1e1024c93dda49b21fae5e8a699cc292cc",
+          "candidate_git_blob": "43abde1e1024c93dda49b21fae5e8a699cc292cc",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/N49D-HARD-AUDIT.md",
+          "local_git_blob": "809a5b1a84a77ecd71d988b21658e937820b44e4",
+          "candidate_git_blob": "809a5b1a84a77ecd71d988b21658e937820b44e4",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/N49D-PLAN-AUDIT.md",
+          "local_git_blob": "f2b50feb4c15de89724cd80c336a0abd44536dff",
+          "candidate_git_blob": "f2b50feb4c15de89724cd80c336a0abd44536dff",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/N49D-PLAN.md",
+          "local_git_blob": "1e8883c688982daedf8b02ab19888bcc6544d0fb",
+          "candidate_git_blob": "1e8883c688982daedf8b02ab19888bcc6544d0fb",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/n49d-evidence/RESULT.json",
+          "local_git_blob": "66bea389196f30612578375a51a69d7917fcef8f",
+          "candidate_git_blob": "66bea389196f30612578375a51a69d7917fcef8f",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/n49d-evidence/SOURCE-MANIFEST.json",
+          "local_git_blob": "c7104460ec7c2e21eeae0b224831d60c52e1016a",
+          "candidate_git_blob": "c7104460ec7c2e21eeae0b224831d60c52e1016a",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "scripts/build-cl.ps1",
+          "local_git_blob": "0d70d018ccfd206aa09d6a8dd52f2f21be0ee5d1",
+          "candidate_git_blob": "0d70d018ccfd206aa09d6a8dd52f2f21be0ee5d1",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "scripts/build-tests-cl.ps1",
+          "local_git_blob": "da5fa6defe6891e1218c1b187ed56b5b56e105aa",
+          "candidate_git_blob": "da5fa6defe6891e1218c1b187ed56b5b56e105aa",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "src/qbrain/mcp/server.cpp",
+          "local_git_blob": "0ac3346973bc3d9c79e40714f8b9337c538da276",
+          "candidate_git_blob": "0ac3346973bc3d9c79e40714f8b9337c538da276",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "src/qbrain/ops/handlers.cpp",
+          "local_git_blob": "23719e5764e52cb44dbf25917ff49b9f5999911f",
+          "candidate_git_blob": "23719e5764e52cb44dbf25917ff49b9f5999911f",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "tests/test_main.cpp",
+          "local_git_blob": "5c2ba0d4b3265b07c176f02015f2b23955589ff4",
+          "candidate_git_blob": "5c2ba0d4b3265b07c176f02015f2b23955589ff4",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "tests/test_mcp_directory_search.cpp",
+          "local_git_blob": "e7a532ac7b0ade05d6a01ea4d992f6fb2c0aa278",
+          "candidate_git_blob": "e7a532ac7b0ade05d6a01ea4d992f6fb2c0aa278",
+          "disposition": "already_present_in_frozen_candidate"
+        }
+      ],
+      "matching_file_count": 24
+    },
+    {
+      "accessible_copy": "qbrain-n49d-timeout-fix-local",
+      "files": [
+        {
+          "path": ".ci/check_n49c_sources.py",
+          "local_git_blob": "45a9c078a261270f595642f2d4c0092ad3c74243",
+          "candidate_git_blob": "45a9c078a261270f595642f2d4c0092ad3c74243",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/check_n49d_sources.py",
+          "local_git_blob": "acfb04cf966a7a61d6386835918867a40e7c0e57",
+          "candidate_git_blob": "acfb04cf966a7a61d6386835918867a40e7c0e57",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/check_source_archive.py",
+          "local_git_blob": "8a573bf1e8673b767b8a6f7ebafa5685f241a86d",
+          "candidate_git_blob": "8a573bf1e8673b767b8a6f7ebafa5685f241a86d",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/mcp_directory_search_targets.cmake",
+          "local_git_blob": "dd2bbb231af8533e9ce456b27e30056072c2029e",
+          "candidate_git_blob": "dd2bbb231af8533e9ce456b27e30056072c2029e",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/run_n49d_qualification.py",
+          "local_git_blob": "17ea375d5d5ed447e30d47300f0bf50e8b340985",
+          "candidate_git_blob": "17ea375d5d5ed447e30d47300f0bf50e8b340985",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/test_mcp_directory_search.py",
+          "local_git_blob": "daeac64350e23e4ebc448058ef5fdfcad019b7be",
+          "candidate_git_blob": "daeac64350e23e4ebc448058ef5fdfcad019b7be",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/test_n49d_source_contract.py",
+          "local_git_blob": "9527a0bfaf837aabdd492872024869f87e2317be",
+          "candidate_git_blob": "9527a0bfaf837aabdd492872024869f87e2317be",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/validate_native_log.py",
+          "local_git_blob": "352de0d8df857e2fb5b2e8a5783d49874d585447",
+          "candidate_git_blob": "352de0d8df857e2fb5b2e8a5783d49874d585447",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".github/workflows/n49d-mcp-directory-search.yml",
+          "local_git_blob": "6350634c7973c23d5c013a8710108d69779573db",
+          "candidate_git_blob": "6350634c7973c23d5c013a8710108d69779573db",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".gitignore",
+          "local_git_blob": "5feb6ff25ade3afa00219529d0351063ad2c3519",
+          "candidate_git_blob": "5feb6ff25ade3afa00219529d0351063ad2c3519",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "AGENTS.md",
+          "local_git_blob": "0caff7be7b598ee48ad5e8ef9ac14f054b9f660c",
+          "candidate_git_blob": "0caff7be7b598ee48ad5e8ef9ac14f054b9f660c",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/COMPLETION-ROADMAP.md",
+          "local_git_blob": "4bba829aab22d3741b80019f50cc29b8a5cb53fb",
+          "candidate_git_blob": "4bba829aab22d3741b80019f50cc29b8a5cb53fb",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/OPS-PARITY-LEDGER.md",
+          "local_git_blob": "96e871e102341832ff69ba4df4bbc0ca42fffce3",
+          "candidate_git_blob": "96e871e102341832ff69ba4df4bbc0ca42fffce3",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/integration/MCP-DIRECTORY-SEARCH.md",
+          "local_git_blob": "43abde1e1024c93dda49b21fae5e8a699cc292cc",
+          "candidate_git_blob": "43abde1e1024c93dda49b21fae5e8a699cc292cc",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/N49D-HARD-AUDIT.md",
+          "local_git_blob": "809a5b1a84a77ecd71d988b21658e937820b44e4",
+          "candidate_git_blob": "809a5b1a84a77ecd71d988b21658e937820b44e4",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/N49D-PLAN-AUDIT.md",
+          "local_git_blob": "f2b50feb4c15de89724cd80c336a0abd44536dff",
+          "candidate_git_blob": "f2b50feb4c15de89724cd80c336a0abd44536dff",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/N49D-PLAN.md",
+          "local_git_blob": "1e8883c688982daedf8b02ab19888bcc6544d0fb",
+          "candidate_git_blob": "1e8883c688982daedf8b02ab19888bcc6544d0fb",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/n49d-evidence/RESULT.json",
+          "local_git_blob": "66bea389196f30612578375a51a69d7917fcef8f",
+          "candidate_git_blob": "66bea389196f30612578375a51a69d7917fcef8f",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/n49d-evidence/SOURCE-MANIFEST.json",
+          "local_git_blob": "c7104460ec7c2e21eeae0b224831d60c52e1016a",
+          "candidate_git_blob": "c7104460ec7c2e21eeae0b224831d60c52e1016a",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "scripts/build-cl.ps1",
+          "local_git_blob": "0d70d018ccfd206aa09d6a8dd52f2f21be0ee5d1",
+          "candidate_git_blob": "0d70d018ccfd206aa09d6a8dd52f2f21be0ee5d1",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "scripts/build-tests-cl.ps1",
+          "local_git_blob": "da5fa6defe6891e1218c1b187ed56b5b56e105aa",
+          "candidate_git_blob": "da5fa6defe6891e1218c1b187ed56b5b56e105aa",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "src/qbrain/mcp/server.cpp",
+          "local_git_blob": "0ac3346973bc3d9c79e40714f8b9337c538da276",
+          "candidate_git_blob": "0ac3346973bc3d9c79e40714f8b9337c538da276",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "src/qbrain/ops/handlers.cpp",
+          "local_git_blob": "23719e5764e52cb44dbf25917ff49b9f5999911f",
+          "candidate_git_blob": "23719e5764e52cb44dbf25917ff49b9f5999911f",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "tests/test_main.cpp",
+          "local_git_blob": "5c2ba0d4b3265b07c176f02015f2b23955589ff4",
+          "candidate_git_blob": "5c2ba0d4b3265b07c176f02015f2b23955589ff4",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "tests/test_mcp_directory_search.cpp",
+          "local_git_blob": "e7a532ac7b0ade05d6a01ea4d992f6fb2c0aa278",
+          "candidate_git_blob": "e7a532ac7b0ade05d6a01ea4d992f6fb2c0aa278",
+          "disposition": "already_present_in_frozen_candidate"
+        }
+      ],
+      "matching_file_count": 25
+    },
+    {
+      "accessible_copy": "qbrain-n49d-progress-gate-repair-20261006/source",
+      "files": [
+        {
+          "path": ".ci/check_n49c_sources.py",
+          "local_git_blob": "45a9c078a261270f595642f2d4c0092ad3c74243",
+          "candidate_git_blob": "45a9c078a261270f595642f2d4c0092ad3c74243",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/check_n49d_sources.py",
+          "local_git_blob": "acfb04cf966a7a61d6386835918867a40e7c0e57",
+          "candidate_git_blob": "acfb04cf966a7a61d6386835918867a40e7c0e57",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/check_source_archive.py",
+          "local_git_blob": "8a573bf1e8673b767b8a6f7ebafa5685f241a86d",
+          "candidate_git_blob": "8a573bf1e8673b767b8a6f7ebafa5685f241a86d",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/mcp_directory_search_targets.cmake",
+          "local_git_blob": "dd2bbb231af8533e9ce456b27e30056072c2029e",
+          "candidate_git_blob": "dd2bbb231af8533e9ce456b27e30056072c2029e",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/run_n49d_qualification.py",
+          "local_git_blob": "17ea375d5d5ed447e30d47300f0bf50e8b340985",
+          "candidate_git_blob": "17ea375d5d5ed447e30d47300f0bf50e8b340985",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/test_mcp_directory_search.py",
+          "local_git_blob": "daeac64350e23e4ebc448058ef5fdfcad019b7be",
+          "candidate_git_blob": "daeac64350e23e4ebc448058ef5fdfcad019b7be",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".ci/test_n49d_source_contract.py",
+          "local_git_blob": "217b35687ec8c1ce62823196dca3797cb7a2aa9e",
+          "candidate_git_blob": "9527a0bfaf837aabdd492872024869f87e2317be",
+          "disposition": "historical_file_superseded_by_frozen_candidate"
+        },
+        {
+          "path": ".ci/validate_native_log.py",
+          "local_git_blob": "352de0d8df857e2fb5b2e8a5783d49874d585447",
+          "candidate_git_blob": "352de0d8df857e2fb5b2e8a5783d49874d585447",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".github/workflows/n49d-mcp-directory-search.yml",
+          "local_git_blob": "6350634c7973c23d5c013a8710108d69779573db",
+          "candidate_git_blob": "6350634c7973c23d5c013a8710108d69779573db",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": ".gitignore",
+          "local_git_blob": "5feb6ff25ade3afa00219529d0351063ad2c3519",
+          "candidate_git_blob": "5feb6ff25ade3afa00219529d0351063ad2c3519",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "AGENTS.md",
+          "local_git_blob": "0caff7be7b598ee48ad5e8ef9ac14f054b9f660c",
+          "candidate_git_blob": "0caff7be7b598ee48ad5e8ef9ac14f054b9f660c",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/COMPLETION-ROADMAP.md",
+          "local_git_blob": "4bba829aab22d3741b80019f50cc29b8a5cb53fb",
+          "candidate_git_blob": "4bba829aab22d3741b80019f50cc29b8a5cb53fb",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/OPS-PARITY-LEDGER.md",
+          "local_git_blob": "96e871e102341832ff69ba4df4bbc0ca42fffce3",
+          "candidate_git_blob": "96e871e102341832ff69ba4df4bbc0ca42fffce3",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/integration/MCP-DIRECTORY-SEARCH.md",
+          "local_git_blob": "43abde1e1024c93dda49b21fae5e8a699cc292cc",
+          "candidate_git_blob": "43abde1e1024c93dda49b21fae5e8a699cc292cc",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/N49D-HARD-AUDIT.md",
+          "local_git_blob": "809a5b1a84a77ecd71d988b21658e937820b44e4",
+          "candidate_git_blob": "809a5b1a84a77ecd71d988b21658e937820b44e4",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/N49D-PLAN-AUDIT.md",
+          "local_git_blob": "f2b50feb4c15de89724cd80c336a0abd44536dff",
+          "candidate_git_blob": "f2b50feb4c15de89724cd80c336a0abd44536dff",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/N49D-PLAN.md",
+          "local_git_blob": "1e8883c688982daedf8b02ab19888bcc6544d0fb",
+          "candidate_git_blob": "1e8883c688982daedf8b02ab19888bcc6544d0fb",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/n49d-evidence/RESULT.json",
+          "local_git_blob": "66bea389196f30612578375a51a69d7917fcef8f",
+          "candidate_git_blob": "66bea389196f30612578375a51a69d7917fcef8f",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "docs/nodes/n49d-evidence/SOURCE-MANIFEST.json",
+          "local_git_blob": "c7104460ec7c2e21eeae0b224831d60c52e1016a",
+          "candidate_git_blob": "c7104460ec7c2e21eeae0b224831d60c52e1016a",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "scripts/build-cl.ps1",
+          "local_git_blob": "0d70d018ccfd206aa09d6a8dd52f2f21be0ee5d1",
+          "candidate_git_blob": "0d70d018ccfd206aa09d6a8dd52f2f21be0ee5d1",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "scripts/build-tests-cl.ps1",
+          "local_git_blob": "da5fa6defe6891e1218c1b187ed56b5b56e105aa",
+          "candidate_git_blob": "da5fa6defe6891e1218c1b187ed56b5b56e105aa",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "src/qbrain/mcp/server.cpp",
+          "local_git_blob": "0ac3346973bc3d9c79e40714f8b9337c538da276",
+          "candidate_git_blob": "0ac3346973bc3d9c79e40714f8b9337c538da276",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "src/qbrain/ops/handlers.cpp",
+          "local_git_blob": "23719e5764e52cb44dbf25917ff49b9f5999911f",
+          "candidate_git_blob": "23719e5764e52cb44dbf25917ff49b9f5999911f",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "tests/test_main.cpp",
+          "local_git_blob": "5c2ba0d4b3265b07c176f02015f2b23955589ff4",
+          "candidate_git_blob": "5c2ba0d4b3265b07c176f02015f2b23955589ff4",
+          "disposition": "already_present_in_frozen_candidate"
+        },
+        {
+          "path": "tests/test_mcp_directory_search.cpp",
+          "local_git_blob": "e7a532ac7b0ade05d6a01ea4d992f6fb2c0aa278",
+          "candidate_git_blob": "e7a532ac7b0ade05d6a01ea4d992f6fb2c0aa278",
+          "disposition": "already_present_in_frozen_candidate"
+        }
+      ],
+      "matching_file_count": 24
+    }
+  ],
+  "excluded_from_upload": [
+    "__pycache__ generated bytecode",
+    "Historical patches and ZIPs superseded by the fixed candidate; originals preserved",
+    "Unreviewed raw diagnostic ZIP attachments"
+  ],
+  "result": "No unique newer product file was found in these accessible source copies. The latest timeout test bytes are already in PR69; do not push a dirty old checkout."
+}

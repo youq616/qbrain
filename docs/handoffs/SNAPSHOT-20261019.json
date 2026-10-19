@@ -1,0 +1,93 @@
+{
+  "schema": "qbrain-handoff-snapshot-v1",
+  "verified_at_utc": "2026-10-19T09:02:00Z",
+  "repository": "youq616/qbrain",
+  "scope": "Documentation sync only; not native qualification or outcome acceptance",
+  "main_commit": "e0a27f829d970c24ed8c566023ada0911c0042b3",
+  "pr": {
+    "number": 69,
+    "url": "https://github.com/youq616/qbrain/pull/69",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "head_branch": "diagnostics/n49d-progress-gate-repair-5a387bda-v2-timeout",
+    "base_branch": "diagnostics/n49d-progress-gate-repair-5a387bda-v2",
+    "base_commit": "ea3259a98b46c3e127742fc1aa1c50d8acd7b1b0",
+    "github_merge_base_diff": {
+      "merge_base": "2cb355812df2af5c77106056152d3d93e86784b9",
+      "status": "diverged",
+      "ahead_by": 1,
+      "behind_by": 1,
+      "files": [
+        {
+          "path": ".ci/check_n49d_sources.py",
+          "additions": 11,
+          "deletions": 5
+        },
+        {
+          "path": ".ci/test_n49d_source_contract.py",
+          "additions": 66,
+          "deletions": 36
+        },
+        {
+          "path": ".github/workflows/n49d-mcp-directory-search.yml",
+          "additions": 1,
+          "deletions": 1
+        }
+      ]
+    }
+  },
+  "candidate": {
+    "commit": "0900b19bb31f5c204771c6dd69decbf1337f4c98",
+    "tree": "66b3838cf1ea71efa6a149abc225c138859c0414",
+    "parents": [
+      "2cb355812df2af5c77106056152d3d93e86784b9"
+    ],
+    "test_file": {
+      "path": ".ci/test_n49d_source_contract.py",
+      "git_blob": "9527a0bfaf837aabdd492872024869f87e2317be",
+      "canonical_sha256": "82efc79a278f9cb8590469f4fda80b3420ad4cdf73468b4c23115dc7ead1804f"
+    }
+  },
+  "checks": {
+    "all_event_actions_total_count": 0,
+    "check_runs_total_count": 0,
+    "commit_statuses": [],
+    "pr_reviews": [],
+    "pr_comments": [],
+    "native_qualification": "PENDING",
+    "outcome": "PENDING",
+    "native_tests_run_by_this_sync": false,
+    "ci_started_by_this_sync": false,
+    "prior_local_claim": {
+      "source": "PR69 body",
+      "normal_controls": 1292,
+      "optimized_controls": 1292,
+      "reexecuted_by_this_sync": false,
+      "does_not_establish": "Native Windows, complete candidate qualification, or independent outcome acceptance"
+    }
+  },
+  "sources": [
+    "https://api.github.com/repos/youq616/qbrain/git/commits/0900b19bb31f5c204771c6dd69decbf1337f4c98",
+    "https://api.github.com/repos/youq616/qbrain/git/trees/66b3838cf1ea71efa6a149abc225c138859c0414?recursive=1",
+    "https://api.github.com/repos/youq616/qbrain/actions/runs?head_sha=0900b19bb31f5c204771c6dd69decbf1337f4c98&per_page=100",
+    "https://api.github.com/repos/youq616/qbrain/commits/0900b19bb31f5c204771c6dd69decbf1337f4c98/check-runs?per_page=100",
+    "https://github.com/youq616/qbrain/pull/69",
+    "https://api.github.com/repos/youq616/qbrain/branches/main"
+  ],
+  "not_recovered": [
+    "Additional user-computer files or unpublished work outside accessible cloud copies",
+    "Four native job artifacts for the exact latest head",
+    "A fresh independent product outcome review for that exact head",
+    "A new qualified N49D release package",
+    "Real Windows 11 client consumption, model quality/cost, and other remaining external acceptance evidence"
+  ],
+  "non_actions": [
+    "No main merge",
+    "No deployment or release",
+    "No source or workflow modifications",
+    "No forced push",
+    "No historical audit rewritten",
+    "No secrets or private records uploaded"
+  ]
+}

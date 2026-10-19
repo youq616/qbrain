@@ -1,3 +1,37 @@
+# 2026-10-19 路线增量与交接入口
+
+[最新状态](../CURRENT-STATUS.md) · [完整蓝图索引及单次交接](handoffs/LATEST-HANDOFF-20261019.zh-CN.md)。
+以下增量只调整接续顺序与证据入口，不覆盖原节点计划、放宽验收或重写历史。
+
+## 当前接续顺序
+
+1. 冻结并识别 PR69 代码候选 `0900b19bb31f5c204771c6dd69decbf1337f4c98` /
+   tree `66b3838cf1ea71efa6a149abc225c138859c0414`。main、N49C 继承基线、v2 与 timeout
+   候选及本次文档分支分别记账；文档提交不得被拿去运行原候选的 ancestry gate。
+2. 在有合适原生工具链的工程环境执行 N49D 固定四 job，并保留全部成功、失败、超时和缺失事实。
+   当前 head 没有 Actions 运行。先核对可用 workflow/原生环境；不可靠修改冻结 SHA 或放宽
+   source gate 绕过调度问题。不要在用户机器安装大工具链来代替远端工程工作。
+3. 独立回读绑定 commit/tree、run/attempt、二进制、原始输出及 artifact SHA256 的工件，
+   完成 plan 指定的每项门槛；真实独立 outcome review 无阻断后才可对原代码候选宣告节点验收。
+4. 后续整合候选必须另有精确身份和回归。文档发布、GitHub draft PR、源码控制通过，
+   均不自动授权 main 合并、发行、部署或修改客户端设置。
+5. 取得可复核的新版本包之后，再接真实用户 Windows 11 / 已登录客户端的实际使用证据；
+   不用 N47X/N48K 等旧包替代新实现，文件必须在仓库或版本化 Release 并有完整性校验。
+6. 继续分别闭合真实模型质量与完整费用、必要 PG 对等、正式签名发行和 Issue40。
+   模型/账号/数据/费用相关动作须有各自授权；本轮不执行。
+
+## 蓝图边界
+
+- 总蓝图继续是 [master plan](08-MASTER-PLAN-GBRAIN-PARITY.md) 与 [ops ledger](OPS-PARITY-LEDGER.md)。
+- 当前有界工作是 [N49D approved plan](nodes/N49D-PLAN.md) 和
+  [plan audit](nodes/N49D-PLAN-AUDIT.md)；[outcome](nodes/N49D-HARD-AUDIT.md)维持 pending。
+- 最近检索/客户端模块的计划和说明统一索引见交接文件，不把每个存在的 PLAN 文件解释为已验收。
+- N49B/PR63、PR61 特有机制及计划所列历史冻结探针保持排除；本次不恢复、不检查其内容、
+  不替换路径实施，也不以“完整同步”扩大到这些冻结操作。
+- 下方既有 roadmap 全文保留。其历史时间和节点状态不是 2026-10-19 的新验收声明。
+
+---
+
 # Qbrain 完成路线与验收边界
 
 更新2026-09-27。N48N 原生只读深度体检完成限定源码验收；以下历史阶段及外部门槛保留。
