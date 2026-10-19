@@ -1,3 +1,14 @@
+# 最新交接入口（2026-10-19）
+
+本次完整、单段可复制任务见 [LATEST-HANDOFF-20261019.zh-CN.md](docs/handoffs/LATEST-HANDOFF-20261019.zh-CN.md)。
+其中固定 PR69 代码 commit/tree，说明资料、校验、下一步、结果格式和实际不可用的输入。
+旧 N46E runbook / Release 只是原任务的历史入口，不是 N49D 的新包或验收证据。
+本次没有可供本机安装的 N49D 已验收预编译包；不要拿旧版替代。
+
+下列原始 handoff 约定保留，仍适用；最新状态与 N49D 操作应使用上面的单次任务。
+
+---
+
 # Local Agent handoff convention
 
 Owner instruction, September 13, 2026. Applies to all future handoffs for this
